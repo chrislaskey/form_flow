@@ -1,28 +1,73 @@
 defmodule FormFlow.MixProject do
   use Mix.Project
 
+  @version "0.2.0"
+  @source_url "https://github.com/chrislaskey/form_flow"
+
   def project do
     [
       app: :form_flow,
-      version: "0.1.0",
-      elixir: "~> 1.20",
+      version: @version,
+      elixir: "~> 1.15",
+      # Extracts colocated hooks (phoenix-colocated/form_flow)
+      compilers: [:phoenix_live_view] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      name: "FormFlow",
+      description: description(),
+      package: package(),
+      docs: docs(),
+      source_url: @source_url
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:phoenix_live_view, ">= 1.1.0"},
+      {:phoenix_html, ">= 4.0.0"},
+      {:plug, ">= 1.0.0"},
+      {:ecto, ">= 3.0.0"},
+      {:phoenix_select, ">= 0.0.0"},
+      {:slab, ">= 0.0.0"},
+      {:dynamic_form, ">= 0.0.0"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:mix_credence, ">= 0.0.0", only: :dev, runtime: false}
+    ]
+  end
+
+  defp description do
+    "Batteries included library for creating dynamic form-based user flows in Phoenix"
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url},
+      files: ~w(lib guides mix.exs README.md LICENSE.md)
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      extras: [
+        "README.md",
+        "LICENSE.md",
+        "guides/usage.md",
+        "guides/reference.md",
+        "guides/development.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r{guides/}
+      ]
     ]
   end
 end
