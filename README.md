@@ -95,11 +95,9 @@ explicitly. See `FormFlow.Data.Migration` for other adapters.
 
 **4. Register the colocated hooks** in `assets/js/app.js`
 
-`slab` and `phoenix_select` ship their JavaScript as colocated hooks,
-extracted at compile time by LiveView 1.1+. There is nothing to install, but
-each hook set must be registered once. Register FormFlow's set at the same
-time — it is empty today, so any hook the library adds later works without
-another installation step:
+`form_flow`, `slab`, and `phoenix_select` ship their JavaScript as colocated
+hooks, extracted at compile time by LiveView 1.1+. There is nothing to install,
+but each hook set must be registered once:
 
 ```javascript
 import {hooks as colocatedHooks} from "phoenix-colocated/my_app"
@@ -113,7 +111,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
 })
 ```
 
-`dynamic_form` ships no JavaScript, so it has no import here.
+`dynamic_form` ships no JavaScript, so it has no import here. FormFlow's hook is
+the loader for the flow editor — the editor bundle itself is fetched at runtime
+rather than bundled, which step 6 covers.
 
 **5. Add the Tailwind sources** in `assets/css/app.css`
 
@@ -166,6 +166,33 @@ end
 Apps that would rather own their routing can skip the router and call the
 LiveComponents directly.
 
+**Serving the flow editor.** The visual flow builder is React and ReactFlow —
+~390 KB. FormFlow does not put that in your `app.js`, where every page in your
+app would pay for it. Instead the bundle is prebuilt, shipped inside the
+package, and fetched at runtime by the colocated hook you registered in step 4,
+so only pages that actually render the builder download it. Declare the route it
+is served from, outside any pipeline and **before any catch-all route**:
+
+```elixir
+import FormFlow.Web.Assets.Router
+
+scope "/" do
+  form_flow_assets()
+end
+```
+
+That is the entire integration: no npm, no `package.json`, and no changes to
+your esbuild, vite, or webpack configuration — the bundle never passes through
+your bundler. The path carries a content hash and is served
+`immutable`, so it caches forever and needs no `mix phx.digest`.
+
+Mounting somewhere other than `/form-flow`? Configure it once; the route and the
+URL the hook fetches both derive from this, so they cannot drift:
+
+```elixir
+config :form_flow, asset_path: "/assets/form-flow"
+```
+
 ### Optional: file uploads
 
 DynamicForm's `type="file"` questions upload directly to cloud storage using
@@ -197,7 +224,7 @@ See [DynamicForm: internationalization](https://github.com/chrislaskey/dynamic_f
 
 | Library | What it needs | Details |
 |---|---|---|
-| `form_flow` | Hooks (none yet), Tailwind source, repo, migration | This README |
+| `form_flow` | Hooks, Tailwind source, repo, migration, asset route | This README |
 | `phoenix_select` | Hooks, Tailwind source | [Installation](https://github.com/chrislaskey/phoenix_select#installation) |
 | `dynamic_form` | Tailwind source, daisyUI, uploader for file fields | [Installation](https://github.com/chrislaskey/dynamic_form#installation) |
 | `slab` | Hooks, Tailwind source, repo for query mode | [Installation](https://github.com/chrislaskey/slab#installation) |

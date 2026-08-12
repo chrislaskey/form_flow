@@ -1,0 +1,15 @@
+{
+  "name": "form-flow-editor",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Build-time only. Produces priv/static/form_flow_editor.mjs, which is committed. Apps installing form_flow never install any of this.",
+  "scripts": {
+    "build": "./build.sh"
+  },
+  "devDependencies": {
+    "@xyflow/react": "12.11.2",
+    "esbuild": "0.25.10",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

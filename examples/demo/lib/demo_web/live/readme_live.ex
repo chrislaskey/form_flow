@@ -20,8 +20,9 @@ defmodule DemoWeb.ReadmeLive do
   @requirements [
     %{
       library: "form_flow",
-      needs: "Colocated hooks, Tailwind @source, a repo, a generated migration",
-      where: "assets/js/app.js, assets/css/app.css, config/config.exs, priv/repo/migrations"
+      needs: "Colocated hooks, Tailwind @source, a repo, a migration, an asset route",
+      where:
+        "assets/js/app.js, assets/css/app.css, config/config.exs, priv/repo/migrations, router.ex"
     },
     %{
       library: "phoenix_select",
@@ -75,11 +76,26 @@ defmodule DemoWeb.ReadmeLive do
             This LiveView is mounted on <code>live "/*path", ReadmeLive</code>
             and hands the remaining path (<span class="font-mono">{@path}</span>)
             to FormFlow's optional router, which dispatches to the library's
-            LiveComponents:
+            LiveComponents.
           </p>
+          <div>Navigate to:</div>
+          <div class="flex justify-between gap-3">
+            <.link navigate="/flows">Flows Index</.link>
+            <.link navigate="/flows/1">Flows Show</.link>
+            <.link navigate="/forms">Forms Index</.link>
+            <.link navigate="/forms/1">Forms Show</.link>
+          </div>
           <div id="form-flow-router" class="rounded-lg border border-base-300 p-4">
             <FormFlow.Web.router type="templates" path={@path} />
           </div>
+          <p class="text-sm text-base-content/70">
+            <.link navigate={~p"/forms"} class="link">/forms</.link>
+            dispatches to <code>FormFlow.Web.Templates.Forms.Index</code>, which
+            renders the ReactFlow editor. Its ~390 KB bundle is fetched from the
+            <code>form_flow_assets()</code>
+            route on that page only — it is not
+            in <code>app.js</code>.
+          </p>
         </section>
 
         <section class="space-y-3">

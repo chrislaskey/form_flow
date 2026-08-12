@@ -14,6 +14,12 @@ defmodule DemoWeb.Router do
     plug :accepts, ["json"]
   end
 
+  import FormFlow.Web.Assets.Router
+
+  scope "/" do
+    form_flow_assets()
+  end
+
   scope "/", DemoWeb do
     pipe_through :browser
 

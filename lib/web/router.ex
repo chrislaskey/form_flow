@@ -29,6 +29,20 @@ defmodule FormFlow.Web.Router do
       <h1>Hello from {@app} showing {@type}</h1>
       <%= if @type == "templates" do %>
         <.live_component
+          :if={matches?("/flows", @path)}
+          module={FormFlow.Web.Templates.Flows.Index}
+          id="flows-index"
+          app={@app}
+        />
+
+        <.live_component
+          :if={matches?("/flows/1", @path)}
+          module={FormFlow.Web.Templates.Flows.Show}
+          id="flows-show"
+          app={@app}
+        />
+
+        <.live_component
           :if={matches?("/forms", @path)}
           module={FormFlow.Web.Templates.Forms.Index}
           id="forms-index"

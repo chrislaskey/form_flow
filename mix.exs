@@ -57,7 +57,9 @@ defmodule FormFlow.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib guides mix.exs README.md LICENSE.md)
+      # priv carries the prebuilt editor bundle served by FormFlow.Web.Assets;
+      # without it the flow editor cannot load
+      files: ~w(lib priv guides mix.exs README.md LICENSE.md)
     ]
   end
 

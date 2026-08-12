@@ -1,0 +1,60 @@
+/* Styles for the flow editor's own markup. Bundled into
+   priv/static/form_flow_editor.mjs as a string and injected as one <style> tag
+   by injectStyles(), so these never pass through the host app's Tailwind and
+   cannot collide with its classes. */
+
+.ff-node {
+  min-width: 160px;
+  padding: 10px 12px;
+  border: 1px solid #d4d4d8;
+  border-left: 3px solid #71717a;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  color: #18181b;
+}
+
+.ff-node.is-selected {
+  border-color: #0891b2;
+  box-shadow: 0 0 0 2px rgb(8 145 178 / 25%);
+}
+
+.ff-node--start {
+  border-left-color: #16a34a;
+}
+
+.ff-node--form {
+  border-left-color: #0891b2;
+}
+
+.ff-node--end {
+  border-left-color: #9333ea;
+}
+
+.ff-node__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ff-node__meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #71717a;
+}
+
+.ff-panel button {
+  padding: 4px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ff-panel button:hover {
+  border-color: #0891b2;
+  color: #0891b2;
+}

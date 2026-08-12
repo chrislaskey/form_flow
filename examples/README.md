@@ -16,6 +16,10 @@ Then open [http://localhost:4000](http://localhost:4000):
 - `/` — the index: renders FormFlow's optional path-based router (mounted on
   the `/*path` catch-all, so `/forms` and friends land here too) and lists what
   each dependency needs at install time
+- `/forms` — the flow editor: `FormFlow.Web.Templates.Forms.Index`, a ReactFlow
+  canvas. Drag a step, connect two, or click "Add step" and the step and
+  connection counts above the canvas update from the server — that round trip is
+  the point of the page
 - `/install-check` — one component from each library FormFlow depends on:
   `PhoenixSelect.select`, `DynamicForm.form`, and `Slab.table`. A missing
   colocated hook, Tailwind `@source`, or absent daisyUI shows up here first
@@ -35,6 +39,7 @@ executable version of it:
 | `config :form_flow, repo:` | `config/config.exs` | FormFlow's data layer |
 | `config :slab, repo:` | `config/config.exs` | Slab's query mode |
 | A generated migration | `priv/repo/migrations/` | FormFlow's tables |
+| `form_flow_assets()` route | `lib/demo_web/router.ex` | FormFlow's flow editor bundle |
 | Stub `GoogleStorage` uploader | `assets/js/app.js` | dynamic_form's file fields |
 
 The demo points Tailwind at `../../../../lib` rather than
@@ -43,6 +48,16 @@ installing from Hex use the `deps/` path.
 
 The uploader is a stub: it reports instant success instead of talking to a
 bucket, which is enough to exercise the wiring without cloud credentials.
+
+The flow editor's ~390 KB of React and ReactFlow never enters `app.js`: the
+`form_flow_assets()` route serves the prebuilt bundle from FormFlow's own
+`priv/static`, and FormFlow's colocated hook fetches it at runtime on the pages
+that use it. `app.js` grows by about a kilobyte — the hook. You can check
+that for yourself:
+
+```
+grep -c xyflow priv/static/assets/js/app.js   # 0
+```
 
 The migration was produced by `mix form_flow.gen.migration` and then committed
 to `overlay/` with a fixed timestamp, so regenerating the demo is reproducible.

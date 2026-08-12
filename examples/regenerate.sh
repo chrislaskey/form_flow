@@ -68,6 +68,12 @@ perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallChe
 # but the route above replaced that page with the demo index
 rm -f demo/test/demo_web/controllers/page_controller_test.exs
 
+echo "==> Declaring the route that serves FormFlow's editor bundle"
+# The editor is ~390 KB of React + ReactFlow, fetched at runtime by FormFlow's
+# colocated hook instead of being bundled into app.js. This must come before the
+# catch-all route above, which would otherwise swallow the asset path.
+perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  import FormFlow.Web.Assets.Router\n\n  scope "/" do\n    form_flow_assets()\n  end\n\n$1}' demo/lib/demo_web/router.ex
+
 echo "==> Pointing Tailwind at FormFlow's classes"
 # All four libraries render server-side markup styled with Tailwind (plus the
 # daisyUI component classes DynamicForm uses), so each needs a @source line or
