@@ -1,18 +1,8 @@
 defmodule FormFlow do
   @moduledoc """
-  Documentation for `FormFlow`.
+  `FormFlow` module has two primary parts:
+
+  - `FormFlow.Data` for all backend and data related code
+  - `FormFlow.Web`  for all UI, UX, presentation, and web related code
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> FormFlow.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
