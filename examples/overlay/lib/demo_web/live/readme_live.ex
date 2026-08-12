@@ -1,11 +1,10 @@
 defmodule DemoWeb.ReadmeLive do
   @moduledoc """
-  The demo index: confirms the FormFlow path dependency is wired up and lists
-  the demos as they land.
+  The demo index: renders FormFlow's optional path-based router and documents
+  what each of FormFlow's dependencies needs at install time.
 
-  Right now this page only *references* FormFlow — it reads the compiled
-  library's version and module structure. The next iteration renders
-  `FormFlow.Web.router/1` on its own route.
+  Mounted on the `/*path` catch-all so `FormFlow.Web.Router` receives the
+  remaining path segments and dispatches on them.
   """
 
   use DemoWeb, :live_view
@@ -18,25 +17,39 @@ defmodule DemoWeb.ReadmeLive do
     {FormFlow.Web.Router, "Optional path-based router for `*path` catch-all routes"}
   ]
 
-  @next_up ~S"""
-  scope "/", DemoWeb do
-    pipe_through :browser
-
-    live "/templates/*path", TemplatesLive
-  end
-
-  # in TemplatesLive's template
-  <FormFlow.Web.router type="templates" path={@path} app="demo" />
-  """
+  @requirements [
+    %{
+      library: "form_flow",
+      needs: "Colocated hooks, Tailwind @source, a repo, a generated migration",
+      where: "assets/js/app.js, assets/css/app.css, config/config.exs, priv/repo/migrations"
+    },
+    %{
+      library: "phoenix_select",
+      needs: "Colocated hooks, Tailwind @source",
+      where: "assets/js/app.js, assets/css/app.css"
+    },
+    %{
+      library: "slab",
+      needs: "Colocated hooks, Tailwind @source, a repo for query mode",
+      where: "assets/js/app.js, assets/css/app.css, config/config.exs"
+    },
+    %{
+      library: "dynamic_form",
+      needs:
+        "Tailwind @source, daisyUI (vendored by phx.new 1.8+), a JS uploader for file fields",
+      where: "assets/css/app.css, assets/js/app.js"
+    }
+  ]
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "FormFlow demo")
      |> assign(:version, to_string(Application.spec(:form_flow, :vsn)))
      |> assign(:modules, Enum.map(@modules, fn {mod, doc} -> {inspect(mod), doc} end))
-     |> assign(:next_up, @next_up)}
+     |> assign(:requirements, @requirements)
+     |> assign(:path, path(params))}
   end
 
   @impl true
@@ -57,6 +70,53 @@ defmodule DemoWeb.ReadmeLive do
         </header>
 
         <section class="space-y-3">
+          <h2 class="text-lg font-semibold">Router</h2>
+          <p class="text-sm text-base-content/70">
+            This LiveView is mounted on <code>live "/*path", ReadmeLive</code>
+            and hands the remaining path (<span class="font-mono">{@path}</span>)
+            to FormFlow's optional router, which dispatches to the library's
+            LiveComponents:
+          </p>
+          <div id="form-flow-router" class="rounded-lg border border-base-300 p-4">
+            <FormFlow.Web.router type="templates" path={@path} />
+          </div>
+        </section>
+
+        <section class="space-y-3">
+          <h2 class="text-lg font-semibold">Install requirements</h2>
+          <p class="text-sm text-base-content/70">
+            Apps declare only <code>form_flow</code>; phoenix_select,
+            dynamic_form, and slab come along as dependencies. Each still needs
+            its own wiring, all of it applied by <code>examples/regenerate.sh</code>:
+          </p>
+          <div class="overflow-x-auto">
+            <table id="install-requirements" class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Library</th>
+                  <th>Needs</th>
+                  <th>In this app</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={requirement <- @requirements}>
+                  <td class="font-mono whitespace-nowrap">{requirement.library}</td>
+                  <td>{requirement.needs}</td>
+                  <td class="font-mono text-xs">{requirement.where}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-sm text-base-content/70">
+            <.link navigate={~p"/install-check"} class="link">
+              Install check
+            </.link>
+            renders a component from each library, so a broken hook, missing
+            Tailwind source, or absent daisyUI shows up immediately.
+          </p>
+        </section>
+
+        <section class="space-y-3">
           <h2 class="text-lg font-semibold">Library modules</h2>
           <ul id="form-flow-modules" class="space-y-1">
             <li :for={{name, doc} <- @modules} class="text-sm">
@@ -65,27 +125,12 @@ defmodule DemoWeb.ReadmeLive do
             </li>
           </ul>
         </section>
-
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">Demos</h2>
-          <p class="text-sm text-base-content/70">
-            None yet. Each demo gets its own route and a LiveView in <code>examples/overlay/lib/demo_web/live/</code>.
-          </p>
-        </section>
-
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">Next up</h2>
-          <p class="text-sm text-base-content/70">
-            Mounting the optional router, which dispatches to FormFlow's
-            LiveComponents based on the path:
-          </p>
-          <pre
-            phx-no-curly-interpolation
-            class="overflow-x-auto rounded-lg bg-base-200 p-4 text-xs"
-          ><code>{@next_up}</code></pre>
-        </section>
       </div>
     </Layouts.app>
     """
   end
+
+  # FormFlow.Web.Router takes a path string; the `*path` glob gives segments
+  defp path(%{"path" => segments}) when is_list(segments), do: "/" <> Enum.join(segments, "/")
+  defp path(_params), do: "/"
 end

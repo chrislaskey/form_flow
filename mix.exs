@@ -9,6 +9,7 @@ defmodule FormFlow.MixProject do
       app: :form_flow,
       version: @version,
       elixir: "~> 1.15",
+      elixirc_paths: elixirc_paths(Mix.env()),
       # Extracts colocated hooks (phoenix-colocated/form_flow)
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
@@ -27,12 +28,18 @@ defmodule FormFlow.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
+
   defp deps do
     [
       {:phoenix_live_view, ">= 1.1.0"},
       {:phoenix_html, ">= 4.0.0"},
       {:plug, ">= 1.0.0"},
       {:ecto, ">= 3.0.0"},
+      # Required for FormFlow.Data.Migration, which runs inside the parent app's
+      # migrations. Any app with a repo already depends on it.
+      {:ecto_sql, ">= 3.0.0"},
       {:phoenix_select, ">= 0.0.0"},
       {:slab, ">= 0.0.0"},
       {:dynamic_form, ">= 0.0.0"},

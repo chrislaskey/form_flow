@@ -23,13 +23,24 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/demo"
+import {hooks as formFlowHooks} from "phoenix-colocated/form_flow"
+import {hooks as slabHooks} from "phoenix-colocated/slab"
+import {hooks as phoenixSelectHooks} from "phoenix-colocated/phoenix_select"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+// Stub uploader for DynamicForm's direct-upload fields: simulates a
+// successful upload without a real cloud bucket. Real apps PUT the file to
+// the presigned URL in entry.meta.url.
+const GoogleStorage = (entries, _onViewError) => {
+  entries.forEach(entry => setTimeout(() => entry.progress(100), 300))
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  uploaders: {GoogleStorage},
+  hooks: {...colocatedHooks, ...formFlowHooks, ...slabHooks, ...phoenixSelectHooks},
 })
 
 // Show progress bar on live navigation and form submits

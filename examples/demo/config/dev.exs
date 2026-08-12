@@ -1,5 +1,12 @@
 import Config
 
+# Configure your database
+config :demo, Demo.Repo,
+  database: Path.expand("../demo_dev.db", __DIR__),
+  pool_size: 5,
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -13,7 +20,7 @@ config :demo, DemoWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "CRUygyp5p+6dfIIJYsX6L6QYXU8z/0gH85ZimKtwNJ3coBNzH1JP2lblRalpDdBn",
+  secret_key_base: "cb9nuWkygQ1T5Nb8+k4l5c9J5+I4ey++IPY8yOHIWYzKI8+5RA3S7Zxj6IuvubMo",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:demo, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]}

@@ -8,6 +8,7 @@
 import Config
 
 config :demo,
+  ecto_repos: [Demo.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
@@ -19,7 +20,7 @@ config :demo, DemoWeb.Endpoint,
     layout: false
   ],
   pubsub_server: Demo.PubSub,
-  live_view: [signing_salt: "vORwq2jS"]
+  live_view: [signing_salt: "CgexWjuD"]
 
 # Configure esbuild (the version is required)
 config :esbuild,
@@ -49,6 +50,12 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# FormFlow.Data.Repo wraps the parent app's repo
+config :form_flow, repo: Demo.Repo
+
+# Slab query mode uses this repo unless a table passes one explicitly
+config :slab, repo: Demo.Repo
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

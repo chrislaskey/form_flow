@@ -7,8 +7,8 @@
 @source "../../lib/demo_web";
 /* FormFlow is a path dependency here, so point Tailwind at its source
    directly. Apps installing form_flow from Hex use
-   "../../deps/form_flow/lib" instead. FormFlow builds on these libraries,
-   so their classes need to be scanned too. */
+   "../../deps/form_flow/lib" instead. FormFlow renders components from
+   these libraries too, so their classes need to be scanned as well. */
 @source "../../../../lib";
 @source "../../deps/slab/lib";
 @source "../../deps/dynamic_form/lib";

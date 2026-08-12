@@ -1,7 +1,7 @@
 # FormFlow demo app
 
-A full Phoenix application exercising FormFlow — no database or external
-services required.
+A full Phoenix application exercising FormFlow against a local SQLite
+database — no external services required.
 
 ## Running it
 
@@ -11,33 +11,63 @@ mix setup
 mix phx.server
 ```
 
-Then open [http://localhost:4000](http://localhost:4000). The home page lists
-every demo.
+Then open [http://localhost:4000](http://localhost:4000):
 
-Right now there is only the index, which confirms the library is wired up
-(compiled version, module structure) without calling into it yet. Each new
-demo gets a route in `regenerate.sh` and a LiveView in `overlay/`.
+- `/` — the index: renders FormFlow's optional path-based router (mounted on
+  the `/*path` catch-all, so `/forms` and friends land here too) and lists what
+  each dependency needs at install time
+- `/install-check` — one component from each library FormFlow depends on:
+  `PhoenixSelect.select`, `DynamicForm.form`, and `Slab.table`. A missing
+  colocated hook, Tailwind `@source`, or absent daisyUI shows up here first
+
+## Installation requirements, applied
+
+The demo is wired up exactly the way the [main README's Quick
+start](../README.md#quick-start) describes, and `regenerate.sh` is the
+executable version of it:
+
+| Requirement | Where | For |
+|---|---|---|
+| `{:form_flow, path: "../.."}` | `mix.exs` | all four libraries (the rest are transitive) |
+| Colocated hook imports | `assets/js/app.js` | form_flow, slab, phoenix_select |
+| Tailwind `@source` lines | `assets/css/app.css` | all four libraries |
+| daisyUI | vendored by `phx.new` 1.8+ | dynamic_form's built-in components |
+| `config :form_flow, repo:` | `config/config.exs` | FormFlow's data layer |
+| `config :slab, repo:` | `config/config.exs` | Slab's query mode |
+| A generated migration | `priv/repo/migrations/` | FormFlow's tables |
+| Stub `GoogleStorage` uploader | `assets/js/app.js` | dynamic_form's file fields |
+
+The demo points Tailwind at `../../../../lib` rather than
+`../../deps/form_flow/lib` because FormFlow is a path dependency here. Apps
+installing from Hex use the `deps/` path.
+
+The uploader is a stub: it reports instant success instead of talking to a
+bucket, which is enough to exercise the wiring without cloud credentials.
+
+The migration was produced by `mix form_flow.gen.migration` and then committed
+to `overlay/` with a fixed timestamp, so regenerating the demo is reproducible.
+`test/form_flow/migration_test.exs` runs against the migrated SQLite database —
+the library's own tests use repo stubs and never issue DDL, so this is where the
+migration is proven to actually run.
 
 ## Layout
 
 - `demo/` — the generated app. The interesting files are:
-  - `lib/demo_web/live/readme_live.ex` — the demo index
-  - `assets/css/app.css` — the Tailwind `@source` lines (pointing at
-    FormFlow's source directly, since the demo uses a path dependency;
-    Hex-installed apps use `../../deps/form_flow/lib`), plus the lines for
-    the libraries FormFlow builds on (`slab`, `dynamic_form`,
-    `phoenix_select`)
-  - `mix.exs` — the `{:form_flow, path: "../.."}` dependency
+  - `lib/demo_web/live/readme_live.ex` — the index and the router usage
+  - `lib/demo_web/live/install_check_live.ex` — one component per dependency
+  - `priv/repo/migrations/*_add_form_flow.exs` — the generated migration
+  - `test/form_flow/migration_test.exs` — the migration, against real SQLite
+  - `assets/js/app.js`, `assets/css/app.css`, `config/config.exs` — the
+    installation requirements above
 - `overlay/` — the FormFlow-specific demo code, copied over the generated
   skeleton by the regenerate script
 - `regenerate.sh` — regenerates `demo/` from scratch with a pinned
-  `phx.new` version, reapplies the edits and overlay, and builds assets.
-  Run it whenever the skeleton drifts out of date.
+  `phx.new` version, reapplies the edits and overlay, sets up the database,
+  and builds assets. Run it whenever the skeleton drifts out of date.
 
-The demo is generated with `--no-ecto`: `FormFlow.Data.Repo` wraps the parent
-app's repo, but nothing in the demo persists anything yet. When the data layer
-lands, regenerate with `--database sqlite3` and add
-`config :form_flow, repo: Demo.Repo` — see the comments in `regenerate.sh`.
+Stop the demo server before regenerating — the script deletes `demo/` and a
+running server (plus its asset watchers) keeps writing into it. The script
+checks port 4000 and aborts if something is listening.
 
 ## Distribution note
 

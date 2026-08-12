@@ -9,6 +9,9 @@ defmodule Demo.Application do
   def start(_type, _args) do
     children = [
       DemoWeb.Telemetry,
+      Demo.Repo,
+      {Ecto.Migrator,
+       repos: Application.fetch_env!(:demo, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:demo, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Demo.PubSub},
       # Start a worker by calling: Demo.Worker.start_link(arg)
@@ -29,5 +32,10 @@ defmodule Demo.Application do
   def config_change(changed, _new, removed) do
     DemoWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp skip_migrations?() do
+    # By default, sqlite migrations are run when using a release
+    System.get_env("RELEASE_NAME") == nil
   end
 end
