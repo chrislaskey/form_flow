@@ -1,11 +1,12 @@
-defmodule FormFlow.Web.Router do
+defmodule FormFlow.Web do
   @moduledoc """
-  `FormFlow.Web.Router` module contains an optional path-based router that
-  works with Phoenix `*path` catch-all routes and the default routes.
+  `FormFlow.Web` module contains UI, UX, presentation, and web related code
 
-  Using the router simplifies the amount of the parent app has to define.
+  Within this module there are two primary areas:
 
-  Custom installations can skip the router and call the LiveComponents directly
-  if that's easier.
+  - `Templates` which define the flow itself
+  - `Instances` which capture the instances of users going through the templated defined flow
   """
+
+  def router(assigns), do: FormFlow.Web.Router.router(assigns)
 end
