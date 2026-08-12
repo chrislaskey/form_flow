@@ -27,7 +27,7 @@ defmodule FormFlow.Web.Router do
     ~H"""
     <div>
       <h1>Hello from {@app} showing {@type}</h1>
-      <%= if @app == "templates" do %>
+      <%= if @type == "templates" do %>
         <.live_component
           :if={matches?("/forms", @path)}
           module={FormFlow.Web.Templates.Forms.Index}
@@ -46,7 +46,11 @@ defmodule FormFlow.Web.Router do
     """
   end
 
-  defp matches?(pattern, path) do
+  defp matches?(pattern, path_parts) when is_list(path_parts) do
+    matches?(pattern, "/#{Enum.join(path_parts, "/")}")
+  end
+
+  defp matches?(pattern, path) when is_bitstring(path) do
     pattern == path
   end
 end
