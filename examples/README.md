@@ -16,7 +16,7 @@ Then open [http://localhost:4000](http://localhost:4000):
 - `/` — the index: renders FormFlow's optional path-based router (mounted on
   the `/*path` catch-all, so `/forms` and friends land here too) and lists what
   each dependency needs at install time
-- `/forms` — the flow editor: `FormFlow.Web.Templates.Forms.Index`, a ReactFlow
+- `/flows` — the flow editor: `FormFlow.Web.Templates.Flows.Index`, a ReactFlow
   canvas. Drag a step, connect two, or click "Add step" and the step and
   connection counts above the canvas update from the server — that round trip is
   the point of the page
@@ -87,7 +87,7 @@ checks port 4000 and aborts if something is listening.
 ## Distribution note
 
 None of this ships to library users installing from Hex — the package includes
-only the files whitelisted in `mix.exs` (`lib`, `guides`, `mix.exs`,
+only the files whitelisted in `mix.exs` (`lib`, `priv`, `guides`, `mix.exs`,
 `README.md`, `LICENSE.md`). Git dependencies clone the repo including this
 directory, but it is a few hundred KB of text and is never compiled as part of
 the dependency.

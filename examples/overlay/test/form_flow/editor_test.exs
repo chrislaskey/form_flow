@@ -46,24 +46,24 @@ defmodule Demo.FormFlowEditorTest do
 
   describe "the editor container" do
     test "renders on the templates route with the bundle's URL", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/forms")
+      {:ok, view, _html} = live(conn, "/flows")
 
-      assert has_element?(view, ~s(#forms-index-editor[phx-update="ignore"]))
-      assert render(element(view, "#forms-index-editor")) =~ Assets.editor_path()
+      assert has_element?(view, ~s(#flows-index-editor[phx-update="ignore"]))
+      assert render(element(view, "#flows-index-editor")) =~ Assets.editor_path()
     end
 
     test "reports the graph the editor pushes back", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/forms")
+      {:ok, view, _html} = live(conn, "/flows")
 
       assert render(view) =~ "Loading the editor…"
 
       # Stands in for the hook, which pushes to the LiveComponent by element
       view
-      |> element("#forms-index-editor")
+      |> element("#flows-index-editor")
       |> render_hook("form_flow:editor_mounted", %{})
 
       view
-      |> element("#forms-index-editor")
+      |> element("#flows-index-editor")
       |> render_hook("form_flow:graph_changed", %{
         "nodes" => [
           %{"id" => "1", "data" => %{"label" => "Start"}},
@@ -81,7 +81,7 @@ defmodule Demo.FormFlowEditorTest do
     test "does not render the editor on other paths", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      refute has_element?(view, "#forms-index-editor")
+      refute has_element?(view, "#flows-index-editor")
     end
   end
 end

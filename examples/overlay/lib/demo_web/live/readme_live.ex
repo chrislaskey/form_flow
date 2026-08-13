@@ -89,8 +89,8 @@ defmodule DemoWeb.ReadmeLive do
             <FormFlow.Web.router type="templates" path={@path} />
           </div>
           <p class="text-sm text-base-content/70">
-            <.link navigate={~p"/forms"} class="link">/forms</.link>
-            dispatches to <code>FormFlow.Web.Templates.Forms.Index</code>, which
+            <.link navigate={~p"/flows"} class="link">/flows</.link>
+            dispatches to <code>FormFlow.Web.Templates.Flows.Index</code>, which
             renders the ReactFlow editor. Its ~390 KB bundle is fetched from the
             <code>form_flow_assets()</code>
             route on that page only — it is not

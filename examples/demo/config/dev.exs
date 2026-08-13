@@ -20,7 +20,7 @@ config :demo, DemoWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "H5i+eL9IGH3jJNQHMslRa4KGS2SqIT9iuQ2ylJ2jFPMmb4/kDA7yXPYyjiAAF6u/",
+  secret_key_base: "8B1y+0e+ov59EXxY/JRoITo1/qNUw4AC7p1sajist4r0RUBdkUuqUrc+sxadpyxQ",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:demo, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]}
@@ -54,6 +54,8 @@ config :demo, DemoWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
+      # FormFlow source, since it is a path dependency in this demo
+      ~r"lib/.*\.(ex|heex)$"E,
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
       # Router, Controllers, LiveViews and LiveComponents
@@ -82,3 +84,12 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# FormFlow is a path dependency in this demo, so the code reloader has to be
+# told about it. Without reloadable_apps, library edits need a server restart;
+# :demo has to stay in the list or the demo's own code stops reloading. :dirs
+# puts the library's source under the file watcher, which otherwise only watches
+# this app's directory, so the browser reloads on library changes too.
+config :demo, DemoWeb.Endpoint, reloadable_apps: [:demo, :form_flow]
+
+config :phoenix_live_reload, dirs: [Path.expand("../../../lib", __DIR__)]
