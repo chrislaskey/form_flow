@@ -24,6 +24,7 @@ defmodule DemoWeb.Router do
     pipe_through :browser
 
     live "/install-check", InstallCheckLive
+    live "/example", ExampleLive.Index
     live "/*path", ReadmeLive
   end
 

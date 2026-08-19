@@ -78,6 +78,59 @@ defmodule Demo.FormFlowEditorTest do
       assert html =~ "Start, Contact details"
     end
 
+    test "carries the Elixir-defined data as JSON for the hook to parse", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/flows")
+
+      graph =
+        view
+        |> element("#flows-index-editor")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("data-graph")
+        |> hd()
+        |> Jason.decode!()
+
+      assert Enum.map(graph["nodes"], & &1["data"]["label"]) == ["Start", "Form", "End"]
+      assert Enum.map(graph["nodes"], & &1["data"]["kind"]) == ["start", "form", "end"]
+      assert Enum.map(graph["edges"], & &1["id"]) == ["e1-2", "e2-3"]
+
+      # Positions and arrowheads come from ReactFlow.data/2, not from the JS
+      assert Enum.map(graph["nodes"], & &1["position"]["y"]) == [0, 140, 280]
+      assert Enum.map(graph["edges"], & &1["markerEnd"]["type"]) == ["arrowclosed", "arrowclosed"]
+    end
+
+    test "pins the start and end steps as non-deletable", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/flows")
+
+      nodes =
+        view
+        |> element("#flows-index-editor")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("data-graph")
+        |> hd()
+        |> Jason.decode!()
+        |> Map.fetch!("nodes")
+
+      # ReactFlow's own flag, passed straight through: false pins a node
+      assert Enum.map(nodes, &{&1["data"]["label"], &1["deletable"]}) == [
+               {"Start", false},
+               {"Form", nil},
+               {"End", false}
+             ]
+    end
+
+    test "pushes the Elixir definition back on reset", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/flows")
+
+      view |> element("#flows-index-editor") |> render_hook("form_flow:editor_mounted", %{})
+
+      view |> element("button", "Reset to the Elixir definition") |> render_click()
+
+      assert_push_event(view, "form_flow:set_graph", %{graph: graph})
+      assert Enum.map(graph.nodes, & &1.data.label) == ["Start", "Form", "End"]
+    end
+
     test "does not render the editor on other paths", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 

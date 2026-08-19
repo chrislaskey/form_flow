@@ -4,7 +4,7 @@
 //
 // The public surface is mount/unmount/injectStyles, called by the colocated
 // hook in FormFlow.Web.Templates.Forms.Index.
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
@@ -18,6 +18,8 @@ import {
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
+  useReactFlow,
+  ReactFlowProvider,
 } from "@xyflow/react";
 
 import flowStyles from "@xyflow/react/dist/style.css";
@@ -41,25 +43,64 @@ function StepNode({ data, selected }) {
 // Must be module-level (or useMemo'd): a new object each render remounts every node
 const nodeTypes = { step: StepNode };
 
-const DEFAULT_GRAPH = {
-  nodes: [
-    { id: "1", type: "step", position: { x: 240, y: 0 }, data: { label: "Start", kind: "start", fields: 0 } },
-    { id: "2", type: "step", position: { x: 240, y: 120 }, data: { label: "Contact details", kind: "form", fields: 4 } },
-    { id: "3", type: "step", position: { x: 240, y: 260 }, data: { label: "Review", kind: "end", fields: 1 } },
-  ],
-  edges: [
-    { id: "e1-2", source: "1", target: "2", markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: "e2-3", source: "2", target: "3", markerEnd: { type: MarkerType.ArrowClosed } },
-  ],
-};
+// The flow itself is defined in Elixir — see
+// FormFlow.Web.Templates.Flows.Graph — serialized to JSON, and handed in as
+// opts.graph. This is only the fallback for mounting with nothing at all, so it
+// is deliberately empty rather than a second, competing definition of a flow.
+const EMPTY_GRAPH = { nodes: [], edges: [] };
+
+// Nodes are positioned by their top centre, so a node dropped at the cursor
+// lands under it rather than to its right
+const NODE_ORIGIN = [0.5, 0];
+
+const NEW_STEP = { kind: "form", fields: 0 };
+
+// Ids stay in the same simple numeric style the server sends, without colliding
+// with the ids already in play
+function nextId(nodes) {
+  const used = new Set(nodes.map((node) => node.id));
+  let candidate = nodes.length + 1;
+
+  while (used.has(String(candidate))) candidate += 1;
+
+  return String(candidate);
+}
+
+function stepNode(id, position) {
+  return {
+    id,
+    type: "step",
+    position,
+    origin: NODE_ORIGIN,
+    data: { label: `Step ${id}`, ...NEW_STEP },
+  };
+}
+
+function stepEdge(source, target) {
+  return {
+    id: `e${source}-${target}`,
+    source,
+    target,
+    markerEnd: { type: MarkerType.ArrowClosed },
+  };
+}
 
 /* ----------------------------------------------------------------- editor -- */
 
 function FlowEditor({ graph, onChange }) {
-  const initial = useMemo(() => normalize(graph), [graph]);
+  const [nodes, setNodes] = useState(() => normalize(graph).nodes);
+  const [edges, setEdges] = useState(() => normalize(graph).edges);
 
-  const [nodes, setNodes] = useState(initial.nodes);
-  const [edges, setEdges] = useState(initial.edges);
+  const { screenToFlowPosition } = useReactFlow();
+
+  // Elixir can push new data at any time (see form_flow:set_graph). useState
+  // ignores a changed initial value, so the canvas has to be told explicitly.
+  useEffect(() => {
+    const next = normalize(graph);
+
+    setNodes(next.nodes);
+    setEdges(next.edges);
+  }, [graph]);
 
   // Only report the changes worth persisting; dragging fires continuously
   const report = useCallback(
@@ -101,33 +142,62 @@ function FlowEditor({ graph, onChange }) {
     [nodes, report],
   );
 
+  // Dropping a connection on empty canvas creates the step it would have gone
+  // to, wired up. https://reactflow.dev/examples/nodes/add-node-on-edge-drop
+  const onConnectEnd = useCallback(
+    (event, connectionState) => {
+      // A drop that landed on a handle is an ordinary connection; onConnect has it
+      if (connectionState.isValid) return;
+
+      const source = connectionState.fromNode?.id;
+      if (!source) return;
+
+      const { clientX, clientY } = "changedTouches" in event ? event.changedTouches[0] : event;
+      const position = screenToFlowPosition({ x: clientX, y: clientY });
+
+      setNodes((currentNodes) => {
+        const id = nextId(currentNodes);
+        const nextNodes = currentNodes.concat(stepNode(id, position));
+
+        setEdges((currentEdges) => {
+          const nextEdges = currentEdges.concat(stepEdge(source, id));
+          report(nextNodes, nextEdges);
+          return nextEdges;
+        });
+
+        return nextNodes;
+      });
+    },
+    [report, screenToFlowPosition],
+  );
+
   const addStep = useCallback(() => {
-    const id = String(Date.now());
-    const last = nodes[nodes.length - 1];
-
-    const node = {
-      id,
-      type: "step",
-      position: { x: (last?.position.x ?? 240) + 220, y: last?.position.y ?? 120 },
-      data: { label: "New step", kind: "form", fields: 0 },
-    };
-
     setNodes((current) => {
-      const next = [...current, node];
+      const id = nextId(current);
+      const last = current[current.length - 1];
+      const position = {
+        x: (last?.position.x ?? 240) + 220,
+        y: last?.position.y ?? 120,
+      };
+
+      const next = current.concat(stepNode(id, position));
       report(next, edges);
       return next;
     });
-  }, [edges, nodes, report]);
+  }, [edges, report]);
 
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      nodeOrigin={NODE_ORIGIN}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onConnectEnd={onConnectEnd}
       fitView
+      fitViewOptions={{ padding: 0.4 }}
       proOptions={{ hideAttribution: false }}
     >
       <Background variant="dots" gap={16} size={1} />
@@ -143,7 +213,7 @@ function FlowEditor({ graph, onChange }) {
 }
 
 function normalize(graph) {
-  if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return DEFAULT_GRAPH;
+  if (!graph || !Array.isArray(graph.nodes)) return EMPTY_GRAPH;
 
   return { nodes: graph.nodes, edges: Array.isArray(graph.edges) ? graph.edges : [] };
 }
@@ -173,7 +243,13 @@ export function injectStyles(doc = document) {
  */
 export function mount(el, opts = {}) {
   const root = createRoot(el);
-  const render = (graph) => root.render(<FlowEditor graph={graph} onChange={opts.onChange} />);
+  const render = (graph) =>
+    root.render(
+      // useReactFlow (used for screenToFlowPosition) requires this provider
+      <ReactFlowProvider>
+        <FlowEditor graph={graph} onChange={opts.onChange} />
+      </ReactFlowProvider>,
+    );
 
   roots.set(el, root);
   render(opts.graph);
