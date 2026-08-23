@@ -5,7 +5,7 @@ defmodule Demo.FormFlowEditorTest do
 
   What can't be covered here is React itself — LiveViewTest has no JavaScript
   engine, so mounting the editor is a manual check at
-  http://localhost:4000/forms.
+  http://localhost:4000/flows/new.
   """
 
   use DemoWeb.ConnCase
@@ -45,45 +45,19 @@ defmodule Demo.FormFlowEditorTest do
   end
 
   describe "the editor container" do
-    test "renders on the templates route with the bundle's URL", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows")
+    test "renders on the new flow page with the bundle's URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/flows/new")
 
-      assert has_element?(view, ~s(#flows-index-editor[phx-update="ignore"]))
-      assert render(element(view, "#flows-index-editor")) =~ Assets.editor_path()
-    end
-
-    test "reports the graph the editor pushes back", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows")
-
-      assert render(view) =~ "Loading the editor…"
-
-      # Stands in for the hook, which pushes to the LiveComponent by element
-      view
-      |> element("#flows-index-editor")
-      |> render_hook("form_flow:editor_mounted", %{})
-
-      view
-      |> element("#flows-index-editor")
-      |> render_hook("form_flow:graph_changed", %{
-        "nodes" => [
-          %{"id" => "1", "data" => %{"label" => "Start"}},
-          %{"id" => "2", "data" => %{"label" => "Contact details"}}
-        ],
-        "edges" => [%{"id" => "e1-2"}]
-      })
-
-      html = render(view)
-
-      assert html =~ "2 steps, 1 connections"
-      assert html =~ "Start, Contact details"
+      assert has_element?(view, ~s(#flows-new-editor[phx-update="ignore"]))
+      assert render(element(view, "#flows-new-editor")) =~ Assets.editor_path()
     end
 
     test "carries the Elixir-defined data as JSON for the hook to parse", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows")
+      {:ok, view, _html} = live(conn, "/flows/new")
 
       graph =
         view
-        |> element("#flows-index-editor")
+        |> element("#flows-new-editor")
         |> render()
         |> LazyHTML.from_fragment()
         |> LazyHTML.attribute("data-graph")
@@ -94,17 +68,17 @@ defmodule Demo.FormFlowEditorTest do
       assert Enum.map(graph["nodes"], & &1["data"]["kind"]) == ["start", "form", "end"]
       assert Enum.map(graph["edges"], & &1["id"]) == ["e1-2", "e2-3"]
 
-      # Positions and arrowheads come from ReactFlow.data/2, not from the JS
+      # Positions and arrowheads come from the Elixir definition, not the JS
       assert Enum.map(graph["nodes"], & &1["position"]["y"]) == [0, 140, 280]
       assert Enum.map(graph["edges"], & &1["markerEnd"]["type"]) == ["arrowclosed", "arrowclosed"]
     end
 
     test "pins the start and end steps as non-deletable", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows")
+      {:ok, view, _html} = live(conn, "/flows/new")
 
       nodes =
         view
-        |> element("#flows-index-editor")
+        |> element("#flows-new-editor")
         |> render()
         |> LazyHTML.from_fragment()
         |> LazyHTML.attribute("data-graph")
@@ -120,21 +94,11 @@ defmodule Demo.FormFlowEditorTest do
              ]
     end
 
-    test "pushes the Elixir definition back on reset", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows")
+    test "the flows index is a table and never loads the bundle", %{conn: conn} do
+      {:ok, view, html} = live(conn, "/flows")
 
-      view |> element("#flows-index-editor") |> render_hook("form_flow:editor_mounted", %{})
-
-      view |> element("button", "Reset to the Elixir definition") |> render_click()
-
-      assert_push_event(view, "form_flow:set_graph", %{graph: graph})
-      assert Enum.map(graph.nodes, & &1.data.label) == ["Start", "Form", "End"]
-    end
-
-    test "does not render the editor on other paths", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-
-      refute has_element?(view, "#flows-index-editor")
+      refute html =~ Assets.editor_path()
+      refute has_element?(view, "[data-src]")
     end
   end
 end

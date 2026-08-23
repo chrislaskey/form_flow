@@ -81,7 +81,7 @@ defmodule DemoWeb.ReadmeLive do
           <div>Navigate to:</div>
           <div class="flex justify-between gap-3">
             <.link navigate="/flows">Flows Index</.link>
-            <.link navigate="/flows/1">Flows Show</.link>
+            <.link navigate="/flows/new">Flows New</.link>
             <.link navigate="/forms">Forms Index</.link>
             <.link navigate="/forms/1">Forms Show</.link>
           </div>
@@ -90,10 +90,10 @@ defmodule DemoWeb.ReadmeLive do
           </div>
           <p class="text-sm text-base-content/70">
             <.link navigate={~p"/flows"} class="link">/flows</.link>
-            dispatches to <code>FormFlow.Web.Templates.Flows.Index</code>, which
-            renders the ReactFlow editor. Its ~390 KB bundle is fetched from the
-            <code>form_flow_assets()</code>
-            route on that page only — it is not
+            has a dedicated page, <code>DemoWeb.FlowsLive</code>, where the same
+            FormFlow router dispatches to the flows CRUD LiveComponents. The
+            ReactFlow editor's ~390 KB bundle is fetched from the <code>form_flow_assets()</code>
+            route on those pages only — it is not
             in <code>app.js</code>.
           </p>
         </section>

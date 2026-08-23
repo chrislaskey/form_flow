@@ -74,7 +74,7 @@ FormFlow:
 defmodule MyApp.Repo.Migrations.AddFormFlow do
   use Ecto.Migration
 
-  def up, do: FormFlow.Data.Migration.up(version: 2)
+  def up, do: FormFlow.Data.Migration.up(version: 3)
   def down, do: FormFlow.Data.Migration.down(version: 1)
 end
 ```
@@ -91,7 +91,7 @@ returns to the previous version rather than removing FormFlow. Re-running `up` o
 
 Postgres and SQLite are supported, chosen from your repo's adapter. Postgres
 schema prefixes work too — `mix ecto.migrate --prefix` is picked up
-automatically, or pass `FormFlow.Data.Migration.up(version: 2, prefix: "tenant")`
+automatically, or pass `FormFlow.Data.Migration.up(version: 3, prefix: "tenant")`
 explicitly. See `FormFlow.Data.Migration` for other adapters.
 
 **4. Register the colocated hooks** in `assets/js/app.js`

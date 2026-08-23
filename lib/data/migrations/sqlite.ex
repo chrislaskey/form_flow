@@ -9,7 +9,7 @@ defmodule FormFlow.Data.Migrations.SQLite do
   @behaviour FormFlow.Data.Migration
 
   @initial_version 1
-  @current_version 2
+  @current_version 3
 
   @impl FormFlow.Data.Migration
   def initial_version, do: @initial_version

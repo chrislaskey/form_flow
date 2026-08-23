@@ -87,7 +87,7 @@ function stepEdge(source, target) {
 
 /* ----------------------------------------------------------------- editor -- */
 
-function FlowEditor({ graph, onChange }) {
+function FlowEditor({ graph, onChange, editable = true }) {
   const [nodes, setNodes] = useState(() => normalize(graph).nodes);
   const [edges, setEdges] = useState(() => normalize(graph).edges);
 
@@ -196,18 +196,27 @@ function FlowEditor({ graph, onChange }) {
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
       onConnectEnd={onConnectEnd}
+      nodesDraggable={editable}
+      nodesConnectable={editable}
+      elementsSelectable={editable}
+      edgesReconnectable={editable}
+      deleteKeyCode={editable ? "Backspace" : null}
       fitView
       fitViewOptions={{ padding: 0.4 }}
       proOptions={{ hideAttribution: false }}
     >
       <Background variant="dots" gap={16} size={1} />
-      <Controls />
+      {/* showInteractive hides the lock button read-only pages, since it could
+          re-enable interactivity from inside the canvas */}
+      <Controls showInteractive={editable} />
       <MiniMap pannable zoomable />
-      <Panel position="top-left" className="ff-panel">
-        <button type="button" onClick={addStep}>
-          + Add step
-        </button>
-      </Panel>
+      {editable && (
+        <Panel position="top-left" className="ff-panel">
+          <button type="button" onClick={addStep}>
+            + Add step
+          </button>
+        </Panel>
+      )}
     </ReactFlow>
   );
 }
@@ -238,6 +247,9 @@ export function injectStyles(doc = document) {
 /**
  * Renders the editor into `el`.
  *
+ * Pass `editable: false` for a read-only canvas: pan and zoom still work, but
+ * nothing can be selected, dragged, connected, or deleted.
+ *
  * Returns a handle with `setGraph/1` so the server can push a new graph in, and
  * `unmount/0` for teardown.
  */
@@ -247,7 +259,7 @@ export function mount(el, opts = {}) {
     root.render(
       // useReactFlow (used for screenToFlowPosition) requires this provider
       <ReactFlowProvider>
-        <FlowEditor graph={graph} onChange={opts.onChange} />
+        <FlowEditor graph={graph} onChange={opts.onChange} editable={opts.editable !== false} />
       </ReactFlowProvider>,
     );
 

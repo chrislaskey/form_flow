@@ -1,6 +1,6 @@
 defmodule Demo.FormFlowGraphsTest do
   @moduledoc """
-  Exercises `FormFlow.Graphs` and the graph schemas against a real database —
+  Exercises `FormFlow.Data.Graphs` and the graph schemas against a real database —
   the library's own tests stop at changesets, so this is where the V02 DDL
   (foreign keys, cascades, the unique relationship index) is proven to hold.
   """
@@ -8,8 +8,8 @@ defmodule Demo.FormFlowGraphsTest do
   use Demo.DataCase, async: false
 
   alias FormFlow.Data.Repo, as: FormFlowRepo
-  alias FormFlow.Graph
-  alias FormFlow.Graphs
+  alias FormFlow.Data.Graph
+  alias FormFlow.Data.Graphs
 
   test "create, get, update, and delete a graph" do
     assert {:ok, %Graph{id: id}} = Graphs.create()
@@ -22,12 +22,21 @@ defmodule Demo.FormFlowGraphsTest do
     assert Graphs.get(id) == nil
   end
 
-  test "list returns graphs without loading their contents" do
+  test "list returns graphs with counts, without loading their contents" do
     {:ok, first} = Graphs.create()
     {:ok, second} = Graphs.create()
 
+    start = insert_node(first)
+    form = insert_node(first)
+    insert_relationship(first, start, form)
+
     assert [%Graph{id: a}, %Graph{id: b}] = Graphs.list()
     assert {a, b} == {first.id, second.id}
+
+    assert [
+             %Graph{nodes_count: 2, relationships_count: 1},
+             %Graph{nodes_count: 0, relationships_count: 0}
+           ] = Graphs.list()
 
     assert [%Graph{nodes: %Ecto.Association.NotLoaded{}} | _] = Graphs.list()
   end
@@ -43,11 +52,29 @@ defmodule Demo.FormFlowGraphsTest do
 
     assert length(nodes) == 2
     assert Enum.find(nodes, &(&1.id == start.id)).labels == ["Step", "Start"]
-    assert Enum.find(nodes, &(&1.id == form.id)).properties == %{"label" => "Form", "fields" => 4}
+
+    assert Enum.find(nodes, &(&1.id == form.id)).properties == %{
+             "label" => "Form",
+             "fields" => 4,
+             "graph_id" => graph.id
+           }
 
     assert relationship.label == "TRANSITIONS_TO"
-    assert relationship.properties == %{"if" => "always"}
+    assert relationship.properties == %{"if" => "always", "graph_id" => graph.id}
     assert {relationship.source_id, relationship.target_id} == {start.id, form.id}
+  end
+
+  test "graph_id is written to both the column and properties" do
+    {:ok, graph} = Graphs.create()
+    node = insert_node(graph)
+    other = insert_node(graph)
+    relationship = insert_relationship(graph, node, other)
+
+    assert node.graph_id == graph.id
+    assert node.properties["graph_id"] == graph.id
+
+    assert relationship.graph_id == graph.id
+    assert relationship.properties["graph_id"] == graph.id
   end
 
   test "a source and target can only be linked once per label" do
@@ -115,6 +142,151 @@ defmodule Demo.FormFlowGraphsTest do
              Repo.query("SELECT count(*) FROM form_flow_graph_relationships")
   end
 
+  describe "subflows and ownership" do
+    test "an owned subflow: created, referenced, drilled into" do
+      {:ok, root} = Graphs.create()
+      {:ok, child} = Graphs.create(%{owner_graph_id: root.id})
+
+      node = insert_subflow_node(root, child)
+
+      assert Graphs.owned?(child)
+      refute Graphs.owned?(root)
+
+      # The reference dual-writes into properties, like graph_id
+      assert node.subflow_id == child.id
+      assert node.properties["subflow_id"] == child.id
+
+      assert %Graph{id: id} = Graphs.get(node.subflow_id)
+      assert id == child.id
+    end
+
+    test "a subflow reference survives the editor round-trip via properties" do
+      {:ok, root} = Graphs.create()
+      {:ok, child} = Graphs.create(%{owner_graph_id: root.id})
+
+      # The editor sends properties untouched, no :subflow_id attribute
+      {:ok, _} =
+        Graphs.update(root, %{
+          nodes: [%{id: Ecto.UUID.generate(), properties: %{"subflow_id" => child.id}}],
+          relationships: []
+        })
+
+      assert [node] = Graphs.get(root.id).nodes
+      assert node.subflow_id == child.id
+      assert Graphs.get(child.id) != nil
+    end
+
+    test "make_reusable detaches, stamps, and re-homes descendants" do
+      {:ok, root} = Graphs.create()
+      {:ok, middle} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, leaf} = Graphs.create(%{owner_graph_id: root.id})
+
+      insert_subflow_node(root, middle)
+      insert_subflow_node(middle, leaf)
+
+      assert {:ok, middle} = Graphs.make_reusable(Graphs.get(middle.id))
+
+      assert middle.owner_graph_id == nil
+      assert %DateTime{} = middle.made_reusable_at
+
+      # The leaf under it stays private, re-homed to the new ownership root
+      assert Graphs.get(leaf.id).owner_graph_id == middle.id
+    end
+
+    test "list_reusable lists only graphs made reusable, newest first" do
+      {:ok, _root} = Graphs.create()
+      {:ok, first} = Graphs.create()
+      {:ok, second} = Graphs.create()
+
+      {:ok, _} = Graphs.make_reusable(first)
+      {:ok, _} = Graphs.make_reusable(second)
+
+      assert Enum.map(Graphs.list_reusable(), & &1.id) == [second.id, first.id]
+    end
+
+    test "duplicate deep-copies owned children and keeps reusable references" do
+      {:ok, root} = Graphs.create()
+      {:ok, owned} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, shared} = Graphs.create()
+      {:ok, shared} = Graphs.make_reusable(shared)
+
+      form = insert_node(owned, ["Step"], %{"label" => "Inside"})
+      insert_subflow_node(root, owned)
+      insert_subflow_node(root, shared)
+
+      assert {:ok, copy} = Graphs.duplicate(Graphs.get(root.id))
+
+      assert copy.id != root.id
+      assert copy.made_reusable_at == nil
+
+      copied_refs = copy.nodes |> Enum.map(& &1.subflow_id) |> Enum.reject(&is_nil/1)
+
+      # The reusable reference is shared; the owned one points at a fresh copy
+      assert shared.id in copied_refs
+      assert [owned_copy_id] = copied_refs -- [shared.id]
+      assert owned_copy_id != owned.id
+
+      owned_copy = Graphs.get(owned_copy_id)
+      assert owned_copy.owner_graph_id == copy.id
+      assert [inside] = owned_copy.nodes
+      assert inside.id != form.id
+      assert inside.properties["label"] == "Inside"
+    end
+
+    test "deleting a graph referenced by another flow is refused" do
+      {:ok, root} = Graphs.create()
+      {:ok, shared} = Graphs.create()
+      {:ok, shared} = Graphs.make_reusable(shared)
+
+      insert_subflow_node(root, shared)
+
+      assert {:error, changeset} = Graphs.delete(shared)
+      assert %{id: ["is still used as a subflow by another flow"]} = errors_on(changeset)
+
+      # Remove the reference and deletion goes through
+      {:ok, _} = Graphs.update(Graphs.get(root.id), %{nodes: [], relationships: []})
+      assert {:ok, _} = Graphs.delete(shared)
+    end
+
+    test "deleting a root deletes its owned tree, sparing reusable graphs" do
+      {:ok, root} = Graphs.create()
+      {:ok, owned} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, shared} = Graphs.create()
+      {:ok, shared} = Graphs.make_reusable(shared)
+
+      insert_subflow_node(root, owned)
+      insert_subflow_node(root, shared)
+
+      assert {:ok, _} = Graphs.delete(Graphs.get(root.id))
+
+      assert Graphs.get(root.id) == nil
+      assert Graphs.get(owned.id) == nil
+      assert Graphs.get(shared.id) != nil
+    end
+
+    test "saving contents garbage-collects unreachable owned subflows" do
+      {:ok, root} = Graphs.create()
+      {:ok, kept} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, dropped} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, grandchild} = Graphs.create(%{owner_graph_id: root.id})
+
+      keeper = insert_subflow_node(root, kept)
+      insert_subflow_node(root, dropped)
+      insert_subflow_node(dropped, grandchild)
+
+      # Save the root keeping only the node that references `kept`
+      {:ok, _} =
+        Graphs.update(Graphs.get(root.id), %{
+          nodes: [%{id: keeper.id, subflow_id: kept.id, properties: keeper.properties}],
+          relationships: []
+        })
+
+      assert Graphs.get(kept.id) != nil
+      assert Graphs.get(dropped.id) == nil
+      assert Graphs.get(grandchild.id) == nil
+    end
+  end
+
   defp insert_node(graph, labels \\ ["Step"], properties \\ %{}) do
     {:ok, node} =
       %Graph.Node{}
@@ -129,6 +301,19 @@ defmodule Demo.FormFlowGraphsTest do
       FormFlowRepo.insert(relationship_changeset(graph, source, target, properties: properties))
 
     relationship
+  end
+
+  defp insert_subflow_node(graph, subflow) do
+    {:ok, node} =
+      %Graph.Node{}
+      |> Graph.Node.changeset(%{
+        graph_id: graph.id,
+        subflow_id: subflow.id,
+        properties: %{"type" => "subflow"}
+      })
+      |> FormFlowRepo.insert()
+
+    node
   end
 
   defp relationship_changeset(graph, source, target, opts \\ []) do

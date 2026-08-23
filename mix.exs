@@ -72,7 +72,8 @@ defmodule FormFlow.MixProject do
         "LICENSE.md",
         "guides/usage.md",
         "guides/reference.md",
-        "guides/development.md"
+        "guides/development.md",
+        "guides/neo4j.md"
       ],
       groups_for_extras: [
         Guides: ~r{guides/}

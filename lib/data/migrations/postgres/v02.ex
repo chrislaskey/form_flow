@@ -3,9 +3,9 @@ defmodule FormFlow.Data.Migrations.Postgres.V02 do
 
   # The graph schema: a property graph in the Neo4j style, stored relationally.
   # Nodes carry labels (a set) and properties; relationships carry a single
-  # label and properties. `graph_id` is a real column rather than a property so
-  # the database can enforce membership and cascade deletes — the future Neo4j
-  # adapter can fold it into the property map at the mapping layer.
+  # label and properties. `graph_id` is a real column so the database can
+  # enforce membership and cascade deletes; the schemas also keep a copy of it
+  # inside properties, the location that carries over to Neo4j.
   #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
   # only mode): `:restrict` would push deletion ordering onto every caller, and

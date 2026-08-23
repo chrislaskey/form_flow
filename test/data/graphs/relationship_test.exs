@@ -1,7 +1,7 @@
-defmodule FormFlow.Graph.RelationshipTest do
+defmodule FormFlow.Data.Graph.RelationshipTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Graph.Relationship
+  alias FormFlow.Data.Graph.Relationship
 
   @attrs %{
     graph_id: Ecto.UUID.generate(),
@@ -16,7 +16,11 @@ defmodule FormFlow.Graph.RelationshipTest do
 
     assert changeset.valid?
     assert changeset.changes.label == "TRANSITIONS_TO"
-    assert changeset.changes.properties == %{"if" => "approved"}
+
+    assert changeset.changes.properties == %{
+             "if" => "approved",
+             "graph_id" => @attrs.graph_id
+           }
   end
 
   test "requires graph_id, source_id, target_id, and label" do
@@ -36,7 +40,21 @@ defmodule FormFlow.Graph.RelationshipTest do
     changeset = Relationship.changeset(%Relationship{}, @attrs)
 
     assert changeset.valid?
-    assert Ecto.Changeset.apply_changes(changeset).properties == %{}
+
+    assert Ecto.Changeset.apply_changes(changeset).properties == %{
+             "graph_id" => @attrs.graph_id
+           }
+  end
+
+  test "IN, EMBEDS, and OWNED_BY are reserved for the Neo4j structural vocabulary" do
+    for label <- ~w(IN EMBEDS OWNED_BY) do
+      changeset = Relationship.changeset(%Relationship{}, %{@attrs | label: label})
+
+      refute changeset.valid?
+      assert %{label: ["is reserved by FormFlow"]} = errors_on(changeset)
+    end
+
+    assert Relationship.changeset(%Relationship{}, @attrs).valid?
   end
 
   test "carries the unique constraint on source, target, and label" do

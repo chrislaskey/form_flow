@@ -16,14 +16,14 @@ defmodule FormFlow.Data.MigrationTest do
 
   describe "current_version/1" do
     test "reports the latest version for each supported adapter" do
-      assert Migration.current_version(repo: PostgresRepo) == 2
-      assert Migration.current_version(repo: SQLiteRepo) == 2
+      assert Migration.current_version(repo: PostgresRepo) == 3
+      assert Migration.current_version(repo: SQLiteRepo) == 3
     end
 
     test "uses the configured repo when none is passed" do
       Application.put_env(:form_flow, :repo, PostgresRepo)
 
-      assert Migration.current_version() == 2
+      assert Migration.current_version() == 3
     end
   end
 
@@ -47,7 +47,7 @@ defmodule FormFlow.Data.MigrationTest do
     test "honors a configured migrator over the adapter default" do
       Application.put_env(:form_flow, :migrator, FormFlow.Data.Migrations.SQLite)
 
-      assert Migration.current_version(repo: MysqlRepo) == 2
+      assert Migration.current_version(repo: MysqlRepo) == 3
     end
   end
 
@@ -61,7 +61,7 @@ defmodule FormFlow.Data.MigrationTest do
 
   describe "option validation" do
     test "rejects versions outside the supported range" do
-      assert_raise ArgumentError, ~r/expected :version to be between 1..2, got: 99/, fn ->
+      assert_raise ArgumentError, ~r/expected :version to be between 1..3, got: 99/, fn ->
         Migration.up(repo: PostgresRepo, version: 99)
       end
 

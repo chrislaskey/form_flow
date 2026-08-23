@@ -10,4 +10,9 @@ defmodule FormFlow.Data.Repo do
   def insert(changeset), do: repo().insert(changeset)
   def update(changeset), do: repo().update(changeset)
   def delete(struct), do: repo().delete(struct)
+  def delete_all(query), do: repo().delete_all(query)
+  def update_all(query, updates), do: repo().update_all(query, updates)
+  def exists?(query), do: repo().exists?(query)
+  def transaction(fun), do: repo().transaction(fun)
+  def rollback(value), do: repo().rollback(value)
 end

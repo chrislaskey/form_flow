@@ -89,4 +89,119 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert_raise FunctionClauseError, fn -> ReactFlow.to_json([@node]) end
     end
   end
+
+  describe "to_graph_attrs/1" do
+    test "a node's map becomes its properties, minus the id" do
+      %{nodes: [node]} =
+        ReactFlow.to_graph_attrs(%{
+          "nodes" => [
+            %{
+              "id" => "1",
+              "type" => "step",
+              "position" => %{"x" => 240, "y" => 0},
+              "data" => %{"label" => "Start"}
+            }
+          ],
+          "edges" => []
+        })
+
+      assert node.properties == %{
+               "type" => "step",
+               "position" => %{"x" => 240, "y" => 0},
+               "data" => %{"label" => "Start"}
+             }
+    end
+
+    test "editor ids become UUIDs; existing UUIDs are kept" do
+      existing = Ecto.UUID.generate()
+
+      %{nodes: [kept, fresh]} =
+        ReactFlow.to_graph_attrs(%{
+          "nodes" => [%{"id" => existing}, %{"id" => "4"}],
+          "edges" => []
+        })
+
+      assert kept.id == existing
+      assert {:ok, _} = Ecto.UUID.cast(fresh.id)
+      refute fresh.id == existing
+    end
+
+    test "edges follow their nodes through the id mapping" do
+      %{nodes: [start, form], relationships: [relationship]} =
+        ReactFlow.to_graph_attrs(%{
+          "nodes" => [%{"id" => "1"}, %{"id" => "2"}],
+          "edges" => [
+            %{
+              "id" => "e1-2",
+              "source" => "1",
+              "target" => "2",
+              "markerEnd" => %{"type" => "arrowclosed"}
+            }
+          ]
+        })
+
+      assert relationship.source_id == start.id
+      assert relationship.target_id == form.id
+      assert relationship.label == "CONNECTS_TO"
+      assert relationship.properties == %{"markerEnd" => %{"type" => "arrowclosed"}}
+    end
+
+    test "accepts atom keys, the shape flows are written in Elixir" do
+      %{nodes: [node, _form], relationships: [relationship]} =
+        ReactFlow.to_graph_attrs(%{
+          nodes: [%{id: "1", position: %{x: 0, y: 0}}, %{id: "2", position: %{x: 0, y: 100}}],
+          edges: [%{id: "e1-2", source: "1", target: "2"}]
+        })
+
+      assert node.properties["position"] == %{"x" => 0, "y" => 0}
+      assert {:ok, _} = Ecto.UUID.cast(relationship.source_id)
+    end
+
+    test "missing nodes or edges default to empty" do
+      assert ReactFlow.to_graph_attrs(%{}) == %{nodes: [], relationships: []}
+    end
+  end
+
+  describe "to_data/1" do
+    test "is the inverse of to_graph_attrs/1" do
+      attrs =
+        ReactFlow.to_graph_attrs(%{
+          "nodes" => [
+            %{"id" => "1", "type" => "step", "position" => %{"x" => 240, "y" => 0}},
+            %{"id" => "2", "type" => "step", "position" => %{"x" => 240, "y" => 140}}
+          ],
+          "edges" => [%{"id" => "e1-2", "source" => "1", "target" => "2"}]
+        })
+
+      graph = %FormFlow.Data.Graph{
+        id: Ecto.UUID.generate(),
+        nodes:
+          Enum.map(attrs.nodes, fn node ->
+            %FormFlow.Data.Graph.Node{id: node.id, properties: node.properties}
+          end),
+        relationships:
+          Enum.map(attrs.relationships, fn relationship ->
+            %FormFlow.Data.Graph.Relationship{
+              id: relationship.id,
+              source_id: relationship.source_id,
+              target_id: relationship.target_id,
+              label: relationship.label,
+              properties: relationship.properties
+            }
+          end)
+      }
+
+      data = ReactFlow.to_data(graph)
+
+      assert [%{"id" => id, "type" => "step", "position" => %{"x" => 240}} | _] = data.nodes
+      assert {:ok, _} = Ecto.UUID.cast(id)
+
+      assert [%{"source" => source, "target" => target}] = data.edges
+      assert source == hd(data.nodes)["id"]
+      assert target == Enum.at(data.nodes, 1)["id"]
+
+      # And saving what to_data produced changes nothing: ids are stable
+      assert ReactFlow.to_graph_attrs(data) == attrs
+    end
+  end
 end

@@ -25,6 +25,7 @@ defmodule DemoWeb.Router do
 
     live "/install-check", InstallCheckLive
     live "/example", ExampleLive.Index
+    live "/flows/*path", FlowsLive
     live "/*path", ReadmeLive
   end
 

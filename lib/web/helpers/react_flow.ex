@@ -57,7 +57,30 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     * `fields` - the field count shown under the label
 
   Any other node type you register in the editor is passed through the same way.
+
+  ## Persistence
+
+  `to_graph_attrs/1` and `to_data/1` translate between ReactFlow's shape and
+  `FormFlow.Data.Graph` records, and are inverses of each other:
+
+    * A ReactFlow node becomes a `FormFlow.Data.Graph.Node` whose `properties`
+      are the node map itself, minus `id` — position, type, data, and anything
+      else ReactFlow supports round-trips untouched.
+    * A ReactFlow edge becomes a `FormFlow.Data.Graph.Relationship` the same
+      way, minus `id`, `source`, and `target`, which become columns. Every
+      relationship gets the label `"CONNECTS_TO"` — the editor's
+      edges all mean the same thing today.
+    * Ids from the editor (`"1"`, `"4"`) are replaced with generated UUIDs at
+      save time; ids that already are UUIDs are kept, so unchanged records are
+      updated in place rather than recreated.
+
+  Saved properties also carry a `"graph_id"` key — the schemas keep a copy of
+  the `graph_id` column inside `properties` (see `FormFlow.Data.Graph.Node`).
+  It rides through the editor and back as any other property; the column stays
+  authoritative on save.
   """
+
+  @edge_label "CONNECTS_TO"
 
   @doc """
   Encodes ReactFlow data as JSON, ready to hand to the editor.
@@ -67,5 +90,69 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   """
   def to_json(data) when is_map(data) do
     Phoenix.json_library().encode!(data)
+  end
+
+  @doc """
+  Converts ReactFlow data into attributes for `FormFlow.Data.Graphs.create/1`
+  and `FormFlow.Data.Graphs.update/2`.
+
+  Accepts the shape the editor reports (string keys) or the shape flows are
+  written in Elixir (atom keys). See the module documentation for the mapping.
+  """
+  def to_graph_attrs(data) when is_map(data) do
+    %{"nodes" => nodes, "edges" => edges} =
+      data
+      |> string_keys()
+      |> Map.put_new("nodes", [])
+      |> Map.put_new("edges", [])
+
+    ids = Map.new(nodes, fn node -> {node["id"], uuid(node["id"])} end)
+
+    %{
+      nodes:
+        Enum.map(nodes, fn node ->
+          %{id: ids[node["id"]], properties: Map.delete(node, "id")}
+        end),
+      relationships:
+        Enum.map(edges, fn edge ->
+          %{
+            id: uuid(edge["id"]),
+            source_id: Map.get(ids, edge["source"], edge["source"]),
+            target_id: Map.get(ids, edge["target"], edge["target"]),
+            label: @edge_label,
+            properties: Map.drop(edge, ["id", "source", "target"])
+          }
+        end)
+    }
+  end
+
+  @doc """
+  Converts a loaded `FormFlow.Data.Graph` back into ReactFlow data — the
+  inverse of `to_graph_attrs/1`. Node and edge ids are the records' UUIDs.
+  """
+  def to_data(%FormFlow.Data.Graph{} = graph) do
+    %{
+      nodes: Enum.map(graph.nodes, fn node -> Map.put(node.properties, "id", node.id) end),
+      edges:
+        Enum.map(graph.relationships, fn relationship ->
+          relationship.properties
+          |> Map.put("id", relationship.id)
+          |> Map.put("source", relationship.source_id)
+          |> Map.put("target", relationship.target_id)
+        end)
+    }
+  end
+
+  # Atom or string keys in, string keys out — the same normalization the data
+  # goes through anyway on its way to the browser
+  defp string_keys(data) do
+    data |> Phoenix.json_library().encode!() |> Phoenix.json_library().decode!()
+  end
+
+  defp uuid(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, id} -> id
+      :error -> Ecto.UUID.generate()
+    end
   end
 end
