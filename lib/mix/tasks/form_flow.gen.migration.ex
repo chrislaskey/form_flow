@@ -9,7 +9,10 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
 
   The generated migration calls `FormFlow.Data.Migration.up/1` with the version
   pinned, so it keeps doing what it did when it was written. Upgrading FormFlow
-  means running this task again to generate a migration for the newer version.
+  means running this task again: it finds the version your existing migration
+  pinned and generates a second migration that applies only the versions in
+  between — and whose rollback returns to the old version rather than removing
+  FormFlow entirely.
 
   ## Options
 
@@ -40,18 +43,51 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
     repo = repo(args)
     version = opts[:version] || Migration.current_version(repo: repo)
     path = opts[:migrations_path] || Path.join(EctoSQL.source_repo_priv(repo), "migrations")
-    file = Path.join(path, "#{timestamp()}_add_form_flow.exs")
+    pinned = highest_pinned_version(path)
+
+    cond do
+      pinned >= version ->
+        Mix.shell().info("""
+        A migration in #{path} already pins FormFlow version #{pinned} — nothing to generate.
+        """)
+
+      pinned == 0 ->
+        # First install: rolling back removes FormFlow entirely
+        generate(path, repo, "AddFormFlow", "add_form_flow", version, 1)
+
+      true ->
+        # Upgrade: rolling back returns to the previously pinned version
+        generate(
+          path,
+          repo,
+          "AddFormFlowV#{version}",
+          "add_form_flow_v#{version}",
+          version,
+          pinned + 1
+        )
+    end
+  end
+
+  defp generate(path, repo, module, name, up_version, down_version) do
+    file = Path.join(path, "#{timestamp()}_#{name}.exs")
+
+    down_comment =
+      if down_version == 1 do
+        "# Rolling back removes FormFlow's tables, and the data in them"
+      else
+        "# Rolling back returns FormFlow to schema version #{down_version - 1}"
+      end
 
     create_directory(path)
 
     create_file(file, """
-    defmodule #{inspect(Module.concat(repo, Migrations.AddFormFlow))} do
+    defmodule #{inspect(Module.concat([repo, "Migrations", module]))} do
       use Ecto.Migration
 
-      def up, do: FormFlow.Data.Migration.up(version: #{version})
+      def up, do: FormFlow.Data.Migration.up(version: #{up_version})
 
-      # Rolling back removes FormFlow's tables, and the data in them
-      def down, do: FormFlow.Data.Migration.down(version: #{version})
+      #{down_comment}
+      def down, do: FormFlow.Data.Migration.down(version: #{down_version})
     end
     """)
 
@@ -61,6 +97,20 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
 
         mix ecto.migrate
     """)
+  end
+
+  # The version an earlier run of this task pinned, or 0 when there is none.
+  # Read from the migration files themselves — the database may not exist yet.
+  defp highest_pinned_version(path) do
+    path
+    |> Path.join("*.exs")
+    |> Path.wildcard()
+    |> Enum.flat_map(fn file ->
+      ~r/FormFlow\.Data\.Migration\.up\(version: (\d+)\)/
+      |> Regex.scan(File.read!(file))
+      |> Enum.map(fn [_, version] -> String.to_integer(version) end)
+    end)
+    |> Enum.max(fn -> 0 end)
   end
 
   defp repo(args) do

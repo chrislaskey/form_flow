@@ -5,8 +5,9 @@ defmodule FormFlow.Data.Repo do
 
   def repo, do: Application.get_env(:form_flow, :repo)
   def all(query), do: repo().all(query)
-  def get(query), do: repo().get(query)
-  def insert(query), do: repo().insert(query)
-  def update(query), do: repo().update(query)
-  def delete(query), do: repo().delete(query)
+  def get(queryable, id), do: repo().get(queryable, id)
+  def preload(structs, preloads), do: repo().preload(structs, preloads)
+  def insert(changeset), do: repo().insert(changeset)
+  def update(changeset), do: repo().update(changeset)
+  def delete(struct), do: repo().delete(struct)
 end

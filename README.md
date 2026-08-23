@@ -74,7 +74,7 @@ FormFlow:
 defmodule MyApp.Repo.Migrations.AddFormFlow do
   use Ecto.Migration
 
-  def up, do: FormFlow.Data.Migration.up(version: 1)
+  def up, do: FormFlow.Data.Migration.up(version: 2)
   def down, do: FormFlow.Data.Migration.down(version: 1)
 end
 ```
@@ -85,12 +85,13 @@ migrator all work as they already do.
 
 The version is pinned on purpose: that migration keeps doing what it did when it
 was written. **Upgrading FormFlow means running `mix form_flow.gen.migration`
-again** to generate a migration for the newer version, which applies only the
-steps in between. Re-running `up` on an already-current database is a no-op.
+again** — it finds the version your existing migration pinned and generates an
+upgrade migration that applies only the steps in between, and whose rollback
+returns to the previous version rather than removing FormFlow. Re-running `up` on an already-current database is a no-op.
 
 Postgres and SQLite are supported, chosen from your repo's adapter. Postgres
 schema prefixes work too — `mix ecto.migrate --prefix` is picked up
-automatically, or pass `FormFlow.Data.Migration.up(version: 1, prefix: "tenant")`
+automatically, or pass `FormFlow.Data.Migration.up(version: 2, prefix: "tenant")`
 explicitly. See `FormFlow.Data.Migration` for other adapters.
 
 **4. Register the colocated hooks** in `assets/js/app.js`
