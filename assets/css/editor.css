@@ -58,3 +58,42 @@
   border-color: #0891b2;
   color: #0891b2;
 }
+
+.ff-node--subflow {
+  border-left-color: #ca8a04;
+}
+
+.ff-node__open {
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+
+  /* Read-only canvases set pointer-events: none on the whole node wrapper
+     (ReactFlow does this when a node is neither draggable, selectable, nor
+     connectable). Opening a subflow is navigation, not editing, so the
+     button opts back in. */
+  pointer-events: all;
+}
+
+.ff-node__open:hover {
+  border-color: #ca8a04;
+  color: #ca8a04;
+}
+
+/* ReactFlow's default handles are 6px dots — hard to grab when starting a
+   connection. Bigger, with a visible affordance. */
+.ff-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #71717a;
+  border-radius: 9999px;
+  background: #fff;
+}
+
+.ff-node .react-flow__handle:hover {
+  border-color: #0891b2;
+}

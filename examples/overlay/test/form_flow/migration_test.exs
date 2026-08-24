@@ -20,7 +20,7 @@ defmodule Demo.FormFlowMigrationTest do
 
   test "the version is read through the configured repo, with no argument" do
     assert Application.get_env(:form_flow, :repo) == Repo
-    assert Migration.migrated_version() == 3
+    assert Migration.migrated_version() == 4
   end
 
   test "the template and instance tables accept rows" do

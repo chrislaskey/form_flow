@@ -47,7 +47,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       <table :if={@graphs != []} class="w-full text-left text-sm">
         <thead>
           <tr class="border-b border-zinc-300 text-xs text-zinc-500">
-            <th class="py-2 pr-4 font-medium">Flow</th>
+            <th class="py-2 pr-4 font-medium">Name</th>
+            <th class="py-2 pr-4 font-medium">Kind</th>
             <th class="py-2 pr-4 font-medium">Steps</th>
             <th class="py-2 pr-4 font-medium">Connections</th>
             <th class="py-2 pr-4 font-medium">Created</th>
@@ -56,7 +57,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         </thead>
         <tbody>
           <tr :for={graph <- @graphs} class="border-b border-zinc-200">
-            <td class="py-2 pr-4 font-mono text-xs">{graph.id}</td>
+            <td class="py-2 pr-4">
+              {graph.name || "Untitled"}
+              <span class="block font-mono text-[10px] text-zinc-400">{graph.id}</span>
+            </td>
+            <td class="py-2 pr-4 text-xs text-zinc-500">
+              {if graph.label == "subflows", do: "Complex", else: "Simple"}
+            </td>
             <td class="py-2 pr-4">{graph.nodes_count}</td>
             <td class="py-2 pr-4">{graph.relationships_count}</td>
             <td class="py-2 pr-4 text-xs text-zinc-500">

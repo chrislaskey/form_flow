@@ -13,9 +13,10 @@ defmodule FormFlow.Web.Components.Editor do
 
     * React to Elixir — `pushEventTo(this.el, ...)`, which lands in the
       `handle_event/3` of the LiveComponent passed as `target`:
-      `"form_flow:editor_mounted"` once the bundle has loaded, and
+      `"form_flow:editor_mounted"` once the bundle has loaded,
       `"form_flow:graph_changed"` with `%{"nodes" => ..., "edges" => ...}` on
-      every meaningful edit
+      every meaningful edit, and `"form_flow:open_subflow"` with
+      `%{"node_id" => ...}` when a subflow node's Open button is clicked
     * Elixir to React — `push_event/3` with the `form_flow:set_graph` event,
       picked up by `handleEvent` in the hook
 
@@ -38,6 +39,11 @@ defmodule FormFlow.Web.Components.Editor do
     doc: "false renders a read-only canvas: pan and zoom, but no changes"
   )
 
+  attr(:flow_label, :string,
+    default: "forms",
+    doc: "the graph's declared flavor; picks the editor's add actions"
+  )
+
   def editor(assigns) do
     ~H"""
     <%!-- ReactFlow needs explicit dimensions, and the canvas should not depend
@@ -49,6 +55,7 @@ defmodule FormFlow.Web.Components.Editor do
       phx-target={@target}
       data-src={Assets.editor_path()}
       data-editable={to_string(@editable)}
+      data-flow-label={@flow_label}
       data-graph={ReactFlow.to_json(@data)}
       style="height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
@@ -67,7 +74,10 @@ defmodule FormFlow.Web.Components.Editor do
             this.editor = editor.mount(this.el, {
               graph: JSON.parse(this.el.dataset.graph),
               editable: this.el.dataset.editable !== "false",
-              onChange: (graph) => this.pushEventTo(this.el, "form_flow:graph_changed", graph)
+              flowLabel: this.el.dataset.flowLabel,
+              onChange: (graph) => this.pushEventTo(this.el, "form_flow:graph_changed", graph),
+              onOpenSubflow: (nodeId) =>
+                this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId})
             })
 
             this.handleEvent("form_flow:set_graph", ({graph}) => this.editor.setGraph(graph))

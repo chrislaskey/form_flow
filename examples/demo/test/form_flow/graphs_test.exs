@@ -39,6 +39,10 @@ defmodule Demo.FormFlowGraphsTest do
            ] = Graphs.list()
 
     assert [%Graph{nodes: %Ecto.Association.NotLoaded{}} | _] = Graphs.list()
+
+    # Owned subflow children live inside their root — never listed beside it
+    {:ok, _child} = Graphs.create(%{owner_graph_id: first.id})
+    assert length(Graphs.list()) == 2
   end
 
   test "get loads nodes and relationships, round-tripping labels and properties" do
@@ -142,6 +146,105 @@ defmodule Demo.FormFlowGraphsTest do
              Repo.query("SELECT count(*) FROM form_flow_graph_relationships")
   end
 
+  describe "declared flavor and save-time children" do
+    test "create persists name and label; label is immutable" do
+      {:ok, graph} = Graphs.create(%{name: "Enrollment", label: "subflows"})
+
+      assert graph.name == "Enrollment"
+      assert graph.label == "subflows"
+
+      assert {:error, changeset} = Graphs.update(graph, %{label: "forms"})
+      assert %{label: ["cannot be changed after creation"]} = errors_on(changeset)
+
+      assert {:ok, renamed} = Graphs.update(graph, %{name: "Renamed"})
+      assert renamed.name == "Renamed"
+    end
+
+    test "a forms flow rejects subflow steps" do
+      {:ok, graph} = Graphs.create(%{label: "forms"})
+
+      assert {:error, changeset} =
+               Graphs.update(graph, %{
+                 nodes: [%{properties: %{"type" => "subflow", "data" => %{}}}],
+                 relationships: []
+               })
+
+      assert %{nodes: ["a forms flow cannot contain subflow steps"]} = errors_on(changeset)
+    end
+
+    test "a subflows flow rejects form steps but accepts Start and End" do
+      {:ok, graph} = Graphs.create(%{label: "subflows"})
+
+      assert {:error, changeset} =
+               Graphs.update(graph, %{
+                 nodes: [%{properties: %{"type" => "step", "data" => %{"kind" => "form"}}}],
+                 relationships: []
+               })
+
+      assert %{nodes: ["a subflows flow cannot contain form steps"]} = errors_on(changeset)
+
+      assert {:ok, _} =
+               Graphs.update(Graphs.get(graph.id), %{
+                 nodes: Graphs.starter_nodes(),
+                 relationships: []
+               })
+    end
+
+    test "saving creates children for subflow nodes, from their declared label" do
+      {:ok, root} =
+        Graphs.create(%{label: "subflows", nodes: Graphs.starter_nodes(), relationships: []})
+
+      {:ok, _} =
+        Graphs.update(Graphs.get(root.id), %{
+          nodes: [
+            %{
+              properties: %{
+                "type" => "subflow",
+                "data" => %{"label" => "Collect address", "subflow_label" => "forms"}
+              }
+            },
+            %{
+              properties: %{
+                "type" => "subflow",
+                "data" => %{"label" => "Interview", "subflow_label" => "subflows"}
+              }
+            }
+          ],
+          relationships: []
+        })
+
+      root = Graphs.get(root.id)
+      children = root.nodes |> Enum.map(& &1.subflow_id) |> Enum.map(&Graphs.get/1)
+
+      address = Enum.find(children, &(&1.name == "Collect address"))
+      interview = Enum.find(children, &(&1.name == "Interview"))
+
+      assert address.label == "forms"
+      assert interview.label == "subflows"
+
+      # Owned by the root, seeded with the universal Start/End starter
+      for child <- children do
+        assert child.owner_graph_id == root.id
+
+        assert child.nodes |> Enum.map(&get_in(&1.properties, ["data", "label"])) |> Enum.sort() ==
+                 ["End", "Start"]
+
+        assert child.relationships == []
+      end
+
+      # Saving again does not create duplicates: the references round-trip
+      {:ok, _} =
+        Graphs.update(root, %{
+          nodes: Enum.map(root.nodes, &%{id: &1.id, properties: &1.properties}),
+          relationships: []
+        })
+
+      assert Graphs.get(root.id).nodes
+             |> Enum.map(& &1.subflow_id)
+             |> Enum.sort() == Enum.sort([address.id, interview.id])
+    end
+  end
+
   describe "subflows and ownership" do
     test "an owned subflow: created, referenced, drilled into" do
       {:ok, root} = Graphs.create()
@@ -161,7 +264,7 @@ defmodule Demo.FormFlowGraphsTest do
     end
 
     test "a subflow reference survives the editor round-trip via properties" do
-      {:ok, root} = Graphs.create()
+      {:ok, root} = Graphs.create(%{label: "subflows"})
       {:ok, child} = Graphs.create(%{owner_graph_id: root.id})
 
       # The editor sends properties untouched, no :subflow_id attribute
@@ -265,7 +368,7 @@ defmodule Demo.FormFlowGraphsTest do
     end
 
     test "saving contents garbage-collects unreachable owned subflows" do
-      {:ok, root} = Graphs.create()
+      {:ok, root} = Graphs.create(%{label: "subflows"})
       {:ok, kept} = Graphs.create(%{owner_graph_id: root.id})
       {:ok, dropped} = Graphs.create(%{owner_graph_id: root.id})
       {:ok, grandchild} = Graphs.create(%{owner_graph_id: root.id})

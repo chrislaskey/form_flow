@@ -23,6 +23,19 @@ defmodule FormFlow.Data.Graphs do
   Reusable graphs can be referenced by many flows — edits show up everywhere —
   or copied with `duplicate/2` for a private point-in-time copy.
 
+  ## Declared flavor
+
+  Every graph declares its flavor at creation in `label`: `"forms"` flows
+  contain form steps, `"subflows"` flows contain subflow steps — never mixed
+  (structural Start/End nodes are exempt). Saves validate the rule, and the
+  label is immutable: converting means wrapping in a new parent flow.
+
+  Saving a `"subflows"` graph also creates the children: any subflow node
+  without a `subflow_id` gets a fresh graph — owned by the root, seeded with
+  `starter_nodes/0`, named from the node's canvas label, its own label taken
+  from the node's `data.subflow_label` (declared when the node was added in
+  the editor) — and the node is pointed at it.
+
   See the Neo4j guide (`guides/neo4j.md`) for how all of this maps onto a
   graph database when the dual-write extension lands.
   """
@@ -35,13 +48,18 @@ defmodule FormFlow.Data.Graphs do
   alias FormFlow.Data.Repo
 
   @doc """
-  Returns all graphs, oldest first, without their nodes and relationships —
-  just the counts, in the `:nodes_count` and `:relationships_count` virtual
-  fields, as summary data for listings.
+  Returns the top-level flows — root flows and reusable subflows — oldest
+  first, without their nodes and relationships; just the counts, in the
+  `:nodes_count` and `:relationships_count` virtual fields, as summary data
+  for listings.
+
+  Owned subflow children are deliberately excluded: they live inside their
+  root and are reached by drill-in, not listed beside it.
   """
   def list do
     Repo.all(
       from(g in Graph,
+        where: is_nil(g.owner_graph_id),
         left_join: n in assoc(g, :nodes),
         left_join: r in assoc(g, :relationships),
         group_by: g.id,
@@ -86,6 +104,47 @@ defmodule FormFlow.Data.Graphs do
   end
 
   @doc """
+  Fetches one node by id, or `nil`. Drill-in URLs carry node ids — the node's
+  `subflow_id` is the graph they open.
+  """
+  def get_node(id) do
+    with {:ok, id} <- Ecto.UUID.cast(id),
+         %Node{} = node <- Repo.get(Node, id) do
+      node
+    else
+      _other -> nil
+    end
+  end
+
+  @doc """
+  The node attributes every flow starts from: a pinned `Start` and `End`,
+  nothing else — the user connects the dots. One universal seed for both
+  flavors, used for new flows and for subflow children created at save.
+  """
+  def starter_nodes do
+    [
+      %{
+        labels: [],
+        properties: %{
+          "type" => "step",
+          "position" => %{"x" => 240, "y" => 0},
+          "deletable" => false,
+          "data" => %{"label" => "Start", "kind" => "start", "fields" => 0}
+        }
+      },
+      %{
+        labels: [],
+        properties: %{
+          "type" => "step",
+          "position" => %{"x" => 240, "y" => 260},
+          "deletable" => false,
+          "data" => %{"label" => "End", "kind" => "end", "fields" => 0}
+        }
+      }
+    ]
+  end
+
+  @doc """
   Whether the graph is some root flow's private property.
 
   Unowned graphs are root flows or reusable subflows — structurally the same
@@ -104,7 +163,7 @@ defmodule FormFlow.Data.Graphs do
   for subflows.
   """
   def create(attrs \\ %{}) do
-    save(Graph.changeset(%Graph{}, attrs), attrs, &Repo.insert/1)
+    save(Graph.changeset(%Graph{}, attrs), attrs, &Repo.insert/1, sweep?: false)
   end
 
   @doc """
@@ -120,7 +179,7 @@ defmodule FormFlow.Data.Graphs do
   an owned subflow (and its whole private subtree) goes away.
   """
   def update(%Graph{} = graph, attrs) do
-    save(Graph.changeset(graph, attrs), attrs, &Repo.update/1)
+    save(Graph.changeset(graph, attrs), attrs, &Repo.update/1, sweep?: true)
   end
 
   @doc """
@@ -206,33 +265,121 @@ defmodule FormFlow.Data.Graphs do
     end)
   end
 
-  defp save(changeset, attrs, operation) do
-    Repo.transaction(fn ->
-      with {:ok, graph} <- operation.(changeset),
-           {:ok, graph} <- replace_contents(graph, attrs) do
-        graph
-      else
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
+  # Only updates sweep: replacing existing contents is the one way owned
+  # graphs become unreachable. Creates must not — a child graph created
+  # mid-save of its parent would sweep the domain before the parent's node
+  # points at it, collecting itself.
+  defp save(changeset, attrs, operation, sweep?: sweep?) do
+    Repo.transaction(fn -> do_save(changeset, attrs, operation, sweep?) end)
+  end
+
+  defp do_save(changeset, attrs, operation, sweep?) do
+    with {:ok, graph} <- operation.(changeset),
+         {:ok, graph} <- replace_contents(graph, attrs) do
+      if sweep? and contents?(attrs), do: sweep_unreachable(graph)
+
+      graph
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp contents?(attrs) do
+    Map.has_key?(attrs, :nodes) or Map.has_key?(attrs, :relationships)
   end
 
   defp replace_contents(graph, attrs) do
-    if Map.has_key?(attrs, :nodes) or Map.has_key?(attrs, :relationships) do
-      # Deleting the nodes cascades to any relationships that referenced them
-      Repo.delete_all(from(n in Node, where: n.graph_id == ^graph.id))
-      Repo.delete_all(from(r in Relationship, where: r.graph_id == ^graph.id))
-
-      with {:ok, _nodes} <- insert_contents(graph, Node, Map.get(attrs, :nodes, [])),
+    if contents?(attrs) do
+      with :ok <- validate_flavor(graph, Map.get(attrs, :nodes, [])),
+           :ok <- clear_contents(graph),
+           {:ok, nodes} <- insert_contents(graph, Node, Map.get(attrs, :nodes, [])),
            {:ok, _rels} <-
-             insert_contents(graph, Relationship, Map.get(attrs, :relationships, [])) do
-        sweep_unreachable(graph)
-
+             insert_contents(graph, Relationship, Map.get(attrs, :relationships, [])),
+           {:ok, _children} <- create_missing_subflows(graph, nodes) do
         {:ok, graph}
       end
     else
       {:ok, graph}
     end
+  end
+
+  # Deleting the nodes cascades to any relationships that referenced them
+  defp clear_contents(graph) do
+    Repo.delete_all(from(n in Node, where: n.graph_id == ^graph.id))
+    Repo.delete_all(from(r in Relationship, where: r.graph_id == ^graph.id))
+
+    :ok
+  end
+
+  # The homogeneity rule for the declared flavor: a "forms" flow never holds
+  # subflow steps, a "subflows" flow never holds form steps. Start/End are
+  # structural and pass. The editor is the primary guard — this is the belt
+  # for callers bypassing it.
+  defp validate_flavor(graph, nodes_attrs) do
+    error =
+      case graph.label do
+        "forms" ->
+          if Enum.any?(nodes_attrs, &subflow_step?/1),
+            do: "a forms flow cannot contain subflow steps"
+
+        "subflows" ->
+          if Enum.any?(nodes_attrs, &form_step?/1),
+            do: "a subflows flow cannot contain form steps"
+      end
+
+    if error do
+      changeset =
+        graph
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.add_error(:nodes, error)
+
+      {:error, changeset}
+    else
+      :ok
+    end
+  end
+
+  defp subflow_step?(attrs) do
+    properties = node_properties(attrs)
+
+    properties["type"] == "subflow" or
+      properties["subflow_id"] != nil or
+      attrs[:subflow_id] != nil
+  end
+
+  defp form_step?(attrs) do
+    get_in(node_properties(attrs), ["data", "kind"]) == "form"
+  end
+
+  defp node_properties(attrs), do: attrs[:properties] || attrs["properties"] || %{}
+
+  # Save-time child creation: every subflow node declared its child's flavor
+  # when it was added in the editor (data.subflow_label), so missing children
+  # can be created without asking anyone — owned by the root, universally
+  # seeded, named from the canvas label.
+  defp create_missing_subflows(graph, nodes) do
+    root_id = graph.owner_graph_id || graph.id
+
+    nodes
+    |> Enum.filter(fn node ->
+      node.properties["type"] == "subflow" and is_nil(node.subflow_id)
+    end)
+    |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
+      child_attrs = %{
+        name: get_in(node.properties, ["data", "label"]) || "Untitled subflow",
+        label: get_in(node.properties, ["data", "subflow_label"]) || "forms",
+        owner_graph_id: root_id,
+        nodes: starter_nodes(),
+        relationships: []
+      }
+
+      with {:ok, child} <- create(child_attrs),
+           {:ok, _node} <- Repo.update(Node.changeset(node, %{subflow_id: child.id})) do
+        {:cont, {:ok, [child | created]}}
+      else
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
   end
 
   defp insert_contents(graph, schema, attrs_list) do

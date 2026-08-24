@@ -44,6 +44,13 @@ defmodule FormFlow.Data.Graph do
   @foreign_key_type :binary_id
 
   schema "form_flow_graphs" do
+    field(:name, :string)
+
+    # The declared flavor: "forms" or "subflows", never mixed (see
+    # FormFlow.Data.Graphs). Named `label` to mirror Neo4j, where it becomes
+    # the second label on the :Graph node — :Graph:Forms / :Graph:Subflows.
+    field(:label, :string, default: "forms")
+
     has_many(:nodes, Node)
     has_many(:relationships, Relationship)
 
@@ -61,15 +68,27 @@ defmodule FormFlow.Data.Graph do
   @doc """
   Builds a changeset for a graph.
 
-  `:owner_graph_id` is castable so owned subflows can be created; contents are
-  written by `FormFlow.Data.Graphs`. `:made_reusable_at` is deliberately not
-  castable — it is only stamped by `FormFlow.Data.Graphs.make_reusable/1`.
+  `:name` and `:owner_graph_id` are castable; `:label` is castable at creation
+  and immutable afterwards — the declared flavor is a commitment, and the
+  escape hatch is wrapping in a new parent flow, not converting.
+  `:made_reusable_at` is deliberately not castable — it is only stamped by
+  `FormFlow.Data.Graphs.make_reusable/1`.
   """
   def changeset(graph, attrs \\ %{}) do
     graph
-    |> cast(attrs, [:owner_graph_id])
+    |> cast(attrs, [:name, :label, :owner_graph_id])
+    |> validate_inclusion(:label, ~w(forms subflows))
+    |> validate_label_immutable()
     |> validate_owned_graphs_are_not_reusable()
     |> foreign_key_constraint(:owner_graph_id)
+  end
+
+  defp validate_label_immutable(changeset) do
+    if changeset.data.__meta__.state == :loaded and get_change(changeset, :label) do
+      add_error(changeset, :label, "cannot be changed after creation")
+    else
+      changeset
+    end
   end
 
   defp validate_owned_graphs_are_not_reusable(changeset) do

@@ -10,6 +10,32 @@ defmodule FormFlow.Data.GraphTest do
     assert changeset.changes == %{}
   end
 
+  test "casts name and label at creation" do
+    changeset = Graph.changeset(%Graph{}, %{name: "Enrollment", label: "subflows"})
+
+    assert changeset.valid?
+    assert changeset.changes.name == "Enrollment"
+    assert changeset.changes.label == "subflows"
+  end
+
+  test "label must be forms or subflows" do
+    changeset = Graph.changeset(%Graph{}, %{label: "mixed"})
+
+    refute changeset.valid?
+    assert {"is invalid", _opts} = changeset.errors[:label]
+  end
+
+  test "label is immutable once the graph is persisted" do
+    persisted = %Graph{label: "forms"} |> Ecto.put_meta(state: :loaded)
+    changeset = Graph.changeset(persisted, %{label: "subflows"})
+
+    refute changeset.valid?
+    assert {"cannot be changed after creation", _opts} = changeset.errors[:label]
+
+    # Renaming a persisted graph stays fine
+    assert Graph.changeset(persisted, %{name: "Renamed"}).valid?
+  end
+
   test "casts owner_graph_id, so owned subflows can be created" do
     owner_id = Ecto.UUID.generate()
     changeset = Graph.changeset(%Graph{}, %{owner_graph_id: owner_id})
@@ -34,7 +60,7 @@ defmodule FormFlow.Data.GraphTest do
   end
 
   test "ignores unknown attributes rather than casting them" do
-    changeset = Graph.changeset(%Graph{}, %{name: "Enrollment"})
+    changeset = Graph.changeset(%Graph{}, %{color: "teal"})
 
     assert changeset.valid?
     assert changeset.changes == %{}

@@ -18,12 +18,17 @@ defmodule FormFlow.Web.Router do
   Optional component to route using the `*path` helper concept in Phoenix
   Routers. Dispatches the remaining path to the matching LiveComponent:
 
-  | Path              | LiveComponent |
-  |-------------------|---------------|
-  | `/flows`          | `FormFlow.Web.Templates.Flows.Index` |
-  | `/flows/new`      | `FormFlow.Web.Templates.Flows.New` |
-  | `/flows/:id`      | `FormFlow.Web.Templates.Flows.Show` |
-  | `/flows/:id/edit` | `FormFlow.Web.Templates.Flows.Edit` |
+  | Path                                | LiveComponent |
+  |-------------------------------------|---------------|
+  | `/flows`                            | `FormFlow.Web.Templates.Flows.Index` |
+  | `/flows/new`                        | `FormFlow.Web.Templates.Flows.New` |
+  | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
+  | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
+  | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
+  | `/flows/:root/nodes/:node_id/edit`  | `FormFlow.Web.Templates.Flows.Edit` (the node's subflow) |
+
+  Drill-in URLs carry the *node* id, not the child graph's id — a reusable
+  subflow used twice in one root is two nodes, so two unambiguous URLs.
 
   `base` is the path prefix the catch-all is mounted under, so the components
   build working navigation links — `live "/admin/*path", ...` needs
@@ -51,6 +56,24 @@ defmodule FormFlow.Web.Router do
             <.live_component module={Flows.Show} id="flows-show" graph_id={id} app={@app} base={@base} />
           <% {:edit, id} -> %>
             <.live_component module={Flows.Edit} id="flows-edit" graph_id={id} app={@app} base={@base} />
+          <% {:node_show, root_id, node_id} -> %>
+            <.live_component
+              module={Flows.Show}
+              id="flows-show"
+              root_id={root_id}
+              node_id={node_id}
+              app={@app}
+              base={@base}
+            />
+          <% {:node_edit, root_id, node_id} -> %>
+            <.live_component
+              module={Flows.Edit}
+              id="flows-edit"
+              root_id={root_id}
+              node_id={node_id}
+              app={@app}
+              base={@base}
+            />
           <% nil -> %>
             <%!-- not a /flows path --%>
         <% end %>
@@ -79,6 +102,8 @@ defmodule FormFlow.Web.Router do
       ["flows", "new"] -> :new
       ["flows", id] -> {:show, id}
       ["flows", id, "edit"] -> {:edit, id}
+      ["flows", root_id, "nodes", node_id] -> {:node_show, root_id, node_id}
+      ["flows", root_id, "nodes", node_id, "edit"] -> {:node_edit, root_id, node_id}
       _other -> nil
     end
   end

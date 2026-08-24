@@ -4,7 +4,7 @@
 //
 // The public surface is mount/unmount/injectStyles, called by the colocated
 // hook in FormFlow.Web.Templates.Forms.Index.
-import React, { useCallback, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
@@ -27,21 +27,57 @@ import editorStyles from "../css/editor.css";
 
 /* ------------------------------------------------------------------ nodes -- */
 
-function StepNode({ data, selected }) {
+// Callbacks the custom nodes need but that must never live in node.data —
+// data round-trips to the server as JSON, and functions don't survive that
+const EditorContext = createContext({ onOpenSubflow: null });
+
+// isConnectable must be passed through to every Handle: it is how ReactFlow
+// delivers nodesConnectable to custom nodes, and Handle defaults to true
+// when it is omitted — which would leave handles live on read-only canvases.
+function StepNode({ data, selected, isConnectable }) {
   return (
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
-      {data.kind !== "start" && <Handle type="target" position={Position.Top} />}
+      {data.kind !== "start" && (
+        <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
+      )}
       <div className="ff-node__title">{data.label}</div>
       <div className="ff-node__meta">
         {data.fields} field{data.fields === 1 ? "" : "s"}
       </div>
-      {data.kind !== "end" && <Handle type="source" position={Position.Bottom} />}
+      {data.kind !== "end" && (
+        <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
+      )}
+    </div>
+  );
+}
+
+function SubflowNode({ id, data, selected, isConnectable }) {
+  const { onOpenSubflow } = useContext(EditorContext);
+
+  return (
+    <div className={`ff-node ff-node--subflow ${selected ? "is-selected" : ""}`}>
+      <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
+      <div className="ff-node__title">⧉ {data.label}</div>
+      <div className="ff-node__meta">
+        {data.subflow_label === "subflows" ? "Complex subflow" : "Form subflow"}
+      </div>
+      <button
+        type="button"
+        className="ff-node__open"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenSubflow?.(id);
+        }}
+      >
+        Open →
+      </button>
+      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
     </div>
   );
 }
 
 // Must be module-level (or useMemo'd): a new object each render remounts every node
-const nodeTypes = { step: StepNode };
+const nodeTypes = { step: StepNode, subflow: SubflowNode };
 
 // The flow itself is defined in Elixir — see
 // FormFlow.Web.Templates.Flows.Graph — serialized to JSON, and handed in as
@@ -52,8 +88,6 @@ const EMPTY_GRAPH = { nodes: [], edges: [] };
 // Nodes are positioned by their top centre, so a node dropped at the cursor
 // lands under it rather than to its right
 const NODE_ORIGIN = [0.5, 0];
-
-const NEW_STEP = { kind: "form", fields: 0 };
 
 // Ids stay in the same simple numeric style the server sends, without colliding
 // with the ids already in play
@@ -66,13 +100,27 @@ function nextId(nodes) {
   return String(candidate);
 }
 
-function stepNode(id, position) {
+// What the add actions create. In a "forms" flow the only kind is a form
+// step; in a "subflows" flow the node embeds a child whose flavor was chosen
+// by the button (data.subflow_label) — the server reads it at save to create
+// the child.
+function newNode(flowLabel, subflowLabel, id, position) {
+  if (flowLabel === "subflows") {
+    return {
+      id,
+      type: "subflow",
+      position,
+      origin: NODE_ORIGIN,
+      data: { label: `Subflow ${id}`, subflow_label: subflowLabel },
+    };
+  }
+
   return {
     id,
     type: "step",
     position,
     origin: NODE_ORIGIN,
-    data: { label: `Step ${id}`, ...NEW_STEP },
+    data: { label: `Form ${id}`, kind: "form", fields: 0 },
   };
 }
 
@@ -87,7 +135,7 @@ function stepEdge(source, target) {
 
 /* ----------------------------------------------------------------- editor -- */
 
-function FlowEditor({ graph, onChange, editable = true }) {
+function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onOpenSubflow }) {
   const [nodes, setNodes] = useState(() => normalize(graph).nodes);
   const [edges, setEdges] = useState(() => normalize(graph).edges);
 
@@ -133,19 +181,27 @@ function FlowEditor({ graph, onChange, editable = true }) {
   );
 
   const onConnect = useCallback(
-    (connection) =>
+    (connection) => {
+      if (!editable) return;
+
       setEdges((current) => {
         const next = addEdge({ ...connection, markerEnd: { type: MarkerType.ArrowClosed } }, current);
         report(nodes, next);
         return next;
-      }),
-    [nodes, report],
+      });
+    },
+    [editable, nodes, report],
   );
 
-  // Dropping a connection on empty canvas creates the step it would have gone
-  // to, wired up. https://reactflow.dev/examples/nodes/add-node-on-edge-drop
+  // Dropping a connection on empty canvas creates the node it would have gone
+  // to, wired up — a form step, or in a subflows flow a Form subflow, the
+  // common case. https://reactflow.dev/examples/nodes/add-node-on-edge-drop
   const onConnectEnd = useCallback(
     (event, connectionState) => {
+      // Belt and braces: with isConnectable wired through, no connection can
+      // start on a read-only canvas — but node creation must never slip in
+      if (!editable) return;
+
       // A drop that landed on a handle is an ordinary connection; onConnect has it
       if (connectionState.isValid) return;
 
@@ -157,7 +213,7 @@ function FlowEditor({ graph, onChange, editable = true }) {
 
       setNodes((currentNodes) => {
         const id = nextId(currentNodes);
-        const nextNodes = currentNodes.concat(stepNode(id, position));
+        const nextNodes = currentNodes.concat(newNode(flowLabel, "forms", id, position));
 
         setEdges((currentEdges) => {
           const nextEdges = currentEdges.concat(stepEdge(source, id));
@@ -168,25 +224,29 @@ function FlowEditor({ graph, onChange, editable = true }) {
         return nextNodes;
       });
     },
-    [report, screenToFlowPosition],
+    [editable, flowLabel, report, screenToFlowPosition],
   );
 
-  const addStep = useCallback(() => {
-    setNodes((current) => {
-      const id = nextId(current);
-      const last = current[current.length - 1];
-      const position = {
-        x: (last?.position.x ?? 240) + 220,
-        y: last?.position.y ?? 120,
-      };
+  const addNode = useCallback(
+    (subflowLabel) => {
+      setNodes((current) => {
+        const id = nextId(current);
+        const last = current[current.length - 1];
+        const position = {
+          x: (last?.position.x ?? 240) + 220,
+          y: last?.position.y ?? 120,
+        };
 
-      const next = current.concat(stepNode(id, position));
-      report(next, edges);
-      return next;
-    });
-  }, [edges, report]);
+        const next = current.concat(newNode(flowLabel, subflowLabel, id, position));
+        report(next, edges);
+        return next;
+      });
+    },
+    [edges, flowLabel, report],
+  );
 
   return (
+    <EditorContext.Provider value={{ onOpenSubflow }}>
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -201,6 +261,7 @@ function FlowEditor({ graph, onChange, editable = true }) {
       elementsSelectable={editable}
       edgesReconnectable={editable}
       deleteKeyCode={editable ? "Backspace" : null}
+      connectionRadius={40}
       fitView
       fitViewOptions={{ padding: 0.4 }}
       proOptions={{ hideAttribution: false }}
@@ -212,12 +273,24 @@ function FlowEditor({ graph, onChange, editable = true }) {
       <MiniMap pannable zoomable />
       {editable && (
         <Panel position="top-left" className="ff-panel">
-          <button type="button" onClick={addStep}>
-            + Add step
-          </button>
+          {flowLabel === "subflows" ? (
+            <>
+              <button type="button" onClick={() => addNode("forms")}>
+                + Form subflow
+              </button>
+              <button type="button" onClick={() => addNode("subflows")}>
+                + Complex subflow
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => addNode(null)}>
+              + Form
+            </button>
+          )}
         </Panel>
       )}
     </ReactFlow>
+    </EditorContext.Provider>
   );
 }
 
@@ -248,7 +321,12 @@ export function injectStyles(doc = document) {
  * Renders the editor into `el`.
  *
  * Pass `editable: false` for a read-only canvas: pan and zoom still work, but
- * nothing can be selected, dragged, connected, or deleted.
+ * nothing can be selected, dragged, connected, or deleted. Opening a subflow
+ * still works — it is navigation, not editing.
+ *
+ * `flowLabel` ("forms" | "subflows") picks the add actions and what edge-drop
+ * autocreate makes; `onOpenSubflow(nodeId)` is called by a subflow node's
+ * Open button.
  *
  * Returns a handle with `setGraph/1` so the server can push a new graph in, and
  * `unmount/0` for teardown.
@@ -259,7 +337,13 @@ export function mount(el, opts = {}) {
     root.render(
       // useReactFlow (used for screenToFlowPosition) requires this provider
       <ReactFlowProvider>
-        <FlowEditor graph={graph} onChange={opts.onChange} editable={opts.editable !== false} />
+        <FlowEditor
+          graph={graph}
+          onChange={opts.onChange}
+          editable={opts.editable !== false}
+          flowLabel={opts.flowLabel}
+          onOpenSubflow={opts.onOpenSubflow}
+        />
       </ReactFlowProvider>,
     );
 

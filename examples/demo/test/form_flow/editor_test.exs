@@ -12,6 +12,7 @@ defmodule Demo.FormFlowEditorTest do
 
   import Phoenix.LiveViewTest
 
+  alias FormFlow.Data.Graphs
   alias FormFlow.Web.Assets
 
   describe "the asset route" do
@@ -45,53 +46,46 @@ defmodule Demo.FormFlowEditorTest do
   end
 
   describe "the editor container" do
-    test "renders on the new flow page with the bundle's URL", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows/new")
+    test "renders on the edit page with the bundle's URL", %{conn: conn} do
+      {:ok, graph} = create_seeded()
+      {:ok, view, _html} = live(conn, "/flows/#{graph.id}/edit")
 
-      assert has_element?(view, ~s(#flows-new-editor[phx-update="ignore"]))
-      assert render(element(view, "#flows-new-editor")) =~ Assets.editor_path()
+      assert has_element?(view, ~s(#flows-edit-editor[phx-update="ignore"]))
+      assert render(element(view, "#flows-edit-editor")) =~ Assets.editor_path()
     end
 
-    test "carries the Elixir-defined data as JSON for the hook to parse", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows/new")
+    test "carries the graph as JSON for the hook to parse, Start and End pinned", %{conn: conn} do
+      {:ok, graph} = create_seeded()
+      {:ok, view, _html} = live(conn, "/flows/#{graph.id}/edit")
 
-      graph =
+      data =
         view
-        |> element("#flows-new-editor")
+        |> element("#flows-edit-editor")
         |> render()
         |> LazyHTML.from_fragment()
         |> LazyHTML.attribute("data-graph")
         |> hd()
         |> Jason.decode!()
 
-      assert Enum.map(graph["nodes"], & &1["data"]["label"]) == ["Start", "Form", "End"]
-      assert Enum.map(graph["nodes"], & &1["data"]["kind"]) == ["start", "form", "end"]
-      assert Enum.map(graph["edges"], & &1["id"]) == ["e1-2", "e2-3"]
-
-      # Positions and arrowheads come from the Elixir definition, not the JS
-      assert Enum.map(graph["nodes"], & &1["position"]["y"]) == [0, 140, 280]
-      assert Enum.map(graph["edges"], & &1["markerEnd"]["type"]) == ["arrowclosed", "arrowclosed"]
-    end
-
-    test "pins the start and end steps as non-deletable", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/flows/new")
-
-      nodes =
-        view
-        |> element("#flows-new-editor")
-        |> render()
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.attribute("data-graph")
-        |> hd()
-        |> Jason.decode!()
-        |> Map.fetch!("nodes")
-
-      # ReactFlow's own flag, passed straight through: false pins a node
-      assert Enum.map(nodes, &{&1["data"]["label"], &1["deletable"]}) == [
+      # The universal seed: a pinned Start and End, no middle node, no edges —
+      # the user connects the dots
+      assert Enum.map(data["nodes"], &{&1["data"]["label"], &1["deletable"]}) == [
                {"Start", false},
-               {"Form", nil},
                {"End", false}
              ]
+
+      assert data["edges"] == []
+    end
+
+    test "tells the hook the flow's declared flavor", %{conn: conn} do
+      {:ok, simple} = create_seeded(%{label: "forms"})
+      {:ok, complex} = create_seeded(%{label: "subflows"})
+
+      {:ok, view, _html} = live(conn, "/flows/#{simple.id}/edit")
+      assert view |> element("#flows-edit-editor") |> render() =~ ~s(data-flow-label="forms")
+
+      {:ok, view, _html} = live(conn, "/flows/#{complex.id}/edit")
+      assert view |> element("#flows-edit-editor") |> render() =~ ~s(data-flow-label="subflows")
     end
 
     test "the flows index is a table and never loads the bundle", %{conn: conn} do
@@ -100,5 +94,12 @@ defmodule Demo.FormFlowEditorTest do
       refute html =~ Assets.editor_path()
       refute has_element?(view, "[data-src]")
     end
+  end
+
+  defp create_seeded(attrs \\ %{}) do
+    attrs
+    |> Map.merge(%{nodes: Graphs.starter_nodes(), relationships: []})
+    |> Map.put_new(:name, "Enrollment")
+    |> Graphs.create()
   end
 end
