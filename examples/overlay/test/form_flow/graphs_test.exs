@@ -367,6 +367,29 @@ defmodule Demo.FormFlowGraphsTest do
       assert Graphs.get(shared.id) != nil
     end
 
+    test "delete_node removes the step and collects owned children, sparing reusable" do
+      {:ok, root} = Graphs.create(%{label: "subflows"})
+      {:ok, owned} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, grandchild} = Graphs.create(%{owner_graph_id: root.id})
+      {:ok, shared} = Graphs.create()
+      {:ok, shared} = Graphs.make_reusable(shared)
+
+      owned_node = insert_subflow_node(root, owned)
+      shared_node = insert_subflow_node(root, shared)
+      insert_subflow_node(owned, grandchild)
+
+      {:ok, _} = Graphs.delete_node(owned_node)
+
+      # The step is gone, and the owned subtree went with it
+      assert Graphs.get_node(owned_node.id) == nil
+      assert Graphs.get(owned.id) == nil
+      assert Graphs.get(grandchild.id) == nil
+
+      # Removing a reusable usage keeps the reusable graph
+      {:ok, _} = Graphs.delete_node(shared_node)
+      assert Graphs.get(shared.id) != nil
+    end
+
     test "saving contents garbage-collects unreachable owned subflows" do
       {:ok, root} = Graphs.create(%{label: "subflows"})
       {:ok, kept} = Graphs.create(%{owner_graph_id: root.id})

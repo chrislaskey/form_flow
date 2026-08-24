@@ -41,9 +41,7 @@ function StepNode({ data, selected, isConnectable }) {
         <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
       )}
       <div className="ff-node__title">{data.label}</div>
-      <div className="ff-node__meta">
-        {data.fields} field{data.fields === 1 ? "" : "s"}
-      </div>
+      <div className="ff-node__meta">{(data.labels ?? []).join(", ")}</div>
       {data.kind !== "end" && (
         <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
       )}
@@ -120,7 +118,7 @@ function newNode(flowLabel, subflowLabel, id, position) {
     type: "step",
     position,
     origin: NODE_ORIGIN,
-    data: { label: `Form ${id}`, kind: "form", fields: 0 },
+    data: { label: `Form ${id}`, kind: "form" },
   };
 }
 
@@ -136,61 +134,80 @@ function stepEdge(source, target) {
 /* ----------------------------------------------------------------- editor -- */
 
 function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onOpenSubflow }) {
-  const [nodes, setNodes] = useState(() => normalize(graph).nodes);
-  const [edges, setEdges] = useState(() => normalize(graph).edges);
+  // One state object on purpose. With separate node/edge states, a handler
+  // reporting to the server reads the *other* collection from a stale render
+  // closure — deleting a node (which also auto-removes its edges) once
+  // reported "node still present, edges gone", and saving persisted the
+  // ghost. Functional updates over the combined state always see the whole
+  // current picture.
+  const [state, setState] = useState(() => normalize(graph));
 
   const { screenToFlowPosition } = useReactFlow();
 
   // Elixir can push new data at any time (see form_flow:set_graph). useState
   // ignores a changed initial value, so the canvas has to be told explicitly.
   useEffect(() => {
-    const next = normalize(graph);
-
-    setNodes(next.nodes);
-    setEdges(next.edges);
+    setState(normalize(graph));
   }, [graph]);
 
-  // Only report the changes worth persisting; dragging fires continuously
   const report = useCallback(
-    (nextNodes, nextEdges) => {
-      if (onChange) onChange({ nodes: nextNodes, edges: nextEdges });
+    (next) => {
+      if (onChange) onChange({ nodes: next.nodes, edges: next.edges });
     },
     [onChange],
   );
 
   const onNodesChange = useCallback(
     (changes) =>
-      setNodes((current) => {
-        const next = applyNodeChanges(changes, current);
-        if (changes.some((change) => change.type === "position" && change.dragging === false)) {
-          report(next, edges);
+      setState((current) => {
+        const next = { ...current, nodes: applyNodeChanges(changes, current.nodes) };
+
+        // Report what's worth persisting: drag-ends (dragging fires
+        // continuously) and removals. Additions report from their creators.
+        if (
+          changes.some(
+            (change) =>
+              (change.type === "position" && change.dragging === false) ||
+              change.type === "remove",
+          )
+        ) {
+          report(next);
         }
+
         return next;
       }),
-    [edges, report],
+    [report],
   );
 
   const onEdgesChange = useCallback(
     (changes) =>
-      setEdges((current) => {
-        const next = applyEdgeChanges(changes, current);
-        report(nodes, next);
+      setState((current) => {
+        const next = { ...current, edges: applyEdgeChanges(changes, current.edges) };
+
+        if (changes.some((change) => change.type === "remove")) {
+          report(next);
+        }
+
         return next;
       }),
-    [nodes, report],
+    [report],
   );
 
   const onConnect = useCallback(
     (connection) => {
       if (!editable) return;
 
-      setEdges((current) => {
-        const next = addEdge({ ...connection, markerEnd: { type: MarkerType.ArrowClosed } }, current);
-        report(nodes, next);
+      setState((current) => {
+        const next = {
+          ...current,
+          edges: addEdge({ ...connection, markerEnd: { type: MarkerType.ArrowClosed } }, current.edges),
+        };
+
+        report(next);
         return next;
       });
     },
-    [editable, nodes, report],
+    [editable, report],
   );
 
   // Dropping a connection on empty canvas creates the node it would have gone
@@ -211,17 +228,15 @@ function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onO
       const { clientX, clientY } = "changedTouches" in event ? event.changedTouches[0] : event;
       const position = screenToFlowPosition({ x: clientX, y: clientY });
 
-      setNodes((currentNodes) => {
-        const id = nextId(currentNodes);
-        const nextNodes = currentNodes.concat(newNode(flowLabel, "forms", id, position));
+      setState((current) => {
+        const id = nextId(current.nodes);
+        const next = {
+          nodes: current.nodes.concat(newNode(flowLabel, "forms", id, position)),
+          edges: current.edges.concat(stepEdge(source, id)),
+        };
 
-        setEdges((currentEdges) => {
-          const nextEdges = currentEdges.concat(stepEdge(source, id));
-          report(nextNodes, nextEdges);
-          return nextEdges;
-        });
-
-        return nextNodes;
+        report(next);
+        return next;
       });
     },
     [editable, flowLabel, report, screenToFlowPosition],
@@ -229,27 +244,31 @@ function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onO
 
   const addNode = useCallback(
     (subflowLabel) => {
-      setNodes((current) => {
-        const id = nextId(current);
-        const last = current[current.length - 1];
+      setState((current) => {
+        const id = nextId(current.nodes);
+        const last = current.nodes[current.nodes.length - 1];
         const position = {
           x: (last?.position.x ?? 240) + 220,
           y: last?.position.y ?? 120,
         };
 
-        const next = current.concat(newNode(flowLabel, subflowLabel, id, position));
-        report(next, edges);
+        const next = {
+          ...current,
+          nodes: current.nodes.concat(newNode(flowLabel, subflowLabel, id, position)),
+        };
+
+        report(next);
         return next;
       });
     },
-    [edges, flowLabel, report],
+    [flowLabel, report],
   );
 
   return (
     <EditorContext.Provider value={{ onOpenSubflow }}>
     <ReactFlow
-      nodes={nodes}
-      edges={edges}
+      nodes={state.nodes}
+      edges={state.edges}
       nodeTypes={nodeTypes}
       nodeOrigin={NODE_ORIGIN}
       onNodesChange={onNodesChange}

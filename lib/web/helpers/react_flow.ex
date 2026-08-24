@@ -14,13 +14,13 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
             id: "1",
             type: "step",
             position: %{x: 240, y: 0},
-            data: %{label: "Start", kind: "start", fields: 0}
+            data: %{label: "Start", kind: "start"}
           },
           %{
             id: "2",
             type: "step",
             position: %{x: 240, y: 140},
-            data: %{label: "Form", kind: "form", fields: 4}
+            data: %{label: "Form", kind: "form"}
           }
         ],
         edges: [
@@ -48,13 +48,16 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
 
   ## The node type FormFlow ships
 
-  `type: "step"` selects FormFlow's own node, which reads three keys out of
+  `type: "step"` selects FormFlow's own node, which reads two keys out of
   `data`:
 
     * `label` - the text drawn on the node
     * `kind` - `"start"`, `"form"`, or `"end"`. Sets the node's colour, and
       which connection handles it gets
-    * `fields` - the field count shown under the label
+
+  `to_data/1` adds a third key, `labels` — the node's stored
+  `FormFlow.Data.Graph.Node.labels`, shown under the title. It isn't something
+  you set by hand in the map above; see Persistence below.
 
   Any other node type you register in the editor is passed through the same way.
 
@@ -78,6 +81,12 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   the `graph_id` column inside `properties` (see `FormFlow.Data.Graph.Node`).
   It rides through the editor and back as any other property; the column stays
   authoritative on save.
+
+  One exception to the pure pass-through: `to_data/1` merges the node's stored
+  `labels` (see `FormFlow.Data.Graph.Node`) into `data.labels` for display.
+  Nothing sets it the other way — the editor never writes labels back, so
+  `to_graph_attrs/1` just carries whatever it finds there like any other
+  property, and the changeset re-derives the authoritative value on save.
   """
 
   @edge_label "CONNECTS_TO"
@@ -132,7 +141,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   """
   def to_data(%FormFlow.Data.Graph{} = graph) do
     %{
-      nodes: Enum.map(graph.nodes, fn node -> Map.put(node.properties, "id", node.id) end),
+      nodes: Enum.map(graph.nodes, &node_data/1),
       edges:
         Enum.map(graph.relationships, fn relationship ->
           relationship.properties
@@ -141,6 +150,20 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
           |> Map.put("target", relationship.target_id)
         end)
     }
+  end
+
+  defp node_data(node) do
+    node.properties
+    |> Map.put("id", node.id)
+    |> put_labels(node.labels)
+  end
+
+  # A node with no labels (nothing has run its changeset yet) is left exactly
+  # as stored, matching to_data/1's otherwise-untouched pass-through.
+  defp put_labels(properties, []), do: properties
+
+  defp put_labels(properties, labels) do
+    Map.update(properties, "data", %{"labels" => labels}, &Map.put(&1, "labels", labels))
   end
 
   # Atom or string keys in, string keys out — the same normalization the data

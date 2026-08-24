@@ -7,6 +7,11 @@ defmodule FormFlow.Data.Graph.Node do
   node *means* lives entirely in those two fields; the only structural columns
   are its identity and which graph it belongs to.
 
+  `labels` is derived, not editor-supplied: the changeset sets it from the
+  ReactFlow `kind`/`type` already sitting in `properties` (`"start"`, `"form"`,
+  `"end"`, or a subflow) whenever it isn't already set explicitly. FormFlow's
+  editor shows it under a node's title.
+
   `graph_id` is written to both locations: the dedicated column, so the
   database can index membership and cascade deletes, and a `"graph_id"` key
   inside `properties`, which is the copy that carries over to Neo4j, where
@@ -55,6 +60,7 @@ defmodule FormFlow.Data.Graph.Node do
     |> cast(attrs, [:id, :graph_id, :subflow_id, :labels, :properties])
     |> validate_required([:graph_id])
     |> adopt_subflow_id_from_properties()
+    |> derive_labels_from_kind()
     |> copy_into_properties(:graph_id, "graph_id")
     |> copy_into_properties(:subflow_id, "subflow_id")
     |> foreign_key_constraint(:graph_id)
@@ -76,6 +82,37 @@ defmodule FormFlow.Data.Graph.Node do
 
       _other ->
         changeset
+    end
+  end
+
+  # Labels categorize what a node *is*, Neo4j-style. The editor never sets
+  # them — they are derived from the ReactFlow `kind`/`type` already in
+  # properties, so every node gets one without the client needing to know the
+  # mapping. Only kicks in when nothing already set labels explicitly (e.g.
+  # copy_graph, which carries a source node's labels forward as-is).
+  defp derive_labels_from_kind(changeset) do
+    case get_field(changeset, :labels) do
+      [] ->
+        properties = get_field(changeset, :properties) || %{}
+
+        case label_for_kind(properties) do
+          nil -> changeset
+          label -> put_change(changeset, :labels, [label])
+        end
+
+      _labels ->
+        changeset
+    end
+  end
+
+  defp label_for_kind(%{"type" => "subflow"}), do: "Subflow"
+
+  defp label_for_kind(properties) do
+    case get_in(properties, ["data", "kind"]) do
+      "start" -> "Start"
+      "form" -> "Form"
+      "end" -> "End"
+      _other -> nil
     end
   end
 

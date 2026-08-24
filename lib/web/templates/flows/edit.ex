@@ -5,9 +5,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   Loads the graph with `FormFlow.Data.Graphs.get/1`, renders it in the editor
   (see `FormFlow.Web.Components.Editor`), tracks edits as the editor reports
   them, and on save replaces the graph's contents with
-  `FormFlow.Data.Graphs.update/2` before navigating back to the show page.
-  Saving a subflows flow also creates the children of any freshly added
-  subflow nodes — see `FormFlow.Data.Graphs`.
+  `FormFlow.Data.Graphs.update/2`. Saving a subflows flow also creates the
+  children of any freshly added subflow nodes — see `FormFlow.Data.Graphs`.
+
+  Edit mode is sticky: saving stays here rather than bouncing to the show
+  page — flow editing is a workspace loop, often across several levels. After
+  a save the persisted graph is pushed back into the canvas
+  (`form_flow:set_graph`), so editor-temporary node ids become the real UUIDs
+  — which is what makes Open work on a just-saved subflow node.
 
   Two addressing modes, matching the router:
 
@@ -17,7 +22,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       graph edited here
 
   A subflow node's Open button pushes `form_flow:open_subflow`, which
-  navigates to that node's edit page under the same root.
+  navigates to that node's edit page under the same root — unless the canvas
+  has unsaved changes (`current` differs from the last-persisted `data`), in
+  which case navigation pauses for a prompt to save first or cancel. Declining
+  leaves the canvas exactly as it was; nothing is discarded.
   """
 
   use Phoenix.LiveComponent
@@ -28,7 +36,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, error: nil)}
+    {:ok, assign(socket, error: nil, notice: nil, pending_node_id: nil)}
   end
 
   @impl true
@@ -54,22 +62,23 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   @impl true
   def handle_event("form_flow:graph_changed", %{"nodes" => nodes, "edges" => edges}, socket) do
-    {:noreply, assign(socket, :current, %{"nodes" => nodes, "edges" => edges})}
+    {:noreply,
+     socket
+     |> assign(:current, %{"nodes" => nodes, "edges" => edges})
+     |> assign(:notice, nil)}
   end
 
   @impl true
   def handle_event("form_flow:open_subflow", %{"node_id" => node_id}, socket) do
-    case Graphs.get_node(node_id) do
-      nil ->
+    cond do
+      is_nil(Graphs.get_node(node_id)) ->
         {:noreply, assign(socket, :error, "Save the flow before opening a new subflow.")}
 
-      _node ->
-        root_id = socket.assigns.root_id || socket.assigns.graph.id
+      unsaved_changes?(socket.assigns) ->
+        {:noreply, assign(socket, :pending_node_id, node_id)}
 
-        {:noreply,
-         push_navigate(socket,
-           to: "#{socket.assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit"
-         )}
+      true ->
+        {:noreply, navigate_to_node(socket, node_id)}
     end
   end
 
@@ -83,14 +92,59 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   @impl true
   def handle_event("save", _params, socket) do
+    case persist_current(socket) do
+      {:ok, socket} -> {:noreply, assign(socket, :notice, "Saved.")}
+      {:error, socket} -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("save_and_open", _params, socket) do
+    node_id = socket.assigns.pending_node_id
+
+    case persist_current(socket) do
+      {:ok, socket} ->
+        {:noreply, socket |> assign(:pending_node_id, nil) |> navigate_to_node(node_id)}
+
+      {:error, socket} ->
+        {:noreply, assign(socket, :pending_node_id, nil)}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_open", _params, socket) do
+    {:noreply, assign(socket, :pending_node_id, nil)}
+  end
+
+  # Whether the canvas has edits the last save doesn't reflect yet —
+  # `current` tracks every reported `graph_changed`, `data` only what
+  # `Graphs.update/2` last persisted.
+  defp unsaved_changes?(assigns), do: assigns.current != assigns.data
+
+  defp navigate_to_node(socket, node_id) do
+    root_id = socket.assigns.root_id || socket.assigns.graph.id
+
+    push_navigate(socket, to: "#{socket.assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit")
+  end
+
+  # Shared by "save" and "save_and_open": persists the canvas and re-syncs it
+  # with what was written — temporary editor ids became real UUIDs, and fresh
+  # subflow nodes gained their subflow_id — so Open works without a reload.
+  defp persist_current(socket) do
     attrs = ReactFlow.to_graph_attrs(socket.assigns.current)
 
     case Graphs.update(socket.assigns.graph, attrs) do
-      {:ok, _graph} ->
-        {:noreply, push_navigate(socket, to: show_path(socket.assigns))}
+      {:ok, graph} ->
+        graph = Graphs.get(graph.id)
+        data = ReactFlow.to_data(graph)
+
+        {:ok,
+         socket
+         |> assign(graph: graph, data: data, current: data, error: nil)
+         |> push_event("form_flow:set_graph", %{graph: data})}
 
       {:error, %Ecto.Changeset{}} ->
-        {:noreply, assign(socket, :error, "Could not save the flow. Please try again.")}
+        {:error, assign(socket, :error, "Could not save the flow. Please try again.")}
     end
   end
 
@@ -154,6 +208,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       </div>
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
 
       <Editor.editor
         id={"#{@id}-editor"}
@@ -161,6 +216,35 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         target={@myself}
         flow_label={@graph.label}
       />
+
+      <div
+        :if={@pending_node_id}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+          <p class="mb-4 text-sm text-zinc-700">
+            This flow has unsaved changes. Save before opening the subflow?
+          </p>
+          <div class="flex justify-end gap-2">
+            <button
+              type="button"
+              phx-click="cancel_open"
+              phx-target={@myself}
+              class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              phx-click="save_and_open"
+              phx-target={@myself}
+              class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+            >
+              Save &amp; Open
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     """
   end

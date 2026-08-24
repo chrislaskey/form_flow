@@ -88,11 +88,23 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
-    assert_redirect(view, "/flows/#{id}")
+
+    # Edit mode is sticky: no redirect, a Saved notice, and the canvas is
+    # re-synced with persisted UUIDs in place of the editor's temporary ids
+    assert render(view) =~ "Saved."
+    assert_push_event(view, "form_flow:set_graph", %{graph: %{nodes: [pushed]}})
+    assert {:ok, _} = Ecto.UUID.cast(pushed["id"])
 
     graph = Graphs.get(id)
     assert [node] = graph.nodes
     assert node.properties["data"]["label"] == "Renamed step"
+
+    # The notice clears on the next edit
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:graph_changed", %{"nodes" => [], "edges" => []})
+
+    refute render(view) =~ "Saved."
   end
 
   test "renaming from the edit header persists", %{conn: conn} do
@@ -135,7 +147,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
-    assert_redirect(view, "/flows/#{root_id}")
+    assert render(view) =~ "Saved."
 
     assert [node] = Graphs.get(root_id).nodes
     child = Graphs.get(node.subflow_id)
@@ -168,6 +180,75 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ "Onboarding"
     refute html =~ "Subflow 1"
     assert view |> render() |> String.split("<tr") |> length() == 3
+  end
+
+  test "the index name links to the show page", %{conn: conn} do
+    id = create_flow(conn, "Enrollment")
+
+    {:ok, view, _html} = live(conn, "/flows")
+
+    assert view |> element(~s(td a[href="/flows/#{id}"]), "Enrollment") |> has_element?()
+  end
+
+  test "deleting from a drill-in page removes the step and returns to the parent's editor", %{
+    conn: conn
+  } do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Graphs.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/nodes/#{node.id}")
+
+    view |> element("button", "Delete") |> render_click()
+    assert_redirect(view, "/flows/#{root_id}/edit")
+
+    assert Graphs.get(root_id).nodes == []
+    assert Graphs.get(node.subflow_id) == nil
+  end
+
+  test "deleting two levels deep returns to the containing subflow's editor", %{conn: conn} do
+    {:ok, root} = Graphs.create(%{name: "Root", label: "subflows"})
+
+    {:ok, _} =
+      Graphs.update(root, %{
+        nodes: [
+          %{
+            properties: %{
+              "type" => "subflow",
+              "data" => %{"label" => "Middle", "subflow_label" => "subflows"}
+            }
+          }
+        ],
+        relationships: []
+      })
+
+    [x] = Graphs.get(root.id).nodes
+    middle = Graphs.get(x.subflow_id)
+
+    {:ok, _} =
+      Graphs.update(middle, %{
+        nodes: [
+          %{
+            properties: %{
+              "type" => "subflow",
+              "data" => %{"label" => "Leaf", "subflow_label" => "forms"}
+            }
+          }
+        ],
+        relationships: []
+      })
+
+    [y] = Enum.filter(Graphs.get(middle.id).nodes, &(&1.properties["type"] == "subflow"))
+
+    # The page shows Leaf; deleting removes node y from Middle, so the
+    # destination is Middle's editor — addressed by the node embedding Middle
+    {:ok, view, _html} = live(conn, "/flows/#{root.id}/nodes/#{y.id}")
+
+    view |> element("button", "Delete") |> render_click()
+    assert_redirect(view, "/flows/#{root.id}/nodes/#{x.id}/edit")
+
+    assert Graphs.get(y.subflow_id) == nil
+    assert Graphs.get(middle.id) != nil
   end
 
   test "deleting a subflow another flow still uses is refused with an explanation", %{conn: conn} do
@@ -209,6 +290,91 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_hook("form_flow:open_subflow", %{"node_id" => "3"})
 
     assert render(view) =~ "Save the flow before opening a new subflow."
+  end
+
+  test "opening a subflow from the edit canvas navigates directly when nothing changed since save",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Graphs.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
+
+    assert_redirect(view, "/flows/#{root_id}/nodes/#{node.id}/edit")
+  end
+
+  test "opening a subflow from the edit canvas with unsaved changes prompts instead of navigating",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Graphs.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
+
+    move_subflow_node(view, node.id)
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
+
+    # Still on the edit page — no redirect fired — with the prompt showing
+    assert render(view) =~ "unsaved changes"
+    assert has_element?(view, "button", "Save & Open")
+  end
+
+  test "confirming the unsaved-changes prompt saves before navigating", %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Graphs.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
+
+    move_subflow_node(view, node.id)
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
+
+    view |> element("button", "Save & Open") |> render_click()
+
+    assert_redirect(view, "/flows/#{root_id}/nodes/#{node.id}/edit")
+
+    [saved_node] = Graphs.get(root_id).nodes
+    assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
+  end
+
+  test "cancelling the unsaved-changes prompt keeps editing without discarding changes",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Graphs.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
+
+    move_subflow_node(view, node.id)
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
+
+    view |> element("button", "Cancel") |> render_click()
+
+    refute render(view) =~ "unsaved changes"
+
+    # Nothing was persisted, and nothing navigated away
+    [unmoved_node] = Graphs.get(root_id).nodes
+    assert unmoved_node.properties["position"] == %{"x" => 0, "y" => 0}
+
+    # The pending edit is still live on the canvas and can still be saved
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    [saved_node] = Graphs.get(root_id).nodes
+    assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
   end
 
   test "deleting a flow from the show page removes it and its children", %{conn: conn} do
@@ -268,6 +434,23 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
-    assert_redirect(view)
+  end
+
+  # Reports a moved node without saving — the canvas ends up with unsaved
+  # changes relative to whatever was last persisted
+  defp move_subflow_node(view, node_id) do
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:graph_changed", %{
+      "nodes" => [
+        %{
+          "id" => node_id,
+          "type" => "subflow",
+          "position" => %{"x" => 40, "y" => 40},
+          "data" => %{"label" => "Subflow 1", "subflow_label" => "forms"}
+        }
+      ],
+      "edges" => []
+    })
   end
 end

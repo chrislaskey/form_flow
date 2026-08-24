@@ -117,6 +117,33 @@ defmodule FormFlow.Data.Graphs do
   end
 
   @doc """
+  The node within an ownership domain that embeds the given graph, or `nil`.
+
+  Used to build the drill-in URL of a graph's *containing* page: the node's id
+  is the `/flows/:root/nodes/:node_id` segment. Scoped to the domain because a
+  reusable graph can be embedded by many flows — only the usage under this
+  root is wanted.
+  """
+  def embedding_node(graph_id, root_id) do
+    case Ecto.UUID.cast(root_id) do
+      {:ok, root_id} ->
+        Repo.one(
+          from(n in Node,
+            join: g in Graph,
+            on: g.id == n.graph_id,
+            where:
+              n.subflow_id == ^graph_id and
+                (g.id == ^root_id or g.owner_graph_id == ^root_id),
+            limit: 1
+          )
+        )
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
   The node attributes every flow starts from: a pinned `Start` and `End`,
   nothing else — the user connects the dots. One universal seed for both
   flavors, used for new flows and for subflow children created at save.
@@ -129,7 +156,7 @@ defmodule FormFlow.Data.Graphs do
           "type" => "step",
           "position" => %{"x" => 240, "y" => 0},
           "deletable" => false,
-          "data" => %{"label" => "Start", "kind" => "start", "fields" => 0}
+          "data" => %{"label" => "Start", "kind" => "start"}
         }
       },
       %{
@@ -138,7 +165,7 @@ defmodule FormFlow.Data.Graphs do
           "type" => "step",
           "position" => %{"x" => 240, "y" => 260},
           "deletable" => false,
-          "data" => %{"label" => "End", "kind" => "end", "fields" => 0}
+          "data" => %{"label" => "End", "kind" => "end"}
         }
       }
     ]
@@ -209,6 +236,26 @@ defmodule FormFlow.Data.Graphs do
         delete_graphs(tree_ids)
         graph
       end
+    end)
+  end
+
+  @doc """
+  Deletes one node from its graph — the drill-in "delete this subflow".
+
+  The node row goes (its relationships cascade), and the ownership domain is
+  swept: an owned subflow the node referenced becomes unreachable and is
+  collected with everything under it. A reusable subflow just loses this
+  usage and survives.
+  """
+  def delete_node(%Node{} = node) do
+    Repo.transaction(fn ->
+      graph = Repo.get(Graph, node.graph_id)
+
+      {:ok, _node} = Repo.delete(node)
+
+      sweep_unreachable(graph)
+
+      node
     end)
   end
 

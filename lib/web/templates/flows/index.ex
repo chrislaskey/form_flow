@@ -58,7 +58,9 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <tbody>
           <tr :for={graph <- @graphs} class="border-b border-zinc-200">
             <td class="py-2 pr-4">
-              {graph.name || "Untitled"}
+              <.link navigate={"#{@base}/flows/#{graph.id}"} class="hover:underline">
+                {graph.name || "Untitled"}
+              </.link>
               <span class="block font-mono text-[10px] text-zinc-400">{graph.id}</span>
             </td>
             <td class="py-2 pr-4 text-xs text-zinc-500">

@@ -17,6 +17,13 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   A subflow node's Open button pushes `form_flow:open_subflow`, which
   navigates to that node's show page under the same root — drill-in is
   navigation, so it works on this read-only page too.
+
+  Delete means different things in the two modes. At the top level it deletes
+  the flow and everything it owns. On a drill-in page it removes the parent's
+  subflow step (`FormFlow.Data.Graphs.delete_node/1`) — the child's graphs go
+  with it through garbage collection when owned, and survive when reusable.
+  Deleting the child *graph* directly would be refused while the parent still
+  references it, which is why that is not what the button does.
   """
 
   use Phoenix.LiveComponent
@@ -66,6 +73,19 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   @impl true
+  def handle_event("delete", _params, %{assigns: %{node_id: node_id}} = socket)
+      when is_binary(node_id) do
+    node = Graphs.get_node(node_id)
+
+    # Compute the destination before deleting: the *containing* graph's edit
+    # page — edit mode is sticky, and deleting a step is an editing action
+    to = parent_edit_path(socket.assigns, node)
+
+    {:ok, _node} = Graphs.delete_node(node)
+
+    {:noreply, push_navigate(socket, to: to)}
+  end
+
   def handle_event("delete", _params, socket) do
     case Graphs.delete(socket.assigns.graph) do
       {:ok, _graph} ->
@@ -126,11 +146,15 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             Edit
           </.link>
           <button
-            :if={is_nil(@node_id)}
             type="button"
             phx-click="delete"
             phx-target={@myself}
-            data-confirm="Delete this flow? Its steps, connections, and subflows go with it."
+            data-confirm={
+              if @node_id,
+                do:
+                  "Delete this subflow? It is removed from the parent flow, and its own steps and subflows go with it.",
+                else: "Delete this flow? Its steps, connections, and subflows go with it."
+            }
             class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Delete
@@ -162,6 +186,22 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   defp back_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows"
   defp back_path(assigns), do: "#{assigns.base}/flows/#{assigns.root_id}"
+
+  # The edit page of the graph containing `node`: the root's editor when the
+  # node sits on the root canvas, otherwise the drill-in editor addressed by
+  # the node that embeds the containing graph
+  defp parent_edit_path(assigns, node) do
+    cond do
+      node.graph_id == assigns.root_id ->
+        "#{assigns.base}/flows/#{assigns.root_id}/edit"
+
+      parent = Graphs.embedding_node(node.graph_id, assigns.root_id) ->
+        "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{parent.id}/edit"
+
+      true ->
+        "#{assigns.base}/flows/#{assigns.root_id}/edit"
+    end
+  end
 
   defp edit_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.graph.id}/edit"
 
