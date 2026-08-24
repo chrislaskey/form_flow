@@ -59,6 +59,12 @@ mix phx.new demo --module Demo --database sqlite3 --no-mailer --no-dashboard --n
 echo "==> Adding form_flow as a path dependency"
 perl -0777 -pi -e 's/(defp deps do\s*\n\s*\[\n)/$1      {:form_flow, path: "..\/.."},\n/' demo/mix.exs
 
+echo "==> Bumping phoenix_live_view for the unsaved-changes guard's phx:before-navigate"
+# form_flow's edit page cancels client-side navigation (browser back/forward,
+# live links) when the canvas is dirty, which needs the phx:before-navigate
+# event LiveView added in 1.2.8 — older than the generator's default floor.
+perl -pi -e 's{\{:phoenix_live_view, "~> 1\.1\.0"\}}{{:phoenix_live_view, "~> 1.2.8"}}' demo/mix.exs
+
 echo "==> Replacing the default route with the demo LiveViews"
 # The catch-all comes last: FormFlow.Web.Router dispatches on the path segments
 # it is handed, so anything not matched by an earlier route falls through to it.

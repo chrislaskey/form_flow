@@ -36,14 +36,35 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   `id_map`), so Open still lands on the right subflow even when it was never
   saved before this click.
 
-  The same `unsaved_changes?/1` flag also guards navigation the app can't
-  intercept — closing the tab, refreshing, typing a new URL — via a
-  `beforeunload` prompt. That needs its own tiny hook rather than piggybacking
-  on `FormFlow.Web.Components.Editor`'s: that hook's container is
+  The same `unsaved_changes?/1` flag also guards two kinds of navigation the
+  `"navigate"` event above can't reach, because neither one goes through a
+  click this page controls:
+
+    * Closing the tab, refreshing, or typing a new URL — a `beforeunload`
+      prompt, reading the flag at the moment it fires.
+    * The browser's Back/Forward buttons — LiveView intercepts these itself
+      and performs a live navigation over the existing socket, the same way
+      `push_navigate/2` does, so the document never unloads and
+      `beforeunload` never sees it. LiveView 1.2.8 added exactly the escape
+      hatch this needs: it dispatches a cancelable `phx:before-navigate`
+      before acting on *any* live navigation, click or popstate alike. The
+      hook cancels it and reports the attempted destination through the very
+      same `"navigate"` event as everything else, producing the same
+      save-first prompt — cancelling this way is native to LiveView, so
+      unlike a hand-rolled history trap it doesn't touch `history` itself or
+      disturb the forward/back stack. `phx:before-navigate` doesn't exist
+      before LiveView 1.2.8, but form_flow's own dependency floor stays at
+      1.1.0 rather than forcing every consumer onto it: an app on an older
+      LiveView simply never receives the event, so the listener never fires
+      — the Back/Forward guard is silently absent there, while `beforeunload`
+      above still works regardless of version.
+
+  This needs its own tiny hook rather than piggybacking on
+  `FormFlow.Web.Components.Editor`'s: that hook's container is
   `phx-update="ignore"`, so a data attribute on it would never see a new
-  value. This hook's div renders normally, so its `data-unsaved` attribute is
-  simply read at the moment `beforeunload` fires — nothing is mirrored into
-  JS state.
+  value. This hook's div renders normally, so `data-unsaved` is simply read
+  at the moment each browser event fires — nothing is mirrored into JS
+  state.
 
   Discard changes is the deliberate opposite: shown only while the canvas is
   dirty, it throws the edit away rather than protecting it, so it asks for
@@ -236,6 +257,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       <div
         id={"#{@id}-unsaved-guard"}
         phx-hook=".UnsavedGuard"
+        phx-target={@myself}
         data-unsaved={to_string(unsaved_changes?(assigns))}
         style="display: none;"
       >
@@ -243,16 +265,26 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       <script :type={Phoenix.LiveView.ColocatedHook} name=".UnsavedGuard">
         export default {
           mounted() {
-            this.handler = (e) => {
+            this.beforeNavigateHandler = (e) => {
+              if (this.el.dataset.unsaved !== "true") return
+
+              e.preventDefault()
+              const {pathname, search, hash} = new URL(e.detail.href)
+              this.pushEventTo(this.el, "navigate", {to: pathname + search + hash})
+            }
+            window.addEventListener("phx:before-navigate", this.beforeNavigateHandler)
+
+            this.beforeUnloadHandler = (e) => {
               if (this.el.dataset.unsaved === "true") {
                 e.preventDefault()
                 e.returnValue = ""
               }
             }
-            window.addEventListener("beforeunload", this.handler)
+            window.addEventListener("beforeunload", this.beforeUnloadHandler)
           },
           destroyed() {
-            window.removeEventListener("beforeunload", this.handler)
+            window.removeEventListener("phx:before-navigate", this.beforeNavigateHandler)
+            window.removeEventListener("beforeunload", this.beforeUnloadHandler)
           }
         }
       </script>
