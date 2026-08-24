@@ -7,7 +7,7 @@ defmodule FormFlow.Data.Migrations.Postgres do
   @behaviour FormFlow.Data.Migration
 
   @initial_version 1
-  @current_version 4
+  @current_version 1
 
   @impl FormFlow.Data.Migration
   def initial_version, do: @initial_version

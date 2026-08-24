@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowGraphsTest do
   @moduledoc """
   Exercises `FormFlow.Data.Graphs` and the graph schemas against a real database —
-  the library's own tests stop at changesets, so this is where the V02 DDL
+  the library's own tests stop at changesets, so this is where the V01 graph DDL
   (foreign keys, cascades, the unique relationship index) is proven to hold.
   """
 
