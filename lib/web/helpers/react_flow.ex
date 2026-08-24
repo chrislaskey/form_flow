@@ -75,7 +75,8 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       edges all mean the same thing today.
     * Ids from the editor (`"1"`, `"4"`) are replaced with generated UUIDs at
       save time; ids that already are UUIDs are kept, so unchanged records are
-      updated in place rather than recreated.
+      updated in place rather than recreated. `to_graph_attrs/1`'s `id_map`
+      return value is how a caller finds out what a given editor id became.
 
   Saved properties also carry a `"graph_id"` key — the schemas keep a copy of
   the `graph_id` column inside `properties` (see `FormFlow.Data.Graph.Node`).
@@ -107,6 +108,14 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
 
   Accepts the shape the editor reports (string keys) or the shape flows are
   written in Elixir (atom keys). See the module documentation for the mapping.
+
+  The result also carries `id_map`: editor node/edge id (string) to the id it
+  was saved under. For an id that was already a UUID this is the identity —
+  the mapping only does real work for the editor's temporary ids (`"1"`,
+  `"4"`), generated fresh on every call since nothing here is stored yet. A
+  caller that needs to know what a just-created node's id became — e.g. to
+  navigate straight to it after the save this attrs map is about to go
+  into — reads it from here rather than guessing.
   """
   def to_graph_attrs(data) when is_map(data) do
     %{"nodes" => nodes, "edges" => edges} =
@@ -131,7 +140,8 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
             label: @edge_label,
             properties: Map.drop(edge, ["id", "source", "target"])
           }
-        end)
+        end),
+      id_map: ids
     }
   end
 

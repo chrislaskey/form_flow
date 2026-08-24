@@ -280,7 +280,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert_redirect(view, "/flows/#{root_id}/nodes/#{node.id}")
   end
 
-  test "opening an unsaved subflow node explains instead of crashing", %{conn: conn} do
+  test "opening a subflow node the canvas never reported prompts instead of crashing",
+       %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
 
     {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
@@ -289,7 +290,45 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => "3"})
 
-    assert render(view) =~ "Save the flow before opening a new subflow."
+    assert render(view) =~ "unsaved changes"
+  end
+
+  test "opening a brand-new subflow node saves it and navigates to the node it became",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+
+    {:ok, view, _html} = live(conn, "/flows/#{root_id}/edit")
+
+    # Added but never saved — Graphs.get_node/1 can't find it under its
+    # editor-temporary id yet
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:graph_changed", %{
+      "nodes" => [
+        %{
+          "id" => "1",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Subflow 1", "subflow_label" => "forms"}
+        }
+      ],
+      "edges" => []
+    })
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => "1"})
+
+    assert render(view) =~ "unsaved changes"
+
+    view |> element("button", "Save & Open") |> render_click()
+
+    [node] = Graphs.get(root_id).nodes
+    assert {:ok, _} = Ecto.UUID.cast(node.id)
+    assert node.subflow_id != nil
+
+    # Not just "back to the root" — the specific node the temp id resolved to
+    assert_redirect(view, "/flows/#{root_id}/nodes/#{node.id}/edit")
   end
 
   test "opening a subflow from the edit canvas navigates directly when nothing changed since save",

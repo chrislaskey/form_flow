@@ -115,7 +115,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     test "editor ids become UUIDs; existing UUIDs are kept" do
       existing = Ecto.UUID.generate()
 
-      %{nodes: [kept, fresh]} =
+      %{nodes: [kept, fresh], id_map: id_map} =
         ReactFlow.to_graph_attrs(%{
           "nodes" => [%{"id" => existing}, %{"id" => "4"}],
           "edges" => []
@@ -124,6 +124,10 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert kept.id == existing
       assert {:ok, _} = Ecto.UUID.cast(fresh.id)
       refute fresh.id == existing
+
+      # id_map is how a caller learns what a temporary editor id was saved as
+      assert id_map[existing] == existing
+      assert id_map["4"] == fresh.id
     end
 
     test "edges follow their nodes through the id mapping" do
@@ -158,7 +162,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     end
 
     test "missing nodes or edges default to empty" do
-      assert ReactFlow.to_graph_attrs(%{}) == %{nodes: [], relationships: []}
+      assert ReactFlow.to_graph_attrs(%{}) == %{nodes: [], relationships: [], id_map: %{}}
     end
   end
 
@@ -200,8 +204,13 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert source == hd(data.nodes)["id"]
       assert target == Enum.at(data.nodes, 1)["id"]
 
-      # And saving what to_data produced changes nothing: ids are stable
-      assert ReactFlow.to_graph_attrs(data) == attrs
+      # And saving what to_data produced changes nothing: ids are stable.
+      # id_map itself isn't part of that invariant — this second call's ids
+      # are already UUIDs, so it's the identity map, unlike the temporary-id
+      # mapping the first call produced.
+      round_tripped = ReactFlow.to_graph_attrs(data)
+      assert round_tripped.nodes == attrs.nodes
+      assert round_tripped.relationships == attrs.relationships
     end
   end
 end

@@ -23,9 +23,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   A subflow node's Open button pushes `form_flow:open_subflow`, which
   navigates to that node's edit page under the same root — unless the canvas
-  has unsaved changes (`current` differs from the last-persisted `data`), in
-  which case navigation pauses for a prompt to save first or cancel. Declining
-  leaves the canvas exactly as it was; nothing is discarded.
+  has unsaved changes (`current` differs from the last-persisted `data`) or
+  the node itself was only just added and has never been saved at all (so
+  `FormFlow.Data.Graphs.get_node/1` can't find it yet), in which case
+  navigation pauses for a prompt to save first or cancel. Declining leaves the
+  canvas exactly as it was; nothing is discarded. Saving resolves the node's
+  editor-temporary id to whatever it was actually saved as (see
+  `FormFlow.Web.Helpers.ReactFlow.to_graph_attrs/1`'s `id_map`), so Open still
+  lands on the right subflow even when it was never saved before this click.
   """
 
   use Phoenix.LiveComponent
@@ -70,15 +75,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   @impl true
   def handle_event("form_flow:open_subflow", %{"node_id" => node_id}, socket) do
-    cond do
-      is_nil(Graphs.get_node(node_id)) ->
-        {:noreply, assign(socket, :error, "Save the flow before opening a new subflow.")}
-
-      unsaved_changes?(socket.assigns) ->
-        {:noreply, assign(socket, :pending_node_id, node_id)}
-
-      true ->
-        {:noreply, navigate_to_node(socket, node_id)}
+    if Graphs.get_node(node_id) && not unsaved_changes?(socket.assigns) do
+      {:noreply, navigate_to_node(socket, node_id)}
+    else
+      {:noreply, assign(socket, :pending_node_id, node_id)}
     end
   end
 
@@ -93,7 +93,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   @impl true
   def handle_event("save", _params, socket) do
     case persist_current(socket) do
-      {:ok, socket} -> {:noreply, assign(socket, :notice, "Saved.")}
+      {:ok, socket, _id_map} -> {:noreply, assign(socket, :notice, "Saved.")}
       {:error, socket} -> {:noreply, socket}
     end
   end
@@ -103,8 +103,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     node_id = socket.assigns.pending_node_id
 
     case persist_current(socket) do
-      {:ok, socket} ->
-        {:noreply, socket |> assign(:pending_node_id, nil) |> navigate_to_node(node_id)}
+      {:ok, socket, id_map} ->
+        resolved_id = Map.get(id_map, node_id, node_id)
+
+        {:noreply, socket |> assign(:pending_node_id, nil) |> navigate_to_node(resolved_id)}
 
       {:error, socket} ->
         {:noreply, assign(socket, :pending_node_id, nil)}
@@ -130,6 +132,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # Shared by "save" and "save_and_open": persists the canvas and re-syncs it
   # with what was written — temporary editor ids became real UUIDs, and fresh
   # subflow nodes gained their subflow_id — so Open works without a reload.
+  # Returns the id_map too: "save_and_open" needs it to find out what the
+  # pending node's editor-temporary id was actually saved as.
   defp persist_current(socket) do
     attrs = ReactFlow.to_graph_attrs(socket.assigns.current)
 
@@ -138,10 +142,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         graph = Graphs.get(graph.id)
         data = ReactFlow.to_data(graph)
 
-        {:ok,
-         socket
-         |> assign(graph: graph, data: data, current: data, error: nil)
-         |> push_event("form_flow:set_graph", %{graph: data})}
+        socket =
+          socket
+          |> assign(graph: graph, data: data, current: data, error: nil)
+          |> push_event("form_flow:set_graph", %{graph: data})
+
+        {:ok, socket, attrs.id_map}
 
       {:error, %Ecto.Changeset{}} ->
         {:error, assign(socket, :error, "Could not save the flow. Please try again.")}
