@@ -36,6 +36,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   `id_map`), so Open still lands on the right subflow even when it was never
   saved before this click.
 
+  The same `unsaved_changes?/1` flag also guards navigation the app can't
+  intercept — closing the tab, refreshing, typing a new URL — via a
+  `beforeunload` prompt. That needs its own tiny hook rather than piggybacking
+  on `FormFlow.Web.Components.Editor`'s: that hook's container is
+  `phx-update="ignore"`, so a data attribute on it would never see a new
+  value. This hook's div renders normally, so its `data-unsaved` attribute is
+  simply read at the moment `beforeunload` fires — nothing is mirrored into
+  JS state.
+
   Discard changes is the deliberate opposite: shown only while the canvas is
   dirty, it throws the edit away rather than protecting it, so it asks for
   confirmation first rather than checking for one. Confirming reloads this
@@ -224,6 +233,29 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   def render(assigns) do
     ~H"""
     <div>
+      <div
+        id={"#{@id}-unsaved-guard"}
+        phx-hook=".UnsavedGuard"
+        data-unsaved={to_string(unsaved_changes?(assigns))}
+        style="display: none;"
+      >
+      </div>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".UnsavedGuard">
+        export default {
+          mounted() {
+            this.handler = (e) => {
+              if (this.el.dataset.unsaved === "true") {
+                e.preventDefault()
+                e.returnValue = ""
+              }
+            }
+            window.addEventListener("beforeunload", this.handler)
+          },
+          destroyed() {
+            window.removeEventListener("beforeunload", this.handler)
+          }
+        }
+      </script>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
         <div class="flex items-center gap-2 text-sm font-semibold">
           <%!-- Breadcrumbs stay in edit mode: backing out of a subflow lands
@@ -297,7 +329,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             type="button"
             phx-click="save"
             phx-target={@myself}
-            class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+            class={[
+              "rounded-md border px-2 py-1 text-xs",
+              if(unsaved_changes?(assigns),
+                do: "border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700",
+                else: "border-zinc-300 text-zinc-700 hover:border-zinc-400"
+              )
+            ]}
           >
             Save
           </button>

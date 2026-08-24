@@ -189,9 +189,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     end
   end
 
-  defp back_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows"
-  defp back_path(assigns), do: "#{assigns.base}/flows/#{assigns.root_id}"
-
   # The edit page of the graph containing `node`: the root's editor when the
   # node sits on the root canvas, otherwise the drill-in editor addressed by
   # the node that embeds the containing graph

@@ -449,6 +449,23 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert node.properties["data"]["label"] == "Renamed step"
   end
 
+  test "the unsaved-guard flag tracks unsaved changes for the beforeunload hook",
+       %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, html} = live(conn, "/flows/#{id}/edit")
+    assert html =~ ~s(id="flows-edit-unsaved-guard")
+    assert has_element?(view, ~s(#flows-edit-unsaved-guard[data-unsaved="false"]))
+
+    edit_step(view)
+
+    assert has_element?(view, ~s(#flows-edit-unsaved-guard[data-unsaved="true"]))
+
+    view |> element("button", "Save") |> render_click()
+
+    assert has_element?(view, ~s(#flows-edit-unsaved-guard[data-unsaved="false"]))
+  end
+
   test "discard changes is hidden when the canvas is clean", %{conn: conn} do
     id = create_flow(conn)
 
