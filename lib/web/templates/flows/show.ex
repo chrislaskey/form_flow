@@ -119,7 +119,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 flex items-center justify-between gap-4">
+      <div class="mb-2 h-14 flex items-center justify-between gap-4">
         <h2 class="text-sm font-semibold">
           <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
           <span class="text-zinc-400">/</span>
@@ -133,17 +133,22 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           </span>
         </h2>
         <div class="flex items-center gap-2">
-          <.link
-            navigate={back_path(assigns)}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
-          >
-            Back
-          </.link>
+          <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
+                opposite position: this page is always the "off" (Show)
+                side, so unlike there, nothing here needs to intercept the
+                click. --%>
           <.link
             navigate={edit_path(assigns)}
-            class="rounded-md border border-cyan-600 px-2 py-1 text-xs text-cyan-600 hover:bg-cyan-50"
+            role="switch"
+            aria-checked="false"
+            aria-label="Switch to Edit"
+            class="flex items-center gap-1.5 text-xs"
           >
-            Edit
+            <span class="font-semibold text-zinc-900">Show</span>
+            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
+              <span class="inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
+            </span>
+            <span class="text-zinc-500">Edit</span>
           </.link>
           <button
             type="button"

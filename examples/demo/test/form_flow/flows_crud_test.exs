@@ -164,11 +164,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert view |> element("#flows-show-editor") |> render() =~ ~s(data-editable="false")
 
     # Drill-in edit works on the same node URL, with a breadcrumb that stays
-    # in edit mode — backing out lands on the parent's editor
+    # in edit mode — backing out lands on the parent's editor. Edit-page
+    # breadcrumbs are buttons, not plain links, so unsaved changes can gate
+    # them the same way Open is gated.
     {:ok, view, html} = live(conn, "/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Collect address"
-    assert has_element?(view, ~s(a[href="/flows/#{root_id}/edit"]), "Onboarding")
-    assert has_element?(view, ~s(a[href="/flows"]), "Flows")
+    assert has_element?(view, "button", "Onboarding")
+    assert has_element?(view, "button", "Flows")
   end
 
   test "the index lists roots but not their owned subflow children", %{conn: conn} do
@@ -321,7 +323,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert render(view) =~ "unsaved changes"
 
-    view |> element("button", "Save & Open") |> render_click()
+    view |> element("button", "Save & Continue") |> render_click()
 
     [node] = Graphs.get(root_id).nodes
     assert {:ok, _} = Ecto.UUID.cast(node.id)
@@ -362,7 +364,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Still on the edit page — no redirect fired — with the prompt showing
     assert render(view) =~ "unsaved changes"
-    assert has_element?(view, "button", "Save & Open")
+    assert has_element?(view, "button", "Save & Continue")
   end
 
   test "confirming the unsaved-changes prompt saves before navigating", %{conn: conn} do
@@ -378,7 +380,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    view |> element("button", "Save & Open") |> render_click()
+    view |> element("button", "Save & Continue") |> render_click()
 
     assert_redirect(view, "/flows/#{root_id}/nodes/#{node.id}/edit")
 
@@ -400,7 +402,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    view |> element("button", "Cancel") |> render_click()
+    view |> element("button", "Keep editing") |> render_click()
 
     refute render(view) =~ "unsaved changes"
 
@@ -414,6 +416,142 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     [saved_node] = Graphs.get(root_id).nodes
     assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
+  end
+
+  test "show navigates directly to the show page when nothing changed since save",
+       %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    view |> element("button", "Show") |> render_click()
+
+    assert_redirect(view, "/flows/#{id}")
+  end
+
+  test "show with unsaved changes prompts to save before leaving", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    edit_step(view)
+
+    view |> element("button", "Show") |> render_click()
+
+    # Still on the edit page — no redirect fired — with the prompt showing
+    assert render(view) =~ "unsaved changes"
+
+    view |> element("button", "Save & Continue") |> render_click()
+
+    assert_redirect(view, "/flows/#{id}")
+
+    assert [node] = Graphs.get(id).nodes
+    assert node.properties["data"]["label"] == "Renamed step"
+  end
+
+  test "discard changes is hidden when the canvas is clean", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "discarding changes reloads the edit page and drops the unsaved edit", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    edit_step(view)
+
+    assert has_element?(view, "button", "Discard changes")
+
+    # Selected by phx-click, not text: the modal's confirm button also reads
+    # "Discard", a substring of the trigger's "Discard changes"
+    view |> element(~s(button[phx-click="request_discard"])) |> render_click()
+
+    assert render(view) =~ "Discard changes?"
+
+    view |> element(~s(button[phx-click="confirm_discard"])) |> render_click()
+
+    assert_redirect(view, "/flows/#{id}/edit")
+
+    # Nothing was persisted — the edit never went through save
+    assert length(Graphs.get(id).nodes) == 2
+  end
+
+  test "cancelling the discard prompt keeps the unsaved edit live", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    edit_step(view)
+
+    view |> element(~s(button[phx-click="request_discard"])) |> render_click()
+    view |> element(~s(button[phx-click="cancel_discard"])) |> render_click()
+
+    refute render(view) =~ "Discard changes?"
+
+    # The pending edit is still live on the canvas and can still be saved
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    assert [node] = Graphs.get(id).nodes
+    assert node.properties["data"]["label"] == "Renamed step"
+  end
+
+  test "a breadcrumb navigates directly when nothing changed since save", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    view |> element("button", "Flows") |> render_click()
+
+    assert_redirect(view, "/flows")
+  end
+
+  test "a breadcrumb with unsaved changes prompts to save before leaving", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    edit_step(view)
+
+    view |> element("button", "Flows") |> render_click()
+
+    # Still on the edit page — no redirect fired — with the prompt showing
+    assert render(view) =~ "unsaved changes"
+
+    view |> element("button", "Save & Continue") |> render_click()
+
+    assert_redirect(view, "/flows")
+
+    assert [node] = Graphs.get(id).nodes
+    assert node.properties["data"]["label"] == "Renamed step"
+  end
+
+  test "keep editing on a leave prompt discards nothing and stays on the canvas",
+       %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/flows/#{id}/edit")
+
+    edit_step(view)
+
+    view |> element("button", "Flows") |> render_click()
+    view |> element("button", "Keep editing") |> render_click()
+
+    refute render(view) =~ "unsaved changes"
+
+    # Nothing was persisted, and nothing navigated away
+    assert length(Graphs.get(id).nodes) == 2
+
+    # The pending edit is still live on the canvas and can still be saved
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    assert [node] = Graphs.get(id).nodes
+    assert node.properties["data"]["label"] == "Renamed step"
   end
 
   test "deleting a flow from the show page removes it and its children", %{conn: conn} do
@@ -487,6 +625,24 @@ defmodule Demo.FormFlowFlowsCrudTest do
           "type" => "subflow",
           "position" => %{"x" => 40, "y" => 40},
           "data" => %{"label" => "Subflow 1", "subflow_label" => "forms"}
+        }
+      ],
+      "edges" => []
+    })
+  end
+
+  # Reports a "forms" flow's starter nodes collapsed down to one renamed step
+  # — an unsaved change relative to whatever was last persisted
+  defp edit_step(view) do
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:graph_changed", %{
+      "nodes" => [
+        %{
+          "id" => "1",
+          "type" => "step",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Renamed step", "kind" => "form"}
         }
       ],
       "edges" => []
