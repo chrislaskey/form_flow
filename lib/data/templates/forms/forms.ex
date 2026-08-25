@@ -270,8 +270,20 @@ defmodule FormFlow.Data.Templates.Forms do
     Ecto.StaleEntryError -> {:error, :stale}
   end
 
-  @doc "Deletes a draft. Published and archived versions cannot be deleted."
-  def delete_draft(%Version{status: "draft"} = version), do: Repo.delete(version)
+  @doc """
+  Deletes a draft. Published and archived versions cannot be deleted.
+
+  Refuses with `{:error, :has_instances}` if anything pins the draft —
+  impossible today (instances pin published versions), but the test-fills
+  seam will change that, and a raise from the FK is the wrong answer.
+  """
+  def delete_draft(%Version{status: "draft"} = version) do
+    pinned? =
+      Repo.exists?(from(i in Instances.Form, where: i.template_form_version_id == ^version.id))
+
+    if pinned?, do: {:error, :has_instances}, else: Repo.delete(version)
+  end
+
   def delete_draft(%Version{}), do: {:error, :not_draft}
 
   @doc """

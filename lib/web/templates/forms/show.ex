@@ -158,6 +158,22 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   @impl true
+  def handle_event("delete_draft", _params, socket) do
+    case Forms.delete_draft(socket.assigns.version) do
+      {:ok, _draft} ->
+        # Back to the form's default view: latest published, or the newest
+        # remaining draft, or the no-versions state
+        {:noreply, push_navigate(socket, to: form_base_path(socket.assigns))}
+
+      {:error, :has_instances} ->
+        {:noreply, assign(socket, :error, "This draft can't be deleted: it has instances.")}
+
+      {:error, _other} ->
+        {:noreply, assign(socket, :error, "Only drafts can be deleted.")}
+    end
+  end
+
+  @impl true
   def handle_event("delete", _params, socket) do
     case Forms.delete(socket.assigns.form) do
       {:ok, _form} ->
@@ -220,6 +236,16 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           </span>
         </div>
         <div :if={@version} class="flex items-center gap-2">
+          <button
+            :if={@version.status == "draft"}
+            type="button"
+            phx-click="delete_draft"
+            phx-target={@myself}
+            data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
+            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+          >
+            Delete draft
+          </button>
           <.link
             :if={@version.status == "draft"}
             navigate={edit_path(assigns, @version)}

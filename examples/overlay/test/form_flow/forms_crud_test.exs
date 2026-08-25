@@ -334,12 +334,47 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "v1 · published"
   end
 
+  test "a draft can be deleted from its show page; published versions survive",
+       %{conn: conn} do
+    {form, v1} = published_form()
+    {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
+
+    # Delete draft sits left of the Show/Edit toggle, which sits left of Publish
+    assert html =~ ~r/Delete draft.*Switch to Edit.*Publish/s
+
+    view |> element("button", "Delete draft") |> render_click()
+
+    assert_redirect(view, "/admin/forms/#{form.id}")
+    assert Forms.get_version(draft.id) == nil
+    assert Forms.get_version(v1.id).status == "published"
+
+    # Published versions never offer the button
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{v1.id}")
+    refute has_element?(view, "button", "Delete draft")
+  end
+
+  test "a draft can be deleted from its edit page too", %{conn: conn} do
+    {form, v1} = published_form()
+    {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    assert html =~ ~r/Delete draft.*Switch to Show.*Save.*Publish/s
+
+    view |> element("button", "Delete draft") |> render_click()
+
+    assert_redirect(view, "/admin/forms/#{form.id}")
+    assert Forms.get_version(draft.id) == nil
+  end
+
   test "deleting a catalog form returns to the catalog", %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Mistake"})
 
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
 
-    view |> element("button", "Delete") |> render_click()
+    view |> element(~s(button[phx-click="delete"])) |> render_click()
 
     assert_redirect(view, "/admin/forms")
     assert Forms.get(form.id) == nil

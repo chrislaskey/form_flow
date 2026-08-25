@@ -478,8 +478,6 @@ defmodule Demo.FormFlowFormsTest do
   defp reload(instance), do: Instances.Forms.get(instance.id)
 
   defp events_for(instance) do
-    FormFlowRepo.all(
-      from(e in Instances.Form.Event, where: e.instance_form_id == ^instance.id)
-    )
+    FormFlowRepo.all(from(e in Instances.Form.Event, where: e.instance_form_id == ^instance.id))
   end
 end
