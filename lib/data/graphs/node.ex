@@ -19,15 +19,19 @@ defmodule FormFlow.Data.Graph.Node do
   authoritative, and a stale `"graph_id"` arriving in `properties` is
   overwritten.
 
-  ## Subflows
+  ## Subflows and forms
 
   A node that embeds another graph carries that graph's id in `subflow_id` —
-  the reference behind `FormFlow.Data.Graphs`' subflow operations. It follows
+  the reference behind `FormFlow.Data.Graphs`' subflow operations. A form
+  node carries its form's *lineage* id in `form_id` — never a version id:
+  which version to show is a read-time and instance-pin concern (see
+  `archive/form-versioning.md`, Decision 3), and a node inside a shared
+  reusable subflow has one pointer but many consumers. Both references follow
   the same dual-write rule as `graph_id`, with one addition: when only the
   `properties` copy arrives (the editor round-trips properties untouched), the
-  column adopts it, so a subflow node surviving an editor save keeps its
-  reference. In Neo4j this reference becomes an `EMBEDS` relationship — see
-  the Neo4j guide (`guides/neo4j.md`).
+  column adopts it, so a subflow or form node surviving an editor save keeps
+  its reference. In Neo4j the subflow reference becomes an `EMBEDS`
+  relationship — see the Neo4j guide (`guides/neo4j.md`).
   """
 
   use Ecto.Schema
@@ -35,6 +39,7 @@ defmodule FormFlow.Data.Graph.Node do
   import Ecto.Changeset
 
   alias FormFlow.Data.Graph
+  alias FormFlow.Data.Templates
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -45,6 +50,7 @@ defmodule FormFlow.Data.Graph.Node do
 
     belongs_to(:graph, Graph)
     belongs_to(:subflow, Graph, foreign_key: :subflow_id)
+    belongs_to(:form, Templates.Form, foreign_key: :form_id)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -57,27 +63,32 @@ defmodule FormFlow.Data.Graph.Node do
   """
   def changeset(node, attrs) do
     node
-    |> cast(attrs, [:id, :graph_id, :subflow_id, :labels, :properties])
+    |> cast(attrs, [:id, :graph_id, :subflow_id, :form_id, :labels, :properties])
     |> validate_required([:graph_id])
-    |> adopt_subflow_id_from_properties()
+    |> adopt_from_properties(:subflow_id, "subflow_id")
+    |> adopt_from_properties(:form_id, "form_id")
     |> derive_labels_from_kind()
     |> copy_into_properties(:graph_id, "graph_id")
     |> copy_into_properties(:subflow_id, "subflow_id")
+    |> copy_into_properties(:form_id, "form_id")
     |> foreign_key_constraint(:graph_id)
     |> foreign_key_constraint(:subflow_id)
+    |> foreign_key_constraint(:form_id)
   end
 
-  # The editor round-trips properties untouched, so a saved subflow node
-  # arrives with only the properties copy — the column adopts it. An explicit
-  # :subflow_id in the attributes wins over the copy.
-  defp adopt_subflow_id_from_properties(changeset) do
+  # The editor round-trips properties untouched, so a saved subflow or form
+  # node arrives with only the properties copy — the column adopts it. An
+  # explicit reference in the attributes wins over the copy (copy_graph relies
+  # on this: it passes the *new* id so a stale property copy can't re-point a
+  # copied node at the original).
+  defp adopt_from_properties(changeset, field, key) do
     properties = get_field(changeset, :properties) || %{}
 
-    case {get_field(changeset, :subflow_id), properties["subflow_id"]} do
+    case {get_field(changeset, field), properties[key]} do
       {nil, id} when is_binary(id) ->
         case Ecto.UUID.cast(id) do
-          {:ok, id} -> put_change(changeset, :subflow_id, id)
-          :error -> add_error(changeset, :subflow_id, "is invalid")
+          {:ok, id} -> put_change(changeset, field, id)
+          :error -> add_error(changeset, field, "is invalid")
         end
 
       _other ->

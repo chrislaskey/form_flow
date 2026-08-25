@@ -96,6 +96,54 @@ defmodule FormFlow.Data.Graph.NodeTest do
     assert %{subflow_id: ["is invalid"]} = errors_on(changeset)
   end
 
+  test "casts form_id and copies it into properties" do
+    form_id = Ecto.UUID.generate()
+
+    changeset = Node.changeset(%Node{}, %{graph_id: @graph_id, form_id: form_id})
+
+    assert changeset.valid?
+    assert changeset.changes.form_id == form_id
+    assert changeset.changes.properties["form_id"] == form_id
+  end
+
+  test "adopts form_id from properties when the column is not given" do
+    # The editor round-trips properties untouched — the reference must survive
+    form_id = Ecto.UUID.generate()
+
+    changeset =
+      Node.changeset(%Node{}, %{
+        graph_id: @graph_id,
+        properties: %{"form_id" => form_id, "data" => %{"kind" => "form"}}
+      })
+
+    assert changeset.valid?
+    assert changeset.changes.form_id == form_id
+  end
+
+  test "an explicit form_id wins over the properties copy" do
+    # copy_graph relies on this: source properties carry the OLD lineage id,
+    # and adoption would re-point a copied node at the original form
+    explicit = Ecto.UUID.generate()
+
+    changeset =
+      Node.changeset(%Node{}, %{
+        graph_id: @graph_id,
+        form_id: explicit,
+        properties: %{"form_id" => Ecto.UUID.generate()}
+      })
+
+    assert changeset.changes.form_id == explicit
+    assert changeset.changes.properties["form_id"] == explicit
+  end
+
+  test "a non-UUID form_id in properties is an error, not a crash" do
+    changeset =
+      Node.changeset(%Node{}, %{graph_id: @graph_id, properties: %{"form_id" => "nope"}})
+
+    refute changeset.valid?
+    assert %{form_id: ["is invalid"]} = errors_on(changeset)
+  end
+
   test "graph_id is copied into properties, overwriting a stale copy" do
     changeset =
       Node.changeset(%Node{}, %{

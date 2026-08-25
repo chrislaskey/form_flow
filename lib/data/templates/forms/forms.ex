@@ -114,6 +114,43 @@ defmodule FormFlow.Data.Templates.Forms do
     end
   end
 
+  @doc """
+  Copies a lineage — the rollover operation behind copying a flow tree.
+
+  The copy is a new lineage with `copied_from_form_id` provenance. A source
+  with a published version copies as a single **published v1** carrying the
+  latest published definition — version history stays with the original,
+  reachable via provenance, and drafts do not copy. A source that has never
+  been published copies its most recently updated draft as a draft: the copy
+  of an unpublished thing is an unpublished thing.
+
+  Pass `owner_graph_id:` to make the copy a flow tree's private property —
+  the normal case; a copy without an owner lands in the catalog and must not
+  collide on `(app, name)`.
+  """
+  def copy(%Form{} = form, opts \\ []) do
+    owner_graph_id = Keyword.get(opts, :owner_graph_id)
+
+    Repo.transaction(fn ->
+      changeset =
+        %Form{}
+        |> Form.changeset(%{
+          app: form.app,
+          name: form.name,
+          description: form.description,
+          owner_graph_id: owner_graph_id
+        })
+        |> Ecto.Changeset.put_change(:copied_from_form_id, form.id)
+
+      with {:ok, copy} <- Repo.insert(changeset),
+           {:ok, _version} <- copy_version(form, copy) do
+        Repo.preload(copy, :versions)
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
   @doc "Fetches a lineage by id, or nil."
   def get(form_id), do: Repo.get(Form, form_id)
 
@@ -437,6 +474,31 @@ defmodule FormFlow.Data.Templates.Forms do
   defp declared_field_names(_definition), do: nil
 
   # --- helpers --------------------------------------------------------------
+
+  # Published source → published v1 from the latest published definition;
+  # never-published source → the most recently updated draft copies as a draft
+  defp copy_version(source, copy) do
+    case get_latest_version(source.id) do
+      %Version{} = published ->
+        with {:ok, draft} <- insert_draft(copy.id, published.definition, nil) do
+          Repo.update(Version.status_changeset(draft, "published", 1, DateTime.utc_now()))
+        end
+
+      nil ->
+        latest_draft =
+          Repo.one(
+            from(v in Version,
+              where: v.template_form_id == ^source.id and v.status == "draft",
+              order_by: [desc: v.updated_at],
+              limit: 1
+            )
+          )
+
+        definition = (latest_draft && latest_draft.definition) || %{}
+
+        insert_draft(copy.id, definition, nil)
+    end
+  end
 
   defp insert_draft(form_id, definition, based_on_id) do
     Repo.insert(

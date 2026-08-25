@@ -46,6 +46,7 @@ defmodule FormFlow.Data.Graphs do
   alias FormFlow.Data.Graph.Node
   alias FormFlow.Data.Graph.Relationship
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates
 
   @doc """
   Returns the top-level flows — root flows and reusable subflows — oldest
@@ -233,7 +234,24 @@ defmodule FormFlow.Data.Graphs do
         |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
         |> Repo.rollback()
       else
+        # Owned forms are deleted explicitly — their owner FK nilifies on
+        # graph deletion, and a nil owner is the *definition* of a catalog
+        # form, so leaving them to the FK would launder every owned form into
+        # /forms. Ordering matters: the fill-data check comes first (refuse
+        # before destroying anything), the form rows go last (their node
+        # FK, though :nothing, still enforces — nodes must delete first).
+        forms =
+          case owned_forms_deletable(graph) do
+            {:ok, forms} -> forms
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+
         delete_graphs(tree_ids)
+
+        Enum.each(forms, fn form ->
+          {:ok, _form} = Templates.Forms.delete(form)
+        end)
+
         graph
       end
     end)
@@ -283,6 +301,24 @@ defmodule FormFlow.Data.Graphs do
 
         Repo.update_all(
           from(g in Graph, where: g.id in ^rehome_ids),
+          set: [owner_graph_id: graph.id]
+        )
+
+        # Owned forms referenced from the rehomed tree move with it — left in
+        # the old domain, the old root's next sweep would collect them while
+        # this graph still references them
+        form_ids =
+          Repo.all(
+            from(n in Node,
+              where: n.graph_id in ^[graph.id | rehome_ids] and not is_nil(n.form_id),
+              select: n.form_id
+            )
+          )
+
+        Repo.update_all(
+          from(f in Templates.Form,
+            where: f.owner_graph_id == ^old_owner_id and f.id in ^form_ids
+          ),
           set: [owner_graph_id: graph.id]
         )
       end
@@ -342,7 +378,8 @@ defmodule FormFlow.Data.Graphs do
            {:ok, nodes} <- insert_contents(graph, Node, Map.get(attrs, :nodes, [])),
            {:ok, _rels} <-
              insert_contents(graph, Relationship, Map.get(attrs, :relationships, [])),
-           {:ok, _children} <- create_missing_subflows(graph, nodes) do
+           {:ok, _children} <- create_missing_subflows(graph, nodes),
+           {:ok, _forms} <- create_missing_forms(graph, nodes) do
         {:ok, graph}
       end
     else
@@ -442,8 +479,9 @@ defmodule FormFlow.Data.Graphs do
 
   # Garbage collection after a save: owned graphs in this ownership domain
   # that are no longer reachable through subflow references get deleted, with
-  # their contents. Multi-level removal comes for free — a removed subflow's
-  # own children stop being reachable too.
+  # their contents — and owned forms no longer referenced by any node in the
+  # domain go with them. Multi-level removal comes for free — a removed
+  # subflow's own children stop being reachable too.
   defp sweep_unreachable(graph) do
     root_id = graph.owner_graph_id || graph.id
     reachable = reachable_owned([root_id], root_id)
@@ -458,7 +496,84 @@ defmodule FormFlow.Data.Graphs do
 
     if doomed != [], do: delete_graphs(doomed)
 
+    sweep_unreferenced_forms(graph, root_id, [root_id | reachable])
+
     :ok
+  end
+
+  # Owned forms whose form nodes were all removed. Deletion goes through the
+  # context (the node FK is :nothing by design), which refuses while fill
+  # data exists — and then so does this save: fill data is never orphaned
+  # silently, the user is told the removed step still has submissions.
+  defp sweep_unreferenced_forms(graph, root_id, graph_ids) do
+    referenced =
+      Repo.all(
+        from(n in Node,
+          where: n.graph_id in ^graph_ids and not is_nil(n.form_id),
+          distinct: true,
+          select: n.form_id
+        )
+      )
+
+    doomed =
+      Repo.all(
+        from(f in Templates.Form,
+          where: f.owner_graph_id == ^root_id and f.id not in ^referenced
+        )
+      )
+
+    Enum.each(doomed, fn form ->
+      case Templates.Forms.delete(form) do
+        {:ok, _form} ->
+          :ok
+
+        {:error, :has_instances} ->
+          graph
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.add_error(
+            :nodes,
+            "the removed form \"#{form.name}\" still has submitted data — " <>
+              "delete its instances first, or keep the step"
+          )
+          |> Repo.rollback()
+
+        {:error, other} ->
+          Repo.rollback(other)
+      end
+    end)
+  end
+
+  # The owned forms a flow deletion will take with it, or a friendly refusal
+  # when any of them still holds fill data. The actual deletion happens after
+  # the graph tree (nodes first — their form FK enforces even as :nothing).
+  defp owned_forms_deletable(graph) do
+    forms = Repo.all(from(f in Templates.Form, where: f.owner_graph_id == ^graph.id))
+
+    case Enum.find(forms, fn form -> form_has_instances?(form.id) end) do
+      nil ->
+        {:ok, forms}
+
+      form ->
+        changeset =
+          graph
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.add_error(
+            :id,
+            "cannot be deleted: its form \"#{form.name}\" still has submitted data"
+          )
+
+        {:error, changeset}
+    end
+  end
+
+  defp form_has_instances?(form_id) do
+    Repo.exists?(
+      from(i in FormFlow.Data.Instances.Form,
+        join: v in Templates.Form.Version,
+        on: i.template_form_version_id == v.id,
+        where: v.template_form_id == ^form_id
+      )
+    )
   end
 
   # Graphs owned by `owner_id` reachable by following subflow references out
@@ -517,6 +632,10 @@ defmodule FormFlow.Data.Graphs do
           id: node_ids[node.id],
           graph_id: copy_id,
           subflow_id: copy_subflow_reference(node.subflow_id, domain_id),
+          # Explicit, even when unchanged: the source properties still carry
+          # the OLD form id, and the changeset's adopt-from-properties path
+          # would re-point the copy at the original if the column arrived nil
+          form_id: copy_form_reference(node.form_id, domain_id),
           labels: node.labels,
           properties: node.properties
         })
@@ -550,5 +669,49 @@ defmodule FormFlow.Data.Graphs do
       %Graph{} -> copy_graph(subflow_id, domain_id, domain_id)
       nil -> nil
     end
+  end
+
+  # The same boundary for forms: owned lineages are copied (with provenance),
+  # catalog forms stay shared references — sharing is for forms whose
+  # consumers want lockstep updates (archive/form-versioning.md, Decision 6)
+  defp copy_form_reference(nil, _domain_id), do: nil
+
+  defp copy_form_reference(form_id, domain_id) do
+    case Repo.get(Templates.Form, form_id) do
+      %Templates.Form{owner_graph_id: nil} ->
+        form_id
+
+      %Templates.Form{} = form ->
+        {:ok, copy} = Templates.Forms.copy(form, owner_graph_id: domain_id)
+        copy.id
+
+      nil ->
+        nil
+    end
+  end
+
+  # Save-time form creation, the form-node mirror of create_missing_subflows:
+  # a form node without a form gets a fresh owned lineage (with one blank
+  # draft), named from the canvas label, owned by the ownership root
+  defp create_missing_forms(graph, nodes) do
+    root_id = graph.owner_graph_id || graph.id
+
+    nodes
+    |> Enum.filter(fn node ->
+      get_in(node.properties, ["data", "kind"]) == "form" and is_nil(node.form_id)
+    end)
+    |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
+      form_attrs = %{
+        name: get_in(node.properties, ["data", "label"]) || "Untitled form",
+        owner_graph_id: root_id
+      }
+
+      with {:ok, form} <- Templates.Forms.create(form_attrs),
+           {:ok, _node} <- Repo.update(Node.changeset(node, %{form_id: form.id})) do
+        {:cont, {:ok, [form | created]}}
+      else
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
   end
 end
