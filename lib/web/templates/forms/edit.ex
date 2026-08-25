@@ -25,11 +25,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.PublishDialog
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, error: nil, notice: nil, publishing?: false)}
+    {:ok,
+     assign(socket,
+       error: nil,
+       notice: nil,
+       publishing?: false,
+       auto_update?: false,
+       preview_rev: 0
+     )}
   end
 
   @impl true
@@ -54,7 +62,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def update(%{event: "change", payload: payload}, socket) do
     dirty? = values_from(payload.data) != socket.assigns.saved_values
 
-    {:ok, assign(socket, dirty?: dirty?, notice: nil)}
+    socket =
+      socket
+      |> assign(dirty?: dirty?, notice: nil)
+      |> assign(:latest_json, to_string(payload.data[:definition] || ""))
+
+    {:ok, maybe_refresh_preview(socket)}
   end
 
   def update(%{event: "save", payload: payload}, socket) do
@@ -131,7 +144,31 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       socket
       |> assign(:saved_values, saved_values(form, socket.assigns.definition_json))
       |> assign(:dirty?, false)
+      # What the preview currently shows, and the editor's latest content —
+      # both start at the saved definition; change events move latest_json,
+      # and a refresh copies it over and bumps the rev
+      |> assign_new(:preview_json, fn %{definition_json: json} -> json end)
+      |> assign_new(:latest_json, fn %{definition_json: json} -> json end)
     end)
+  end
+
+  defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket) do
+    refresh_preview(socket)
+  end
+
+  defp maybe_refresh_preview(socket), do: socket
+
+  # Re-rendering the preview means remounting it: a child LiveView never
+  # re-reads its session, so the id carries the rev — a bump makes
+  # live_render mount a fresh child with the new definition in its session
+  defp refresh_preview(socket) do
+    if socket.assigns.latest_json != socket.assigns.preview_json do
+      socket
+      |> assign(:preview_json, socket.assigns.latest_json)
+      |> assign(:preview_rev, socket.assigns.preview_rev + 1)
+    else
+      socket
+    end
   end
 
   # What the last save wrote, in the shape DynamicForm reports — the baseline
@@ -174,6 +211,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   @impl true
   def handle_event("cancel_publish", _params, socket) do
     {:noreply, assign(socket, :publishing?, false)}
+  end
+
+  @impl true
+  def handle_event("toggle_auto_update", _params, socket) do
+    socket = assign(socket, :auto_update?, !socket.assigns.auto_update?)
+
+    # Turning it on catches the preview up to whatever was typed while off
+    {:noreply, maybe_refresh_preview(socket)}
+  end
+
+  @impl true
+  def handle_event("update_preview", _params, socket) do
+    {:noreply, refresh_preview(socket)}
   end
 
   @impl true
@@ -375,20 +425,26 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         This draft was based on a version that is no longer the latest — review before publishing.
       </p>
 
-      <%!-- One form, one Save: the lineage's identity (name, description)
+      <div class="flex flex-wrap gap-6">
+        <div class="min-w-0 flex-1">
+          <%!-- One form, one Save: the lineage's identity (name, description)
             above the version's definition, separated by a read-only strip
             saying which draft is being edited. The save event writes each
             value to its owner — identity to the form row, definition to the
             draft. Picking a different draft belongs on Show, where the
-            version history lists them all. --%>
-      <DynamicForm.form
-        id={"#{@id}-form"}
-        data={%{name: @form.name, description: @form.description, definition: @definition_json}}
-        hide_submit
-        on_change={&changed(&1, @id)}
-        on_submit={&validate_json/1}
-        on_success={&saved(&1, @id)}
-      >
+            version history lists them all.
+
+            The 500ms debounce exists for the preview — no point remounting
+            it per keystroke — so it only applies while auto-update is on. --%>
+          <DynamicForm.form
+            id={"#{@id}-form"}
+            data={%{name: @form.name, description: @form.description, definition: @definition_json}}
+            hide_submit
+            on_change={&changed(&1, @id)}
+            on_submit={&validate_json/1}
+            on_success={&saved(&1, @id)}
+            change_debounce_in_ms={if(@auto_update?, do: 500)}
+          >
         <:field type="text" name="name" label="Name" required />
         <:field type="comment" name="description" label="Description" />
         <:field type="html" name="draft_info">
@@ -426,7 +482,65 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </div>
         </:field>
         <:field type="comment" name="definition" label="Definition (JSON)" required />
-      </DynamicForm.form>
+          </DynamicForm.form>
+        </div>
+
+        <div class="min-w-0 flex-1">
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <h3 class="text-xs font-medium text-zinc-500">Preview</h3>
+            <div class="flex items-center gap-2">
+              <%!-- Auto-update, styled like the Show/Edit switch: on, the
+                    preview re-renders on every (debounced) change; off, it
+                    keeps whatever it last showed until Update is clicked --%>
+              <button
+                type="button"
+                phx-click="toggle_auto_update"
+                phx-target={@myself}
+                role="switch"
+                aria-checked={to_string(@auto_update?)}
+                aria-label="Toggle auto-update preview"
+                class="flex items-center gap-1.5 text-xs"
+              >
+                <span class={
+                  if(@auto_update?, do: "font-semibold text-zinc-900", else: "text-zinc-500")
+                }>
+                  Auto-update
+                </span>
+                <span class={[
+                  "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                  if(@auto_update?, do: "bg-cyan-600", else: "bg-zinc-300")
+                ]}>
+                  <span class={[
+                    "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    if(@auto_update?, do: "translate-x-4", else: "translate-x-0.5")
+                  ]} />
+                </span>
+              </button>
+              <button
+                :if={!@auto_update?}
+                type="button"
+                phx-click="update_preview"
+                phx-target={@myself}
+                class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+              >
+                Update
+              </button>
+            </div>
+          </div>
+          <div class="rounded-md border border-zinc-200 p-4">
+            <%!-- A child LiveView (own process), not a LiveComponent: a
+                  definition that crashes the form renderer takes down only
+                  the preview — the client remounts it — never this page.
+                  The rev in the id is what re-renders it: a child never
+                  re-reads its session, so each refresh remounts a fresh
+                  child carrying the new definition. --%>
+            {live_render(@socket, Preview,
+              id: preview_id(assigns),
+              session: %{"id" => preview_id(assigns), "definition" => @preview_json}
+            )}
+          </div>
+        </div>
+      </div>
 
       <PublishDialog.publish_dialog
         :if={@publishing?}
@@ -439,6 +553,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     </div>
     """
   end
+
+  defp preview_id(assigns), do: "#{assigns.id}-preview-r#{assigns.preview_rev}"
 
   defp based_on_version(versions, %{based_on_version_id: base_id}) when is_binary(base_id) do
     Enum.find(versions, &(&1.id == base_id))

@@ -27,6 +27,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.PublishDialog
 
   @impl true
@@ -312,6 +313,16 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       </p>
 
       <div class="flex flex-wrap gap-6">
+        <div :if={@version} class="min-w-0 flex-1">
+          <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
+          <div class="rounded-md border border-zinc-200 p-4">
+            {live_render(@socket, Preview,
+              id: "form-preview-#{@version.id}",
+              session: %{"id" => "form-preview-#{@version.id}", "version_id" => @version.id}
+            )}
+          </div>
+        </div>
+
         <div class="min-w-0 flex-1">
           <h3 class="mb-1 text-xs font-medium text-zinc-500">Definition</h3>
           <pre
