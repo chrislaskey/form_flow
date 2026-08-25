@@ -47,7 +47,7 @@ defmodule DemoWeb.InstallCheckLive do
 
   # DynamicForm messages the parent LiveView on every valid submission
   @impl true
-  def handle_info({:dynamic_form, payload}, socket) do
+  def handle_info({:dynamic_form, :success, payload}, socket) do
     {:noreply, put_flash(socket, :info, "Submitted: #{inspect(payload.data)}")}
   end
 

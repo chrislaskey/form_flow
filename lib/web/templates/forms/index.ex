@@ -14,6 +14,8 @@ defmodule FormFlow.Web.Templates.Forms.Index do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Templates.Forms
 
   @impl true
@@ -32,7 +34,11 @@ defmodule FormFlow.Web.Templates.Forms.Index do
     ~H"""
     <div>
       <div class="mb-2 flex items-center justify-between gap-4">
-        <h2 class="text-sm font-semibold">Forms</h2>
+        <div class="text-sm font-semibold">
+          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
+          <span class="text-zinc-400">/</span>
+          Forms
+        </div>
         <.link
           navigate={"#{@base}/forms/new"}
           class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"

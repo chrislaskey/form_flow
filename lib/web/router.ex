@@ -20,6 +20,7 @@ defmodule FormFlow.Web.Router do
 
   | Path                                | LiveComponent |
   |-------------------------------------|---------------|
+  | `/`                                 | a landing linking the Flows and Forms indexes — the mount root is generic, not owned by either section |
   | `/flows`                            | `FormFlow.Web.Templates.Flows.Index` |
   | `/flows/new`                        | `FormFlow.Web.Templates.Flows.New` |
   | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
@@ -57,6 +58,28 @@ defmodule FormFlow.Web.Router do
     ~H"""
     <div>
       <%= if @type == "templates" do %>
+        <%!-- The mount root is generic — it belongs to neither section, it
+              links to both. `live "/admin/*path", ...` with base="/admin"
+              makes /admin this landing, /admin/flows and /admin/forms the
+              indexes. --%>
+        <div :if={segments(@path) == []}>
+          <h2 class="mb-2 text-sm font-semibold">Templates</h2>
+          <ul class="space-y-1 text-sm">
+            <li>
+              <.link navigate={"#{@base}/flows"} class="text-cyan-600 hover:underline">
+                Flows
+              </.link>
+              <span class="text-xs text-zinc-500">— graph-based user flows</span>
+            </li>
+            <li>
+              <.link navigate={"#{@base}/forms"} class="text-cyan-600 hover:underline">
+                Forms
+              </.link>
+              <span class="text-xs text-zinc-500">— the reusable form catalog</span>
+            </li>
+          </ul>
+        </div>
+
         <%= case flows_route(@path) do %>
           <% :index -> %>
             <.live_component module={Flows.Index} id="flows-index" app={@app} base={@base} />

@@ -21,6 +21,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
 
@@ -85,9 +87,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     socket
     |> assign(form: form, node: node, version: version, versions: versions)
+    |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn ->
       version && Phoenix.json_library().encode!(version.definition, pretty: true)
     end)
+  end
+
+  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
+
+  defp assign_breadcrumb(socket, node) do
+    root = Graphs.get(socket.assigns.root_id)
+
+    parent_node =
+      if root && node.graph_id != root.id,
+        do: Graphs.embedding_node(node.graph_id, root.id)
+
+    assign(socket, root: root, parent_node: parent_node)
   end
 
   # The JSON-syntax gate, run by DynamicForm on every submit: a parse error
@@ -143,9 +158,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
         <div class="text-sm font-semibold">
+          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
+          <span class="text-zinc-400">/</span>
           <%= if @node do %>
             <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
             <span class="text-zinc-400">/</span>
+            <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">
+              {@root.name || "Untitled"}
+            </.link>
+            <span :if={@root} class="text-zinc-400">/</span>
+            <.link
+              :if={@parent_node}
+              navigate={"#{@base}/flows/#{@root.id}/nodes/#{@parent_node.id}"}
+              class="hover:underline"
+            >
+              {get_in(@parent_node.properties, ["data", "label"]) || "Subflow"}
+            </.link>
+            <span :if={@parent_node} class="text-zinc-400">/</span>
           <% else %>
             <.link navigate={"#{@base}/forms"} class="hover:underline">Forms</.link>
             <span class="text-zinc-400">/</span>

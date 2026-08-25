@@ -23,6 +23,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
 
@@ -117,7 +119,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   @impl true
   def handle_event("open_publish", _params, socket) do
-    {:noreply, assign(socket, :publishing?, true)}
+    if first_publish?(socket.assigns.versions) do
+      # Nothing has ever been published, so no instance can exist and no
+      # migration policy is meaningful — the dialog would prompt about
+      # nobody. Publish directly; every later publish prompts.
+      publish_directly(socket)
+    else
+      {:noreply, assign(socket, :publishing?, true)}
+    end
   end
 
   @impl true
@@ -183,6 +192,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
         <div class="text-sm font-semibold">
+          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
+          <span class="text-zinc-400">/</span>
           <%= if @node do %>
             <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
             <span class="text-zinc-400">/</span>
@@ -360,6 +371,23 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       event: "publish",
       payload: payload
     })
+  end
+
+  # "First" means no version ever got a number — an archived v1 still counts
+  # as published history, because instances may be pinned to it
+  defp first_publish?(versions), do: not Enum.any?(versions, &(&1.version != nil))
+
+  defp publish_directly(socket) do
+    case Forms.update_status(socket.assigns.version, :published) do
+      {:ok, published} ->
+        {:noreply, push_navigate(socket, to: version_path(socket.assigns, published))}
+
+      {:error, :not_draft} ->
+        {:noreply, assign(socket, :error, "Only drafts can be published.")}
+
+      {:error, _other} ->
+        {:noreply, assign(socket, :error, "Could not publish. Please try again.")}
+    end
   end
 
   defp version_badge(%{status: "draft"}), do: "draft"

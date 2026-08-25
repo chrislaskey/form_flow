@@ -28,6 +28,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Graphs
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -129,6 +131,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
         <div class="text-sm font-semibold">
+          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
+          <span class="text-zinc-400">/</span>
           <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
           <span class="text-zinc-400">/</span>
           <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">

@@ -83,15 +83,17 @@ defmodule DemoWeb.ReadmeLive do
             <.link navigate="/flows">Flows Index</.link>
             <.link navigate="/flows/new">Flows New</.link>
             <.link navigate="/forms">Forms Index</.link>
-            <.link navigate="/forms/1">Forms Show</.link>
+            <.link navigate="/forms/new">Forms New</.link>
           </div>
           <div id="form-flow-router" class="rounded-lg border border-base-300 p-4">
             <FormFlow.Web.router type="templates" path={@path} />
           </div>
           <p class="text-sm text-base-content/70">
-            <.link navigate={~p"/flows"} class="link">/flows</.link>
-            has a dedicated page, <code>DemoWeb.FlowsLive</code>, where the same
-            FormFlow router dispatches to the flows CRUD LiveComponents. The
+            <.link navigate={~p"/admin"} class="link">/admin</.link>
+            has a dedicated page, <code>DemoWeb.AdminLive</code>, where the same
+            FormFlow router — mounted with <code>base="/admin"</code> — serves a
+            landing plus the flows and forms CRUD LiveComponents at
+            <code>/admin/flows</code> and <code>/admin/forms</code>. The
             ReactFlow editor's ~390 KB bundle is fetched from the <code>form_flow_assets()</code>
             route on those pages only — it is not
             in <code>app.js</code>.

@@ -68,7 +68,7 @@ perl -pi -e 's{\{:phoenix_live_view, "~> 1\.1\.0"\}}{{:phoenix_live_view, "~> 1.
 echo "==> Replacing the default route with the demo LiveViews"
 # The catch-all comes last: FormFlow.Web.Router dispatches on the path segments
 # it is handed, so anything not matched by an earlier route falls through to it.
-perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallCheckLive\n    live "/flows/*path", FlowsLive\n    live "/*path", ReadmeLive}' demo/lib/demo_web/router.ex
+perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallCheckLive\n    live "/admin/*path", AdminLive\n    live "/*path", ReadmeLive}' demo/lib/demo_web/router.ex
 
 # The generated home page test asserts the default Phoenix marketing copy,
 # but the route above replaced that page with the demo index

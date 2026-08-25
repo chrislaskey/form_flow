@@ -81,6 +81,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Graphs
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -317,6 +319,16 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
                 on the parent's editor, not its show page. They navigate
                 through the "navigate" event rather than a bare <.link>, so
                 unsaved changes get the same save-first prompt as Open. --%>
+          <button
+            type="button"
+            phx-click="navigate"
+            phx-value-to={templates_path(@base)}
+            phx-target={@myself}
+            class="hover:underline"
+          >
+            Templates
+          </button>
+          <span class="text-zinc-400">/</span>
           <button
             type="button"
             phx-click="navigate"

@@ -16,6 +16,8 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   use Phoenix.LiveComponent
 
+  import FormFlow.Web.Helpers.Paths
+
   alias FormFlow.Data.Graphs
 
   @impl true
@@ -49,7 +51,13 @@ defmodule FormFlow.Web.Templates.Flows.New do
     ~H"""
     <div>
       <div class="mb-2 flex items-center justify-between gap-4">
-        <h2 class="text-sm font-semibold">New flow</h2>
+        <div class="text-sm font-semibold">
+          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
+          <span class="text-zinc-400">/</span>
+          <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
+          <span class="text-zinc-400">/</span>
+          New flow
+        </div>
         <.link
           navigate={"#{@base}/flows"}
           class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"

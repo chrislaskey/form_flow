@@ -1,14 +1,15 @@
 defmodule Demo.FormFlowFormsCrudTest do
   @moduledoc """
-  Drives the forms CRUD pages end-to-end: `/forms` is the catalog,
-  `/forms/new` creates a lineage with its initial draft, `/forms/:id` shows
-  the resolved version (latest published, else newest draft) with the version
-  history and the publish dialog, `/forms/:id/versions/:vid/edit` edits a
-  draft, and `/flows/:root/nodes/:node_id/form` is the drill-in from a flow.
+  Drives the forms CRUD pages end-to-end through the dedicated
+  `live "/admin/*path", AdminLive` route (mounted with `base="/admin"`):
+  `/admin/forms` is the catalog, `/admin/forms/new` creates a lineage with
+  its initial draft, `/admin/forms/:id` shows the resolved version (latest
+  published, else newest draft) with the version history and the publish
+  dialog, `/admin/forms/:id/versions/:vid/edit` edits a draft, and
+  `/admin/flows/:root/nodes/:node_id/form` is the drill-in from a flow.
 
-  The standalone pages ride the demo's `/*path` catch-all; drill-ins ride the
-  dedicated `/flows/*path` page. The editor's React side can't run here, so
-  the form node's Open button is driven by pushing the hook's event.
+  The editor's React side can't run here, so the form node's Open button is
+  driven by pushing the hook's event.
   """
 
   use DemoWeb.ConnCase
@@ -18,8 +19,25 @@ defmodule Demo.FormFlowFormsCrudTest do
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
 
+  test "the admin root is a generic landing linking both indexes", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/admin")
+
+    assert html =~ "Templates"
+    assert has_element?(view, ~s(a[href="/admin/flows"]), "Flows")
+    assert has_element?(view, ~s(a[href="/admin/forms"]), "Forms")
+  end
+
+  test "breadcrumbs lead back to the landing from inside both sections", %{conn: conn} do
+    for path <- ["/admin/forms", "/admin/flows", "/admin/forms/new", "/admin/flows/new"] do
+      {:ok, view, _html} = live(conn, path)
+
+      assert has_element?(view, ~s(a[href="/admin"]), "Templates"),
+             "missing Templates root crumb on #{path}"
+    end
+  end
+
   test "the new page creates a lineage with its initial draft", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/forms/new")
+    {:ok, view, html} = live(conn, "/admin/forms/new")
 
     assert html =~ "New form"
 
@@ -28,7 +46,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_submit(%{"dynamic_form" => %{"name" => "W-2 Details", "description" => "Wages"}})
 
     {path, _flash} = assert_redirect(view)
-    assert "/forms/" <> id = path
+    assert "/admin/forms/" <> id = path
 
     form = Forms.get(id)
     assert form.name == "W-2 Details"
@@ -36,24 +54,24 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   test "the catalog lists forms; owned forms never appear", %{conn: conn} do
-    {:ok, _view, html} = live(conn, "/forms")
+    {:ok, _view, html} = live(conn, "/admin/forms")
     assert html =~ "No forms yet"
 
     {:ok, form} = Forms.create(%{name: "Catalog form"})
     {:ok, graph} = Graphs.create()
     {:ok, _owned} = Forms.create(%{name: "Owned form", owner_graph_id: graph.id})
 
-    {:ok, view, html} = live(conn, "/forms")
+    {:ok, view, html} = live(conn, "/admin/forms")
 
     assert html =~ "Catalog form"
     refute html =~ "Owned form"
-    assert has_element?(view, ~s(a[href="/forms/#{form.id}"]), "Show")
+    assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}"]), "Show")
   end
 
   test "show resolves the newest draft before anything is published", %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Unpublished", definition: %{"wip" => true}})
 
-    {:ok, _view, html} = live(conn, "/forms/#{form.id}")
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
 
     assert html =~ "draft"
     assert html =~ "wip"
@@ -63,7 +81,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Editable"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     assert html =~ "Definition (JSON)"
 
@@ -84,16 +102,31 @@ defmodule Demo.FormFlowFormsCrudTest do
   test "only drafts render the editor", %{conn: conn} do
     {form, v1} = published_form()
 
-    {:ok, _view, html} = live(conn, "/forms/#{form.id}/versions/#{v1.id}/edit")
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{v1.id}/edit")
 
     assert html =~ "Only drafts can be edited"
   end
 
-  test "publishing a draft through the dialog assigns v1", %{conn: conn} do
+  test "the first publish skips the policy dialog — there is nobody to migrate",
+       %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Publishable"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/forms/#{form.id}")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
+
+    view |> element("button", "Publish") |> render_click()
+
+    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}")
+    assert %{status: "published", version: 1} = Forms.get_version(draft.id)
+  end
+
+  test "every later publish prompts for the policy, archived history included",
+       %{conn: conn} do
+    {form, v1} = published_form()
+    {:ok, _} = Forms.update_status(v1, :archived)
+    {:ok, draft} = Forms.create_draft(form.id)
+
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
 
     view |> element("button", "Publish") |> render_click()
     assert render(view) =~ "Publish this draft?"
@@ -102,8 +135,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-show-publish-form-form")
     |> render_submit(%{"dynamic_form" => %{"preset" => "small_fix"}})
 
-    assert_redirect(view, "/forms/#{form.id}/versions/#{draft.id}")
-    assert %{status: "published", version: 1} = Forms.get_version(draft.id)
+    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}")
+    assert %{status: "published", version: 2} = Forms.get_version(draft.id)
   end
 
   test "the big-fix preset passes through to the migration policy", %{conn: conn} do
@@ -119,9 +152,10 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
 
-    {:ok, view, _html} = live(conn, "/forms/#{form.id}/versions/#{draft.id}")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
 
     view |> element("button", "Publish") |> render_click()
+    assert render(view) =~ "Publish this draft?"
 
     view
     |> element("#forms-show-publish-form-form")
@@ -135,12 +169,12 @@ defmodule Demo.FormFlowFormsCrudTest do
   test "a published version offers a new draft, landing on its editor", %{conn: conn} do
     {form, _v1} = published_form()
 
-    {:ok, view, _html} = live(conn, "/forms/#{form.id}")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
 
     view |> element("button", "New draft from this version") |> render_click()
 
     {path, _flash} = assert_redirect(view)
-    assert path =~ ~r{^/forms/#{form.id}/versions/.+/edit$}
+    assert path =~ ~r{^/admin/forms/#{form.id}/versions/.+/edit$}
   end
 
   test "archiving the latest published version falls back to the previous one",
@@ -149,48 +183,85 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
     {:ok, v2} = Forms.update_status(draft, :published)
 
-    {:ok, view, _html} = live(conn, "/forms/#{form.id}")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
     assert render(view) =~ "v2 · published"
 
     view |> element("button", "Archive") |> render_click()
-    assert_redirect(view, "/forms/#{form.id}/versions/#{v2.id}")
+    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{v2.id}")
 
     # The bare URL resolves latest published — v1 again
-    {:ok, _view, html} = live(conn, "/forms/#{form.id}")
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
     assert html =~ "v1 · published"
   end
 
   test "deleting a catalog form returns to the catalog", %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Mistake"})
 
-    {:ok, view, _html} = live(conn, "/forms/#{form.id}")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
 
     view |> element("button", "Delete") |> render_click()
 
-    assert_redirect(view, "/forms")
+    assert_redirect(view, "/admin/forms")
     assert Forms.get(form.id) == nil
   end
 
   test "drill-in shows the form with a breadcrumb back to the root", %{conn: conn} do
     {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
 
-    {:ok, _view, html} = live(conn, "/flows/#{root.id}/nodes/#{node.id}/form")
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
 
     assert html =~ "Taxes 2026"
     assert html =~ "W-2 Details"
     assert html =~ "draft"
   end
 
+  test "drill-in edit shows the same full breadcrumb as show", %{conn: conn} do
+    # The nested case: root flow → subflow → form node, reached by drill-in
+    {:ok, root} = Graphs.create(%{name: "Taxes 2026", label: "subflows"})
+
+    subflow_attrs = %{
+      properties: %{
+        "type" => "subflow",
+        "data" => %{"label" => "Wages", "subflow_label" => "forms"}
+      }
+    }
+
+    {:ok, _} = Graphs.update(root, %{nodes: [subflow_attrs]})
+    [subflow_node] = Graphs.get(root.id).nodes
+
+    child = Graphs.get(subflow_node.subflow_id)
+
+    form_attrs = %{
+      properties: %{"type" => "step", "data" => %{"label" => "W-2 Details", "kind" => "form"}}
+    }
+
+    {:ok, _} = Graphs.update(child, %{nodes: [form_attrs]})
+    [form_node] = Graphs.get(child.id).nodes
+    [draft] = Forms.list_versions(form_node.form_id)
+
+    show_path = "/admin/flows/#{root.id}/nodes/#{form_node.id}/form"
+    edit_path = "#{show_path}/versions/#{draft.id}/edit"
+
+    for path <- [show_path, edit_path] do
+      {:ok, _view, html} = live(conn, path)
+
+      # Flows / Taxes 2026 / Wages / W-2 Details — the full trail on both pages
+      assert html =~ "Taxes 2026", "missing root crumb on #{path}"
+      assert html =~ "Wages", "missing subflow crumb on #{path}"
+      assert html =~ "W-2 Details", "missing form name on #{path}"
+    end
+  end
+
   test "a form node's Open button navigates to the drill-in URL", %{conn: conn} do
     {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
 
-    {:ok, view, _html} = live(conn, "/flows/#{root.id}")
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}")
 
     view
     |> element("#flows-show-editor")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
-    assert_redirect(view, "/flows/#{root.id}/nodes/#{node.id}/form")
+    assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
   end
 
   # --- helpers --------------------------------------------------------------
