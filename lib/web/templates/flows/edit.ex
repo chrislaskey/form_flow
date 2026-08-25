@@ -129,6 +129,20 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
+  # A form node's Open: same save-first guard as subflows — and a node saved
+  # for the first time only *gets* its form at save, so the pending path
+  # resolves after "Save & Continue" through the id_map like subflow opens do
+  @impl true
+  def handle_event("form_flow:open_form", %{"node_id" => node_id}, socket) do
+    node = Graphs.get_node(node_id)
+
+    if node && node.form_id && not unsaved_changes?(socket.assigns) do
+      {:noreply, push_navigate(socket, to: form_node_path(socket.assigns, node_id))}
+    else
+      {:noreply, assign(socket, :pending_navigation, {:form_node, node_id})}
+    end
+  end
+
   # The generic guard: Show and the breadcrumbs route through here instead of
   # a bare `<.link navigate>`, so they get the same prompt as Open when the
   # canvas has unsaved changes.
@@ -206,12 +220,21 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit"
   end
 
+  defp form_node_path(assigns, node_id) do
+    root_id = assigns.root_id || assigns.graph.id
+    "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
+  end
+
   # A plain path was already the destination; a pending node needs its
   # editor-temporary id resolved through what the save just assigned it.
   defp resolve_pending_navigation({:path, to}, _assigns, _id_map), do: to
 
   defp resolve_pending_navigation({:node, node_id}, assigns, id_map) do
     node_path(assigns, Map.get(id_map, node_id, node_id))
+  end
+
+  defp resolve_pending_navigation({:form_node, node_id}, assigns, id_map) do
+    form_node_path(assigns, Map.get(id_map, node_id, node_id))
   end
 
   # Shared by "save" and "save_and_continue": persists the canvas and re-syncs

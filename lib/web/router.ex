@@ -26,9 +26,19 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
   | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
   | `/flows/:root/nodes/:node_id/edit`  | `FormFlow.Web.Templates.Flows.Edit` (the node's subflow) |
+  | `/forms`                            | `FormFlow.Web.Templates.Forms.Index` (the catalog) |
+  | `/forms/new`                        | `FormFlow.Web.Templates.Forms.New` |
+  | `/forms/:id`                        | `FormFlow.Web.Templates.Forms.Show` (latest published, else newest draft) |
+  | `/forms/:id/versions/:version_id`   | `FormFlow.Web.Templates.Forms.Show` (a specific version or draft) |
+  | `/forms/:id/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` (drafts only) |
+  | `/flows/:root/nodes/:node_id/form`  | `FormFlow.Web.Templates.Forms.Show` (the node's form, with breadcrumb) |
+  | `/flows/:root/nodes/:node_id/form/versions/:version_id` | `FormFlow.Web.Templates.Forms.Show` |
+  | `/flows/:root/nodes/:node_id/form/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` |
 
-  Drill-in URLs carry the *node* id, not the child graph's id — a reusable
-  subflow used twice in one root is two nodes, so two unambiguous URLs.
+  Drill-in URLs carry the *node* id, not the child graph's or form's id — a
+  reusable subflow or form used twice in one root is two nodes, so two
+  unambiguous URLs. Versions get an explicit id suffix because several drafts
+  may coexist and nothing else disambiguates them.
 
   `base` is the path prefix the catch-all is mounted under, so the components
   build working navigation links — `live "/admin/*path", ...` needs
@@ -78,19 +88,52 @@ defmodule FormFlow.Web.Router do
             <%!-- not a /flows path --%>
         <% end %>
 
-        <.live_component
-          :if={matches?("/forms", @path)}
-          module={Forms.Index}
-          id="forms-index"
-          app={@app}
-        />
-
-        <.live_component
-          :if={matches?("/forms/1", @path)}
-          module={Forms.Show}
-          id="forms-show"
-          app={@app}
-        />
+        <%= case forms_route(@path) do %>
+          <% :index -> %>
+            <.live_component module={Forms.Index} id="forms-index" app={@app} base={@base} />
+          <% :new -> %>
+            <.live_component module={Forms.New} id="forms-new" app={@app} base={@base} />
+          <% {:show, form_id, version_id} -> %>
+            <.live_component
+              module={Forms.Show}
+              id="forms-show"
+              form_id={form_id}
+              version_id={version_id}
+              app={@app}
+              base={@base}
+            />
+          <% {:edit, form_id, version_id} -> %>
+            <.live_component
+              module={Forms.Edit}
+              id="forms-edit"
+              form_id={form_id}
+              version_id={version_id}
+              app={@app}
+              base={@base}
+            />
+          <% {:node_show, root_id, node_id, version_id} -> %>
+            <.live_component
+              module={Forms.Show}
+              id="forms-show"
+              root_id={root_id}
+              node_id={node_id}
+              version_id={version_id}
+              app={@app}
+              base={@base}
+            />
+          <% {:node_edit, root_id, node_id, version_id} -> %>
+            <.live_component
+              module={Forms.Edit}
+              id="forms-edit"
+              root_id={root_id}
+              node_id={node_id}
+              version_id={version_id}
+              app={@app}
+              base={@base}
+            />
+          <% nil -> %>
+            <%!-- not a /forms path --%>
+        <% end %>
       <% end %>
     </div>
     """
@@ -108,8 +151,37 @@ defmodule FormFlow.Web.Router do
     end
   end
 
-  defp matches?(pattern, path) do
-    "/#{Enum.join(segments(path), "/")}" == pattern
+  defp forms_route(path) do
+    case segments(path) do
+      ["forms" | rest] ->
+        catalog_forms_route(rest)
+
+      ["flows", root_id, "nodes", node_id, "form" | rest] ->
+        node_forms_route(root_id, node_id, rest)
+
+      _other ->
+        nil
+    end
+  end
+
+  defp catalog_forms_route(rest) do
+    case rest do
+      [] -> :index
+      ["new"] -> :new
+      [id] -> {:show, id, nil}
+      [id, "versions", version_id] -> {:show, id, version_id}
+      [id, "versions", version_id, "edit"] -> {:edit, id, version_id}
+      _other -> nil
+    end
+  end
+
+  defp node_forms_route(root_id, node_id, rest) do
+    case rest do
+      [] -> {:node_show, root_id, node_id, nil}
+      ["versions", version_id] -> {:node_show, root_id, node_id, version_id}
+      ["versions", version_id, "edit"] -> {:node_edit, root_id, node_id, version_id}
+      _other -> nil
+    end
   end
 
   defp segments(path) when is_list(path), do: path

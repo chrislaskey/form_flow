@@ -103,14 +103,16 @@ defmodule FormFlow.Data.Templates.Forms do
     if has_instances?(form.id) do
       {:error, :has_instances}
     else
-      Repo.transaction(fn ->
-        Repo.delete_all(from(v in Version, where: v.template_form_id == ^form.id))
+      Repo.transaction(fn -> delete_versions_then_lineage(form) end)
+    end
+  end
 
-        case Repo.delete(form) do
-          {:ok, deleted} -> deleted
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
-      end)
+  defp delete_versions_then_lineage(form) do
+    Repo.delete_all(from(v in Version, where: v.template_form_id == ^form.id))
+
+    case Repo.delete(form) do
+      {:ok, deleted} -> deleted
+      {:error, changeset} -> Repo.rollback(changeset)
     end
   end
 
@@ -191,6 +193,25 @@ defmodule FormFlow.Data.Templates.Forms do
         limit: 1
       )
     )
+  end
+
+  @doc """
+  Counts a lineage's instances by status — the publish dialog's blast radius
+  ("N in-progress instances will be reset").
+  """
+  def instance_counts(form_id) do
+    rows =
+      Repo.all(
+        from(i in Instances.Form,
+          join: v in Version,
+          on: i.template_form_version_id == v.id,
+          where: v.template_form_id == ^form_id,
+          group_by: i.status,
+          select: {i.status, count(i.id)}
+        )
+      )
+
+    Map.merge(%{"in_progress" => 0, "completed" => 0}, Map.new(rows))
   end
 
   @doc """
@@ -276,30 +297,31 @@ defmodule FormFlow.Data.Templates.Forms do
     Repo.transaction(fn ->
       lock_lineage(version.template_form_id)
 
+      # Reloaded inside the lock — the caller's struct may predate a
+      # concurrent publish of the same draft
       case Repo.get(Version, version.id) do
-        nil ->
-          Repo.rollback(:not_found)
-
-        %Version{status: status} when status != "draft" ->
-          Repo.rollback(:not_draft)
-
-        %Version{} = draft ->
-          number = next_version_number(draft.template_form_id)
-          now = DateTime.utc_now()
-
-          case Repo.update(Version.status_changeset(draft, "published", number, now)) do
-            {:ok, published} ->
-              migrate_instances(published, policy)
-              published
-
-            {:error, changeset} ->
-              Repo.rollback(changeset)
-          end
+        nil -> Repo.rollback(:not_found)
+        %Version{status: "draft"} = draft -> publish_draft(draft, policy)
+        %Version{} -> Repo.rollback(:not_draft)
       end
     end)
   end
 
   # --- publish internals ---------------------------------------------------
+
+  defp publish_draft(draft, policy) do
+    number = next_version_number(draft.template_form_id)
+    now = DateTime.utc_now()
+
+    case Repo.update(Version.status_changeset(draft, "published", number, now)) do
+      {:ok, published} ->
+        migrate_instances(published, policy)
+        published
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
+    end
+  end
 
   defp resolve_policy!(opts) do
     preset = Keyword.get(opts, :preset, :small_fix)

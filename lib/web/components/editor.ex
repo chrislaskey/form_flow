@@ -15,8 +15,9 @@ defmodule FormFlow.Web.Components.Editor do
       `handle_event/3` of the LiveComponent passed as `target`:
       `"form_flow:editor_mounted"` once the bundle has loaded,
       `"form_flow:graph_changed"` with `%{"nodes" => ..., "edges" => ...}` on
-      every meaningful edit, and `"form_flow:open_subflow"` with
-      `%{"node_id" => ...}` when a subflow node's Open button is clicked
+      every meaningful edit, `"form_flow:open_subflow"` with
+      `%{"node_id" => ...}` when a subflow node's Open button is clicked, and
+      `"form_flow:open_form"` likewise for a form step's Open button
     * Elixir to React — `push_event/3` with the `form_flow:set_graph` event,
       picked up by `handleEvent` in the hook
 
@@ -77,7 +78,9 @@ defmodule FormFlow.Web.Components.Editor do
               flowLabel: this.el.dataset.flowLabel,
               onChange: (graph) => this.pushEventTo(this.el, "form_flow:graph_changed", graph),
               onOpenSubflow: (nodeId) =>
-                this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId})
+                this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId}),
+              onOpenForm: (nodeId) =>
+                this.pushEventTo(this.el, "form_flow:open_form", {node_id: nodeId})
             })
 
             this.handleEvent("form_flow:set_graph", ({graph}) => this.editor.setGraph(graph))

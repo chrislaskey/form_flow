@@ -234,27 +234,31 @@ defmodule FormFlow.Data.Graphs do
         |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
         |> Repo.rollback()
       else
-        # Owned forms are deleted explicitly — their owner FK nilifies on
-        # graph deletion, and a nil owner is the *definition* of a catalog
-        # form, so leaving them to the FK would launder every owned form into
-        # /forms. Ordering matters: the fill-data check comes first (refuse
-        # before destroying anything), the form rows go last (their node
-        # FK, though :nothing, still enforces — nodes must delete first).
-        forms =
-          case owned_forms_deletable(graph) do
-            {:ok, forms} -> forms
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-
-        delete_graphs(tree_ids)
-
-        Enum.each(forms, fn form ->
-          {:ok, _form} = Templates.Forms.delete(form)
-        end)
-
-        graph
+        delete_tree_with_owned_forms(graph, tree_ids)
       end
     end)
+  end
+
+  # Owned forms are deleted explicitly — their owner FK nilifies on graph
+  # deletion, and a nil owner is the *definition* of a catalog form, so
+  # leaving them to the FK would launder every owned form into /forms.
+  # Ordering matters: the fill-data check comes first (refuse before
+  # destroying anything), the form rows go last (their node FK, though
+  # :nothing, still enforces — nodes must delete first).
+  defp delete_tree_with_owned_forms(graph, tree_ids) do
+    forms =
+      case owned_forms_deletable(graph) do
+        {:ok, forms} -> forms
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+
+    delete_graphs(tree_ids)
+
+    Enum.each(forms, fn form ->
+      {:ok, _form} = Templates.Forms.delete(form)
+    end)
+
+    graph
   end
 
   @doc """

@@ -65,6 +65,14 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   @impl true
+  def handle_event("form_flow:open_form", %{"node_id" => node_id}, socket) do
+    root_id = socket.assigns.root_id || socket.assigns.graph.id
+
+    {:noreply,
+     push_navigate(socket, to: "#{socket.assigns.base}/flows/#{root_id}/nodes/#{node_id}/form")}
+  end
+
+  @impl true
   def handle_event("form_flow:open_subflow", %{"node_id" => node_id}, socket) do
     root_id = socket.assigns.root_id || socket.assigns.graph.id
 

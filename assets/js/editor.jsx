@@ -29,12 +29,14 @@ import editorStyles from "../css/editor.css";
 
 // Callbacks the custom nodes need but that must never live in node.data —
 // data round-trips to the server as JSON, and functions don't survive that
-const EditorContext = createContext({ onOpenSubflow: null });
+const EditorContext = createContext({ onOpenSubflow: null, onOpenForm: null });
 
 // isConnectable must be passed through to every Handle: it is how ReactFlow
 // delivers nodesConnectable to custom nodes, and Handle defaults to true
 // when it is omitted — which would leave handles live on read-only canvases.
-function StepNode({ data, selected, isConnectable }) {
+function StepNode({ id, data, selected, isConnectable }) {
+  const { onOpenForm } = useContext(EditorContext);
+
   return (
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
       {data.kind !== "start" && (
@@ -42,6 +44,18 @@ function StepNode({ data, selected, isConnectable }) {
       )}
       <div className="ff-node__title">{data.label}</div>
       <div className="ff-node__meta">{(data.labels ?? []).join(", ")}</div>
+      {data.kind === "form" && (
+        <button
+          type="button"
+          className="ff-node__open"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenForm?.(id);
+          }}
+        >
+          Open →
+        </button>
+      )}
       {data.kind !== "end" && (
         <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
       )}
@@ -133,7 +147,14 @@ function stepEdge(source, target) {
 
 /* ----------------------------------------------------------------- editor -- */
 
-function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onOpenSubflow }) {
+function FlowEditor({
+  graph,
+  onChange,
+  editable = true,
+  flowLabel = "forms",
+  onOpenSubflow,
+  onOpenForm,
+}) {
   // One state object on purpose. With separate node/edge states, a handler
   // reporting to the server reads the *other* collection from a stale render
   // closure — deleting a node (which also auto-removes its edges) once
@@ -265,7 +286,7 @@ function FlowEditor({ graph, onChange, editable = true, flowLabel = "forms", onO
   );
 
   return (
-    <EditorContext.Provider value={{ onOpenSubflow }}>
+    <EditorContext.Provider value={{ onOpenSubflow, onOpenForm }}>
     <ReactFlow
       nodes={state.nodes}
       edges={state.edges}
@@ -345,7 +366,7 @@ export function injectStyles(doc = document) {
  *
  * `flowLabel` ("forms" | "subflows") picks the add actions and what edge-drop
  * autocreate makes; `onOpenSubflow(nodeId)` is called by a subflow node's
- * Open button.
+ * Open button, `onOpenForm(nodeId)` by a form step's.
  *
  * Returns a handle with `setGraph/1` so the server can push a new graph in, and
  * `unmount/0` for teardown.
@@ -362,6 +383,7 @@ export function mount(el, opts = {}) {
           editable={opts.editable !== false}
           flowLabel={opts.flowLabel}
           onOpenSubflow={opts.onOpenSubflow}
+          onOpenForm={opts.onOpenForm}
         />
       </ReactFlowProvider>,
     );

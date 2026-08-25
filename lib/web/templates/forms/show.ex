@@ -1,13 +1,388 @@
 defmodule FormFlow.Web.Templates.Forms.Show do
   @moduledoc """
-  `FormFlow.Web.Templates.Forms.Show`
+  `FormFlow.Web.Templates.Forms.Show` LiveComponent shows one form — a
+  specific version, or the resolved default.
+
+  Two addressing modes, mirroring the flows pages:
+
+    * `form_id` (+ optional `version_id`) — standalone, from the catalog:
+      `/forms/:id` and `/forms/:id/versions/:version_id`
+    * `root_id` + `node_id` (+ optional `version_id`) — drill-in from a flow,
+      `/flows/:root/nodes/:node_id/form...`, with a breadcrumb back through
+      the embedding subflow to the root
+
+  Without a `version_id` the page resolves the latest *published* version;
+  when nothing has been published yet it falls back to the newest draft (with
+  its draft badge — viewing a draft read-only is the pre-publish preview).
+  Instances never resolve this way: they render only through their own pins.
+
+  Publishing happens here: the dialog offers the three presets (bug / small /
+  big fix) with plain-language descriptions and restates the blast radius
+  before anything moves.
   """
 
   use Phoenix.LiveComponent
 
-  def render(assigns) do
+  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Forms
+
+  @impl true
+  def mount(socket) do
+    {:ok, assign(socket, error: nil, publishing?: false)}
+  end
+
+  @impl true
+  def update(assigns, socket) do
+    socket =
+      socket
+      |> assign(assigns)
+      |> assign_new(:base, fn -> "" end)
+      |> assign_new(:app, fn -> "default" end)
+      |> assign_new(:form_id, fn -> nil end)
+      |> assign_new(:version_id, fn -> nil end)
+      |> assign_new(:root_id, fn -> nil end)
+      |> assign_new(:node_id, fn -> nil end)
+
+    {:ok, load(socket)}
+  end
+
+  defp load(socket) do
+    assigns = socket.assigns
+    node = assigns.node_id && Graphs.get_node(assigns.node_id)
+    form = resolve_form(assigns.form_id, node)
+    versions = if form, do: Forms.list_versions(form.id), else: []
+
+    socket
+    |> assign(
+      form: form,
+      node: node,
+      versions: versions,
+      version: resolve_version(form, versions, assigns.version_id),
+      counts: form && Forms.instance_counts(form.id)
+    )
+    |> assign_breadcrumb(node)
+  end
+
+  defp resolve_form(form_id, node) do
+    id = form_id || (node && node.form_id)
+    id && Forms.get(id)
+  end
+
+  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
+
+  defp assign_breadcrumb(socket, node) do
+    root = Graphs.get(socket.assigns.root_id)
+
+    parent_node =
+      if root && node.graph_id != root.id,
+        do: Graphs.embedding_node(node.graph_id, root.id)
+
+    assign(socket, root: root, parent_node: parent_node)
+  end
+
+  # An explicit version id wins; otherwise latest published, falling back to
+  # the newest draft so an unpublished form still has a page
+  defp resolve_version(nil, _versions, _version_id), do: nil
+
+  defp resolve_version(_form, versions, version_id) when is_binary(version_id) do
+    Enum.find(versions, &(&1.id == version_id))
+  end
+
+  defp resolve_version(form, versions, nil) do
+    Forms.get_latest_version(form.id) || List.first(versions)
+  end
+
+  @impl true
+  def handle_event("open_publish", _params, socket) do
+    {:noreply, assign(socket, :publishing?, true)}
+  end
+
+  @impl true
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply, assign(socket, :publishing?, false)}
+  end
+
+  @impl true
+  def handle_event("publish", %{"preset" => preset}, socket) do
+    preset = String.to_existing_atom(preset)
+
+    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
+      {:ok, published} ->
+        {:noreply, push_navigate(socket, to: version_path(socket.assigns, published))}
+
+      {:error, :not_draft} ->
+        {:noreply, assign(socket, error: "Only drafts can be published.", publishing?: false)}
+
+      {:error, _other} ->
+        {:noreply,
+         assign(socket, error: "Could not publish. Please try again.", publishing?: false)}
+    end
+  end
+
+  @impl true
+  def handle_event("archive", _params, socket) do
+    case Forms.update_status(socket.assigns.version, :archived) do
+      {:ok, archived} ->
+        {:noreply, push_navigate(socket, to: version_path(socket.assigns, archived))}
+
+      {:error, _changeset} ->
+        {:noreply, assign(socket, :error, "Only published versions can be archived.")}
+    end
+  end
+
+  @impl true
+  def handle_event("create_draft", _params, socket) do
+    case Forms.create_draft(socket.assigns.form.id, based_on: socket.assigns.version.id) do
+      {:ok, draft} ->
+        {:noreply, push_navigate(socket, to: edit_path(socket.assigns, draft))}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, :error, "Could not create a draft from this version.")}
+    end
+  end
+
+  @impl true
+  def handle_event("delete", _params, socket) do
+    case Forms.delete(socket.assigns.form) do
+      {:ok, _form} ->
+        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/forms")}
+
+      {:error, :has_instances} ->
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "This form can't be deleted: it has submitted data. Delete its instances first."
+         )}
+
+      {:error, _other} ->
+        {:noreply, assign(socket, :error, "Could not delete the form. Please try again.")}
+    end
+  end
+
+  @impl true
+  def render(%{form: nil} = assigns) do
     ~H"""
-    <div>FormFlow.Web.Templates.Forms.Show</div>
+    <div>
+      <p class="text-sm text-zinc-500">
+        Form not found.
+        <.link navigate={"#{@base}/forms"} class="underline">Back to forms</.link>
+      </p>
+    </div>
     """
   end
+
+  def render(assigns) do
+    ~H"""
+    <div>
+      <div class="mb-2 h-14 flex items-center justify-between gap-4">
+        <div class="text-sm font-semibold">
+          <%= if @node do %>
+            <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
+            <span class="text-zinc-400">/</span>
+            <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">
+              {@root.name || "Untitled"}
+            </.link>
+            <span :if={@root} class="text-zinc-400">/</span>
+            <.link
+              :if={@parent_node}
+              navigate={"#{@base}/flows/#{@root.id}/nodes/#{@parent_node.id}"}
+              class="hover:underline"
+            >
+              {get_in(@parent_node.properties, ["data", "label"]) || "Subflow"}
+            </.link>
+            <span :if={@parent_node} class="text-zinc-400">/</span>
+          <% else %>
+            <.link navigate={"#{@base}/forms"} class="hover:underline">Forms</.link>
+            <span class="text-zinc-400">/</span>
+          <% end %>
+          {@form.name}
+          <span :if={@version} class="ml-1 text-xs font-normal text-zinc-500">
+            {version_badge(@version)}
+          </span>
+        </div>
+        <div :if={@version} class="flex items-center gap-2">
+          <.link
+            :if={@version.status == "draft"}
+            navigate={edit_path(assigns, @version)}
+            role="switch"
+            aria-checked="false"
+            aria-label="Switch to Edit"
+            class="flex items-center gap-1.5 text-xs"
+          >
+            <span class="font-semibold text-zinc-900">Show</span>
+            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
+              <span class="inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
+            </span>
+            <span class="text-zinc-500">Edit</span>
+          </.link>
+          <button
+            :if={@version.status == "draft"}
+            type="button"
+            phx-click="open_publish"
+            phx-target={@myself}
+            class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+          >
+            Publish
+          </button>
+          <button
+            :if={@version.status == "published"}
+            type="button"
+            phx-click="create_draft"
+            phx-target={@myself}
+            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+          >
+            New draft from this version
+          </button>
+          <button
+            :if={@version.status == "published"}
+            type="button"
+            phx-click="archive"
+            phx-target={@myself}
+            data-confirm="Archive this version? It stops being the latest; users pinned to it are unaffected."
+            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+          >
+            Archive
+          </button>
+          <button
+            :if={@form.owner_graph_id == nil and @node == nil}
+            type="button"
+            phx-click="delete"
+            phx-target={@myself}
+            data-confirm="Delete this form and all of its versions?"
+            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <p :if={@form.description} class="mb-3 text-sm text-zinc-600">{@form.description}</p>
+
+      <p
+        :if={@version && @version.status == "draft" && Forms.stale_draft?(@version)}
+        class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+      >
+        This draft was based on a version that is no longer the latest — review before publishing.
+      </p>
+
+      <div class="flex flex-wrap gap-6">
+        <div class="min-w-0 flex-1">
+          <h3 class="mb-1 text-xs font-medium text-zinc-500">Definition</h3>
+          <pre
+            :if={@version}
+            class="overflow-x-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs"
+          >{definition_json(@version)}</pre>
+          <p :if={@version == nil} class="text-sm text-zinc-500">This form has no versions.</p>
+        </div>
+
+        <div class="w-64 shrink-0">
+          <h3 class="mb-1 text-xs font-medium text-zinc-500">Versions</h3>
+          <ul class="space-y-1 text-sm">
+            <li :for={version <- @versions}>
+              <.link
+                navigate={version_path(assigns, version)}
+                class={[
+                  "hover:underline",
+                  @version && @version.id == version.id && "font-semibold"
+                ]}
+              >
+                {version_badge(version)}
+              </.link>
+              <span class="block text-[10px] text-zinc-400">
+                {Calendar.strftime(version.updated_at, "%Y-%m-%d %H:%M")}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div
+        :if={@publishing?}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <form
+          phx-submit="publish"
+          phx-target={@myself}
+          class="w-96 rounded-md border border-zinc-300 bg-white p-4 shadow-lg"
+        >
+          <p class="mb-1 text-sm font-semibold text-zinc-900">Publish this draft?</p>
+          <p class="mb-3 text-xs text-zinc-500">
+            {@counts["in_progress"]} in progress and {@counts["completed"]} completed
+            instance(s) exist for this form.
+          </p>
+
+          <div class="mb-4 space-y-2">
+            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
+              <input type="radio" name="preset" value="small_fix" checked class="mt-0.5" />
+              <span>
+                <span class="font-medium">Small fix</span>
+                <span class="block text-xs text-zinc-500">
+                  Existing users keep the version they started; new users get this one.
+                </span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
+              <input type="radio" name="preset" value="bug_fix" class="mt-0.5" />
+              <span>
+                <span class="font-medium">Bug fix</span>
+                <span class="block text-xs text-zinc-500">
+                  In-progress users move to this version and keep their answers — they may
+                  see new required fields. Completed instances are untouched.
+                </span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
+              <input type="radio" name="preset" value="big_fix" class="mt-0.5" />
+              <span>
+                <span class="font-medium">Big fix</span>
+                <span class="block text-xs text-zinc-500">
+                  Everyone must fill this version out: {@counts["in_progress"]} in-progress
+                  instance(s) will be reset and {@counts["completed"]} completed
+                  instance(s) reopened. Prior answers are kept in the audit trail.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <button
+              type="button"
+              phx-click="cancel_publish"
+              phx-target={@myself}
+              class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+            >
+              Publish
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  defp version_badge(%{status: "draft"}), do: "draft"
+  defp version_badge(%{status: "published"} = v), do: "v#{v.version} · published"
+  defp version_badge(%{status: "archived"} = v), do: "v#{v.version} · archived"
+
+  defp definition_json(version) do
+    Phoenix.json_library().encode!(version.definition, pretty: true)
+  end
+
+  defp form_base_path(%{node: nil} = assigns), do: "#{assigns.base}/forms/#{assigns.form.id}"
+
+  defp form_base_path(assigns) do
+    "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}/form"
+  end
+
+  defp version_path(assigns, version), do: "#{form_base_path(assigns)}/versions/#{version.id}"
+
+  defp edit_path(assigns, version), do: "#{version_path(assigns, version)}/edit"
 end
