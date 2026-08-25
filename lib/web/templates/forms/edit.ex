@@ -25,26 +25,55 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.PublishDialog
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, error: nil, notice: nil)}
+    {:ok, assign(socket, error: nil, notice: nil, publishing?: false)}
   end
 
   @impl true
+  def update(%{event: "publish", payload: payload}, socket) do
+    preset = String.to_existing_atom(payload.data[:preset])
+
+    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
+      {:ok, published} ->
+        # Redirects are forbidden inside update/2; handle_async is the
+        # component-owned callback where they are allowed
+        to = version_show_path(socket.assigns, published)
+        {:ok, start_async(socket, :navigate, fn -> to end)}
+
+      {:error, :not_draft} ->
+        {:ok, assign(socket, error: "Only drafts can be published.", publishing?: false)}
+
+      {:error, _other} ->
+        {:ok, assign(socket, error: "Could not publish. Please try again.", publishing?: false)}
+    end
+  end
+
+  def update(%{event: "change", payload: payload}, socket) do
+    dirty? = values_from(payload.data) != socket.assigns.saved_values
+
+    {:ok, assign(socket, dirty?: dirty?, notice: nil)}
+  end
+
   def update(%{event: "save", payload: payload}, socket) do
-    definition = payload.extra[:definition]
+    identity = %{name: payload.data[:name], description: payload.data[:description]}
 
-    case Forms.update_draft(socket.assigns.version, %{definition: definition}) do
-      {:ok, version} ->
-        {:ok,
-         assign(socket,
-           version: version,
-           versions: Forms.list_versions(socket.assigns.form.id),
-           error: nil,
-           notice: "Saved."
-         )}
-
+    with {:ok, form} <- Forms.update(socket.assigns.form, identity),
+         {:ok, version} <-
+           Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
+      {:ok,
+       assign(socket,
+         form: form,
+         version: version,
+         versions: Forms.list_versions(form.id),
+         saved_values: values_from(payload.data),
+         dirty?: false,
+         error: nil,
+         notice: "Saved."
+       )}
+    else
       {:error, :stale} ->
         {:ok,
          assign(socket,
@@ -57,7 +86,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:error, %Ecto.Changeset{}} ->
         {:ok,
          assign(socket,
-           error: "Only drafts can be edited — this version is published.",
+           error: "Could not save. Please try again.",
            notice: nil
          )}
     end
@@ -86,11 +115,86 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     versions = if form, do: Forms.list_versions(form.id), else: []
 
     socket
-    |> assign(form: form, node: node, version: version, versions: versions)
+    |> assign(
+      form: form,
+      node: node,
+      version: version,
+      versions: versions,
+      based_on: based_on_version(versions, version),
+      counts: form && Forms.instance_counts(form.id)
+    )
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn ->
       version && Phoenix.json_library().encode!(version.definition, pretty: true)
     end)
+    |> then(fn socket ->
+      socket
+      |> assign(:saved_values, saved_values(form, socket.assigns.definition_json))
+      |> assign(:dirty?, false)
+    end)
+  end
+
+  # What the last save wrote, in the shape DynamicForm reports — the baseline
+  # `dirty?` compares against, so the Save button can go primary exactly when
+  # the form differs from what's persisted (matching the flows editor)
+  defp saved_values(nil, _definition_json), do: nil
+
+  defp saved_values(form, definition_json) do
+    %{
+      name: to_string(form.name),
+      description: to_string(form.description),
+      definition: to_string(definition_json)
+    }
+  end
+
+  defp values_from(payload_data) do
+    %{
+      name: to_string(payload_data[:name] || ""),
+      description: to_string(payload_data[:description] || ""),
+      definition: to_string(payload_data[:definition] || "")
+    }
+  end
+
+  @impl true
+  def handle_async(:navigate, {:ok, to}, socket) do
+    {:noreply, push_navigate(socket, to: to)}
+  end
+
+  @impl true
+  def handle_event("open_publish", _params, socket) do
+    if Forms.ever_published?(socket.assigns.form.id) do
+      {:noreply, assign(socket, :publishing?, true)}
+    else
+      # Nothing has ever been published, so no instance can exist and no
+      # migration policy is meaningful — publish directly, like Show does
+      publish_directly(socket)
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply, assign(socket, :publishing?, false)}
+  end
+
+  defp publish_directly(socket) do
+    case Forms.update_status(socket.assigns.version, :published) do
+      {:ok, published} ->
+        {:noreply, push_navigate(socket, to: version_show_path(socket.assigns, published))}
+
+      {:error, :not_draft} ->
+        {:noreply, assign(socket, :error, "Only drafts can be published.")}
+
+      {:error, _other} ->
+        {:noreply, assign(socket, :error, "Could not publish. Please try again.")}
+    end
+  end
+
+  defp publish(payload, component_id) do
+    Phoenix.LiveView.send_update(__MODULE__, %{
+      id: component_id,
+      event: "publish",
+      payload: payload
+    })
   end
 
   defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
@@ -128,6 +232,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       event: "save",
       payload: payload
     })
+  end
+
+  # DynamicForm's on_change hook, abused gently: no extra validation, just a
+  # report of the current values so dirtiness can drive the Save button
+  defp changed(payload, component_id) do
+    Phoenix.LiveView.send_update(__MODULE__, %{
+      id: component_id,
+      event: "change",
+      payload: payload
+    })
+
+    payload
   end
 
   @impl true
@@ -196,6 +312,31 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </.link>
+          <%!-- The remote submit: an HTML form= reference into the
+                DynamicForm below, so Save lives in the header like every
+                other page's primary action. Styled like the flows editor's
+                Save — quiet until changes exist, primary once they do. --%>
+          <button
+            type="submit"
+            form={"#{@id}-form-form"}
+            class={[
+              "phx-submit-loading:opacity-75 rounded-md border px-2 py-1 text-xs",
+              if(@dirty?,
+                do: "border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700",
+                else: "border-zinc-300 text-zinc-700 hover:border-zinc-400"
+              )
+            ]}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            phx-click="open_publish"
+            phx-target={@myself}
+            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+          >
+            Publish
+          </button>
         </div>
       </div>
 
@@ -209,38 +350,79 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         This draft was based on a version that is no longer the latest — review before publishing.
       </p>
 
-      <div class="flex flex-wrap gap-6">
-        <div class="min-w-0 flex-1">
-          <DynamicForm.form
-            id={"#{@id}-form"}
-            data={%{definition: @definition_json}}
-            submit_text="Save draft"
-            on_submit={&validate_json/1}
-            on_success={&saved(&1, @id)}
-          >
-            <:field type="comment" name="definition" label="Definition (JSON)" required />
-          </DynamicForm.form>
-        </div>
-
-        <div class="w-64 shrink-0">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Drafts</h3>
-          <ul class="space-y-1 text-sm">
-            <li :for={version <- @versions} :if={version.status == "draft"}>
+      <%!-- One form, one Save: the lineage's identity (name, description)
+            above the version's definition, separated by a read-only strip
+            saying which draft is being edited. The save event writes each
+            value to its owner — identity to the form row, definition to the
+            draft. Picking a different draft belongs on Show, where the
+            version history lists them all. --%>
+      <DynamicForm.form
+        id={"#{@id}-form"}
+        data={%{name: @form.name, description: @form.description, definition: @definition_json}}
+        hide_submit
+        on_change={&changed(&1, @id)}
+        on_submit={&validate_json/1}
+        on_success={&saved(&1, @id)}
+      >
+        <:field type="text" name="name" label="Name" required />
+        <:field type="comment" name="description" label="Description" />
+        <:field type="html" name="draft_info">
+          <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+            Editing <span class="font-medium">draft</span>,
+            last updated {Calendar.strftime(@version.updated_at, "%Y-%m-%d %H:%M")}<span :if={@based_on}>, based on
               <.link
-                navigate={"#{version_show_path(assigns, version)}/edit"}
-                class={["hover:underline", @version.id == version.id && "font-semibold"]}
+                href={version_show_path(assigns, @based_on)}
+                target="_blank"
+                class="inline-flex items-baseline gap-0.5 border-b border-transparent text-blue-600 hover:border-blue-600"
               >
-                draft
-              </.link>
-              <span class="block text-[10px] text-zinc-400">
-                {Calendar.strftime(version.updated_at, "%Y-%m-%d %H:%M")}
-              </span>
-            </li>
-          </ul>
-        </div>
-      </div>
+                v{@based_on.version}<svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="size-3 self-center"
+                  aria-hidden="true"
+                ><path
+                    fill-rule="evenodd"
+                    d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
+                    clip-rule="evenodd"
+                  /><path
+                    fill-rule="evenodd"
+                    d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
+                    clip-rule="evenodd"
+                  /></svg>
+              </.link></span>.
+            <.link
+              :if={other_draft_count(@versions, @version) > 0}
+              navigate={show_path(assigns)}
+              class="text-cyan-600 hover:underline"
+            >
+              {other_draft_count(@versions, @version)} other draft(s) exist — see all versions
+            </.link>
+          </div>
+        </:field>
+        <:field type="comment" name="definition" label="Definition (JSON)" required />
+      </DynamicForm.form>
+
+      <PublishDialog.publish_dialog
+        :if={@publishing?}
+        id={"#{@id}-publish-form"}
+        counts={@counts}
+        target={@myself}
+        on_success={&publish(&1, @id)}
+        saved_note
+      />
     </div>
     """
+  end
+
+  defp based_on_version(versions, %{based_on_version_id: base_id}) when is_binary(base_id) do
+    Enum.find(versions, &(&1.id == base_id))
+  end
+
+  defp based_on_version(_versions, _version), do: nil
+
+  defp other_draft_count(versions, version) do
+    Enum.count(versions, &(&1.status == "draft" and &1.id != version.id))
   end
 
   defp form_base_path(%{node: nil} = assigns), do: "#{assigns.base}/forms/#{assigns.form.id}"

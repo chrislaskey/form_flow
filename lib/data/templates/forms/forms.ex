@@ -184,6 +184,18 @@ defmodule FormFlow.Data.Templates.Forms do
     )
   end
 
+  @doc """
+  Whether any version of the lineage was ever published — archived included,
+  since version numbers are never reissued and instances may still pin them.
+  The first publish is the special case that skips the migration-policy
+  dialog: with no published history, no instance can exist.
+  """
+  def ever_published?(form_id) do
+    Repo.exists?(
+      from(v in Version, where: v.template_form_id == ^form_id and not is_nil(v.version))
+    )
+  end
+
   @doc "The latest published version of a lineage, or nil. Skips drafts and archived."
   def get_latest_version(form_id) do
     Repo.one(

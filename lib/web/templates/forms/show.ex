@@ -27,6 +27,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Data.Graphs
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.PublishDialog
 
   @impl true
   def mount(socket) do
@@ -119,13 +120,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   @impl true
   def handle_event("open_publish", _params, socket) do
-    if first_publish?(socket.assigns.versions) do
+    if Forms.ever_published?(socket.assigns.form.id) do
+      {:noreply, assign(socket, :publishing?, true)}
+    else
       # Nothing has ever been published, so no instance can exist and no
       # migration policy is meaningful — the dialog would prompt about
       # nobody. Publish directly; every later publish prompts.
       publish_directly(socket)
-    else
-      {:noreply, assign(socket, :publishing?, true)}
     end
   end
 
@@ -315,52 +316,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         </div>
       </div>
 
-      <div
+      <PublishDialog.publish_dialog
         :if={@publishing?}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="max-h-[90vh] w-[28rem] overflow-y-auto rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-1 text-sm font-semibold text-zinc-900">Publish this draft?</p>
-          <p class="mb-3 text-xs text-zinc-500">
-            {@counts["in_progress"]} in progress and {@counts["completed"]} completed
-            instance(s) exist for this form.
-          </p>
-
-          <DynamicForm.form
-            id={"#{@id}-publish-form"}
-            submit_text="Publish"
-            on_success={&publish(&1, @id)}
-          >
-            <:field
-              type="radiogroup"
-              name="preset"
-              label="How should existing users be treated?"
-              required
-              default="small_fix"
-              options={[
-                {"Small fix — existing users keep the version they started; new users get this one.",
-                 "small_fix"},
-                {"Bug fix — in-progress users move to this version and keep their answers (they may see new required fields); completed instances are untouched.",
-                 "bug_fix"},
-                {"Big fix — everyone must fill this version out: #{@counts["in_progress"]} in-progress instance(s) will be reset and #{@counts["completed"]} completed instance(s) reopened. Prior answers are kept in the audit trail.",
-                 "big_fix"}
-              ]}
-              metadata={%{"style" => "vertical"}}
-            />
-          </DynamicForm.form>
-
-          <div class="mt-2 flex justify-end">
-            <button
-              type="button"
-              phx-click="cancel_publish"
-              phx-target={@myself}
-              class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
+        id={"#{@id}-publish-form"}
+        counts={@counts}
+        target={@myself}
+        on_success={&publish(&1, @id)}
+      />
     </div>
     """
   end
@@ -372,10 +334,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       payload: payload
     })
   end
-
-  # "First" means no version ever got a number — an archived v1 still counts
-  # as published history, because instances may be pinned to it
-  defp first_publish?(versions), do: not Enum.any?(versions, &(&1.version != nil))
 
   defp publish_directly(socket) do
     case Forms.update_status(socket.assigns.version, :published) do

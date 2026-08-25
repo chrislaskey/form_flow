@@ -113,9 +113,19 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
 
-    view |> element(~s(input[phx-blur="rename"])) |> render_blur(%{"value" => "Better name"})
+    view
+    |> element(~s(form[phx-change="name_changed"]))
+    |> render_change(%{"name" => "Better name"})
+
+    # Nothing persists until Save — a pending name is an unsaved change,
+    # riding the same guard as canvas edits
+    assert Graphs.get(id).name != "Better name"
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
 
     assert Graphs.get(id).name == "Better name"
+    refute has_element?(view, "button", "Discard changes")
   end
 
   test "the show canvas is read-only; the edit canvas is not", %{conn: conn} do

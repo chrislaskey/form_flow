@@ -84,6 +84,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
 
@@ -106,7 +107,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     data = graph && ReactFlow.to_data(graph)
     root = socket.assigns.node_id && Graphs.get(socket.assigns.root_id)
 
-    {:ok, assign(socket, graph: graph, data: data, current: data, root: root)}
+    {:ok,
+     assign(socket,
+       graph: graph,
+       data: data,
+       current: data,
+       root: root,
+       pending_name: graph && graph.name
+     )}
   end
 
   @impl true
@@ -158,11 +166,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
-  def handle_event("rename", %{"value" => name}, socket) do
-    case Graphs.update(socket.assigns.graph, %{name: name}) do
-      {:ok, graph} -> {:noreply, assign(socket, :graph, graph)}
-      {:error, _changeset} -> {:noreply, socket}
-    end
+  def handle_event("name_changed", %{"name" => name}, socket) do
+    # Tracked like canvas edits: nothing persists until Save. An edited name
+    # counts as an unsaved change, so it rides the same guard and prompt.
+    {:noreply, socket |> assign(:pending_name, name) |> assign(:notice, nil)}
   end
 
   @impl true
@@ -208,10 +215,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     {:noreply, push_navigate(socket, to: current_path(socket.assigns))}
   end
 
-  # Whether the canvas has edits the last save doesn't reflect yet —
-  # `current` tracks every reported `graph_changed`, `data` only what
-  # `Graphs.update/2` last persisted.
-  defp unsaved_changes?(assigns), do: assigns.current != assigns.data
+  # Whether the page has edits the last save doesn't reflect yet — `current`
+  # tracks every reported `graph_changed` against what `Graphs.update/2` last
+  # persisted, and the pending name against the graph's saved name.
+  defp unsaved_changes?(assigns) do
+    assigns.current != assigns.data or assigns.pending_name != assigns.graph.name
+  end
 
   defp navigate_to_node(socket, node_id) do
     push_navigate(socket, to: node_path(socket.assigns, node_id))
@@ -222,9 +231,44 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit"
   end
 
+  # Edit mode is sticky, like opening a subflow from this canvas: opening a
+  # form node lands on a draft's *editor* — the newest existing draft, or a
+  # fresh one forked from the latest published version. The show page is
+  # where mode isn't sticky: its Open lands on the form's show page.
   defp form_node_path(assigns, node_id) do
     root_id = assigns.root_id || assigns.graph.id
-    "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
+    show_path = "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
+
+    with %{form_id: form_id} when is_binary(form_id) <- Graphs.get_node(node_id),
+         %{id: draft_id} <- find_or_create_draft(form_id) do
+      "#{show_path}/versions/#{draft_id}/edit"
+    else
+      _other -> show_path
+    end
+  end
+
+  defp find_or_create_draft(form_id) do
+    newest_draft =
+      form_id
+      |> Forms.list_versions()
+      |> Enum.find(&(&1.status == "draft"))
+
+    case newest_draft do
+      %{} = draft ->
+        draft
+
+      nil ->
+        opts =
+          case Forms.get_latest_version(form_id) do
+            nil -> []
+            published -> [based_on: published.id]
+          end
+
+        case Forms.create_draft(form_id, opts) do
+          {:ok, draft} -> draft
+          {:error, _reason} -> nil
+        end
+    end
   end
 
   # A plain path was already the destination; a pending node needs its
@@ -245,7 +289,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # reload. Returns the id_map too: "save_and_continue" needs it to resolve a
   # pending node's editor-temporary id to what it was actually saved as.
   defp persist_current(socket) do
-    attrs = ReactFlow.to_graph_attrs(socket.assigns.current)
+    attrs =
+      socket.assigns.current
+      |> ReactFlow.to_graph_attrs()
+      |> Map.put(:name, socket.assigns.pending_name)
 
     case Graphs.update(socket.assigns.graph, attrs) do
       {:ok, graph} ->
@@ -254,7 +301,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
         socket =
           socket
-          |> assign(graph: graph, data: data, current: data, error: nil)
+          |> assign(
+            graph: graph,
+            data: data,
+            current: data,
+            pending_name: graph.name,
+            error: nil
+          )
           |> push_event("form_flow:set_graph", %{graph: data})
 
         {:ok, socket, attrs.id_map}
@@ -350,14 +403,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             {@root.name || "Untitled"}
           </button>
           <span :if={@root} class="text-zinc-400">/</span>
-          <input
-            type="text"
-            name="name"
-            value={@graph.name || "Untitled"}
-            phx-blur="rename"
-            phx-target={@myself}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-sm font-semibold"
-          />
+          <span>{@graph.name || "Untitled"}</span>
           <span class="text-xs font-normal text-zinc-500">
             {if @graph.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
@@ -411,6 +457,20 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
       <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
+
+      <%!-- Edits here are pending like canvas edits: nothing persists until
+            Save, and a changed name counts as an unsaved change --%>
+      <form id={"#{@id}-name-form"} phx-change="name_changed" phx-target={@myself} class="mb-3 max-w-md">
+        <label class="block">
+          <span class="text-xs font-medium text-zinc-600">Name</span>
+          <input
+            type="text"
+            name="name"
+            value={@pending_name}
+            class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          />
+        </label>
+      </form>
 
       <Editor.editor
         id={"#{@id}-editor"}
