@@ -5,4 +5,6 @@ defmodule FormFlow do
   - `FormFlow.Data` for all backend and data related code
   - `FormFlow.Web`  for all UI, UX, presentation, and web related code
   """
+
+  def config(key), do: Application.get_env(:form_flow, key)
 end

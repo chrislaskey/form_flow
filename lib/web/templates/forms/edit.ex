@@ -36,7 +36,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        notice: nil,
        publishing?: false,
        auto_update?: false,
-       preview_rev: 0
+       preview_rev: 0,
+       preview_topic: Ecto.UUID.generate()
      )}
   end
 
@@ -153,15 +154,37 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket) do
-    refresh_preview(socket)
+    if FormFlow.config(:pubsub_server) do
+      refresh_preview_by_pubsub(socket)
+    else
+      refresh_preview_by_re_render(socket)
+    end
   end
 
   defp maybe_refresh_preview(socket), do: socket
 
+  defp refresh_preview_by_pubsub(socket) do
+    if socket.assigns.latest_json != socket.assigns.preview_json do
+      pubsub_server = FormFlow.config(:pubsub_server)
+      message = {:form_flow, :update_definition, socket.assigns.latest_json}
+
+      Phoenix.PubSub.broadcast(pubsub_server, socket.assigns.preview_topic, message)
+
+      # Track what was pushed so the guard above means "changed since the
+      # last push", not "changed since page load" — otherwise editing back
+      # to the exact saved text would skip the push and strand the preview
+      # on the intermediate content. Also keeps the live_render session
+      # fresh for any future remount.
+      assign(socket, :preview_json, socket.assigns.latest_json)
+    else
+      socket
+    end
+  end
+
   # Re-rendering the preview means remounting it: a child LiveView never
   # re-reads its session, so the id carries the rev — a bump makes
   # live_render mount a fresh child with the new definition in its session
-  defp refresh_preview(socket) do
+  defp refresh_preview_by_re_render(socket) do
     if socket.assigns.latest_json != socket.assigns.preview_json do
       socket
       |> assign(:preview_json, socket.assigns.latest_json)
@@ -223,7 +246,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   @impl true
   def handle_event("update_preview", _params, socket) do
-    {:noreply, refresh_preview(socket)}
+    if FormFlow.config(:pubsub_server) do
+      {:noreply, refresh_preview_by_pubsub(socket)}
+    else
+      {:noreply, refresh_preview_by_re_render(socket)}
+    end
   end
 
   @impl true
@@ -489,9 +516,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <div class="mb-1 flex items-center justify-between gap-2">
             <h3 class="text-xs font-medium text-zinc-500">Preview</h3>
             <div class="flex items-center gap-2">
-              <%!-- Auto-update, styled like the Show/Edit switch: on, the
-                    preview re-renders on every (debounced) change; off, it
-                    keeps whatever it last showed until Update is clicked --%>
               <button
                 type="button"
                 phx-click="toggle_auto_update"
@@ -504,7 +528,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 <span class={
                   if(@auto_update?, do: "font-semibold text-zinc-900", else: "text-zinc-500")
                 }>
-                  Auto-update
+                  Auto-refresh
                 </span>
                 <span class={[
                   "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
@@ -523,20 +547,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 phx-target={@myself}
                 class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
               >
-                Update
+                Refresh
               </button>
             </div>
           </div>
           <div class="rounded-md border border-zinc-200 p-4">
-            <%!-- A child LiveView (own process), not a LiveComponent: a
-                  definition that crashes the form renderer takes down only
-                  the preview — the client remounts it — never this page.
-                  The rev in the id is what re-renders it: a child never
-                  re-reads its session, so each refresh remounts a fresh
-                  child carrying the new definition. --%>
             {live_render(@socket, Preview,
               id: preview_id(assigns),
-              session: %{"id" => preview_id(assigns), "definition" => @preview_json}
+              session: %{"id" => preview_id(assigns), "definition" => @preview_json, "pubsub_topic" => @preview_topic}
             )}
           </div>
         </div>

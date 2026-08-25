@@ -42,6 +42,10 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
   @impl true
   def mount(:not_mounted_at_router, session, socket) do
+    if connected?(socket) && FormFlow.config(:pubsub_server) && session["pubsub_topic"] do
+      Phoenix.PubSub.subscribe(FormFlow.config(:pubsub_server), session["pubsub_topic"])
+    end
+
     {:ok,
      socket
      |> assign(id: session["id"], submitted?: false)
@@ -50,7 +54,6 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
   # Parse the definition eagerly so a malformed one becomes an inline error.
   # Left to crash at render time, the client would remount the preview into
-  # the same crash, over and over.
   defp assign_instance(socket, %{"definition" => json}) when is_binary(json) do
     parse(socket, json)
   end
@@ -73,6 +76,10 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   @impl true
   def handle_info({:dynamic_form, :success, _payload}, socket) do
     {:noreply, assign(socket, :submitted?, true)}
+  end
+
+  def handle_info({:form_flow, :update_definition, definition}, socket) do
+    {:noreply, assign_instance(socket, %{"definition" => definition})}
   end
 
   @impl true

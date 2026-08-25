@@ -51,8 +51,9 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# FormFlow.Data.Repo wraps the parent app's repo
-config :form_flow, repo: Demo.Repo
+config :form_flow,
+  repo: Demo.Repo,
+  pubsub_server: Demo.PubSub
 
 # Slab query mode uses this repo unless a table passes one explicitly
 config :slab, repo: Demo.Repo
