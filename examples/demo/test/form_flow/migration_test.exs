@@ -23,37 +23,115 @@ defmodule Demo.FormFlowMigrationTest do
     assert Migration.migrated_version() == 1
   end
 
-  test "the template and instance tables accept rows" do
-    {:ok, _} = insert_template("Enrollment")
-    {:ok, %{rows: [[template_id]]}} = Repo.query("SELECT id FROM form_flow_template_forms")
+  test "the template, version, instance, and event tables accept rows" do
+    {:ok, form_id} = insert_template("Enrollment")
+    {:ok, version_id} = insert_version(form_id)
+
+    instance_id = Ecto.UUID.generate()
 
     assert {:ok, _} =
              Repo.query(
                """
                INSERT INTO form_flow_instance_forms
-                 (app, template_form_id, state, data, inserted_at, updated_at)
-               VALUES ('default', ?, 'in_progress', '{"name":"Ada"}', ?, ?)
+                 (id, app, template_form_version_id, status, data, labels_snapshot,
+                  metadata, inserted_at, updated_at)
+               VALUES (?, 'default', ?, 'in_progress', '{"name":"Ada"}', '{}', '{}', ?, ?)
                """,
-               [template_id, @timestamp, @timestamp]
+               [instance_id, version_id, @timestamp, @timestamp]
+             )
+
+    assert {:ok, _} =
+             Repo.query(
+               """
+               INSERT INTO form_flow_instance_form_events
+                 (id, instance_form_id, event, to_version_id, data_snapshot,
+                  inserted_at, updated_at)
+               VALUES (?, ?, 'created', ?, '{}', ?, ?)
+               """,
+               [Ecto.UUID.generate(), instance_id, version_id, @timestamp, @timestamp]
              )
 
     assert {:ok, %{rows: [[1]]}} = Repo.query("SELECT count(*) FROM form_flow_instance_forms")
   end
 
-  test "template names are unique per app" do
-    {:ok, _} = insert_template("Enrollment")
+  test "instances cannot be orphaned — the version pin is RESTRICT" do
+    {:ok, form_id} = insert_template("Enrollment")
+    {:ok, version_id} = insert_version(form_id)
 
-    assert {:error, _} = insert_template("Enrollment")
-    assert {:ok, _} = insert_template("Enrollment", "other-app")
+    {:ok, _} =
+      Repo.query(
+        """
+        INSERT INTO form_flow_instance_forms
+          (id, app, template_form_version_id, status, data, labels_snapshot,
+           metadata, inserted_at, updated_at)
+        VALUES (?, 'default', ?, 'in_progress', '{}', '{}', '{}', ?, ?)
+        """,
+        [Ecto.UUID.generate(), version_id, @timestamp, @timestamp]
+      )
+
+    assert {:error, _} =
+             Repo.query("DELETE FROM form_flow_template_form_versions WHERE id = ?", [version_id])
   end
 
-  defp insert_template(name, app \\ "default") do
-    Repo.query(
-      """
-      INSERT INTO form_flow_template_forms (app, name, definition, inserted_at, updated_at)
-      VALUES (?, ?, '{}', ?, ?)
-      """,
-      [app, name, @timestamp, @timestamp]
-    )
+  test "catalog names are unique per app; owned forms may repeat them" do
+    {:ok, _} = insert_template("Enrollment")
+
+    # The partial unique index guards the catalog (owner_graph_id IS NULL)
+    assert {:error, _} = insert_template("Enrollment")
+    assert {:ok, _} = insert_template("Enrollment", app: "other-app")
+
+    # Owned forms are outside the catalog — yearly copies repeat names freely
+    {:ok, graph_id} = insert_graph()
+    assert {:ok, _} = insert_template("Enrollment", owner_graph_id: graph_id)
+    assert {:ok, _} = insert_template("Enrollment", owner_graph_id: graph_id)
+  end
+
+  defp insert_template(name, opts \\ []) do
+    id = Ecto.UUID.generate()
+    app = Keyword.get(opts, :app, "default")
+    owner_graph_id = Keyword.get(opts, :owner_graph_id)
+
+    result =
+      Repo.query(
+        """
+        INSERT INTO form_flow_template_forms
+          (id, app, name, owner_graph_id, inserted_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [id, app, name, owner_graph_id, @timestamp, @timestamp]
+      )
+
+    with {:ok, _} <- result, do: {:ok, id}
+  end
+
+  defp insert_version(form_id) do
+    id = Ecto.UUID.generate()
+
+    result =
+      Repo.query(
+        """
+        INSERT INTO form_flow_template_form_versions
+          (id, template_form_id, status, lock_version, definition, inserted_at, updated_at)
+        VALUES (?, ?, 'draft', 1, '{}', ?, ?)
+        """,
+        [id, form_id, @timestamp, @timestamp]
+      )
+
+    with {:ok, _} <- result, do: {:ok, id}
+  end
+
+  defp insert_graph do
+    id = Ecto.UUID.generate()
+
+    result =
+      Repo.query(
+        """
+        INSERT INTO form_flow_graphs (id, label, inserted_at, updated_at)
+        VALUES (?, 'forms', ?, ?)
+        """,
+        [id, @timestamp, @timestamp]
+      )
+
+    with {:ok, _} <- result, do: {:ok, id}
   end
 end

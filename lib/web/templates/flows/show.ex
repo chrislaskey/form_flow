@@ -120,7 +120,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     ~H"""
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <h2 class="text-sm font-semibold">
+        <div class="text-sm font-semibold">
           <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
           <span class="text-zinc-400">/</span>
           <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">
@@ -131,7 +131,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <span class="ml-1 text-xs font-normal text-zinc-500">
             {if @graph.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
-        </h2>
+        </div>
         <div class="flex items-center gap-2">
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)

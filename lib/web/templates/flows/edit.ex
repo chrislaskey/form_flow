@@ -461,7 +461,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # This edit page's own URL, for Discard's full reload
-  defp current_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.graph.id}/edit"
+  defp current_path(%{node_id: nil} = assigns),
+    do: "#{assigns.base}/flows/#{assigns.graph.id}/edit"
 
   defp current_path(assigns) do
     "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}/edit"
