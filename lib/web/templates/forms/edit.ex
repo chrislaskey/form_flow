@@ -4,9 +4,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   Drafts only — published and archived definitions are immutable, and this
   page refuses to render them editable. The definition editor starts minimal
-  (the JSON, in a textarea); the versioning chrome around it is the point:
-  the optimistic-lock "changed under you" conflict, the stale-draft warning,
-  and the picker between coexisting drafts.
+  (the JSON, in a `DynamicForm.form` comment field); the versioning chrome
+  around it is the point: the optimistic-lock "changed under you" conflict,
+  the stale-draft warning, and the picker between coexisting drafts.
+
+  DynamicForm runs the validation lifecycle: `on_submit` is the JSON-syntax
+  gate (parse errors render inline on the field, the parsed map rides the
+  payload's `extra`), and `on_success` routes the valid payload back to this
+  LiveComponent through `send_update/2` — the `%{event: "save"}` clause of
+  `update/2` performs the actual `update_draft/2`.
 
   Addressed like `FormFlow.Web.Templates.Forms.Show`, standalone
   (`/forms/:id/versions/:version_id/edit`) or by drill-in
@@ -24,6 +30,37 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   @impl true
+  def update(%{event: "save", payload: payload}, socket) do
+    definition = payload.extra[:definition]
+
+    case Forms.update_draft(socket.assigns.version, %{definition: definition}) do
+      {:ok, version} ->
+        {:ok,
+         assign(socket,
+           version: version,
+           versions: Forms.list_versions(socket.assigns.form.id),
+           error: nil,
+           notice: "Saved."
+         )}
+
+      {:error, :stale} ->
+        {:ok,
+         assign(socket,
+           error:
+             "This draft changed under you — someone else saved it. " <>
+               "Reload to pick up their version.",
+           notice: nil
+         )}
+
+      {:error, %Ecto.Changeset{}} ->
+        {:ok,
+         assign(socket,
+           error: "Only drafts can be edited — this version is published.",
+           notice: nil
+         )}
+    end
+  end
+
   def update(assigns, socket) do
     socket =
       socket
@@ -53,45 +90,29 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end)
   end
 
-  @impl true
-  def handle_event("save", %{"definition" => definition_json}, socket) do
-    with {:ok, definition} <- decode(definition_json),
-         {:ok, version} <- Forms.update_draft(socket.assigns.version, %{definition: definition}) do
-      {:noreply,
-       assign(socket,
-         version: version,
-         definition_json: Phoenix.json_library().encode!(version.definition, pretty: true),
-         error: nil,
-         notice: "Saved."
-       )}
-    else
-      {:error, :invalid_json} ->
-        {:noreply,
-         assign(socket, error: "Not valid JSON — fix the syntax and save again.", notice: nil)}
+  # The JSON-syntax gate, run by DynamicForm on every submit: a parse error
+  # renders inline on the field like any built-in validation, and a parsed
+  # definition rides the payload's extra into the "save" event above
+  defp validate_json(payload) do
+    case Phoenix.json_library().decode(payload.data[:definition] || "") do
+      {:ok, definition} when is_map(definition) ->
+        DynamicForm.Payload.put_extra(payload, :definition, definition)
 
-      {:error, :stale} ->
-        {:noreply,
-         assign(socket,
-           error:
-             "This draft changed under you — someone else saved it. " <>
-               "Reload to pick up their version.",
-           notice: nil
-         )}
-
-      {:error, %Ecto.Changeset{}} ->
-        {:noreply,
-         assign(socket,
-           error: "Only drafts can be edited — this version is published.",
-           notice: nil
-         )}
+      _other ->
+        DynamicForm.Payload.add_error(
+          payload,
+          :definition,
+          "is not valid JSON — fix the syntax and save again"
+        )
     end
   end
 
-  defp decode(json) do
-    case Phoenix.json_library().decode(json) do
-      {:ok, definition} when is_map(definition) -> {:ok, definition}
-      _other -> {:error, :invalid_json}
-    end
+  defp saved(payload, component_id) do
+    Phoenix.LiveView.send_update(__MODULE__, %{
+      id: component_id,
+      event: "save",
+      payload: payload
+    })
   end
 
   @impl true
@@ -160,23 +181,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       </p>
 
       <div class="flex flex-wrap gap-6">
-        <form phx-submit="save" phx-target={@myself} class="min-w-0 flex-1">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Definition (JSON)</h3>
-          <textarea
-            name="definition"
-            rows="18"
-            spellcheck="false"
-            class="w-full rounded-md border border-zinc-300 p-3 font-mono text-xs"
-          >{@definition_json}</textarea>
-          <div class="mt-2">
-            <button
-              type="submit"
-              class="rounded-md border border-cyan-600 bg-cyan-600 px-3 py-1.5 text-xs text-white hover:bg-cyan-700"
-            >
-              Save draft
-            </button>
-          </div>
-        </form>
+        <div class="min-w-0 flex-1">
+          <DynamicForm.form
+            id={"#{@id}-form"}
+            data={%{definition: @definition_json}}
+            submit_text="Save draft"
+            on_submit={&validate_json/1}
+            on_success={&saved(&1, @id)}
+          >
+            <:field type="comment" name="definition" label="Definition (JSON)" required />
+          </DynamicForm.form>
+        </div>
 
         <div class="w-64 shrink-0">
           <h3 class="mb-1 text-xs font-medium text-zinc-500">Drafts</h3>

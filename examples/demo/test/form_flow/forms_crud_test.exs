@@ -24,8 +24,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "New form"
 
     view
-    |> element("form")
-    |> render_submit(%{"name" => "W-2 Details", "description" => "Wages"})
+    |> element("#forms-new-form-form")
+    |> render_submit(%{"dynamic_form" => %{"name" => "W-2 Details", "description" => "Wages"}})
 
     {path, _flash} = assert_redirect(view)
     assert "/forms/" <> id = path
@@ -68,14 +68,17 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Definition (JSON)"
 
     view
-    |> element("form")
-    |> render_submit(%{"definition" => ~s({"fields": [{"name": "ssn"}]})})
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{"dynamic_form" => %{"definition" => ~s({"fields": [{"name": "ssn"}]})}})
 
     assert render(view) =~ "Saved."
     assert Forms.get_version(draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
 
-    view |> element("form") |> render_submit(%{"definition" => "{nope"})
-    assert render(view) =~ "Not valid JSON"
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{"dynamic_form" => %{"definition" => "{nope"}})
+
+    assert render(view) =~ "is not valid JSON"
   end
 
   test "only drafts render the editor", %{conn: conn} do
@@ -96,8 +99,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert render(view) =~ "Publish this draft?"
 
     view
-    |> element("form[phx-submit=publish]")
-    |> render_submit(%{"preset" => "small_fix"})
+    |> element("#forms-show-publish-form-form")
+    |> render_submit(%{"dynamic_form" => %{"preset" => "small_fix"}})
 
     assert_redirect(view, "/forms/#{form.id}/versions/#{draft.id}")
     assert %{status: "published", version: 1} = Forms.get_version(draft.id)
@@ -121,8 +124,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     view |> element("button", "Publish") |> render_click()
 
     view
-    |> element("form[phx-submit=publish]")
-    |> render_submit(%{"preset" => "big_fix"})
+    |> element("#forms-show-publish-form-form")
+    |> render_submit(%{"dynamic_form" => %{"preset" => "big_fix"}})
 
     migrated = FormFlow.Data.Instances.Forms.get(instance.id)
     assert migrated.template_form_version_id == draft.id

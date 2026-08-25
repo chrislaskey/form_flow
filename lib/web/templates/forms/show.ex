@@ -32,6 +32,24 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   @impl true
+  def update(%{event: "publish", payload: payload}, socket) do
+    preset = String.to_existing_atom(payload.data[:preset])
+
+    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
+      {:ok, published} ->
+        # Redirects are forbidden inside update/2; handle_async is the
+        # component-owned callback where they are allowed
+        to = version_path(socket.assigns, published)
+        {:ok, start_async(socket, :navigate, fn -> to end)}
+
+      {:error, :not_draft} ->
+        {:ok, assign(socket, error: "Only drafts can be published.", publishing?: false)}
+
+      {:error, _other} ->
+        {:ok, assign(socket, error: "Could not publish. Please try again.", publishing?: false)}
+    end
+  end
+
   def update(assigns, socket) do
     socket =
       socket
@@ -44,6 +62,11 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       |> assign_new(:node_id, fn -> nil end)
 
     {:ok, load(socket)}
+  end
+
+  @impl true
+  def handle_async(:navigate, {:ok, to}, socket) do
+    {:noreply, push_navigate(socket, to: to)}
   end
 
   defp load(socket) do
@@ -100,23 +123,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   @impl true
   def handle_event("cancel_publish", _params, socket) do
     {:noreply, assign(socket, :publishing?, false)}
-  end
-
-  @impl true
-  def handle_event("publish", %{"preset" => preset}, socket) do
-    preset = String.to_existing_atom(preset)
-
-    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
-      {:ok, published} ->
-        {:noreply, push_navigate(socket, to: version_path(socket.assigns, published))}
-
-      {:error, :not_draft} ->
-        {:noreply, assign(socket, error: "Only drafts can be published.", publishing?: false)}
-
-      {:error, _other} ->
-        {:noreply,
-         assign(socket, error: "Could not publish. Please try again.", publishing?: false)}
-    end
   end
 
   @impl true
@@ -302,51 +308,37 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         :if={@publishing?}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       >
-        <form
-          phx-submit="publish"
-          phx-target={@myself}
-          class="w-96 rounded-md border border-zinc-300 bg-white p-4 shadow-lg"
-        >
+        <div class="max-h-[90vh] w-[28rem] overflow-y-auto rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
           <p class="mb-1 text-sm font-semibold text-zinc-900">Publish this draft?</p>
           <p class="mb-3 text-xs text-zinc-500">
             {@counts["in_progress"]} in progress and {@counts["completed"]} completed
             instance(s) exist for this form.
           </p>
 
-          <div class="mb-4 space-y-2">
-            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
-              <input type="radio" name="preset" value="small_fix" checked class="mt-0.5" />
-              <span>
-                <span class="font-medium">Small fix</span>
-                <span class="block text-xs text-zinc-500">
-                  Existing users keep the version they started; new users get this one.
-                </span>
-              </span>
-            </label>
-            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
-              <input type="radio" name="preset" value="bug_fix" class="mt-0.5" />
-              <span>
-                <span class="font-medium">Bug fix</span>
-                <span class="block text-xs text-zinc-500">
-                  In-progress users move to this version and keep their answers — they may
-                  see new required fields. Completed instances are untouched.
-                </span>
-              </span>
-            </label>
-            <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-2 text-sm">
-              <input type="radio" name="preset" value="big_fix" class="mt-0.5" />
-              <span>
-                <span class="font-medium">Big fix</span>
-                <span class="block text-xs text-zinc-500">
-                  Everyone must fill this version out: {@counts["in_progress"]} in-progress
-                  instance(s) will be reset and {@counts["completed"]} completed
-                  instance(s) reopened. Prior answers are kept in the audit trail.
-                </span>
-              </span>
-            </label>
-          </div>
+          <DynamicForm.form
+            id={"#{@id}-publish-form"}
+            submit_text="Publish"
+            on_success={&publish(&1, @id)}
+          >
+            <:field
+              type="radiogroup"
+              name="preset"
+              label="How should existing users be treated?"
+              required
+              default="small_fix"
+              options={[
+                {"Small fix — existing users keep the version they started; new users get this one.",
+                 "small_fix"},
+                {"Bug fix — in-progress users move to this version and keep their answers (they may see new required fields); completed instances are untouched.",
+                 "bug_fix"},
+                {"Big fix — everyone must fill this version out: #{@counts["in_progress"]} in-progress instance(s) will be reset and #{@counts["completed"]} completed instance(s) reopened. Prior answers are kept in the audit trail.",
+                 "big_fix"}
+              ]}
+              metadata={%{"style" => "vertical"}}
+            />
+          </DynamicForm.form>
 
-          <div class="flex justify-end gap-2">
+          <div class="mt-2 flex justify-end">
             <button
               type="button"
               phx-click="cancel_publish"
@@ -355,17 +347,19 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
-            >
-              Publish
-            </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
     """
+  end
+
+  defp publish(payload, component_id) do
+    Phoenix.LiveView.send_update(__MODULE__, %{
+      id: component_id,
+      event: "publish",
+      payload: payload
+    })
   end
 
   defp version_badge(%{status: "draft"}), do: "draft"
