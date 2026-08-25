@@ -2,12 +2,27 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
-  A plain table of the graphs `FormFlow.Data.Graphs.list/0` returns — summary
-  counts and timestamps, with show and edit actions per row and a link to
-  create a new flow. The editor itself lives on those pages, so this one never
-  loads the ReactFlow bundle.
+  A `Slab.table` over `FormFlow.Data.Graphs.roots_query/0` — summary counts
+  and timestamps, with show and edit actions per row and a link to create a
+  new flow. The editor itself lives on those pages, so this one never loads
+  the ReactFlow bundle. Slab runs in query mode against the host app's repo,
+  so sorting and pagination come from the URL: pass the current `uri` and
+  `params` from `handle_params/3` (the `FormFlow.Web.Router` component
+  forwards both).
 
-      <.live_component module={FormFlow.Web.Templates.Flows.Index} id="flows-index" />
+      <.live_component
+        module={FormFlow.Web.Templates.Flows.Index}
+        id="flows-index"
+        uri={@uri}
+        params={@params}
+      />
+
+  Without a `sort` param the table sorts by creation time, matching
+  `Graphs.list/0` — injected into the params handed to Slab so pagination
+  stays deterministic instead of leaning on unspecified database order.
+
+  The count columns aren't sortable: they are virtual fields populated by
+  the query's select, not real columns Slab could compile into `ORDER BY`.
 
   `base` is the path prefix the flows pages are mounted under, used to build
   the links — with the default `""`, rows link to `/flows/:id`.
@@ -18,14 +33,24 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Repo
 
   @impl true
   def update(assigns, socket) do
+    socket =
+      socket
+      |> assign(assigns)
+      |> assign_new(:base, fn -> "" end)
+      |> assign_new(:uri, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
+
+    query = Graphs.roots_query()
+
     {:ok,
      socket
-     |> assign(assigns)
-     |> assign_new(:base, fn -> "" end)
-     |> assign(:graphs, Graphs.list())}
+     |> assign(:query, query)
+     |> assign(:empty?, not Repo.exists?(query))
+     |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))}
   end
 
   @impl true
@@ -46,54 +71,49 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         </.link>
       </div>
 
-      <p :if={@graphs == []} class="text-sm text-zinc-500">
+      <p :if={@empty?} class="text-sm text-zinc-500">
         No flows yet — create the first one.
       </p>
 
-      <table :if={@graphs != []} class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-zinc-300 text-xs text-zinc-500">
-            <th class="py-2 pr-4 font-medium">Name</th>
-            <th class="py-2 pr-4 font-medium">Kind</th>
-            <th class="py-2 pr-4 font-medium">Steps</th>
-            <th class="py-2 pr-4 font-medium">Connections</th>
-            <th class="py-2 pr-4 font-medium">Created</th>
-            <th class="py-2 font-medium"><span class="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :for={graph <- @graphs} class="border-b border-zinc-200">
-            <td class="py-2 pr-4">
-              <.link navigate={"#{@base}/flows/#{graph.id}"} class="hover:underline">
-                {graph.name || "Untitled"}
-              </.link>
-              <span class="block font-mono text-[10px] text-zinc-400">{graph.id}</span>
-            </td>
-            <td class="py-2 pr-4 text-xs text-zinc-500">
-              {if graph.label == "subflows", do: "Complex", else: "Simple"}
-            </td>
-            <td class="py-2 pr-4">{graph.nodes_count}</td>
-            <td class="py-2 pr-4">{graph.relationships_count}</td>
-            <td class="py-2 pr-4 text-xs text-zinc-500">
-              {Calendar.strftime(graph.inserted_at, "%Y-%m-%d %H:%M")}
-            </td>
-            <td class="py-2 text-right whitespace-nowrap">
-              <.link
-                navigate={"#{@base}/flows/#{graph.id}"}
-                class="text-cyan-600 hover:underline"
-              >
-                Show
-              </.link>
-              <.link
-                navigate={"#{@base}/flows/#{graph.id}/edit"}
-                class="ml-3 text-cyan-600 hover:underline"
-              >
-                Edit
-              </.link>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <Slab.table
+        :if={!@empty?}
+        id="flows-table"
+        query={@query}
+        repo={Repo.repo()}
+        uri={@uri}
+        params={@table_params}
+      >
+        <:column :let={graph} field={:name} sortable>
+          <.link navigate={"#{@base}/flows/#{graph.id}"} class="hover:underline">
+            {graph.name || "Untitled"}
+          </.link>
+          <span class="block font-mono text-[10px] text-zinc-400">{graph.id}</span>
+        </:column>
+        <:column :let={graph} field={:label} label="Kind">
+          <span class="text-xs text-zinc-500">
+            {if graph.label == "subflows", do: "Complex", else: "Simple"}
+          </span>
+        </:column>
+        <:column field={:nodes_count} label="Steps" />
+        <:column field={:relationships_count} label="Connections" />
+        <:column :let={graph} field={:inserted_at} label="Created" sortable>
+          <span class="text-xs text-zinc-500">
+            {Calendar.strftime(graph.inserted_at, "%Y-%m-%d %H:%M")}
+          </span>
+        </:column>
+        <:column :let={graph} label="Actions">
+          <.link navigate={"#{@base}/flows/#{graph.id}"} class="text-cyan-600 hover:underline">
+            Show
+          </.link>
+          <.link
+            navigate={"#{@base}/flows/#{graph.id}/edit"}
+            class="ml-3 text-cyan-600 hover:underline"
+          >
+            Edit
+          </.link>
+        </:column>
+        <:pagination per_page={10} />
+      </Slab.table>
     </div>
     """
   end

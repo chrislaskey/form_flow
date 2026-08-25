@@ -58,19 +58,39 @@ defmodule FormFlow.Data.Graphs do
   root and are reached by drill-in, not listed beside it.
   """
   def list do
-    Repo.all(
-      from(g in Graph,
-        where: is_nil(g.owner_graph_id),
-        left_join: n in assoc(g, :nodes),
-        left_join: r in assoc(g, :relationships),
-        group_by: g.id,
-        order_by: [asc: g.inserted_at],
-        select: %{
-          g
-          | nodes_count: count(n.id, :distinct),
-            relationships_count: count(r.id, :distinct)
-        }
+    Repo.all(from(g in roots_query(), order_by: [asc: g.inserted_at]))
+  end
+
+  @doc """
+  The root-graphs listing as a composable query: every non-owned graph with
+  its node and relationship counts, unordered.
+
+  The counts come from grouped subqueries joined 1:1 rather than a `group_by`
+  on the graphs themselves, so callers (like Slab's table in query mode) can
+  layer `order_by`, `limit`/`offset`, and `Repo.aggregate(:count)` on top
+  without fighting the grouping.
+  """
+  def roots_query do
+    node_counts =
+      from(n in Node, group_by: n.graph_id, select: %{graph_id: n.graph_id, count: count(n.id)})
+
+    relationship_counts =
+      from(r in Relationship,
+        group_by: r.graph_id,
+        select: %{graph_id: r.graph_id, count: count(r.id)}
       )
+
+    from(g in Graph,
+      where: is_nil(g.owner_graph_id),
+      left_join: nc in subquery(node_counts),
+      on: nc.graph_id == g.id,
+      left_join: rc in subquery(relationship_counts),
+      on: rc.graph_id == g.id,
+      select: %{
+        g
+        | nodes_count: coalesce(nc.count, 0),
+          relationships_count: coalesce(rc.count, 0)
+      }
     )
   end
 

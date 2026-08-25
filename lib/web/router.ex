@@ -54,6 +54,20 @@ defmodule FormFlow.Web.Router do
   attr(:app, :string, default: "default")
   attr(:base, :string, default: "")
 
+  attr(:uri, :string,
+    default: nil,
+    doc:
+      "the current request URI from handle_params/3; drives the index tables' " <>
+        "sortable headers and pagination links"
+  )
+
+  attr(:params, :map,
+    default: %{},
+    doc:
+      "the current request params from handle_params/3; carries the index " <>
+        "tables' sort and pagination state"
+  )
+
   def router(assigns) do
     ~H"""
     <div>
@@ -82,7 +96,14 @@ defmodule FormFlow.Web.Router do
 
         <%= case flows_route(@path) do %>
           <% :index -> %>
-            <.live_component module={Flows.Index} id="flows-index" app={@app} base={@base} />
+            <.live_component
+              module={Flows.Index}
+              id="flows-index"
+              app={@app}
+              base={@base}
+              uri={@uri}
+              params={@params}
+            />
           <% :new -> %>
             <.live_component module={Flows.New} id="flows-new" app={@app} base={@base} />
           <% {:show, id} -> %>
@@ -113,7 +134,14 @@ defmodule FormFlow.Web.Router do
 
         <%= case forms_route(@path) do %>
           <% :index -> %>
-            <.live_component module={Forms.Index} id="forms-index" app={@app} base={@base} />
+            <.live_component
+              module={Forms.Index}
+              id="forms-index"
+              app={@app}
+              base={@base}
+              uri={@uri}
+              params={@params}
+            />
           <% :new -> %>
             <.live_component module={Forms.New} id="forms-new" app={@app} base={@base} />
           <% {:show, form_id, version_id} -> %>

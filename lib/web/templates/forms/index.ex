@@ -2,11 +2,23 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Index` LiveComponent lists the form catalog.
 
-  A plain table of the reusable forms `FormFlow.Data.Templates.Forms.list/1`
-  returns — owned forms live inside their flow trees and are reached by
-  drill-in, never listed here.
+  A `Slab.table` over `FormFlow.Data.Templates.Forms.catalog_query/1` —
+  owned forms live inside their flow trees and are reached by drill-in,
+  never listed here. Slab runs in query mode against the host app's repo,
+  so sorting and pagination come from the URL: pass the current `uri` and
+  `params` from `handle_params/3` (the `FormFlow.Web.Router` component
+  forwards both).
 
-      <.live_component module={FormFlow.Web.Templates.Forms.Index} id="forms-index" />
+      <.live_component
+        module={FormFlow.Web.Templates.Forms.Index}
+        id="forms-index"
+        uri={@uri}
+        params={@params}
+      />
+
+  Without a `sort` param the table sorts by creation time, matching
+  `Forms.list/1` — injected into the params handed to Slab so pagination
+  stays deterministic instead of leaning on unspecified database order.
 
   `base` is the path prefix the forms pages are mounted under, used to build
   the links — with the default `""`, rows link to `/forms/:id`.
@@ -16,6 +28,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Forms
 
   @impl true
@@ -25,8 +38,16 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:app, fn -> "default" end)
+      |> assign_new(:uri, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
 
-    {:ok, assign(socket, :forms, Forms.list(socket.assigns.app))}
+    query = Forms.catalog_query(socket.assigns.app)
+
+    {:ok,
+     socket
+     |> assign(:query, query)
+     |> assign(:empty?, not Repo.exists?(query))
+     |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))}
   end
 
   @impl true
@@ -47,39 +68,39 @@ defmodule FormFlow.Web.Templates.Forms.Index do
         </.link>
       </div>
 
-      <p :if={@forms == []} class="text-sm text-zinc-500">
+      <p :if={@empty?} class="text-sm text-zinc-500">
         No forms yet — create the first one.
       </p>
 
-      <table :if={@forms != []} class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-zinc-300 text-xs text-zinc-500">
-            <th class="py-2 pr-4 font-medium">Name</th>
-            <th class="py-2 pr-4 font-medium">Description</th>
-            <th class="py-2 pr-4 font-medium">Created</th>
-            <th class="py-2 font-medium"><span class="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :for={form <- @forms} class="border-b border-zinc-200">
-            <td class="py-2 pr-4">
-              <.link navigate={"#{@base}/forms/#{form.id}"} class="hover:underline">
-                {form.name}
-              </.link>
-              <span class="block font-mono text-[10px] text-zinc-400">{form.id}</span>
-            </td>
-            <td class="py-2 pr-4 text-xs text-zinc-500">{form.description}</td>
-            <td class="py-2 pr-4 text-xs text-zinc-500">
-              {Calendar.strftime(form.inserted_at, "%Y-%m-%d %H:%M")}
-            </td>
-            <td class="py-2 text-right whitespace-nowrap">
-              <.link navigate={"#{@base}/forms/#{form.id}"} class="text-cyan-600 hover:underline">
-                Show
-              </.link>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <Slab.table
+        :if={!@empty?}
+        id="forms-table"
+        query={@query}
+        repo={Repo.repo()}
+        uri={@uri}
+        params={@table_params}
+      >
+        <:column :let={form} field={:name} sortable>
+          <.link navigate={"#{@base}/forms/#{form.id}"} class="hover:underline">
+            {form.name}
+          </.link>
+          <span class="block font-mono text-[10px] text-zinc-400">{form.id}</span>
+        </:column>
+        <:column :let={form} field={:description}>
+          <span class="text-xs text-zinc-500">{form.description}</span>
+        </:column>
+        <:column :let={form} field={:inserted_at} label="Created" sortable>
+          <span class="text-xs text-zinc-500">
+            {Calendar.strftime(form.inserted_at, "%Y-%m-%d %H:%M")}
+          </span>
+        </:column>
+        <:column :let={form} label="Actions">
+          <.link navigate={"#{@base}/forms/#{form.id}"} class="text-cyan-600 hover:underline">
+            Show
+          </.link>
+        </:column>
+        <:pagination per_page={10} />
+      </Slab.table>
     </div>
     """
   end

@@ -17,8 +17,12 @@ defmodule DemoWeb.AdminLive do
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
-    {:noreply, assign(socket, :path, Map.get(params, "path", []))}
+  def handle_params(params, uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:path, Map.get(params, "path", []))
+     |> assign(:params, params)
+     |> assign(:uri, uri)}
   end
 
   @impl true
@@ -35,7 +39,13 @@ defmodule DemoWeb.AdminLive do
         </header>
 
         <div id="admin-pages" class="rounded-lg border border-base-300 p-4">
-          <FormFlow.Web.router type="templates" path={@path} base="/admin" />
+          <FormFlow.Web.router
+            type="templates"
+            path={@path}
+            base="/admin"
+            uri={@uri}
+            params={@params}
+          />
         </div>
       </div>
     </Layouts.app>

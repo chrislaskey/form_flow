@@ -166,12 +166,16 @@ defmodule FormFlow.Data.Templates.Forms do
   never listed beside the catalog.
   """
   def list(app \\ "default") do
-    Repo.all(
-      from(f in Form,
-        where: is_nil(f.owner_graph_id) and f.app == ^app,
-        order_by: [asc: f.inserted_at]
-      )
-    )
+    Repo.all(from(f in catalog_query(app), order_by: [asc: f.inserted_at]))
+  end
+
+  @doc """
+  The catalog listing as a composable query: the app's reusable forms
+  (never owned ones), unordered — for callers like Slab's table in query
+  mode that layer their own ordering and pagination on top.
+  """
+  def catalog_query(app \\ "default") do
+    from(f in Form, where: is_nil(f.owner_graph_id) and f.app == ^app)
   end
 
   @doc "Lists a lineage's versions, drafts and published alike, newest first."
