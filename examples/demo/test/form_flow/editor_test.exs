@@ -5,7 +5,7 @@ defmodule Demo.FormFlowEditorTest do
 
   What can't be covered here is React itself — LiveViewTest has no JavaScript
   engine, so mounting the editor is a manual check at
-  http://localhost:4000/flows/new.
+  http://localhost:4001/flows/new.
   """
 
   use DemoWeb.ConnCase

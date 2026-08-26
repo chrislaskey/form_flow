@@ -30,8 +30,8 @@ PHX_NEW_VERSION="1.8.5"
 # and leaves a half-generated app behind. Fail loudly first instead.
 # Only listening sockets count — a browser tab holding a connection open is not
 # a running server.
-if command -v lsof >/dev/null && lsof -ti tcp:4000 -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Something is listening on port 4000 — stop the demo server first" >&2
+if command -v lsof >/dev/null && lsof -ti tcp:4001 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Something is listening on port 4001 — stop the demo server first" >&2
   exit 1
 fi
 
@@ -159,4 +159,4 @@ echo "Done. Run the demo with:"
 echo
 echo "    cd examples/demo && mix phx.server"
 echo
-echo "then open http://localhost:4000"
+echo "then open http://localhost:4001"

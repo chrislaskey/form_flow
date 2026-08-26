@@ -11,7 +11,7 @@ mix setup
 mix phx.server
 ```
 
-Then open [http://localhost:4000](http://localhost:4000):
+Then open [http://localhost:4001](http://localhost:4001):
 
 - `/` — the index: renders FormFlow's optional path-based router (mounted on
   the `/*path` catch-all, so `/forms` and friends land here too) and lists what
@@ -82,7 +82,7 @@ migration is proven to actually run.
 
 Stop the demo server before regenerating — the script deletes `demo/` and a
 running server (plus its asset watchers) keeps writing into it. The script
-checks port 4000 and aborts if something is listening.
+checks port 4001 and aborts if something is listening.
 
 ## Distribution note
 
