@@ -21,6 +21,23 @@ defmodule FormFlow.Data.Instances.Flows do
   def get(instance_flow_id), do: Repo.get(Instances.Flow, instance_flow_id)
 
   @doc """
+  Journeys, newest first, with `:flow` preloaded. `opts[:user_id]` narrows
+  to one creator — a query convenience for "my journeys" listings, not
+  access control: the library never enforces visibility.
+  """
+  def list(opts \\ []) do
+    query = from(i in Instances.Flow, order_by: [desc: i.inserted_at], preload: [:flow])
+
+    query =
+      case Keyword.get(opts, :user_id) do
+        nil -> query
+        user_id -> from(i in query, where: i.user_id == ^user_id)
+      end
+
+    Repo.all(query)
+  end
+
+  @doc """
   Creates a journey and its `created` event in one transaction.
 
   The journey's own `user_id` (the owner) comes from `attrs`; the event's
@@ -82,6 +99,18 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
+  The position a filler should go to next — the first available (or already
+  in-progress) form position in flow order, descending into subflows — or
+  nil when nothing is actionable. This is the after-submit redirect.
+  """
+  def next_path_position(%Instances.Flow{} = instance) do
+    Progress.next_path_position(
+      Templates.Flows.resolve_tree(instance.flow_id),
+      form_instances(instance)
+    )
+  end
+
+  @doc """
   The journey's stranded form instances: active (not superseded) instances
   whose `path` matches no position in the current tree. Accepts a
   `Templates.Flow` to sweep every journey of that root at once — one edit
@@ -131,7 +160,8 @@ defmodule FormFlow.Data.Instances.Flows do
     end)
   end
 
-  defp form_instances(%Instances.Flow{} = instance) do
+  @doc "All of a journey's form instances, superseded ones included."
+  def form_instances(%Instances.Flow{} = instance) do
     Repo.all(from(f in Instances.Form, where: f.instance_flow_id == ^instance.id))
   end
 

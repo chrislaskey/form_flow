@@ -16,9 +16,8 @@ defmodule FormFlow.Data.Instances.Flow do
   progress columns. It is derived by `FormFlow.Data.Instances.Progress`
   from the live tree and the journey's form instances, so a template edit
   can never desync it. `status` and `completed_at` are stamps, not caches:
-  facts at a moment, written by `FormFlow.Data.Instances.Flows.complete/2`
-  on the `labels_snapshot` model — they claim only their moment and are
-  never recomputed.
+  facts at a moment, written by `FormFlow.Data.Instances.Flows.complete/2` —
+  they claim only their moment and are never recomputed.
 
   A journey carries no scoping column. It does carry an owner: `user_id`,
   the creating user, an opaque host handle — any principal string, system

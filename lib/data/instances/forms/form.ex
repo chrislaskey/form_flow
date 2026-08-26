@@ -15,9 +15,11 @@ defmodule FormFlow.Data.Instances.Form do
 
   `data` holds the answers, keyed by field name, and holds *only* answers —
   progress, section state, and system markers never live inside it (hard
-  rule 5). `labels_snapshot` caches `%{field_name => label}` from the pinned
-  definition at completion, so a rename can't rewrite what an attestation
-  meant; it is not castable — completion machinery stamps it.
+  rule 5). What each question's label *said* at completion time is always
+  recoverable through the pin — the pinned definition is immutable.
+  (Denormalizing labels onto the instance at completion — a labels
+  snapshot — is a deliberately deferred optimization; see
+  `archive/plans/instances-next.md`.)
 
   `metadata` is an opaque host-app map: whatever the host wants to attach —
   including who a form instance concerns, until about-ness earns a named column.
@@ -55,7 +57,6 @@ defmodule FormFlow.Data.Instances.Form do
     field(:status, :string, default: "in_progress")
     field(:lock_version, :integer, default: 1)
     field(:data, :map, default: %{})
-    field(:labels_snapshot, :map, default: %{})
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
 
@@ -71,9 +72,9 @@ defmodule FormFlow.Data.Instances.Form do
   @doc """
   Builds a changeset for an instance form.
 
-  `labels_snapshot`, `status`, and `completed_at` are not castable — they
-  are stamped by completion machinery, never supplied by callers (the same
-  discipline planned for `FormFlow.Data.Instances.Flow`). Updates go
+  `status` and `completed_at` are not castable — they are stamped by
+  completion machinery, never supplied by callers (the same discipline as
+  `FormFlow.Data.Instances.Flow`). Updates go
   through the optimistic lock: two editors of one instance's `data` surface
   `Ecto.StaleEntryError` instead of a silent last-write-wins.
   """

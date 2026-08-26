@@ -86,7 +86,7 @@ defmodule DemoWeb.ReadmeLive do
             <.link navigate="/forms/new">Forms New</.link>
           </div>
           <div id="form-flow-router" class="rounded-lg border border-base-300 p-4">
-            <FormFlow.Web.router type="templates" path={@path} />
+            <FormFlow.Web.router type="templates" user_id="demo-admin" path={@path} />
           </div>
           <p class="text-sm text-base-content/70">
             <.link navigate={~p"/admin"} class="link">/admin</.link>

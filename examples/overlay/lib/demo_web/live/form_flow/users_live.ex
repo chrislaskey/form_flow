@@ -41,6 +41,7 @@ defmodule DemoWeb.FormFlowLive.Users do
 
         <div id="users-pages" class="rounded-lg border border-base-300 p-4">
           <FormFlow.Web.router
+            user_id="demo-user"
             uri={@uri}
             params={@params}
             path={@path}

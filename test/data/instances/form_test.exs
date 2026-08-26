@@ -88,17 +88,6 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert changeset.valid?
       assert Ecto.Changeset.get_field(changeset, :superseded_at) == nil
     end
-
-    test "labels_snapshot is not castable — completion machinery stamps it" do
-      changeset =
-        Instances.Form.changeset(%Instances.Form{}, %{
-          template_form_version_id: @version_id,
-          labels_snapshot: %{"first_name" => "First name"}
-        })
-
-      assert changeset.valid?
-      assert Ecto.Changeset.get_field(changeset, :labels_snapshot) == %{}
-    end
   end
 
   describe "Instances.Form.Event.changeset/2" do

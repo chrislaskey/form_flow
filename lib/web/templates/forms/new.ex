@@ -55,7 +55,6 @@ defmodule FormFlow.Web.Templates.Forms.New do
     {:ok,
      socket
      |> assign(assigns)
-     |> assign_new(:base, fn -> "" end)
      |> assign_new(:base, fn -> "" end)}
   end
 

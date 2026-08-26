@@ -27,8 +27,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Components.PublishDialog
   alias FormFlow.Web.Templates.Forms.Preview
-  alias FormFlow.Web.Templates.Forms.PublishDialog
 
   @impl true
   def mount(socket) do

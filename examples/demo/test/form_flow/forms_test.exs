@@ -30,9 +30,8 @@ defmodule Demo.FormFlowFormsTest do
       assert {:error, %Ecto.Changeset{}} = Forms.create(%{definition: %{}})
     end
 
-    test "list is the catalog: unowned forms for one app, oldest first" do
+    test "list is the catalog: unowned forms, oldest first" do
       {:ok, first} = Forms.create(%{name: "First"})
-      {:ok, _other_app} = Forms.create(%{name: "Elsewhere", app: "other"})
       {:ok, second} = Forms.create(%{name: "Second"})
 
       assert Enum.map(Forms.list(), & &1.id) == [first.id, second.id]
@@ -44,11 +43,11 @@ defmodule Demo.FormFlowFormsTest do
       assert {:ok, %Form{name: "After"}} = Forms.update(Forms.get(form.id), %{name: "After"})
     end
 
-    test "catalog names are unique per app" do
+    test "catalog names are unique" do
       {:ok, _} = Forms.create(%{name: "Enrollment"})
 
       assert {:error, changeset} = Forms.create(%{name: "Enrollment"})
-      assert %{app: _} = errors_on(changeset)
+      assert %{name: _} = errors_on(changeset)
     end
 
     test "delete removes versions then the lineage" do
@@ -462,17 +461,21 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   defp insert_instance(version, attrs \\ []) do
-    attrs =
-      Enum.into(attrs, %{
-        template_form_version_id: version.id,
-        data: %{},
-        status: "in_progress"
-      })
+    attrs = Enum.into(attrs, %{template_form_version_id: version.id, data: %{}})
+
+    # status/completed_at are stamp-only (never castable) — tests stamp them
+    # the way completion machinery does, with a bare change/2
+    {stamps, attrs} = Map.split(attrs, [:status, :completed_at])
 
     {:ok, instance} =
       FormFlowRepo.insert(Instances.Form.changeset(%Instances.Form{}, attrs))
 
-    instance
+    if stamps == %{} do
+      instance
+    else
+      {:ok, stamped} = FormFlowRepo.update(Ecto.Changeset.change(instance, stamps))
+      stamped
+    end
   end
 
   defp reload(instance), do: Instances.Forms.get(instance.id)

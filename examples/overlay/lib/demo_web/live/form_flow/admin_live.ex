@@ -41,6 +41,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
         <div id="admin-pages" class="rounded-lg border border-base-300 p-4">
           <FormFlow.Web.router
             type="templates"
+            user_id="demo-admin"
             uri={@uri}
             params={@params}
             path={@path}

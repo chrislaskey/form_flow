@@ -153,6 +153,36 @@ defmodule FormFlow.Data.Instances.ProgressTest do
     end
   end
 
+  describe "next_path_position/2" do
+    test "walks the flow in order: first available, then the one after" do
+      {tree, _start, form1, form2, _stop} = linear_flow()
+
+      assert Progress.next_path_position(tree, []) == [form1.id]
+
+      done_one = [form_instance([form1.id], "completed")]
+      assert Progress.next_path_position(tree, done_one) == [form2.id]
+
+      all_done = [form_instance([form2.id], "completed") | done_one]
+      assert Progress.next_path_position(tree, all_done) == nil
+    end
+
+    test "an in-progress form is the next stop — resume before advancing" do
+      {tree, _start, form1, _form2, _stop} = linear_flow()
+
+      instances = [form_instance([form1.id], "in_progress")]
+      assert Progress.next_path_position(tree, instances) == [form1.id]
+    end
+
+    test "descends into an available subflow" do
+      {outer, subflow, inner_form, _stop} = nested_flow()
+
+      assert Progress.next_path_position(outer, []) == [subflow.id, inner_form.id]
+
+      done = [form_instance([subflow.id, inner_form.id], "completed")]
+      assert Progress.next_path_position(outer, done) == nil
+    end
+  end
+
   describe "derive/2 stranding and supersession" do
     test "an instance whose path matches no position surfaces as stranded" do
       {tree, _start, form1, _form2, _stop} = linear_flow()

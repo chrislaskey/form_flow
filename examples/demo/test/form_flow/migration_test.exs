@@ -33,9 +33,9 @@ defmodule Demo.FormFlowMigrationTest do
              Repo.query(
                """
                INSERT INTO form_flow_instance_forms
-                 (id, app, template_form_version_id, status, data, labels_snapshot,
-                  metadata, inserted_at, updated_at)
-               VALUES (?, 'default', ?, 'in_progress', '{"name":"Ada"}', '{}', '{}', ?, ?)
+                 (id, template_form_version_id, status, data, metadata, path,
+                  inserted_at, updated_at)
+               VALUES (?, ?, 'in_progress', '{"name":"Ada"}', '{}', '[]', ?, ?)
                """,
                [instance_id, version_id, @timestamp, @timestamp]
              )
@@ -62,9 +62,9 @@ defmodule Demo.FormFlowMigrationTest do
       Repo.query(
         """
         INSERT INTO form_flow_instance_forms
-          (id, app, template_form_version_id, status, data, labels_snapshot,
-           metadata, inserted_at, updated_at)
-        VALUES (?, 'default', ?, 'in_progress', '{}', '{}', '{}', ?, ?)
+          (id, template_form_version_id, status, data, metadata, path,
+           inserted_at, updated_at)
+        VALUES (?, ?, 'in_progress', '{}', '{}', '[]', ?, ?)
         """,
         [Ecto.UUID.generate(), version_id, @timestamp, @timestamp]
       )
@@ -73,12 +73,12 @@ defmodule Demo.FormFlowMigrationTest do
              Repo.query("DELETE FROM form_flow_template_form_versions WHERE id = ?", [version_id])
   end
 
-  test "catalog names are unique per app; owned forms may repeat them" do
+  test "catalog names are unique; owned forms may repeat them" do
     {:ok, _} = insert_template("Enrollment")
 
-    # The partial unique index guards the catalog (owner_flow_id IS NULL)
+    # The partial unique index guards the catalog (owner_flow_id IS NULL) —
+    # one namespace, no app scoping
     assert {:error, _} = insert_template("Enrollment")
-    assert {:ok, _} = insert_template("Enrollment", app: "other-app")
 
     # Owned forms are outside the catalog — yearly copies repeat names freely
     {:ok, flow_id} = insert_flow()
@@ -88,17 +88,16 @@ defmodule Demo.FormFlowMigrationTest do
 
   defp insert_template(name, opts \\ []) do
     id = Ecto.UUID.generate()
-    app = Keyword.get(opts, :app, "default")
     owner_flow_id = Keyword.get(opts, :owner_flow_id)
 
     result =
       Repo.query(
         """
         INSERT INTO form_flow_template_forms
-          (id, app, name, owner_flow_id, inserted_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+          (id, name, owner_flow_id, inserted_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        [id, app, name, owner_flow_id, @timestamp, @timestamp]
+        [id, name, owner_flow_id, @timestamp, @timestamp]
       )
 
     with {:ok, _} <- result, do: {:ok, id}

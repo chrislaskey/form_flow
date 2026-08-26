@@ -61,6 +61,64 @@ defmodule FormFlow.Data.Instances.Progress do
     ends != [] and Enum.all?(ends, &completed?(&1, ctx, MapSet.new()))
   end
 
+  @doc """
+  The next actionable position: the first form position in flow order —
+  breadth-first from Start, descending into subflows the moment they are
+  reachable — whose status is `:available` or `:in_progress`. Returns its
+  path, or nil when nothing is actionable (journey done, or blocked).
+  """
+  @spec next_path_position(tree :: map() | nil, form_instances :: [struct()]) :: path() | nil
+  def next_path_position(tree, form_instances) do
+    statuses = derive(tree, form_instances)
+    search_flow(tree, [], statuses)
+  end
+
+  # One flow scope: build its edge/node lookups and scan it in flow order,
+  # starting the queue at its Start nodes.
+  defp search_flow(nil, _prefix, _statuses), do: nil
+
+  defp search_flow(tree, prefix, statuses) do
+    outgoing = Enum.group_by(tree.relationships, & &1.source_id)
+    nodes_by_id = Map.new(tree.nodes, &{&1.id, &1})
+    starts = for node <- tree.nodes, kind(node) == :start, do: node.id
+
+    first_actionable(starts, MapSet.new(), tree, prefix, statuses, outgoing, nodes_by_id)
+  end
+
+  # Scans a queue of node ids in flow order — breadth-first along the edges,
+  # so nearer positions win — returning the first actionable position: an
+  # available or in-progress form, or the first such position *inside* an
+  # actionable subflow (descend the moment one is reachable).
+  defp first_actionable([], _seen, _tree, _prefix, _statuses, _outgoing, _nodes_by_id), do: nil
+
+  defp first_actionable([id | rest], seen, tree, prefix, statuses, outgoing, nodes_by_id) do
+    if MapSet.member?(seen, id) do
+      first_actionable(rest, seen, tree, prefix, statuses, outgoing, nodes_by_id)
+    else
+      seen = MapSet.put(seen, id)
+      node = nodes_by_id[id]
+      position = prefix ++ [id]
+      status = statuses[position]
+
+      hit =
+        case kind(node) do
+          :form when status in [:available, :in_progress] ->
+            position
+
+          :subflow when status in [:available, :in_progress] ->
+            search_flow(tree.subflows[id], position, statuses)
+
+          _other ->
+            nil
+        end
+
+      successors = for relationship <- Map.get(outgoing, id, []), do: relationship.target_id
+
+      hit ||
+        first_actionable(rest ++ successors, seen, tree, prefix, statuses, outgoing, nodes_by_id)
+    end
+  end
+
   defp active_by_path(form_instances) do
     for instance <- form_instances,
         is_nil(instance.superseded_at),

@@ -11,6 +11,7 @@ defmodule FormFlow.Web.Router do
 
   use Phoenix.Component
 
+  alias FormFlow.Web.Instances
   alias FormFlow.Web.Templates.Flows
   alias FormFlow.Web.Templates.Forms
 
@@ -36,6 +37,16 @@ defmodule FormFlow.Web.Router do
   | `/flows/:root/nodes/:node_id/form/versions/:version_id` | `FormFlow.Web.Templates.Forms.Show` |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` |
 
+  The routes above serve `type="templates"` (the admin editor).
+  `type="instances"` (the default) serves the user-facing side:
+
+  | Path                                  | LiveComponent |
+  |---------------------------------------|---------------|
+  | `/`                                   | a landing linking Journeys |
+  | `/journeys`                           | `FormFlow.Web.Instances.Flows.Index` (the user's journeys + starting new ones) |
+  | `/journeys/:id`                       | `FormFlow.Web.Instances.Flows.Show` (positions and their progress) |
+  | `/journeys/:id/instances/:instance_id`| `FormFlow.Web.Instances.Forms.Show` (the form itself) |
+
   Drill-in URLs carry the *node* id, not the child flow's or form's id — a
   reusable subflow or form used twice in one root is two nodes, so two
   unambiguous URLs. Versions get an explicit id suffix because several drafts
@@ -52,6 +63,14 @@ defmodule FormFlow.Web.Router do
   attr(:path, :any, required: true, doc: "the remaining path, as a string or `*path` segments")
 
   attr(:base, :string, default: "")
+
+  attr(:user_id, :string,
+    required: true,
+    doc:
+      "opaque host identity of the current user — stamped as the creator " <>
+        "of journeys started here and as the acting user on instance " <>
+        "events. Never interpreted by the library; auth stays the host's job"
+  )
 
   attr(:config, :atom,
     default: nil,
@@ -187,9 +206,59 @@ defmodule FormFlow.Web.Router do
           <% nil -> %>
             <%!-- not a /forms path --%>
         <% end %>
+      <% else %>
+        <div :if={segments(@path) == []}>
+          <h2 class="mb-2 text-sm font-semibold">Instances</h2>
+          <ul class="space-y-1 text-sm">
+            <li>
+              <.link navigate={"#{@base}/journeys"} class="text-cyan-600 hover:underline">
+                Journeys
+              </.link>
+              <span class="text-xs text-zinc-500">— flows being filled out</span>
+            </li>
+          </ul>
+        </div>
+
+        <%= case journeys_route(@path) do %>
+          <% :index -> %>
+            <.live_component
+              module={Instances.Flows.Index}
+              id="journeys-index"
+              base={@base}
+              user_id={@user_id}
+            />
+          <% {:show, id} -> %>
+            <.live_component
+              module={Instances.Flows.Show}
+              id="journeys-show"
+              journey_id={id}
+              base={@base}
+              user_id={@user_id}
+            />
+          <% {:fill, journey_id, instance_id} -> %>
+            <.live_component
+              module={Instances.Forms.Show}
+              id="instance-forms-show"
+              journey_id={journey_id}
+              instance_id={instance_id}
+              base={@base}
+              user_id={@user_id}
+            />
+          <% nil -> %>
+            <%!-- not a /journeys path --%>
+        <% end %>
       <% end %>
     </div>
     """
+  end
+
+  defp journeys_route(path) do
+    case segments(path) do
+      ["journeys"] -> :index
+      ["journeys", id] -> {:show, id}
+      ["journeys", journey_id, "instances", instance_id] -> {:fill, journey_id, instance_id}
+      _other -> nil
+    end
   end
 
   defp flows_route(path) do

@@ -1,4 +1,4 @@
-defmodule FormFlow.Web.Templates.Forms.PublishDialog do
+defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.PublishDialog` function component renders the
   publish dialog shared by the form Show and Edit pages: the three
