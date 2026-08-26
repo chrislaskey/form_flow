@@ -40,7 +40,7 @@ defmodule FormFlow.Data.Templates.Forms do
       declares its fields (`"fields" => [%{"name" => ...}, ...]`); a
       definition without declared fields prunes nothing rather than
       everything.
-    * `actor:` — opaque host-app identity stamped into every event
+    * `user_id:` — opaque host-app identity stamped into every event
 
   The default preset is `:small_fix` (keep / untouched) — the least
   surprising for existing users. Every pin move writes an append-only
@@ -363,7 +363,7 @@ defmodule FormFlow.Data.Templates.Forms do
       completed: Keyword.get(opts, :completed, base.completed),
       renames: Keyword.get(opts, :renames, %{}),
       prune: Keyword.get(opts, :prune, false),
-      actor: Keyword.get(opts, :actor)
+      user_id: Keyword.get(opts, :user_id)
     }
 
     unless policy.in_progress in @in_progress_policies do
@@ -479,7 +479,7 @@ defmodule FormFlow.Data.Templates.Forms do
       from_version_id: instance.template_form_version_id,
       to_version_id: published.id,
       data_snapshot: data_snapshot,
-      actor: policy.actor
+      user_id: policy.user_id
     }
 
     case Repo.insert(Event.changeset(%Event{}, event_attrs)) do

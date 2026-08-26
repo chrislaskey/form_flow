@@ -94,7 +94,6 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:status, :string, null: false, default: "in_progress")
       add(:data, :map, null: false)
       add(:labels_snapshot, :map, null: false)
-      add(:subject, :string)
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
 
@@ -103,7 +102,6 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_instance_forms, [:template_form_version_id]))
     create_if_not_exists(index(:form_flow_instance_forms, [:app, :status]))
-    create_if_not_exists(index(:form_flow_instance_forms, [:subject]))
 
     create_if_not_exists table(:form_flow_instance_form_events, primary_key: false) do
       add(:id, :uuid, primary_key: true)
@@ -127,7 +125,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       )
 
       add(:data_snapshot, :map, null: false)
-      add(:actor, :string)
+      add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)
     end

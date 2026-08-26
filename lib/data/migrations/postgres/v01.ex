@@ -196,7 +196,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:status, :string, null: false, default: "in_progress")
       add(:data, :map, null: false, default: %{})
       add(:labels_snapshot, :map, null: false, default: %{})
-      add(:subject, :string)
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
 
@@ -211,7 +210,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       index(:form_flow_instance_forms, [:app, :status], prefix: context.prefix)
     )
 
-    create_if_not_exists(index(:form_flow_instance_forms, [:subject], prefix: context.prefix))
 
     create_if_not_exists table(:form_flow_instance_form_events,
                            primary_key: false,
@@ -250,7 +248,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       )
 
       add(:data_snapshot, :map, null: false, default: %{})
-      add(:actor, :string)
+      add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)
     end

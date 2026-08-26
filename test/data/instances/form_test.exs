@@ -13,7 +13,6 @@ defmodule FormFlow.Data.Instances.FormTest do
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
           data: %{"first_name" => "Ada"},
-          subject: "user-123",
           metadata: %{"source" => "import"}
         })
 
@@ -62,7 +61,7 @@ defmodule FormFlow.Data.Instances.FormTest do
           from_version_id: @version_id,
           to_version_id: Ecto.UUID.generate(),
           data_snapshot: %{"old" => "answer"},
-          actor: "admin-7"
+          user_id: "admin-7"
         })
 
       assert changeset.valid?

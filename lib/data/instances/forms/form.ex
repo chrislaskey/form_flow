@@ -19,8 +19,9 @@ defmodule FormFlow.Data.Instances.Form do
   definition at completion, so a rename can't rewrite what an attestation
   meant; it is not castable — completion machinery stamps it.
 
-  `subject` and `metadata` are opaque host-app handles: whose fill this is,
-  and whatever else the host wants to attach. FormFlow never interprets them.
+  `metadata` is an opaque host-app map: whatever the host wants to attach —
+  including who a fill concerns, until about-ness earns a named column.
+  FormFlow never interprets it.
   """
 
   use Ecto.Schema
@@ -42,7 +43,6 @@ defmodule FormFlow.Data.Instances.Form do
     field(:status, :string, default: "in_progress")
     field(:data, :map, default: %{})
     field(:labels_snapshot, :map, default: %{})
-    field(:subject, :string)
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
 
@@ -64,7 +64,6 @@ defmodule FormFlow.Data.Instances.Form do
       :template_form_version_id,
       :status,
       :data,
-      :subject,
       :metadata,
       :completed_at
     ])
