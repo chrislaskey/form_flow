@@ -126,7 +126,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   Pass `owner_flow_id:` to make the copy a flow tree's private property —
   the normal case; a copy without an owner lands in the catalog and must not
-  collide on `(app, name)`.
+  collide on `name`.
   """
   def copy(%Form{} = form, opts \\ []) do
     owner_flow_id = Keyword.get(opts, :owner_flow_id)
@@ -135,7 +135,6 @@ defmodule FormFlow.Data.Templates.Forms do
       changeset =
         %Form{}
         |> Form.changeset(%{
-          app: form.app,
           name: form.name,
           description: form.description,
           owner_flow_id: owner_flow_id
@@ -158,22 +157,22 @@ defmodule FormFlow.Data.Templates.Forms do
   def get_version(version_id), do: Repo.get(Version, version_id)
 
   @doc """
-  Lists the catalog: reusable forms (no owner), for one app, oldest first.
+  Lists the catalog: reusable forms (no owner), oldest first.
 
   Owned forms live inside their flow trees and are reached by drill-in,
   never listed beside the catalog.
   """
-  def list(app \\ "default") do
-    Repo.all(from(f in catalog_query(app), order_by: [asc: f.inserted_at]))
+  def list do
+    Repo.all(from(f in catalog_query(), order_by: [asc: f.inserted_at]))
   end
 
   @doc """
-  The catalog listing as a composable query: the app's reusable forms
-  (never owned ones), unordered — for callers like Slab's table in query
-  mode that layer their own ordering and pagination on top.
+  The catalog listing as a composable query: the reusable forms (never
+  owned ones), unordered — for callers like Slab's table in query mode
+  that layer their own ordering and pagination on top.
   """
-  def catalog_query(app \\ "default") do
-    from(f in Form, where: is_nil(f.owner_flow_id) and f.app == ^app)
+  def catalog_query do
+    from(f in Form, where: is_nil(f.owner_flow_id))
   end
 
   @doc "Lists a lineage's versions, drafts and published alike, newest first."

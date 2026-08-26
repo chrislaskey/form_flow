@@ -12,8 +12,6 @@ defmodule FormFlow.Config.Context do
 
   ## Fields
 
-    * `:app` - the tenant scoping string (see `FormFlow.Web.Router`'s `:app`
-      attr), or `nil` if not yet known
     * `:user_id` - the acting user's opaque host-app identity, or `nil` — not
       populated anywhere yet; the web layer has no current-user concept today
     * `:flow` - the root `FormFlow.Data.Templates.Flow` — the top-level
@@ -36,7 +34,6 @@ defmodule FormFlow.Config.Context do
   """
 
   defstruct [
-    :app,
     :user_id,
     :flow,
     :subflow,
@@ -46,7 +43,6 @@ defmodule FormFlow.Config.Context do
   ]
 
   @type t :: %__MODULE__{
-          app: String.t() | nil,
           user_id: String.t() | nil,
           flow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow: FormFlow.Data.Templates.Flow.t() | nil,

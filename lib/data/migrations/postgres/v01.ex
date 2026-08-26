@@ -33,9 +33,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #   * `template_forms.copied_from_form_id` — provenance: which lineage this
   #     one was copied from (yearly rollover), for cross-cycle identity and
   #     future prefill.
-  #   * The `(app, name)` unique index is scoped to the catalog
-  #     (`owner_flow_id IS NULL`): owned forms may repeat names across yearly
-  #     copies; catalog forms stay unambiguous in every picker.
+  #   * The `(name)` unique index is scoped to the catalog
+  #     (`owner_flow_id IS NULL`) — one namespace: owned forms may repeat
+  #     names across yearly copies; catalog forms stay unambiguous in every
+  #     picker.
   #   * `template_form_versions.version` — NULL until publish. The plain
   #     unique index works because multiple NULLs never collide, so published
   #     versions get uniqueness with no partial-index or CHECK logic. Status
@@ -50,6 +51,26 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     status changes, with prior data snapshotted when a migration discards
   #     it. `:restrict` from events to instances: deleting an instance goes
   #     through an explicit delete API that removes events deliberately.
+  #   * `instance_flows` — one traversal of a root flow (a journey). The root
+  #     is referenced live — no flow versioning, edits propagate to journeys
+  #     in flight — and `:restrict`ed: journeys can never be orphaned by
+  #     template deletion. `user_id` is the creating user, stamped and
+  #     immutable. Traversal state is never stored; it is derived
+  #     (FormFlow.Data.Instances.Progress).
+  #   * `instance_forms.instance_flow_id` + `path` — the visit identity of an
+  #     in-journey form instance: the chain of node ids from the root flow
+  #     through each embedding subflow node to the form node itself.
+  #     NULL/empty = a standalone fill. Deliberately no node FK: editor saves
+  #     replace all nodes (clear_contents), so any FK action would fire on
+  #     every routine save — and a node column would be a derivable copy of
+  #     last(path).
+  #   * `instance_forms.superseded_at` — stamped by strand reconciliation on
+  #     the old instance when its successor is created; derivation skips
+  #     superseded rows. The unique index is scoped to active rows: one
+  #     *active* form instance per visit, while superseded rows remain as
+  #     attestation records that never block a revived path.
+  #   * `instance_flow_events` — the journey's append-only audit, mirroring
+  #     `instance_form_events` discipline (`:restrict`, explicit deletes).
   #   * `nodes.subflow_id` — the reference: this node embeds that flow. NULL
   #     on form nodes. `on_delete: :nothing` on purpose: deletion protection
   #     lives in FormFlow.Data.Templates.Flows, where it can refuse with a friendly
@@ -95,7 +116,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
                            prefix: context.prefix
                          ) do
       add(:id, :uuid, primary_key: true)
-      add(:app, :string, null: false, default: "default")
       add(:name, :string, null: false)
       add(:description, :text)
 
@@ -117,13 +137,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     end
 
     create_if_not_exists(
-      unique_index(:form_flow_template_forms, [:app, :name],
+      unique_index(:form_flow_template_forms, [:name],
         where: "owner_flow_id IS NULL",
         prefix: context.prefix
       )
     )
-
-    create_if_not_exists(index(:form_flow_template_forms, [:app], prefix: context.prefix))
 
     create_if_not_exists(
       index(:form_flow_template_forms, [:owner_flow_id], prefix: context.prefix)
@@ -176,12 +194,34 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       )
     )
 
+    create_if_not_exists table(:form_flow_instance_flows,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :flow_id,
+        references(:form_flow_flows, type: :uuid, on_delete: :restrict, prefix: context.prefix),
+        null: false
+      )
+
+      add(:status, :string, null: false, default: "in_progress")
+      add(:user_id, :string)
+      add(:metadata, :map, null: false, default: %{})
+      add(:completed_at, :utc_datetime_usec)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_instance_flows, [:flow_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_instance_flows, [:status], prefix: context.prefix))
+
     create_if_not_exists table(:form_flow_instance_forms,
                            primary_key: false,
                            prefix: context.prefix
                          ) do
       add(:id, :uuid, primary_key: true)
-      add(:app, :string, null: false, default: "default")
 
       add(
         :template_form_version_id,
@@ -200,6 +240,18 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
 
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        )
+      )
+
+      add(:path, {:array, :text}, null: false, default: [])
+      add(:superseded_at, :utc_datetime_usec)
+
       timestamps(type: :utc_datetime_usec)
     end
 
@@ -208,8 +260,19 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     )
 
     create_if_not_exists(
-      index(:form_flow_instance_forms, [:app, :status], prefix: context.prefix)
+      index(:form_flow_instance_forms, [:instance_flow_id], prefix: context.prefix)
     )
+
+    # One *active* form instance per visit — superseded rows stay as
+    # attestation records without blocking a revived path from being filled
+    create_if_not_exists(
+      unique_index(:form_flow_instance_forms, [:instance_flow_id, :path],
+        where: "instance_flow_id IS NOT NULL AND superseded_at IS NULL",
+        prefix: context.prefix
+      )
+    )
+
+    create_if_not_exists(index(:form_flow_instance_forms, [:status], prefix: context.prefix))
 
     create_if_not_exists table(:form_flow_instance_form_events,
                            primary_key: false,
@@ -255,6 +318,33 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(
       index(:form_flow_instance_form_events, [:instance_form_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists table(:form_flow_instance_flow_events,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        ),
+        null: false
+      )
+
+      add(:event, :string, null: false)
+      add(:snapshot, :map, null: false, default: %{})
+      add(:user_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(
+      index(:form_flow_instance_flow_events, [:instance_flow_id], prefix: context.prefix)
     )
 
     create_if_not_exists table(:form_flow_nodes,
@@ -374,8 +464,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   def down(context) do
     drop_if_exists(table(:form_flow_relationships, prefix: context.prefix))
     drop_if_exists(table(:form_flow_nodes, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_instance_flow_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_form_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_forms, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_instance_flows, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_form_versions, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_forms, prefix: context.prefix))
     drop_if_exists(table(:form_flow_flows, prefix: context.prefix))

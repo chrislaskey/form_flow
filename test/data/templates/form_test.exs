@@ -17,14 +17,12 @@ defmodule FormFlow.Data.Templates.FormTest do
 
     changeset =
       Form.changeset(%Form{}, %{
-        app: "taxes",
         name: "W-2 Details",
         description: "Wages and withholding",
         owner_flow_id: owner_id
       })
 
     assert changeset.valid?
-    assert changeset.changes.app == "taxes"
     assert changeset.changes.description == "Wages and withholding"
     assert changeset.changes.owner_flow_id == owner_id
   end

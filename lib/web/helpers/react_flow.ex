@@ -184,6 +184,12 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     data |> Phoenix.json_library().encode!() |> Phoenix.json_library().decode!()
   end
 
+  # Existing UUIDs pass through unchanged — a load-bearing invariant, not a
+  # convenience: form-instance `path`s (the visit identity of in-journey
+  # fills) reference node ids, so a save that re-idented existing nodes
+  # would strand every in-flight journey (instances plan, "path
+  # stability"). Only non-UUID ids — ReactFlow's temp ids for newly added
+  # nodes — get fresh UUIDs.
   defp uuid(id) do
     case Ecto.UUID.cast(id) do
       {:ok, id} -> id

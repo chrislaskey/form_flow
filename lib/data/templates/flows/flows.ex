@@ -44,6 +44,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   import Ecto.Query
 
+  alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flow
@@ -238,7 +239,12 @@ defmodule FormFlow.Data.Templates.Flows do
   Deletes a flow, everything it owns, and their nodes and relationships.
 
   Refused with an error changeset while other flows still reference the flow
-  as a subflow — remove those references (or `duplicate/2` first) and retry.
+  as a subflow — remove those references (or `duplicate/2` first) and retry —
+  or while journeys have been started against it: journeys reference their
+  root live and can never be orphaned by template deletion (the `:restrict`
+  FK on `instance_flows.flow_id` is the database backstop; this guard gives
+  the friendly error first). Note the owned-forms guard alone would miss a
+  flow built entirely from catalog forms.
   """
   def delete(%Flow{} = flow) do
     Repo.transaction(fn ->
@@ -252,15 +258,61 @@ defmodule FormFlow.Data.Templates.Flows do
           from(n in Node, where: n.subflow_id == ^flow.id and n.flow_id not in ^tree_ids)
         )
 
-      if referenced? do
-        flow
-        |> Ecto.Changeset.change()
-        |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
-        |> Repo.rollback()
-      else
-        delete_tree_with_owned_forms(flow, tree_ids)
+      journeys? = Repo.exists?(from(i in Instances.Flow, where: i.flow_id == ^flow.id))
+
+      cond do
+        journeys? ->
+          flow
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.add_error(
+            :id,
+            "cannot be deleted: journeys have been started against it"
+          )
+          |> Repo.rollback()
+
+        referenced? ->
+          flow
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
+          |> Repo.rollback()
+
+        true ->
+          delete_tree_with_owned_forms(flow, tree_ids)
       end
     end)
+  end
+
+  @doc """
+  The flow aggregate with subflow references resolved, recursively — the
+  tree `FormFlow.Data.Instances.Progress` derives against. Returns
+  `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`, or
+  `nil` for an unknown id.
+
+  A seen-set guards against reference cycles (a cyclic reference resolves
+  to no subtree); a repeated *sibling* reference — the diamond — still
+  resolves at each position, as it must: each position is a distinct
+  traversal.
+  """
+  def resolve_tree(flow_id), do: do_resolve_tree(flow_id, MapSet.new())
+
+  defp do_resolve_tree(flow_id, seen) do
+    case get(flow_id) do
+      nil ->
+        nil
+
+      %Flow{} = flow ->
+        seen = MapSet.put(seen, flow.id)
+
+        subflows =
+          for node <- flow.nodes,
+              node.subflow_id,
+              not MapSet.member?(seen, node.subflow_id),
+              into: %{} do
+            {node.id, do_resolve_tree(node.subflow_id, seen)}
+          end
+
+        %{flow: flow, nodes: flow.nodes, relationships: flow.relationships, subflows: subflows}
+    end
   end
 
   # Owned forms are deleted explicitly — their owner FK nilifies on flow

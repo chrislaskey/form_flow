@@ -31,7 +31,6 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists table(:form_flow_template_forms, primary_key: false) do
       add(:id, :uuid, primary_key: true)
-      add(:app, :string, null: false, default: "default")
       add(:name, :string, null: false)
       add(:description, :text)
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :nilify_all))
@@ -45,10 +44,9 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     end
 
     create_if_not_exists(
-      unique_index(:form_flow_template_forms, [:app, :name], where: "owner_flow_id IS NULL")
+      unique_index(:form_flow_template_forms, [:name], where: "owner_flow_id IS NULL")
     )
 
-    create_if_not_exists(index(:form_flow_template_forms, [:app]))
     create_if_not_exists(index(:form_flow_template_forms, [:owner_flow_id]))
 
     create_if_not_exists table(:form_flow_template_form_versions, primary_key: false) do
@@ -81,9 +79,28 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_template_form_versions, [:template_form_id, :status]))
 
+    create_if_not_exists table(:form_flow_instance_flows, primary_key: false) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :flow_id,
+        references(:form_flow_flows, type: :uuid, on_delete: :restrict),
+        null: false
+      )
+
+      add(:status, :string, null: false, default: "in_progress")
+      add(:user_id, :string)
+      add(:metadata, :map, null: false)
+      add(:completed_at, :utc_datetime_usec)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_instance_flows, [:flow_id]))
+    create_if_not_exists(index(:form_flow_instance_flows, [:status]))
+
     create_if_not_exists table(:form_flow_instance_forms, primary_key: false) do
       add(:id, :uuid, primary_key: true)
-      add(:app, :string, null: false, default: "default")
 
       add(
         :template_form_version_id,
@@ -98,11 +115,27 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
 
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows, type: :uuid, on_delete: :restrict)
+      )
+
+      add(:path, {:array, :string}, null: false)
+      add(:superseded_at, :utc_datetime_usec)
+
       timestamps(type: :utc_datetime_usec)
     end
 
     create_if_not_exists(index(:form_flow_instance_forms, [:template_form_version_id]))
-    create_if_not_exists(index(:form_flow_instance_forms, [:app, :status]))
+    create_if_not_exists(index(:form_flow_instance_forms, [:status]))
+    create_if_not_exists(index(:form_flow_instance_forms, [:instance_flow_id]))
+
+    # One *active* form instance per visit (superseded rows never block)
+    create_if_not_exists(
+      unique_index(:form_flow_instance_forms, [:instance_flow_id, :path],
+        where: "instance_flow_id IS NOT NULL AND superseded_at IS NULL"
+      )
+    )
 
     create_if_not_exists table(:form_flow_instance_form_events, primary_key: false) do
       add(:id, :uuid, primary_key: true)
@@ -132,6 +165,24 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     end
 
     create_if_not_exists(index(:form_flow_instance_form_events, [:instance_form_id]))
+
+    create_if_not_exists table(:form_flow_instance_flow_events, primary_key: false) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows, type: :uuid, on_delete: :restrict),
+        null: false
+      )
+
+      add(:event, :string, null: false)
+      add(:snapshot, :map, null: false)
+      add(:user_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_instance_flow_events, [:instance_flow_id]))
 
     create_if_not_exists table(:form_flow_nodes, primary_key: false) do
       add(:id, :uuid, primary_key: true)
@@ -194,8 +245,10 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
   def down(_context) do
     drop_if_exists(table(:form_flow_relationships))
     drop_if_exists(table(:form_flow_nodes))
+    drop_if_exists(table(:form_flow_instance_flow_events))
     drop_if_exists(table(:form_flow_instance_form_events))
     drop_if_exists(table(:form_flow_instance_forms))
+    drop_if_exists(table(:form_flow_instance_flows))
     drop_if_exists(table(:form_flow_template_form_versions))
     drop_if_exists(table(:form_flow_template_forms))
     drop_if_exists(table(:form_flow_flows))

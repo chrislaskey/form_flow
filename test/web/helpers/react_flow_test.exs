@@ -15,6 +15,14 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
   defp encode(data), do: data |> ReactFlow.to_json() |> Jason.decode!()
 
   describe "to_json/1" do
+    test "keeps existing node UUIDs stable — form-instance paths depend on it" do
+      id = Ecto.UUID.generate()
+
+      %{nodes: [saved]} = ReactFlow.to_flow_attrs(%{"nodes" => [%{"id" => id}], "edges" => []})
+
+      assert saved.id == id
+    end
+
     test "passes a node through unchanged" do
       assert %{"nodes" => [node]} = encode(%{nodes: [@node], edges: []})
 

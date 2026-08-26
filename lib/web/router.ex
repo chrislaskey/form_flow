@@ -51,7 +51,6 @@ defmodule FormFlow.Web.Router do
   attr(:type, :string, values: ["instances", "templates"], default: "instances")
   attr(:path, :any, required: true, doc: "the remaining path, as a string or `*path` segments")
 
-  attr(:app, :string, default: "default")
   attr(:base, :string, default: "")
 
   attr(:config, :atom,
@@ -110,24 +109,22 @@ defmodule FormFlow.Web.Router do
             <.live_component
               module={Flows.Index}
               id="flows-index"
-              app={@app}
               base={@base}
               uri={@uri}
               params={@params}
             />
           <% :new -> %>
-            <.live_component module={Flows.New} id="flows-new" app={@app} base={@base} />
+            <.live_component module={Flows.New} id="flows-new" base={@base} />
           <% {:show, id} -> %>
-            <.live_component module={Flows.Show} id="flows-show" flow_id={id} app={@app} base={@base} />
+            <.live_component module={Flows.Show} id="flows-show" flow_id={id} base={@base} />
           <% {:edit, id} -> %>
-            <.live_component module={Flows.Edit} id="flows-edit" flow_id={id} app={@app} base={@base} />
+            <.live_component module={Flows.Edit} id="flows-edit" flow_id={id} base={@base} />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
               module={Flows.Show}
               id="flows-show"
               root_id={root_id}
               node_id={node_id}
-              app={@app}
               base={@base}
             />
           <% {:node_edit, root_id, node_id} -> %>
@@ -136,7 +133,6 @@ defmodule FormFlow.Web.Router do
               id="flows-edit"
               root_id={root_id}
               node_id={node_id}
-              app={@app}
               base={@base}
             />
           <% nil -> %>
@@ -148,20 +144,18 @@ defmodule FormFlow.Web.Router do
             <.live_component
               module={Forms.Index}
               id="forms-index"
-              app={@app}
               base={@base}
               uri={@uri}
               params={@params}
             />
           <% :new -> %>
-            <.live_component module={Forms.New} id="forms-new" app={@app} base={@base} />
+            <.live_component module={Forms.New} id="forms-new" base={@base} />
           <% {:show, form_id, version_id} -> %>
             <.live_component
               module={Forms.Show}
               id="forms-show"
               form_id={form_id}
               version_id={version_id}
-              app={@app}
               base={@base}
             />
           <% {:edit, form_id, version_id} -> %>
@@ -170,7 +164,6 @@ defmodule FormFlow.Web.Router do
               id="forms-edit"
               form_id={form_id}
               version_id={version_id}
-              app={@app}
               base={@base}
             />
           <% {:node_show, root_id, node_id, version_id} -> %>
@@ -180,7 +173,6 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               version_id={version_id}
-              app={@app}
               base={@base}
             />
           <% {:node_edit, root_id, node_id, version_id} -> %>
@@ -190,7 +182,6 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               version_id={version_id}
-              app={@app}
               base={@base}
             />
           <% nil -> %>

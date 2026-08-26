@@ -31,8 +31,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
   def update(%{event: "create", payload: payload}, socket) do
     attrs = %{
       name: payload.data[:name],
-      description: payload.data[:description],
-      app: socket.assigns.app
+      description: payload.data[:description]
     }
 
     case Forms.create(attrs) do
@@ -44,7 +43,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
       {:error, %Ecto.Changeset{errors: errors}} ->
         message =
-          if Keyword.has_key?(errors, :app),
+          if Keyword.has_key?(errors, :name),
             do: "A form with that name already exists.",
             else: "Could not create the form. Please try again."
 
@@ -57,7 +56,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
      socket
      |> assign(assigns)
      |> assign_new(:base, fn -> "" end)
-     |> assign_new(:app, fn -> "default" end)}
+     |> assign_new(:base, fn -> "" end)}
   end
 
   @impl true

@@ -22,12 +22,26 @@ defmodule FormFlow.Data.Instances.Form do
   `metadata` is an opaque host-app map: whatever the host wants to attach —
   including who a form instance concerns, until about-ness earns a named column.
   FormFlow never interprets it.
+
+  An in-journey form instance carries its visit identity: `instance_flow_id`
+  and `path` — the chain of node ids from the root flow through each
+  embedding subflow node down to the form node itself — both present or
+  both absent (a standalone fill). `path` is a snapshot stamped at creation
+  through `visit_changeset/4`, never castable, never updated; there is
+  deliberately no node FK beside it (a derivable copy of `last(path)` that
+  no FK action would survive — editor saves replace all nodes). Stranded is
+  not a column state: `FormFlow.Data.Instances.Progress` derives it when a
+  path matches no position in the current tree. `superseded_at` is stamped
+  by strand reconciliation on a replaced instance; derivation skips
+  superseded rows, and the partial unique index enforces one *active*
+  instance per visit.
   """
 
   use Ecto.Schema
 
   import Ecto.Changeset
 
+  alias FormFlow.Data.Instances
   alias FormFlow.Data.Templates.Form.Version
 
   @statuses ~w(in_progress completed)
@@ -36,8 +50,6 @@ defmodule FormFlow.Data.Instances.Form do
   @foreign_key_type :binary_id
 
   schema "form_flow_instance_forms" do
-    field(:app, :string, default: "default")
-
     belongs_to(:template_form_version, Version, foreign_key: :template_form_version_id)
 
     field(:status, :string, default: "in_progress")
@@ -46,6 +58,10 @@ defmodule FormFlow.Data.Instances.Form do
     field(:labels_snapshot, :map, default: %{})
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
+
+    belongs_to(:instance_flow, Instances.Flow, foreign_key: :instance_flow_id)
+    field(:path, {:array, :string}, default: [])
+    field(:superseded_at, :utc_datetime_usec)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -64,14 +80,62 @@ defmodule FormFlow.Data.Instances.Form do
   def changeset(instance, attrs \\ %{}) do
     instance
     |> cast(attrs, [
-      :app,
+      :template_form_version_id,
+      :instance_flow_id,
+      :data,
+      :metadata
+    ])
+    |> finalize()
+  end
+
+  @doc """
+  Builds a changeset for an in-journey form instance: `changeset/2` plus
+  the stamped visit identity. `path` is never castable from external
+  input — the runner supplies it here, at creation, and it is immutable
+  afterwards.
+  """
+  def visit_changeset(instance, attrs, instance_flow_id, path) when is_list(path) do
+    instance
+    |> cast(attrs, [
       :template_form_version_id,
       :data,
       :metadata
     ])
+    |> put_change(:instance_flow_id, instance_flow_id)
+    |> put_change(:path, path)
+    |> finalize()
+  end
+
+  defp finalize(changeset) do
+    changeset
     |> validate_required([:template_form_version_id])
-    |> validate_inclusion(:status, @statuses)
+    |> validate_visit_identity()
     |> optimistic_lock(:lock_version)
     |> foreign_key_constraint(:template_form_version_id)
+    |> foreign_key_constraint(:instance_flow_id)
+    |> unique_constraint([:instance_flow_id, :path])
+  end
+
+  # The visit identity is both-or-neither: standalone instances carry no
+  # journey and no path, in-journey instances carry both. The partial
+  # unique index (scoped to active in-journey rows) cannot catch the
+  # orphaned-path half by itself.
+  defp validate_visit_identity(changeset) do
+    instance_flow_id = get_field(changeset, :instance_flow_id)
+    path = get_field(changeset, :path) || []
+
+    cond do
+      is_nil(instance_flow_id) and path == [] ->
+        changeset
+
+      not is_nil(instance_flow_id) and path != [] ->
+        changeset
+
+      is_nil(instance_flow_id) ->
+        add_error(changeset, :instance_flow_id, "is required when a visit path is set")
+
+      true ->
+        add_error(changeset, :path, "is required for an in-journey form instance")
+    end
   end
 end

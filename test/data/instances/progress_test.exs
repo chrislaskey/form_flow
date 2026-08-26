@@ -1,0 +1,188 @@
+defmodule FormFlow.Data.Instances.ProgressTest do
+  use ExUnit.Case, async: true
+
+  alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.Progress
+  alias FormFlow.Data.Templates.Flow
+
+  # ── tree-building helpers: pure structs, no database ─────────────────────
+
+  defp build_node(labels, opts \\ []) do
+    %Flow.Node{
+      id: Ecto.UUID.generate(),
+      labels: labels,
+      form_id: Keyword.get(opts, :form_id),
+      subflow_id: Keyword.get(opts, :subflow_id),
+      properties: %{}
+    }
+  end
+
+  defp edge(source, target) do
+    %Flow.Relationship{
+      id: Ecto.UUID.generate(),
+      source_id: source.id,
+      target_id: target.id,
+      label: "CONNECTS_TO"
+    }
+  end
+
+  defp tree(nodes, edges, subflows \\ %{}) do
+    %{flow: %Flow{}, nodes: nodes, relationships: edges, subflows: subflows}
+  end
+
+  defp form_instance(path, status, opts \\ []) do
+    %Instances.Form{
+      path: path,
+      status: status,
+      superseded_at: Keyword.get(opts, :superseded_at)
+    }
+  end
+
+  defp linear_flow do
+    start = build_node(["Start"])
+    form1 = build_node(["Form"], form_id: Ecto.UUID.generate())
+    form2 = build_node(["Form"], form_id: Ecto.UUID.generate())
+    stop = build_node(["End"])
+
+    edges = [edge(start, form1), edge(form1, form2), edge(form2, stop)]
+    {tree([start, form1, form2, stop], edges), start, form1, form2, stop}
+  end
+
+  describe "derive/2 on a linear flow" do
+    test "an untouched journey: first form available, the rest pending" do
+      {tree, start, form1, form2, stop} = linear_flow()
+
+      statuses = Progress.derive(tree, [])
+
+      assert statuses[[start.id]] == :completed
+      assert statuses[[form1.id]] == :available
+      assert statuses[[form2.id]] == :pending
+      assert statuses[[stop.id]] == :pending
+      refute Progress.complete?(tree, [])
+    end
+
+    test "an instance in progress marks its position and gates the next" do
+      {tree, _start, form1, form2, _stop} = linear_flow()
+
+      statuses = Progress.derive(tree, [form_instance([form1.id], "in_progress")])
+
+      assert statuses[[form1.id]] == :in_progress
+      assert statuses[[form2.id]] == :pending
+    end
+
+    test "completion unlocks the successor and, at End, the journey" do
+      {tree, _start, form1, form2, stop} = linear_flow()
+
+      statuses = Progress.derive(tree, [form_instance([form1.id], "completed")])
+      assert statuses[[form1.id]] == :completed
+      assert statuses[[form2.id]] == :available
+
+      instances = [
+        form_instance([form1.id], "completed"),
+        form_instance([form2.id], "completed")
+      ]
+
+      assert Progress.derive(tree, instances)[[stop.id]] == :completed
+      assert Progress.complete?(tree, instances)
+    end
+  end
+
+  describe "derive/2 join semantics (AND-join)" do
+    test "End waits for every parallel branch" do
+      start = build_node(["Start"])
+      form1 = build_node(["Form"], form_id: Ecto.UUID.generate())
+      form2 = build_node(["Form"], form_id: Ecto.UUID.generate())
+      stop = build_node(["End"])
+
+      edges = [edge(start, form1), edge(start, form2), edge(form1, stop), edge(form2, stop)]
+      tree = tree([start, form1, form2, stop], edges)
+
+      one_done = [form_instance([form1.id], "completed")]
+      assert Progress.derive(tree, one_done)[[stop.id]] == :pending
+      refute Progress.complete?(tree, one_done)
+
+      both_done = [form_instance([form2.id], "completed") | one_done]
+      assert Progress.derive(tree, both_done)[[stop.id]] == :completed
+      assert Progress.complete?(tree, both_done)
+    end
+  end
+
+  describe "derive/2 with subflows" do
+    defp nested_flow do
+      inner_start = build_node(["Start"])
+      inner_form = build_node(["Form"], form_id: Ecto.UUID.generate())
+      inner_stop = build_node(["End"])
+
+      inner =
+        tree([inner_start, inner_form, inner_stop], [
+          edge(inner_start, inner_form),
+          edge(inner_form, inner_stop)
+        ])
+
+      start = build_node(["Start"])
+      subflow = build_node(["Subflow"], subflow_id: Ecto.UUID.generate())
+      stop = build_node(["End"])
+
+      outer =
+        tree([start, subflow, stop], [edge(start, subflow), edge(subflow, stop)], %{
+          subflow.id => inner
+        })
+
+      {outer, subflow, inner_form, stop}
+    end
+
+    test "interior positions are addressed by the embedding chain" do
+      {outer, subflow, inner_form, _stop} = nested_flow()
+
+      statuses = Progress.derive(outer, [])
+      assert statuses[[subflow.id]] == :available
+      assert statuses[[subflow.id, inner_form.id]] == :available
+    end
+
+    test "interior activity marks the subflow in progress; interior End completes it" do
+      {outer, subflow, inner_form, stop} = nested_flow()
+
+      in_progress = [form_instance([subflow.id, inner_form.id], "in_progress")]
+      assert Progress.derive(outer, in_progress)[[subflow.id]] == :in_progress
+
+      completed = [form_instance([subflow.id, inner_form.id], "completed")]
+      statuses = Progress.derive(outer, completed)
+      assert statuses[[subflow.id]] == :completed
+      assert statuses[[stop.id]] == :completed
+      assert Progress.complete?(outer, completed)
+    end
+  end
+
+  describe "derive/2 stranding and supersession" do
+    test "an instance whose path matches no position surfaces as stranded" do
+      {tree, _start, form1, _form2, _stop} = linear_flow()
+      dead_path = [Ecto.UUID.generate()]
+
+      statuses =
+        Progress.derive(tree, [
+          form_instance([form1.id], "completed"),
+          form_instance(dead_path, "in_progress")
+        ])
+
+      assert statuses[dead_path] == :stranded
+      assert statuses[[form1.id]] == :completed
+    end
+
+    test "superseded instances are skipped everywhere" do
+      {tree, _start, form1, _form2, _stop} = linear_flow()
+      dead_path = [Ecto.UUID.generate()]
+      stamp = DateTime.utc_now()
+
+      statuses =
+        Progress.derive(tree, [
+          # a superseded completed instance must not complete its position
+          form_instance([form1.id], "completed", superseded_at: stamp),
+          # a superseded stranded instance must not resurface as stranded
+          form_instance(dead_path, "in_progress", superseded_at: stamp)
+        ])
+
+      assert statuses[[form1.id]] == :available
+      refute Map.has_key?(statuses, dead_path)
+    end
+  end
+end

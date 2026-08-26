@@ -33,6 +33,62 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
+    test "the visit identity is both-or-neither: a journey requires a path" do
+      # standalone: neither — fine (the existing mode)
+      assert Instances.Form.changeset(%Instances.Form{}, %{
+               template_form_version_id: @version_id
+             }).valid?
+
+      # a journey without a stamped path is invalid — the partial unique
+      # index can't catch this half, the changeset must
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          instance_flow_id: Ecto.UUID.generate()
+        })
+
+      refute changeset.valid?
+      assert {"is required for an in-journey form instance", _} = changeset.errors[:path]
+
+      # path is not castable — only visit_changeset/4 stamps it
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          path: [Ecto.UUID.generate()]
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :path) == []
+    end
+
+    test "visit_changeset/4 stamps the full visit identity" do
+      instance_flow_id = Ecto.UUID.generate()
+      path = [Ecto.UUID.generate(), Ecto.UUID.generate()]
+
+      changeset =
+        Instances.Form.visit_changeset(
+          %Instances.Form{},
+          %{template_form_version_id: @version_id, data: %{"name" => "Ada"}},
+          instance_flow_id,
+          path
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :instance_flow_id) == instance_flow_id
+      assert Ecto.Changeset.get_field(changeset, :path) == path
+    end
+
+    test "superseded_at is not castable — reconciliation stamps it" do
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          superseded_at: DateTime.utc_now()
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :superseded_at) == nil
+    end
+
     test "labels_snapshot is not castable — completion machinery stamps it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{

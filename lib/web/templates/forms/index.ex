@@ -2,7 +2,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Index` LiveComponent lists the form catalog.
 
-  A `Slab.table` over `FormFlow.Data.Templates.Forms.catalog_query/1` —
+  A `Slab.table` over `FormFlow.Data.Templates.Forms.catalog_query/0` —
   owned forms live inside their flow trees and are reached by drill-in,
   never listed here. Slab runs in query mode against the host app's repo,
   so sorting and pagination come from the URL: pass the current `uri` and
@@ -37,11 +37,10 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
-      |> assign_new(:app, fn -> "default" end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
-    query = Forms.catalog_query(socket.assigns.app)
+    query = Forms.catalog_query()
 
     {:ok,
      socket
