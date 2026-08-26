@@ -262,7 +262,7 @@ defmodule FormFlow.Data.Graphs do
   # Owned forms are deleted explicitly — their owner FK nilifies on graph
   # deletion, and a nil owner is the *definition* of a catalog form, so
   # leaving them to the FK would launder every owned form into /forms.
-  # Ordering matters: the fill-data check comes first (refuse before
+  # Ordering matters: the instance-data check comes first (refuse before
   # destroying anything), the form rows go last (their node FK, though
   # :nothing, still enforces — nodes must delete first).
   defp delete_tree_with_owned_forms(graph, tree_ids) do
@@ -526,8 +526,8 @@ defmodule FormFlow.Data.Graphs do
   end
 
   # Owned forms whose form nodes were all removed. Deletion goes through the
-  # context (the node FK is :nothing by design), which refuses while fill
-  # data exists — and then so does this save: fill data is never orphaned
+  # context (the node FK is :nothing by design), which refuses while instance
+  # data exists — and then so does this save: instance data is never orphaned
   # silently, the user is told the removed step still has submissions.
   defp sweep_unreferenced_forms(graph, root_id, graph_ids) do
     referenced =
@@ -568,7 +568,7 @@ defmodule FormFlow.Data.Graphs do
   end
 
   # The owned forms a flow deletion will take with it, or a friendly refusal
-  # when any of them still holds fill data. The actual deletion happens after
+  # when any of them still holds instance data. The actual deletion happens after
   # the graph tree (nodes first — their form FK enforces even as :nothing).
   defp owned_forms_deletable(graph) do
     forms = Repo.all(from(f in Templates.Form, where: f.owner_graph_id == ^graph.id))

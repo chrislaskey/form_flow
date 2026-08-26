@@ -2,7 +2,7 @@ defmodule FormFlow.Data.Instances.Forms do
   @moduledoc """
   `FormFlow.Data.Instances.Forms` context module for form instances.
 
-  Deliberately minimal this iteration — the fill/runner surface comes later.
+  Deliberately minimal this iteration — the runner surface comes later.
   What lives here now is the one operation that must exist somewhere
   concrete: explicit instance deletion. Events never cascade-delete with
   their instance (a reset event's `data_snapshot` is the only surviving copy

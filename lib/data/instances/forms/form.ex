@@ -1,6 +1,6 @@
 defmodule FormFlow.Data.Instances.Form do
   @moduledoc """
-  `FormFlow.Data.Instances.Form` Ecto Schema for one user's fill of a form.
+  `FormFlow.Data.Instances.Form` Ecto Schema for one form instance — one user's completion of a form.
 
   The load-bearing column is the pin: `template_form_version_id` names the
   exact definition this instance renders against — never "latest", never the
@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Instances.Form do
   meant; it is not castable — completion machinery stamps it.
 
   `metadata` is an opaque host-app map: whatever the host wants to attach —
-  including who a fill concerns, until about-ness earns a named column.
+  including who a form instance concerns, until about-ness earns a named column.
   FormFlow never interprets it.
   """
 

@@ -95,7 +95,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Deletes a lineage and its versions.
 
   Refuses with `{:error, :has_instances}` when any instance pins any of the
-  lineage's versions — fill data can never be orphaned. (Once flow releases
+  lineage's versions — instance data can never be orphaned. (Once flow releases
   exist, a second pre-check refuses when a release pins the lineage; see
   `archive/flow-versioning-plan.md`.)
   """
@@ -278,7 +278,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Deletes a draft. Published and archived versions cannot be deleted.
 
   Refuses with `{:error, :has_instances}` if anything pins the draft —
-  impossible today (instances pin published versions), but the test-fills
+  impossible today (instances pin published versions), but the test-instance
   seam will change that, and a raise from the FK is the wrong answer.
   """
   def delete_draft(%Version{status: "draft"} = version) do
