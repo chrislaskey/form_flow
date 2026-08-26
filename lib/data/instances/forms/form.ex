@@ -41,6 +41,7 @@ defmodule FormFlow.Data.Instances.Form do
     belongs_to(:template_form_version, Version, foreign_key: :template_form_version_id)
 
     field(:status, :string, default: "in_progress")
+    field(:lock_version, :integer, default: 1)
     field(:data, :map, default: %{})
     field(:labels_snapshot, :map, default: %{})
     field(:metadata, :map, default: %{})
@@ -54,21 +55,23 @@ defmodule FormFlow.Data.Instances.Form do
   @doc """
   Builds a changeset for an instance form.
 
-  `labels_snapshot` is not castable — it is stamped by completion machinery
-  from the pinned definition, never supplied by callers.
+  `labels_snapshot`, `status`, and `completed_at` are not castable — they
+  are stamped by completion machinery, never supplied by callers (the same
+  discipline planned for `FormFlow.Data.Instances.Flow`). Updates go
+  through the optimistic lock: two editors of one instance's `data` surface
+  `Ecto.StaleEntryError` instead of a silent last-write-wins.
   """
   def changeset(instance, attrs \\ %{}) do
     instance
     |> cast(attrs, [
       :app,
       :template_form_version_id,
-      :status,
       :data,
-      :metadata,
-      :completed_at
+      :metadata
     ])
     |> validate_required([:template_form_version_id])
     |> validate_inclusion(:status, @statuses)
+    |> optimistic_lock(:lock_version)
     |> foreign_key_constraint(:template_form_version_id)
   end
 end

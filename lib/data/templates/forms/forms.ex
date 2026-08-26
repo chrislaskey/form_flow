@@ -95,9 +95,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Deletes a lineage and its versions.
 
   Refuses with `{:error, :has_instances}` when any instance pins any of the
-  lineage's versions — instance data can never be orphaned. (Once flow releases
-  exist, a second pre-check refuses when a release pins the lineage; see
-  `archive/flow-versioning-plan.md`.)
+  lineage's versions — instance data can never be orphaned.
   """
   def delete(%Form{} = form) do
     if has_instances?(form.id) do

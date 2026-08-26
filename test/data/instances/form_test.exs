@@ -20,15 +20,17 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
     end
 
-    test "status is whitelisted" do
+    test "status is not castable — completion machinery stamps it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
-          status: "approved"
+          status: "approved",
+          completed_at: DateTime.utc_now()
         })
 
-      refute changeset.valid?
-      assert {"is invalid", _} = changeset.errors[:status]
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
+      assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
     test "labels_snapshot is not castable — completion machinery stamps it" do

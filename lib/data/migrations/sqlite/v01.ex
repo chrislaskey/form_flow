@@ -92,6 +92,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       )
 
       add(:status, :string, null: false, default: "in_progress")
+      add(:lock_version, :integer, null: false, default: 1)
       add(:data, :map, null: false)
       add(:labels_snapshot, :map, null: false)
       add(:metadata, :map, null: false)
