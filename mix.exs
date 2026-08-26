@@ -1,7 +1,7 @@
 defmodule FormFlow.MixProject do
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.6.0"
   @source_url "https://github.com/chrislaskey/form_flow"
 
   def project do
@@ -59,7 +59,7 @@ defmodule FormFlow.MixProject do
       links: %{"GitHub" => @source_url},
       # priv carries the prebuilt editor bundle served by FormFlow.Web.Assets;
       # without it the flow editor cannot load
-      files: ~w(lib priv guides mix.exs README.md LICENSE.md)
+      files: ~w(lib priv guides mix.exs README.md LICENSE.md CHANGELOG.md)
     ]
   end
 
@@ -69,6 +69,7 @@ defmodule FormFlow.MixProject do
       source_ref: "v#{@version}",
       extras: [
         "README.md",
+        "CHANGELOG.md",
         "LICENSE.md",
         "guides/usage.md",
         "guides/reference.md",

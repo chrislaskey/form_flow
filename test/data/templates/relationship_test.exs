@@ -1,10 +1,10 @@
-defmodule FormFlow.Data.Graph.RelationshipTest do
+defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Data.Graph.Relationship
+  alias FormFlow.Data.Templates.Flow.Relationship
 
   @attrs %{
-    graph_id: Ecto.UUID.generate(),
+    flow_id: Ecto.UUID.generate(),
     source_id: Ecto.UUID.generate(),
     target_id: Ecto.UUID.generate(),
     label: "TRANSITIONS_TO"
@@ -19,17 +19,17 @@ defmodule FormFlow.Data.Graph.RelationshipTest do
 
     assert changeset.changes.properties == %{
              "if" => "approved",
-             "graph_id" => @attrs.graph_id
+             "flow_id" => @attrs.flow_id
            }
   end
 
-  test "requires graph_id, source_id, target_id, and label" do
+  test "requires flow_id, source_id, target_id, and label" do
     changeset = Relationship.changeset(%Relationship{}, %{})
 
     refute changeset.valid?
 
     assert %{
-             graph_id: ["can't be blank"],
+             flow_id: ["can't be blank"],
              source_id: ["can't be blank"],
              target_id: ["can't be blank"],
              label: ["can't be blank"]
@@ -42,7 +42,7 @@ defmodule FormFlow.Data.Graph.RelationshipTest do
     assert changeset.valid?
 
     assert Ecto.Changeset.apply_changes(changeset).properties == %{
-             "graph_id" => @attrs.graph_id
+             "flow_id" => @attrs.flow_id
            }
   end
 
@@ -63,7 +63,7 @@ defmodule FormFlow.Data.Graph.RelationshipTest do
     assert Enum.any?(changeset.constraints, fn constraint ->
              constraint.type == :unique and
                constraint.constraint ==
-                 "form_flow_graph_relationships_source_id_target_id_label_index"
+                 "form_flow_relationships_source_id_target_id_label_index"
            end)
   end
 

@@ -36,7 +36,7 @@ defmodule FormFlow.Web.Router do
   | `/flows/:root/nodes/:node_id/form/versions/:version_id` | `FormFlow.Web.Templates.Forms.Show` |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` |
 
-  Drill-in URLs carry the *node* id, not the child graph's or form's id — a
+  Drill-in URLs carry the *node* id, not the child flow's or form's id — a
   reusable subflow or form used twice in one root is two nodes, so two
   unambiguous URLs. Versions get an explicit id suffix because several drafts
   may coexist and nothing else disambiguates them.
@@ -118,9 +118,9 @@ defmodule FormFlow.Web.Router do
           <% :new -> %>
             <.live_component module={Flows.New} id="flows-new" app={@app} base={@base} />
           <% {:show, id} -> %>
-            <.live_component module={Flows.Show} id="flows-show" graph_id={id} app={@app} base={@base} />
+            <.live_component module={Flows.Show} id="flows-show" flow_id={id} app={@app} base={@base} />
           <% {:edit, id} -> %>
-            <.live_component module={Flows.Edit} id="flows-edit" graph_id={id} app={@app} base={@base} />
+            <.live_component module={Flows.Edit} id="flows-edit" flow_id={id} app={@app} base={@base} />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
               module={Flows.Show}

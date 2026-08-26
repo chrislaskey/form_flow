@@ -12,7 +12,7 @@ defmodule Demo.FormFlowEditorTest do
 
   import Phoenix.LiveViewTest
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Assets
 
   describe "the asset route" do
@@ -47,23 +47,23 @@ defmodule Demo.FormFlowEditorTest do
 
   describe "the editor container" do
     test "renders on the edit page with the bundle's URL", %{conn: conn} do
-      {:ok, graph} = create_seeded()
-      {:ok, view, _html} = live(conn, "/flows/#{graph.id}/edit")
+      {:ok, flow} = create_seeded()
+      {:ok, view, _html} = live(conn, "/flows/#{flow.id}/edit")
 
       assert has_element?(view, ~s(#flows-edit-editor[phx-update="ignore"]))
       assert render(element(view, "#flows-edit-editor")) =~ Assets.editor_path()
     end
 
-    test "carries the graph as JSON for the hook to parse, Start and End pinned", %{conn: conn} do
-      {:ok, graph} = create_seeded()
-      {:ok, view, _html} = live(conn, "/flows/#{graph.id}/edit")
+    test "carries the flow as JSON for the hook to parse, Start and End pinned", %{conn: conn} do
+      {:ok, flow} = create_seeded()
+      {:ok, view, _html} = live(conn, "/flows/#{flow.id}/edit")
 
       data =
         view
         |> element("#flows-edit-editor")
         |> render()
         |> LazyHTML.from_fragment()
-        |> LazyHTML.attribute("data-graph")
+        |> LazyHTML.attribute("data-flow")
         |> hd()
         |> Jason.decode!()
 
@@ -98,8 +98,8 @@ defmodule Demo.FormFlowEditorTest do
 
   defp create_seeded(attrs \\ %{}) do
     attrs
-    |> Map.merge(%{nodes: Graphs.starter_nodes(), relationships: []})
+    |> Map.merge(%{nodes: Flows.starter_nodes(), relationships: []})
     |> Map.put_new(:name, "Enrollment")
-    |> Graphs.create()
+    |> Flows.create()
   end
 end

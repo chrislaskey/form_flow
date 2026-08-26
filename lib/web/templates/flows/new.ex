@@ -4,7 +4,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   A flow's flavor is declared up front and is immutable after, so this page is
   the chooser: a name and the forms-or-subflows decision. Creating seeds the
-  graph with `FormFlow.Data.Graphs.starter_nodes/0` (a pinned Start and End)
+  flow with `FormFlow.Data.Templates.Flows.starter_nodes/0` (a pinned Start and End)
   and lands on the edit page — the canvas lives there, not here.
 
       <.live_component module={FormFlow.Web.Templates.Flows.New} id="flows-new" />
@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
 
   @impl true
   def mount(socket) do
@@ -35,11 +35,11 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   @impl true
   def handle_event("create", %{"name" => name, "label" => label}, socket) do
-    attrs = %{name: name, label: label, nodes: Graphs.starter_nodes(), relationships: []}
+    attrs = %{name: name, label: label, nodes: Flows.starter_nodes(), relationships: []}
 
-    case Graphs.create(attrs) do
-      {:ok, graph} ->
-        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{graph.id}/edit")}
+    case Flows.create(attrs) do
+      {:ok, flow} ->
+        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{flow.id}/edit")}
 
       {:error, %Ecto.Changeset{}} ->
         {:noreply, assign(socket, :error, "Could not create the flow. Please try again.")}

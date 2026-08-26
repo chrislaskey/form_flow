@@ -2,24 +2,25 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Edit` LiveComponent edits an existing flow.
 
-  Loads the graph with `FormFlow.Data.Graphs.get/1`, renders it in the editor
-  (see `FormFlow.Web.Components.Editor`), tracks edits as the editor reports
-  them, and on save replaces the graph's contents with
-  `FormFlow.Data.Graphs.update/2`. Saving a subflows flow also creates the
-  children of any freshly added subflow nodes — see `FormFlow.Data.Graphs`.
+  Loads the flow with `FormFlow.Data.Templates.Flows.get/1`, renders it in the
+  editor (see `FormFlow.Web.Components.Editor`), tracks edits as the editor
+  reports them, and on save replaces the flow's contents with
+  `FormFlow.Data.Templates.Flows.update/2`. Saving a subflows flow also
+  creates the children of any freshly added subflow nodes — see
+  `FormFlow.Data.Templates.Flows`.
 
   Edit mode is sticky: saving stays here rather than bouncing to the show
   page — flow editing is a workspace loop, often across several levels. After
-  a save the persisted graph is pushed back into the canvas
-  (`form_flow:set_graph`), so editor-temporary node ids become the real UUIDs
+  a save the persisted flow is pushed back into the canvas
+  (`form_flow:set_flow`), so editor-temporary node ids become the real UUIDs
   — which is what makes Open work on a just-saved subflow node.
 
   Two addressing modes, matching the router:
 
-    * `graph_id` — a flow edited directly, `/flows/:id/edit`
+    * `flow_id` — a flow edited directly, `/flows/:id/edit`
     * `root_id` + `node_id` — a subflow reached by drill-in,
       `/flows/:root_id/nodes/:node_id/edit`; the node's `subflow_id` is the
-      graph edited here
+      flow edited here
 
   Navigating within the canvas is guarded against losing unsaved changes
   (`current` differs from the last-persisted `data`): the header's Show
@@ -28,13 +29,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   navigate>`, precisely so that event can check first — if the canvas is
   dirty, navigation pauses for a prompt to save first or keep editing instead
   of silently discarding the edit. Open additionally treats a node
-  `FormFlow.Data.Graphs.get_node/1` can't find yet (just added, never saved)
-  as unsaved, since there's nothing to navigate to until it exists. Either way
-  declining leaves the canvas exactly as it was — nothing is discarded — and
-  confirming resolves a pending node's editor-temporary id to whatever it was
-  actually saved as (see `FormFlow.Web.Helpers.ReactFlow.to_graph_attrs/1`'s
-  `id_map`), so Open still lands on the right subflow even when it was never
-  saved before this click.
+  `FormFlow.Data.Templates.Flows.get_node/1` can't find yet (just added,
+  never saved) as unsaved, since there's nothing to navigate to until it
+  exists. Either way declining leaves the canvas exactly as it was — nothing
+  is discarded — and confirming resolves a pending node's editor-temporary id
+  to whatever it was actually saved as (see
+  `FormFlow.Web.Helpers.ReactFlow.to_flow_attrs/1`'s `id_map`), so Open still
+  lands on the right subflow even when it was never saved before this click.
 
   The same `unsaved_changes?/1` flag also guards two kinds of navigation the
   `"navigate"` event above can't reach, because neither one goes through a
@@ -69,7 +70,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   Discard changes is the deliberate opposite: shown only while the canvas is
   dirty, it throws the edit away rather than protecting it, so it asks for
   confirmation first rather than checking for one. Confirming reloads this
-  same edit page via `push_navigate/2` — a full remount, refetching the graph
+  same edit page via `push_navigate/2` — a full remount, refetching the flow
   from scratch — rather than trying to reset in-memory state by hand. That's
   deliberately the blunt option: as the canvas grows more state (open panels,
   selections, whatever comes later), reproducing "as freshly loaded" by
@@ -83,7 +84,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -103,17 +104,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
 
-    graph = resolve_graph(socket.assigns)
-    data = graph && ReactFlow.to_data(graph)
-    root = socket.assigns.node_id && Graphs.get(socket.assigns.root_id)
+    flow = resolve_flow(socket.assigns)
+    data = flow && ReactFlow.to_data(flow)
+    root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
 
     {:ok,
      assign(socket,
-       graph: graph,
+       flow: flow,
        data: data,
        current: data,
        root: root,
-       pending_name: graph && graph.name
+       pending_name: flow && flow.name
      )}
   end
 
@@ -123,7 +124,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
-  def handle_event("form_flow:graph_changed", %{"nodes" => nodes, "edges" => edges}, socket) do
+  def handle_event("form_flow:flow_changed", %{"nodes" => nodes, "edges" => edges}, socket) do
     {:noreply,
      socket
      |> assign(:current, %{"nodes" => nodes, "edges" => edges})
@@ -132,7 +133,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   @impl true
   def handle_event("form_flow:open_subflow", %{"node_id" => node_id}, socket) do
-    if Graphs.get_node(node_id) && not unsaved_changes?(socket.assigns) do
+    if Flows.get_node(node_id) && not unsaved_changes?(socket.assigns) do
       {:noreply, navigate_to_node(socket, node_id)}
     else
       {:noreply, assign(socket, :pending_navigation, {:node, node_id})}
@@ -144,7 +145,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # resolves after "Save & Continue" through the id_map like subflow opens do
   @impl true
   def handle_event("form_flow:open_form", %{"node_id" => node_id}, socket) do
-    node = Graphs.get_node(node_id)
+    node = Flows.get_node(node_id)
 
     if node && node.form_id && not unsaved_changes?(socket.assigns) do
       {:noreply, push_navigate(socket, to: form_node_path(socket.assigns, node_id))}
@@ -216,10 +217,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # Whether the page has edits the last save doesn't reflect yet — `current`
-  # tracks every reported `graph_changed` against what `Graphs.update/2` last
-  # persisted, and the pending name against the graph's saved name.
+  # tracks every reported `flow_changed` against what `Flows.update/2` last
+  # persisted, and the pending name against the flow's saved name.
   defp unsaved_changes?(assigns) do
-    assigns.current != assigns.data or assigns.pending_name != assigns.graph.name
+    assigns.current != assigns.data or assigns.pending_name != assigns.flow.name
   end
 
   defp navigate_to_node(socket, node_id) do
@@ -227,7 +228,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp node_path(assigns, node_id) do
-    root_id = assigns.root_id || assigns.graph.id
+    root_id = assigns.root_id || assigns.flow.id
     "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit"
   end
 
@@ -236,10 +237,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # fresh one forked from the latest published version. The show page is
   # where mode isn't sticky: its Open lands on the form's show page.
   defp form_node_path(assigns, node_id) do
-    root_id = assigns.root_id || assigns.graph.id
+    root_id = assigns.root_id || assigns.flow.id
     show_path = "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
 
-    with %{form_id: form_id} when is_binary(form_id) <- Graphs.get_node(node_id),
+    with %{form_id: form_id} when is_binary(form_id) <- Flows.get_node(node_id),
          %{id: draft_id} <- find_or_create_draft(form_id) do
       "#{show_path}/versions/#{draft_id}/edit"
     else
@@ -291,24 +292,24 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp persist_current(socket) do
     attrs =
       socket.assigns.current
-      |> ReactFlow.to_graph_attrs()
+      |> ReactFlow.to_flow_attrs()
       |> Map.put(:name, socket.assigns.pending_name)
 
-    case Graphs.update(socket.assigns.graph, attrs) do
-      {:ok, graph} ->
-        graph = Graphs.get(graph.id)
-        data = ReactFlow.to_data(graph)
+    case Flows.update(socket.assigns.flow, attrs) do
+      {:ok, flow} ->
+        flow = Flows.get(flow.id)
+        data = ReactFlow.to_data(flow)
 
         socket =
           socket
           |> assign(
-            graph: graph,
+            flow: flow,
             data: data,
             current: data,
-            pending_name: graph.name,
+            pending_name: flow.name,
             error: nil
           )
-          |> push_event("form_flow:set_graph", %{graph: data})
+          |> push_event("form_flow:set_flow", %{flow: data})
 
         {:ok, socket, attrs.id_map}
 
@@ -318,7 +319,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
-  def render(%{graph: nil} = assigns) do
+  def render(%{flow: nil} = assigns) do
     ~H"""
     <div>
       <p class="text-sm text-zinc-500">
@@ -403,9 +404,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             {@root.name || "Untitled"}
           </button>
           <span :if={@root} class="text-zinc-400">/</span>
-          <span>{@graph.name || "Untitled"}</span>
+          <span>{@flow.name || "Untitled"}</span>
           <span class="text-xs font-normal text-zinc-500">
-            {if @graph.label == "subflows", do: "Complex flow", else: "Simple flow"}
+            {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
         </div>
         <div class="flex items-center gap-2">
@@ -476,7 +477,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         id={"#{@id}-editor"}
         data={@data}
         target={@myself}
-        flow_label={@graph.label}
+        flow_label={@flow.label}
       />
 
       <div
@@ -540,16 +541,16 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     """
   end
 
-  defp resolve_graph(%{node_id: nil} = assigns), do: Graphs.get(assigns.graph_id)
+  defp resolve_flow(%{node_id: nil} = assigns), do: Flows.get(assigns.flow_id)
 
-  defp resolve_graph(assigns) do
-    case Graphs.get_node(assigns.node_id) do
-      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Graphs.get(subflow_id)
+  defp resolve_flow(assigns) do
+    case Flows.get_node(assigns.node_id) do
+      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Flows.get(subflow_id)
       _other -> nil
     end
   end
 
-  defp show_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.graph.id}"
+  defp show_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}"
 
   defp show_path(assigns) do
     "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}"
@@ -557,7 +558,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # This edit page's own URL, for Discard's full reload
   defp current_path(%{node_id: nil} = assigns),
-    do: "#{assigns.base}/flows/#{assigns.graph.id}/edit"
+    do: "#{assigns.base}/flows/#{assigns.flow.id}/edit"
 
   defp current_path(assigns) do
     "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}/edit"

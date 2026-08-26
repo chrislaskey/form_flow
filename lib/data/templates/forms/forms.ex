@@ -126,12 +126,12 @@ defmodule FormFlow.Data.Templates.Forms do
   been published copies its most recently updated draft as a draft: the copy
   of an unpublished thing is an unpublished thing.
 
-  Pass `owner_graph_id:` to make the copy a flow tree's private property —
+  Pass `owner_flow_id:` to make the copy a flow tree's private property —
   the normal case; a copy without an owner lands in the catalog and must not
   collide on `(app, name)`.
   """
   def copy(%Form{} = form, opts \\ []) do
-    owner_graph_id = Keyword.get(opts, :owner_graph_id)
+    owner_flow_id = Keyword.get(opts, :owner_flow_id)
 
     Repo.transaction(fn ->
       changeset =
@@ -140,7 +140,7 @@ defmodule FormFlow.Data.Templates.Forms do
           app: form.app,
           name: form.name,
           description: form.description,
-          owner_graph_id: owner_graph_id
+          owner_flow_id: owner_flow_id
         })
         |> Ecto.Changeset.put_change(:copied_from_form_id, form.id)
 
@@ -175,7 +175,7 @@ defmodule FormFlow.Data.Templates.Forms do
   mode that layer their own ordering and pagination on top.
   """
   def catalog_query(app \\ "default") do
-    from(f in Form, where: is_nil(f.owner_graph_id) and f.app == ^app)
+    from(f in Form, where: is_nil(f.owner_flow_id) and f.app == ^app)
   end
 
   @doc "Lists a lineage's versions, drafts and published alike, newest first."

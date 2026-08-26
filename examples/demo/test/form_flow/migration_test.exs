@@ -76,29 +76,29 @@ defmodule Demo.FormFlowMigrationTest do
   test "catalog names are unique per app; owned forms may repeat them" do
     {:ok, _} = insert_template("Enrollment")
 
-    # The partial unique index guards the catalog (owner_graph_id IS NULL)
+    # The partial unique index guards the catalog (owner_flow_id IS NULL)
     assert {:error, _} = insert_template("Enrollment")
     assert {:ok, _} = insert_template("Enrollment", app: "other-app")
 
     # Owned forms are outside the catalog — yearly copies repeat names freely
-    {:ok, graph_id} = insert_graph()
-    assert {:ok, _} = insert_template("Enrollment", owner_graph_id: graph_id)
-    assert {:ok, _} = insert_template("Enrollment", owner_graph_id: graph_id)
+    {:ok, flow_id} = insert_flow()
+    assert {:ok, _} = insert_template("Enrollment", owner_flow_id: flow_id)
+    assert {:ok, _} = insert_template("Enrollment", owner_flow_id: flow_id)
   end
 
   defp insert_template(name, opts \\ []) do
     id = Ecto.UUID.generate()
     app = Keyword.get(opts, :app, "default")
-    owner_graph_id = Keyword.get(opts, :owner_graph_id)
+    owner_flow_id = Keyword.get(opts, :owner_flow_id)
 
     result =
       Repo.query(
         """
         INSERT INTO form_flow_template_forms
-          (id, app, name, owner_graph_id, inserted_at, updated_at)
+          (id, app, name, owner_flow_id, inserted_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        [id, app, name, owner_graph_id, @timestamp, @timestamp]
+        [id, app, name, owner_flow_id, @timestamp, @timestamp]
       )
 
     with {:ok, _} <- result, do: {:ok, id}
@@ -120,13 +120,13 @@ defmodule Demo.FormFlowMigrationTest do
     with {:ok, _} <- result, do: {:ok, id}
   end
 
-  defp insert_graph do
+  defp insert_flow do
     id = Ecto.UUID.generate()
 
     result =
       Repo.query(
         """
-        INSERT INTO form_flow_graphs (id, label, inserted_at, updated_at)
+        INSERT INTO form_flow_flows (id, label, inserted_at, updated_at)
         VALUES (?, 'forms', ?, ?)
         """,
         [id, @timestamp, @timestamp]

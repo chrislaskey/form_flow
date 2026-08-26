@@ -1,9 +1,11 @@
-defmodule FormFlow.Data.Graphs do
+defmodule FormFlow.Data.Templates.Flows do
   @moduledoc """
-  `FormFlow.Data.Graphs` context module for `FormFlow.Data.Graph` records.
+  `FormFlow.Data.Templates.Flows` context module for
+  `FormFlow.Data.Templates.Flow` records.
 
-  A graph is the aggregate: the `form_flow_graphs` row plus its
-  `FormFlow.Data.Graph.Node` and `FormFlow.Data.Graph.Relationship` children.
+  A flow is the aggregate: the `form_flow_flows` row plus its
+  `FormFlow.Data.Templates.Flow.Node` and
+  `FormFlow.Data.Templates.Flow.Relationship` children.
   `create/1` and `update/2` accept the whole aggregate — pass `:nodes` and
   `:relationships` in the attributes and the contents are written alongside the
   row, in one transaction, nodes before the relationships that reference them.
@@ -12,26 +14,26 @@ defmodule FormFlow.Data.Graphs do
 
   ## Subflows and ownership
 
-  A node whose `subflow_id` is set embeds another graph. By default such
-  graphs are private: their `owner_graph_id` points at the root flow they
+  A node whose `subflow_id` is set embeds another flow. By default such
+  flows are private: their `owner_flow_id` points at the root flow they
   belong to (the ownership root — flat, not the immediate parent), and they
   are cleaned up automatically when they stop being referenced (see
   `update/2`) or when their root is deleted.
 
-  `make_reusable/1` detaches a graph from its owner and stamps
+  `make_reusable/1` detaches a flow from its owner and stamps
   `made_reusable_at`, putting it in the catalog `list_reusable/0` returns.
-  Reusable graphs can be referenced by many flows — edits show up everywhere —
+  Reusable flows can be referenced by many flows — edits show up everywhere —
   or copied with `duplicate/2` for a private point-in-time copy.
 
   ## Declared flavor
 
-  Every graph declares its flavor at creation in `label`: `"forms"` flows
+  Every flow declares its flavor at creation in `label`: `"forms"` flows
   contain form steps, `"subflows"` flows contain subflow steps — never mixed
   (structural Start/End nodes are exempt). Saves validate the rule, and the
   label is immutable: converting means wrapping in a new parent flow.
 
-  Saving a `"subflows"` graph also creates the children: any subflow node
-  without a `subflow_id` gets a fresh graph — owned by the root, seeded with
+  Saving a `"subflows"` flow also creates the children: any subflow node
+  without a `subflow_id` gets a fresh flow — owned by the root, seeded with
   `starter_nodes/0`, named from the node's canvas label, its own label taken
   from the node's `data.subflow_label` (declared when the node was added in
   the editor) — and the node is pointed at it.
@@ -42,11 +44,11 @@ defmodule FormFlow.Data.Graphs do
 
   import Ecto.Query
 
-  alias FormFlow.Data.Graph
-  alias FormFlow.Data.Graph.Node
-  alias FormFlow.Data.Graph.Relationship
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Flow.Node
+  alias FormFlow.Data.Templates.Flow.Relationship
 
   @doc """
   Returns the top-level flows — root flows and reusable subflows — oldest
@@ -58,36 +60,36 @@ defmodule FormFlow.Data.Graphs do
   root and are reached by drill-in, not listed beside it.
   """
   def list do
-    Repo.all(from(g in roots_query(), order_by: [asc: g.inserted_at]))
+    Repo.all(from(f in roots_query(), order_by: [asc: f.inserted_at]))
   end
 
   @doc """
-  The root-graphs listing as a composable query: every non-owned graph with
+  The root-flows listing as a composable query: every non-owned flow with
   its node and relationship counts, unordered.
 
   The counts come from grouped subqueries joined 1:1 rather than a `group_by`
-  on the graphs themselves, so callers (like Slab's table in query mode) can
+  on the flows themselves, so callers (like Slab's table in query mode) can
   layer `order_by`, `limit`/`offset`, and `Repo.aggregate(:count)` on top
   without fighting the grouping.
   """
   def roots_query do
     node_counts =
-      from(n in Node, group_by: n.graph_id, select: %{graph_id: n.graph_id, count: count(n.id)})
+      from(n in Node, group_by: n.flow_id, select: %{flow_id: n.flow_id, count: count(n.id)})
 
     relationship_counts =
       from(r in Relationship,
-        group_by: r.graph_id,
-        select: %{graph_id: r.graph_id, count: count(r.id)}
+        group_by: r.flow_id,
+        select: %{flow_id: r.flow_id, count: count(r.id)}
       )
 
-    from(g in Graph,
-      where: is_nil(g.owner_graph_id),
+    from(f in Flow,
+      where: is_nil(f.owner_flow_id),
       left_join: nc in subquery(node_counts),
-      on: nc.graph_id == g.id,
+      on: nc.flow_id == f.id,
       left_join: rc in subquery(relationship_counts),
-      on: rc.graph_id == g.id,
+      on: rc.flow_id == f.id,
       select: %{
-        g
+        f
         | nodes_count: coalesce(nc.count, 0),
           relationships_count: coalesce(rc.count, 0)
       }
@@ -95,30 +97,30 @@ defmodule FormFlow.Data.Graphs do
   end
 
   @doc """
-  Returns the reusable catalog: graphs made reusable, newest first.
+  Returns the reusable catalog: flows made reusable, newest first.
 
   Backed by a partial index on `made_reusable_at`, so this is a real-time
   query — no caching needed.
   """
   def list_reusable do
     Repo.all(
-      from(g in Graph,
-        where: not is_nil(g.made_reusable_at),
-        order_by: [desc: g.made_reusable_at]
+      from(f in Flow,
+        where: not is_nil(f.made_reusable_at),
+        order_by: [desc: f.made_reusable_at]
       )
     )
   end
 
   @doc """
-  Fetches one graph by id with its nodes and relationships loaded, or `nil`.
+  Fetches one flow by id with its nodes and relationships loaded, or `nil`.
 
   Ids often arrive from URLs, so anything that is not a UUID is `nil` rather
   than an `Ecto.Query.CastError`.
   """
   def get(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
-         %Graph{} = graph <- Repo.get(Graph, id) do
-      Repo.preload(graph, [:nodes, :relationships])
+         %Flow{} = flow <- Repo.get(Flow, id) do
+      Repo.preload(flow, [:nodes, :relationships])
     else
       _other -> nil
     end
@@ -126,7 +128,7 @@ defmodule FormFlow.Data.Graphs do
 
   @doc """
   Fetches one node by id, or `nil`. Drill-in URLs carry node ids — the node's
-  `subflow_id` is the graph they open.
+  `subflow_id` is the flow they open.
   """
   def get_node(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
@@ -138,23 +140,23 @@ defmodule FormFlow.Data.Graphs do
   end
 
   @doc """
-  The node within an ownership domain that embeds the given graph, or `nil`.
+  The node within an ownership domain that embeds the given flow, or `nil`.
 
-  Used to build the drill-in URL of a graph's *containing* page: the node's id
+  Used to build the drill-in URL of a flow's *containing* page: the node's id
   is the `/flows/:root/nodes/:node_id` segment. Scoped to the domain because a
-  reusable graph can be embedded by many flows — only the usage under this
+  reusable flow can be embedded by many flows — only the usage under this
   root is wanted.
   """
-  def embedding_node(graph_id, root_id) do
+  def embedding_node(flow_id, root_id) do
     case Ecto.UUID.cast(root_id) do
       {:ok, root_id} ->
         Repo.one(
           from(n in Node,
-            join: g in Graph,
-            on: g.id == n.graph_id,
+            join: f in Flow,
+            on: f.id == n.flow_id,
             where:
-              n.subflow_id == ^graph_id and
-                (g.id == ^root_id or g.owner_graph_id == ^root_id),
+              n.subflow_id == ^flow_id and
+                (f.id == ^root_id or f.owner_flow_id == ^root_id),
             limit: 1
           )
         )
@@ -193,96 +195,98 @@ defmodule FormFlow.Data.Graphs do
   end
 
   @doc """
-  Whether the graph is some root flow's private property.
+  Whether the flow is some root flow's private property.
 
-  Unowned graphs are root flows or reusable subflows — structurally the same
-  thing; `made_reusable_at` is what lists a graph in the reusable catalog.
+  Unowned flows are root flows or reusable subflows — structurally the same
+  thing; `made_reusable_at` is what lists a flow in the reusable catalog.
   """
-  def owned?(%Graph{owner_graph_id: nil}), do: false
-  def owned?(%Graph{}), do: true
+  def owned?(%Flow{owner_flow_id: nil}), do: false
+  def owned?(%Flow{}), do: true
 
   @doc """
-  Creates a graph, along with any nodes and relationships in the attributes.
+  Creates a flow, along with any nodes and relationships in the attributes.
 
-      {:ok, graph} = FormFlow.Data.Graphs.create()
-      {:ok, graph} = FormFlow.Data.Graphs.create(%{nodes: [...], relationships: [...]})
+      {:ok, flow} = FormFlow.Data.Templates.Flows.create()
 
-  Pass `:owner_graph_id` to create a graph owned by a root flow — the default
+      {:ok, flow} =
+        FormFlow.Data.Templates.Flows.create(%{nodes: [...], relationships: [...]})
+
+  Pass `:owner_flow_id` to create a flow owned by a root flow — the default
   for subflows.
   """
   def create(attrs \\ %{}) do
-    save(Graph.changeset(%Graph{}, attrs), attrs, &Repo.insert/1, sweep?: false)
+    save(Flow.changeset(%Flow{}, attrs), attrs, &Repo.insert/1, sweep?: false)
   end
 
   @doc """
-  Updates a graph.
+  Updates a flow.
 
-  When `attrs` include `:nodes` or `:relationships`, the graph's contents are
+  When `attrs` include `:nodes` or `:relationships`, the flow's contents are
   replaced to match — existing rows are deleted and the given ones written.
   Attributes without contents leave the contents untouched.
 
-  Replacing contents also garbage-collects: owned graphs in the same ownership
+  Replacing contents also garbage-collects: owned flows in the same ownership
   domain that are no longer reachable through subflow references are deleted,
   with everything under them. Removing a subflow node from the canvas is how
   an owned subflow (and its whole private subtree) goes away.
   """
-  def update(%Graph{} = graph, attrs) do
-    save(Graph.changeset(graph, attrs), attrs, &Repo.update/1, sweep?: true)
+  def update(%Flow{} = flow, attrs) do
+    save(Flow.changeset(flow, attrs), attrs, &Repo.update/1, sweep?: true)
   end
 
   @doc """
-  Deletes a graph, everything it owns, and their nodes and relationships.
+  Deletes a flow, everything it owns, and their nodes and relationships.
 
-  Refused with an error changeset while other flows still reference the graph
+  Refused with an error changeset while other flows still reference the flow
   as a subflow — remove those references (or `duplicate/2` first) and retry.
   """
-  def delete(%Graph{} = graph) do
+  def delete(%Flow{} = flow) do
     Repo.transaction(fn ->
       owned_ids =
-        Repo.all(from(g in Graph, where: g.owner_graph_id == ^graph.id, select: g.id))
+        Repo.all(from(f in Flow, where: f.owner_flow_id == ^flow.id, select: f.id))
 
-      tree_ids = [graph.id | owned_ids]
+      tree_ids = [flow.id | owned_ids]
 
       referenced? =
         Repo.exists?(
-          from(n in Node, where: n.subflow_id == ^graph.id and n.graph_id not in ^tree_ids)
+          from(n in Node, where: n.subflow_id == ^flow.id and n.flow_id not in ^tree_ids)
         )
 
       if referenced? do
-        graph
+        flow
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
         |> Repo.rollback()
       else
-        delete_tree_with_owned_forms(graph, tree_ids)
+        delete_tree_with_owned_forms(flow, tree_ids)
       end
     end)
   end
 
-  # Owned forms are deleted explicitly — their owner FK nilifies on graph
+  # Owned forms are deleted explicitly — their owner FK nilifies on flow
   # deletion, and a nil owner is the *definition* of a catalog form, so
   # leaving them to the FK would launder every owned form into /forms.
   # Ordering matters: the instance-data check comes first (refuse before
   # destroying anything), the form rows go last (their node FK, though
   # :nothing, still enforces — nodes must delete first).
-  defp delete_tree_with_owned_forms(graph, tree_ids) do
+  defp delete_tree_with_owned_forms(flow, tree_ids) do
     forms =
-      case owned_forms_deletable(graph) do
+      case owned_forms_deletable(flow) do
         {:ok, forms} -> forms
         {:error, changeset} -> Repo.rollback(changeset)
       end
 
-    delete_graphs(tree_ids)
+    delete_flows(tree_ids)
 
     Enum.each(forms, fn form ->
       {:ok, _form} = Templates.Forms.delete(form)
     end)
 
-    graph
+    flow
   end
 
   @doc """
-  Deletes one node from its graph — the drill-in "delete this subflow".
+  Deletes one node from its flow — the drill-in "delete this subflow".
 
   The node row goes (its relationships cascade), and the ownership domain is
   swept: an owned subflow the node referenced becomes unreachable and is
@@ -291,89 +295,91 @@ defmodule FormFlow.Data.Graphs do
   """
   def delete_node(%Node{} = node) do
     Repo.transaction(fn ->
-      graph = Repo.get(Graph, node.graph_id)
+      flow = Repo.get(Flow, node.flow_id)
 
       {:ok, _node} = Repo.delete(node)
 
-      sweep_unreachable(graph)
+      sweep_unreachable(flow)
 
       node
     end)
   end
 
   @doc """
-  Makes a graph reusable: detaches it from its owner and stamps
+  Makes a flow reusable: detaches it from its owner and stamps
   `made_reusable_at`, which lists it in `list_reusable/0`.
 
   Its private descendants stay private — they are re-homed from the old
-  ownership root to this graph, which becomes the root of its own ownership
-  domain. Already-reusable graphs pass through unchanged.
+  ownership root to this flow, which becomes the root of its own ownership
+  domain. Already-reusable flows pass through unchanged.
   """
-  def make_reusable(%Graph{made_reusable_at: %DateTime{}} = graph), do: {:ok, graph}
+  def make_reusable(%Flow{made_reusable_at: %DateTime{}} = flow), do: {:ok, flow}
 
-  def make_reusable(%Graph{} = graph) do
+  def make_reusable(%Flow{} = flow) do
     Repo.transaction(fn ->
-      old_owner_id = graph.owner_graph_id
+      old_owner_id = flow.owner_flow_id
 
-      {:ok, graph} =
-        graph
-        |> Ecto.Changeset.change(owner_graph_id: nil, made_reusable_at: DateTime.utc_now())
+      {:ok, flow} =
+        flow
+        |> Ecto.Changeset.change(owner_flow_id: nil, made_reusable_at: DateTime.utc_now())
         |> Repo.update()
 
       if old_owner_id do
-        rehome_ids = reachable_owned([graph.id], old_owner_id)
+        rehome_ids = reachable_owned([flow.id], old_owner_id)
 
         Repo.update_all(
-          from(g in Graph, where: g.id in ^rehome_ids),
-          set: [owner_graph_id: graph.id]
+          from(f in Flow, where: f.id in ^rehome_ids),
+          set: [owner_flow_id: flow.id]
         )
 
         # Owned forms referenced from the rehomed tree move with it — left in
         # the old domain, the old root's next sweep would collect them while
-        # this graph still references them
+        # this flow still references them
         form_ids =
           Repo.all(
             from(n in Node,
-              where: n.graph_id in ^[graph.id | rehome_ids] and not is_nil(n.form_id),
+              where: n.flow_id in ^[flow.id | rehome_ids] and not is_nil(n.form_id),
               select: n.form_id
             )
           )
 
         Repo.update_all(
           from(f in Templates.Form,
-            where: f.owner_graph_id == ^old_owner_id and f.id in ^form_ids
+            where: f.owner_flow_id == ^old_owner_id and f.id in ^form_ids
           ),
-          set: [owner_graph_id: graph.id]
+          set: [owner_flow_id: flow.id]
         )
       end
 
-      graph
+      flow
     end)
   end
 
   @doc """
-  Deep-copies a graph: a new graph with new UUIDs throughout, its contents
+  Deep-copies a flow: a new flow with new UUIDs throughout, its contents
   copied, relationships re-pointed at the copied nodes.
 
-  Subflow references follow the copy boundary: graphs the source *owns* are
-  deep-copied along with it; *reusable* graphs stay shared references. The
+  Subflow references follow the copy boundary: flows the source *owns* are
+  deep-copied along with it; *reusable* flows stay shared references. The
   copy is never in the reusable catalog — `made_reusable_at` starts empty.
 
-      {:ok, copy} = FormFlow.Data.Graphs.duplicate(graph)
-      {:ok, copy} = FormFlow.Data.Graphs.duplicate(graph, owner_graph_id: root.id)
+      {:ok, copy} = FormFlow.Data.Templates.Flows.duplicate(flow)
+
+      {:ok, copy} =
+        FormFlow.Data.Templates.Flows.duplicate(flow, owner_flow_id: root.id)
   """
-  def duplicate(%Graph{} = graph, opts \\ []) do
-    owner_id = Keyword.get(opts, :owner_graph_id)
+  def duplicate(%Flow{} = flow, opts \\ []) do
+    owner_id = Keyword.get(opts, :owner_flow_id)
 
     Repo.transaction(fn ->
-      copy_id = copy_graph(graph.id, owner_id, nil)
+      copy_id = copy_flow(flow.id, owner_id, nil)
 
-      Repo.preload(Repo.get(Graph, copy_id), [:nodes, :relationships])
+      Repo.preload(Repo.get(Flow, copy_id), [:nodes, :relationships])
     end)
   end
 
   # Only updates sweep: replacing existing contents is the one way owned
-  # graphs become unreachable. Creates must not — a child graph created
+  # flows become unreachable. Creates must not — a child flow created
   # mid-save of its parent would sweep the domain before the parent's node
   # points at it, collecting itself.
   defp save(changeset, attrs, operation, sweep?: sweep?) do
@@ -381,11 +387,11 @@ defmodule FormFlow.Data.Graphs do
   end
 
   defp do_save(changeset, attrs, operation, sweep?) do
-    with {:ok, graph} <- operation.(changeset),
-         {:ok, graph} <- replace_contents(graph, attrs) do
-      if sweep? and contents?(attrs), do: sweep_unreachable(graph)
+    with {:ok, flow} <- operation.(changeset),
+         {:ok, flow} <- replace_contents(flow, attrs) do
+      if sweep? and contents?(attrs), do: sweep_unreachable(flow)
 
-      graph
+      flow
     else
       {:error, reason} -> Repo.rollback(reason)
     end
@@ -395,26 +401,26 @@ defmodule FormFlow.Data.Graphs do
     Map.has_key?(attrs, :nodes) or Map.has_key?(attrs, :relationships)
   end
 
-  defp replace_contents(graph, attrs) do
+  defp replace_contents(flow, attrs) do
     if contents?(attrs) do
-      with :ok <- validate_flavor(graph, Map.get(attrs, :nodes, [])),
-           :ok <- clear_contents(graph),
-           {:ok, nodes} <- insert_contents(graph, Node, Map.get(attrs, :nodes, [])),
+      with :ok <- validate_flavor(flow, Map.get(attrs, :nodes, [])),
+           :ok <- clear_contents(flow),
+           {:ok, nodes} <- insert_contents(flow, Node, Map.get(attrs, :nodes, [])),
            {:ok, _rels} <-
-             insert_contents(graph, Relationship, Map.get(attrs, :relationships, [])),
-           {:ok, _children} <- create_missing_subflows(graph, nodes),
-           {:ok, _forms} <- create_missing_forms(graph, nodes) do
-        {:ok, graph}
+             insert_contents(flow, Relationship, Map.get(attrs, :relationships, [])),
+           {:ok, _children} <- create_missing_subflows(flow, nodes),
+           {:ok, _forms} <- create_missing_forms(flow, nodes) do
+        {:ok, flow}
       end
     else
-      {:ok, graph}
+      {:ok, flow}
     end
   end
 
   # Deleting the nodes cascades to any relationships that referenced them
-  defp clear_contents(graph) do
-    Repo.delete_all(from(n in Node, where: n.graph_id == ^graph.id))
-    Repo.delete_all(from(r in Relationship, where: r.graph_id == ^graph.id))
+  defp clear_contents(flow) do
+    Repo.delete_all(from(n in Node, where: n.flow_id == ^flow.id))
+    Repo.delete_all(from(r in Relationship, where: r.flow_id == ^flow.id))
 
     :ok
   end
@@ -423,9 +429,9 @@ defmodule FormFlow.Data.Graphs do
   # subflow steps, a "subflows" flow never holds form steps. Start/End are
   # structural and pass. The editor is the primary guard — this is the belt
   # for callers bypassing it.
-  defp validate_flavor(graph, nodes_attrs) do
+  defp validate_flavor(flow, nodes_attrs) do
     error =
-      case graph.label do
+      case flow.label do
         "forms" ->
           if Enum.any?(nodes_attrs, &subflow_step?/1),
             do: "a forms flow cannot contain subflow steps"
@@ -437,7 +443,7 @@ defmodule FormFlow.Data.Graphs do
 
     if error do
       changeset =
-        graph
+        flow
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.add_error(:nodes, error)
 
@@ -465,8 +471,8 @@ defmodule FormFlow.Data.Graphs do
   # when it was added in the editor (data.subflow_label), so missing children
   # can be created without asking anyone — owned by the root, universally
   # seeded, named from the canvas label.
-  defp create_missing_subflows(graph, nodes) do
-    root_id = graph.owner_graph_id || graph.id
+  defp create_missing_subflows(flow, nodes) do
+    root_id = flow.owner_flow_id || flow.id
 
     nodes
     |> Enum.filter(fn node ->
@@ -476,7 +482,7 @@ defmodule FormFlow.Data.Graphs do
       child_attrs = %{
         name: get_in(node.properties, ["data", "label"]) || "Untitled subflow",
         label: get_in(node.properties, ["data", "subflow_label"]) || "forms",
-        owner_graph_id: root_id,
+        owner_flow_id: root_id,
         nodes: starter_nodes(),
         relationships: []
       }
@@ -490,9 +496,9 @@ defmodule FormFlow.Data.Graphs do
     end)
   end
 
-  defp insert_contents(graph, schema, attrs_list) do
+  defp insert_contents(flow, schema, attrs_list) do
     Enum.reduce_while(attrs_list, {:ok, []}, fn attrs, {:ok, inserted} ->
-      changeset = schema.changeset(struct(schema), Map.put(attrs, :graph_id, graph.id))
+      changeset = schema.changeset(struct(schema), Map.put(attrs, :flow_id, flow.id))
 
       case Repo.insert(changeset) do
         {:ok, record} -> {:cont, {:ok, [record | inserted]}}
@@ -501,26 +507,26 @@ defmodule FormFlow.Data.Graphs do
     end)
   end
 
-  # Garbage collection after a save: owned graphs in this ownership domain
+  # Garbage collection after a save: owned flows in this ownership domain
   # that are no longer reachable through subflow references get deleted, with
   # their contents — and owned forms no longer referenced by any node in the
   # domain go with them. Multi-level removal comes for free — a removed
   # subflow's own children stop being reachable too.
-  defp sweep_unreachable(graph) do
-    root_id = graph.owner_graph_id || graph.id
+  defp sweep_unreachable(flow) do
+    root_id = flow.owner_flow_id || flow.id
     reachable = reachable_owned([root_id], root_id)
 
     doomed =
       Repo.all(
-        from(g in Graph,
-          where: g.owner_graph_id == ^root_id and g.id not in ^reachable,
-          select: g.id
+        from(f in Flow,
+          where: f.owner_flow_id == ^root_id and f.id not in ^reachable,
+          select: f.id
         )
       )
 
-    if doomed != [], do: delete_graphs(doomed)
+    if doomed != [], do: delete_flows(doomed)
 
-    sweep_unreferenced_forms(graph, root_id, [root_id | reachable])
+    sweep_unreferenced_forms(flow, root_id, [root_id | reachable])
 
     :ok
   end
@@ -529,11 +535,11 @@ defmodule FormFlow.Data.Graphs do
   # context (the node FK is :nothing by design), which refuses while instance
   # data exists — and then so does this save: instance data is never orphaned
   # silently, the user is told the removed step still has submissions.
-  defp sweep_unreferenced_forms(graph, root_id, graph_ids) do
+  defp sweep_unreferenced_forms(flow, root_id, flow_ids) do
     referenced =
       Repo.all(
         from(n in Node,
-          where: n.graph_id in ^graph_ids and not is_nil(n.form_id),
+          where: n.flow_id in ^flow_ids and not is_nil(n.form_id),
           distinct: true,
           select: n.form_id
         )
@@ -542,7 +548,7 @@ defmodule FormFlow.Data.Graphs do
     doomed =
       Repo.all(
         from(f in Templates.Form,
-          where: f.owner_graph_id == ^root_id and f.id not in ^referenced
+          where: f.owner_flow_id == ^root_id and f.id not in ^referenced
         )
       )
 
@@ -552,7 +558,7 @@ defmodule FormFlow.Data.Graphs do
           :ok
 
         {:error, :has_instances} ->
-          graph
+          flow
           |> Ecto.Changeset.change()
           |> Ecto.Changeset.add_error(
             :nodes,
@@ -569,9 +575,9 @@ defmodule FormFlow.Data.Graphs do
 
   # The owned forms a flow deletion will take with it, or a friendly refusal
   # when any of them still holds instance data. The actual deletion happens after
-  # the graph tree (nodes first — their form FK enforces even as :nothing).
-  defp owned_forms_deletable(graph) do
-    forms = Repo.all(from(f in Templates.Form, where: f.owner_graph_id == ^graph.id))
+  # the flow tree (nodes first — their form FK enforces even as :nothing).
+  defp owned_forms_deletable(flow) do
+    forms = Repo.all(from(f in Templates.Form, where: f.owner_flow_id == ^flow.id))
 
     case Enum.find(forms, fn form -> form_has_instances?(form.id) end) do
       nil ->
@@ -579,7 +585,7 @@ defmodule FormFlow.Data.Graphs do
 
       form ->
         changeset =
-          graph
+          flow
           |> Ecto.Changeset.change()
           |> Ecto.Changeset.add_error(
             :id,
@@ -600,7 +606,7 @@ defmodule FormFlow.Data.Graphs do
     )
   end
 
-  # Graphs owned by `owner_id` reachable by following subflow references out
+  # Flows owned by `owner_id` reachable by following subflow references out
   # of `frontier`. Within one ownership domain the reference structure is a
   # tree, but the seen-set guards against cycles regardless.
   defp reachable_owned(frontier, owner_id), do: reachable_owned(frontier, owner_id, MapSet.new())
@@ -611,11 +617,11 @@ defmodule FormFlow.Data.Graphs do
     children =
       Repo.all(
         from(n in Node,
-          join: g in Graph,
-          on: g.id == n.subflow_id,
-          where: n.graph_id in ^frontier and g.owner_graph_id == ^owner_id,
+          join: f in Flow,
+          on: f.id == n.subflow_id,
+          where: n.flow_id in ^frontier and f.owner_flow_id == ^owner_id,
           distinct: true,
-          select: g.id
+          select: f.id
         )
       )
 
@@ -624,27 +630,27 @@ defmodule FormFlow.Data.Graphs do
     reachable_owned(new, owner_id, Enum.into(new, seen))
   end
 
-  # Deletes graphs in an order that never trips the subflow foreign key:
+  # Deletes flows in an order that never trips the subflow foreign key:
   # nodes first (removing every subflow reference; their relationships cascade),
-  # then the graph rows themselves.
-  defp delete_graphs(ids) do
-    Repo.delete_all(from(n in Node, where: n.graph_id in ^ids))
-    Repo.delete_all(from(g in Graph, where: g.id in ^ids))
+  # then the flow rows themselves.
+  defp delete_flows(ids) do
+    Repo.delete_all(from(n in Node, where: n.flow_id in ^ids))
+    Repo.delete_all(from(f in Flow, where: f.id in ^ids))
 
     :ok
   end
 
-  # Copies one graph and, recursively, everything it owns. `domain_id` is the
+  # Copies one flow and, recursively, everything it owns. `domain_id` is the
   # ownership root of the new tree: the requested owner, or the top copy
   # itself once it exists.
-  defp copy_graph(source_id, owner_id, domain_id) do
+  defp copy_flow(source_id, owner_id, domain_id) do
     source = get(source_id)
     copy_id = Ecto.UUID.generate()
     domain_id = domain_id || owner_id || copy_id
 
-    {:ok, _graph} =
-      %Graph{id: copy_id}
-      |> Ecto.Changeset.change(owner_graph_id: owner_id)
+    {:ok, _flow} =
+      %Flow{id: copy_id}
+      |> Ecto.Changeset.change(owner_flow_id: owner_id)
       |> Repo.insert()
 
     node_ids = Map.new(source.nodes, fn node -> {node.id, Ecto.UUID.generate()} end)
@@ -654,7 +660,7 @@ defmodule FormFlow.Data.Graphs do
         %Node{}
         |> Node.changeset(%{
           id: node_ids[node.id],
-          graph_id: copy_id,
+          flow_id: copy_id,
           subflow_id: copy_subflow_reference(node.subflow_id, domain_id),
           # Explicit, even when unchanged: the source properties still carry
           # the OLD form id, and the changeset's adopt-from-properties path
@@ -671,7 +677,7 @@ defmodule FormFlow.Data.Graphs do
         %Relationship{}
         |> Relationship.changeset(%{
           id: Ecto.UUID.generate(),
-          graph_id: copy_id,
+          flow_id: copy_id,
           source_id: node_ids[relationship.source_id],
           target_id: node_ids[relationship.target_id],
           label: relationship.label,
@@ -686,11 +692,11 @@ defmodule FormFlow.Data.Graphs do
   defp copy_subflow_reference(nil, _domain_id), do: nil
 
   defp copy_subflow_reference(subflow_id, domain_id) do
-    # The copy boundary: owned graphs are copied into the new domain,
-    # reusable graphs stay shared references
-    case Repo.get(Graph, subflow_id) do
-      %Graph{owner_graph_id: nil} -> subflow_id
-      %Graph{} -> copy_graph(subflow_id, domain_id, domain_id)
+    # The copy boundary: owned flows are copied into the new domain,
+    # reusable flows stay shared references
+    case Repo.get(Flow, subflow_id) do
+      %Flow{owner_flow_id: nil} -> subflow_id
+      %Flow{} -> copy_flow(subflow_id, domain_id, domain_id)
       nil -> nil
     end
   end
@@ -702,11 +708,11 @@ defmodule FormFlow.Data.Graphs do
 
   defp copy_form_reference(form_id, domain_id) do
     case Repo.get(Templates.Form, form_id) do
-      %Templates.Form{owner_graph_id: nil} ->
+      %Templates.Form{owner_flow_id: nil} ->
         form_id
 
       %Templates.Form{} = form ->
-        {:ok, copy} = Templates.Forms.copy(form, owner_graph_id: domain_id)
+        {:ok, copy} = Templates.Forms.copy(form, owner_flow_id: domain_id)
         copy.id
 
       nil ->
@@ -717,8 +723,8 @@ defmodule FormFlow.Data.Graphs do
   # Save-time form creation, the form-node mirror of create_missing_subflows:
   # a form node without a form gets a fresh owned lineage (with one blank
   # draft), named from the canvas label, owned by the ownership root
-  defp create_missing_forms(graph, nodes) do
-    root_id = graph.owner_graph_id || graph.id
+  defp create_missing_forms(flow, nodes) do
+    root_id = flow.owner_flow_id || flow.id
 
     nodes
     |> Enum.filter(fn node ->
@@ -727,7 +733,7 @@ defmodule FormFlow.Data.Graphs do
     |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
       form_attrs = %{
         name: get_in(node.properties, ["data", "label"]) || "Untitled form",
-        owner_graph_id: root_id
+        owner_flow_id: root_id
       }
 
       with {:ok, form} <- Templates.Forms.create(form_attrs),

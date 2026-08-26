@@ -20,13 +20,13 @@ defmodule FormFlow.Data.Templates.FormTest do
         app: "taxes",
         name: "W-2 Details",
         description: "Wages and withholding",
-        owner_graph_id: owner_id
+        owner_flow_id: owner_id
       })
 
     assert changeset.valid?
     assert changeset.changes.app == "taxes"
     assert changeset.changes.description == "Wages and withholding"
-    assert changeset.changes.owner_graph_id == owner_id
+    assert changeset.changes.owner_flow_id == owner_id
   end
 
   test "copied_from_form_id is not castable — only copy/2 stamps provenance" do

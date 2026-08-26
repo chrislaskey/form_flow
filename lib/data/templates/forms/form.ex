@@ -12,9 +12,9 @@ defmodule FormFlow.Data.Templates.Form do
 
   ## Ownership
 
-  `owner_graph_id` mirrors `FormFlow.Data.Graph`'s ownership: an owned form is
-  a flow tree's private property (the ownership root, flat), created by the
-  editor and cleaned up with its flow. `nil` means a reusable catalog form,
+  `owner_flow_id` mirrors `FormFlow.Data.Templates.Flow`'s ownership: an owned
+  form is a flow tree's private property (the ownership root, flat), created
+  by the editor and cleaned up with its flow. `nil` means a reusable catalog form,
   listed in `/forms` and shared by reference. Catalog names are unique per
   app; owned forms may repeat names freely (yearly copies of "W-2 Details").
 
@@ -27,7 +27,7 @@ defmodule FormFlow.Data.Templates.Form do
 
   import Ecto.Changeset
 
-  alias FormFlow.Data.Graph
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Form.Version
 
   @primary_key {:id, :binary_id, autogenerate: true}
@@ -38,7 +38,7 @@ defmodule FormFlow.Data.Templates.Form do
     field(:name, :string)
     field(:description, :string)
 
-    belongs_to(:owner_graph, Graph, foreign_key: :owner_graph_id)
+    belongs_to(:owner_flow, Flow, foreign_key: :owner_flow_id)
     belongs_to(:copied_from, __MODULE__, foreign_key: :copied_from_form_id)
 
     has_many(:versions, Version, foreign_key: :template_form_id)
@@ -54,9 +54,9 @@ defmodule FormFlow.Data.Templates.Form do
   """
   def changeset(form, attrs \\ %{}) do
     form
-    |> cast(attrs, [:app, :name, :description, :owner_graph_id])
+    |> cast(attrs, [:app, :name, :description, :owner_flow_id])
     |> validate_required([:name])
-    |> foreign_key_constraint(:owner_graph_id)
+    |> foreign_key_constraint(:owner_flow_id)
     |> unique_constraint([:app, :name], name: :form_flow_template_forms_app_name_index)
   end
 end

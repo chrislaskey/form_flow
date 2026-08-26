@@ -23,7 +23,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.PublishDialog
@@ -122,7 +122,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp load(socket) do
     assigns = socket.assigns
-    node = assigns.node_id && Graphs.get_node(assigns.node_id)
+    node = assigns.node_id && Flows.get_node(assigns.node_id)
     form_id = assigns.form_id || (node && node.form_id)
     form = form_id && Forms.get(form_id)
     version = assigns.version_id && Forms.get_version(assigns.version_id)
@@ -293,11 +293,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
 
   defp assign_breadcrumb(socket, node) do
-    root = Graphs.get(socket.assigns.root_id)
+    root = Flows.get(socket.assigns.root_id)
 
     parent_node =
-      if root && node.graph_id != root.id,
-        do: Graphs.embedding_node(node.graph_id, root.id)
+      if root && node.flow_id != root.id,
+        do: Flows.embedding_node(node.flow_id, root.id)
 
     assign(socket, root: root, parent_node: parent_node)
   end

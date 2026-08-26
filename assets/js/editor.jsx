@@ -92,10 +92,10 @@ function SubflowNode({ id, data, selected, isConnectable }) {
 const nodeTypes = { step: StepNode, subflow: SubflowNode };
 
 // The flow itself is defined in Elixir — see
-// FormFlow.Web.Templates.Flows.Graph — serialized to JSON, and handed in as
-// opts.graph. This is only the fallback for mounting with nothing at all, so it
-// is deliberately empty rather than a second, competing definition of a flow.
-const EMPTY_GRAPH = { nodes: [], edges: [] };
+// FormFlow.Web.Helpers.ReactFlow.to_data/1 — serialized to JSON, and handed in
+// as opts.flow. This is only the fallback for mounting with nothing at all, so
+// it is deliberately empty rather than a second, competing definition of a flow.
+const EMPTY_FLOW = { nodes: [], edges: [] };
 
 // Nodes are positioned by their top centre, so a node dropped at the cursor
 // lands under it rather than to its right
@@ -148,7 +148,7 @@ function stepEdge(source, target) {
 /* ----------------------------------------------------------------- editor -- */
 
 function FlowEditor({
-  graph,
+  flow,
   onChange,
   editable = true,
   flowLabel = "forms",
@@ -161,15 +161,15 @@ function FlowEditor({
   // reported "node still present, edges gone", and saving persisted the
   // ghost. Functional updates over the combined state always see the whole
   // current picture.
-  const [state, setState] = useState(() => normalize(graph));
+  const [state, setState] = useState(() => normalize(flow));
 
   const { screenToFlowPosition } = useReactFlow();
 
-  // Elixir can push new data at any time (see form_flow:set_graph). useState
+  // Elixir can push new data at any time (see form_flow:set_flow). useState
   // ignores a changed initial value, so the canvas has to be told explicitly.
   useEffect(() => {
-    setState(normalize(graph));
-  }, [graph]);
+    setState(normalize(flow));
+  }, [flow]);
 
   const report = useCallback(
     (next) => {
@@ -334,10 +334,10 @@ function FlowEditor({
   );
 }
 
-function normalize(graph) {
-  if (!graph || !Array.isArray(graph.nodes)) return EMPTY_GRAPH;
+function normalize(flow) {
+  if (!flow || !Array.isArray(flow.nodes)) return EMPTY_FLOW;
 
-  return { nodes: graph.nodes, edges: Array.isArray(graph.edges) ? graph.edges : [] };
+  return { nodes: flow.nodes, edges: Array.isArray(flow.edges) ? flow.edges : [] };
 }
 
 /* ----------------------------------------------------------------- public -- */
@@ -368,17 +368,17 @@ export function injectStyles(doc = document) {
  * autocreate makes; `onOpenSubflow(nodeId)` is called by a subflow node's
  * Open button, `onOpenForm(nodeId)` by a form step's.
  *
- * Returns a handle with `setGraph/1` so the server can push a new graph in, and
+ * Returns a handle with `setFlow/1` so the server can push a new flow in, and
  * `unmount/0` for teardown.
  */
 export function mount(el, opts = {}) {
   const root = createRoot(el);
-  const render = (graph) =>
+  const render = (flow) =>
     root.render(
       // useReactFlow (used for screenToFlowPosition) requires this provider
       <ReactFlowProvider>
         <FlowEditor
-          graph={graph}
+          flow={flow}
           onChange={opts.onChange}
           editable={opts.editable !== false}
           flowLabel={opts.flowLabel}
@@ -389,10 +389,10 @@ export function mount(el, opts = {}) {
     );
 
   roots.set(el, root);
-  render(opts.graph);
+  render(opts.flow);
 
   return {
-    setGraph: (graph) => render(graph),
+    setFlow: (flow) => render(flow),
     unmount: () => unmount(el),
   };
 }

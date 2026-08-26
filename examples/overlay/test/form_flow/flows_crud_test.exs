@@ -2,7 +2,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   @moduledoc """
   Drives the flows CRUD pages end-to-end through the dedicated
   `live "/admin/*path", FormFlowLive.Admin` route (mounted with `base="/admin"`):
-  `/admin/flows/new` chooses a flavor and creates a seeded graph,
+  `/admin/flows/new` chooses a flavor and creates a seeded flow,
   `/admin/flows/:id/edit` is the canvas, `/admin/flows/:id` shows it
   read-only, subflows drill in at `/admin/flows/:root/nodes/:node_id`, and
   delete removes everything a flow owns.
@@ -15,7 +15,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
   import Phoenix.LiveViewTest
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
 
   test "every flows path renders on the dedicated page", %{conn: conn} do
     for path <- ["/admin/flows", "/admin/flows/new"] do
@@ -41,16 +41,16 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert "/admin/flows/" <> rest = path
     assert [id, "edit"] = String.split(rest, "/")
 
-    graph = Graphs.get(id)
-    assert graph.name == "Enrollment"
-    assert graph.label == "forms"
+    flow = Flows.get(id)
+    assert flow.name == "Enrollment"
+    assert flow.label == "forms"
 
     # The universal starter: a pinned Start and End, nothing else
-    assert graph.nodes |> Enum.map(&get_in(&1.properties, ["data", "label"])) |> Enum.sort() ==
+    assert flow.nodes |> Enum.map(&get_in(&1.properties, ["data", "label"])) |> Enum.sort() ==
              ["End", "Start"]
 
-    assert Enum.all?(graph.nodes, &(&1.properties["deletable"] == false))
-    assert graph.relationships == []
+    assert Enum.all?(flow.nodes, &(&1.properties["deletable"] == false))
+    assert flow.relationships == []
   end
 
   test "the index starts empty and lists flows with names, kinds, and actions", %{conn: conn} do
@@ -76,7 +76,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => "1",
@@ -93,17 +93,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # Edit mode is sticky: no redirect, a Saved notice, and the canvas is
     # re-synced with persisted UUIDs in place of the editor's temporary ids
     assert render(view) =~ "Saved."
-    assert_push_event(view, "form_flow:set_graph", %{graph: %{nodes: [pushed]}})
+    assert_push_event(view, "form_flow:set_flow", %{flow: %{nodes: [pushed]}})
     assert {:ok, _} = Ecto.UUID.cast(pushed["id"])
 
-    graph = Graphs.get(id)
-    assert [node] = graph.nodes
+    flow = Flows.get(id)
+    assert [node] = flow.nodes
     assert node.properties["data"]["label"] == "Renamed step"
 
     # The notice clears on the next edit
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{"nodes" => [], "edges" => []})
+    |> render_hook("form_flow:flow_changed", %{"nodes" => [], "edges" => []})
 
     refute render(view) =~ "Saved."
   end
@@ -119,12 +119,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Nothing persists until Save — a pending name is an unsaved change,
     # riding the same guard as canvas edits
-    assert Graphs.get(id).name != "Better name"
+    assert Flows.get(id).name != "Better name"
     assert has_element?(view, "button", "Discard changes")
 
     view |> element("button", "Save") |> render_click()
 
-    assert Graphs.get(id).name == "Better name"
+    assert Flows.get(id).name == "Better name"
     refute has_element?(view, "button", "Discard changes")
   end
 
@@ -145,7 +145,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => "1",
@@ -160,11 +160,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    assert [node] = Graphs.get(root_id).nodes
-    child = Graphs.get(node.subflow_id)
+    assert [node] = Flows.get(root_id).nodes
+    child = Flows.get(node.subflow_id)
     assert child.name == "Collect address"
     assert child.label == "forms"
-    assert child.owner_graph_id == root_id
+    assert child.owner_flow_id == root_id
 
     # Drill-in show: breadcrumb back to the root, read-only child canvas
     {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
@@ -208,22 +208,22 @@ defmodule Demo.FormFlowFlowsCrudTest do
   } do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
 
     view |> element("button", "Delete") |> render_click()
     assert_redirect(view, "/admin/flows/#{root_id}/edit")
 
-    assert Graphs.get(root_id).nodes == []
-    assert Graphs.get(node.subflow_id) == nil
+    assert Flows.get(root_id).nodes == []
+    assert Flows.get(node.subflow_id) == nil
   end
 
   test "deleting two levels deep returns to the containing subflow's editor", %{conn: conn} do
-    {:ok, root} = Graphs.create(%{name: "Root", label: "subflows"})
+    {:ok, root} = Flows.create(%{name: "Root", label: "subflows"})
 
     {:ok, _} =
-      Graphs.update(root, %{
+      Flows.update(root, %{
         nodes: [
           %{
             properties: %{
@@ -235,11 +235,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
         relationships: []
       })
 
-    [x] = Graphs.get(root.id).nodes
-    middle = Graphs.get(x.subflow_id)
+    [x] = Flows.get(root.id).nodes
+    middle = Flows.get(x.subflow_id)
 
     {:ok, _} =
-      Graphs.update(middle, %{
+      Flows.update(middle, %{
         nodes: [
           %{
             properties: %{
@@ -251,7 +251,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
         relationships: []
       })
 
-    [y] = Enum.filter(Graphs.get(middle.id).nodes, &(&1.properties["type"] == "subflow"))
+    [y] = Enum.filter(Flows.get(middle.id).nodes, &(&1.properties["type"] == "subflow"))
 
     # The page shows Leaf; deleting removes node y from Middle, so the
     # destination is Middle's editor — addressed by the node embedding Middle
@@ -260,14 +260,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Delete") |> render_click()
     assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{x.id}/edit")
 
-    assert Graphs.get(y.subflow_id) == nil
-    assert Graphs.get(middle.id) != nil
+    assert Flows.get(y.subflow_id) == nil
+    assert Flows.get(middle.id) != nil
   end
 
   test "deleting a subflow another flow still uses is refused with an explanation", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     # Visiting the owned child directly and trying to delete it
     {:ok, view, _html} = live(conn, "/admin/flows/#{node.subflow_id}")
@@ -275,14 +275,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Delete") |> render_click()
 
     assert render(view) =~ "another flow still uses it as a subflow"
-    assert Graphs.get(node.subflow_id) != nil
+    assert Flows.get(node.subflow_id) != nil
   end
 
   test "opening a subflow node navigates by node id", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
 
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
 
@@ -312,11 +312,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
 
-    # Added but never saved — Graphs.get_node/1 can't find it under its
+    # Added but never saved — Flows.get_node/1 can't find it under its
     # editor-temporary id yet
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => "1",
@@ -336,7 +336,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save & Continue") |> render_click()
 
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
     assert {:ok, _} = Ecto.UUID.cast(node.id)
     assert node.subflow_id != nil
 
@@ -348,7 +348,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
 
@@ -363,7 +363,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
 
@@ -381,7 +381,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "confirming the unsaved-changes prompt saves before navigating", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
 
@@ -395,7 +395,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
 
-    [saved_node] = Graphs.get(root_id).nodes
+    [saved_node] = Flows.get(root_id).nodes
     assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
   end
 
@@ -403,7 +403,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
 
@@ -418,14 +418,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute render(view) =~ "unsaved changes"
 
     # Nothing was persisted, and nothing navigated away
-    [unmoved_node] = Graphs.get(root_id).nodes
+    [unmoved_node] = Flows.get(root_id).nodes
     assert unmoved_node.properties["position"] == %{"x" => 0, "y" => 0}
 
     # The pending edit is still live on the canvas and can still be saved
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    [saved_node] = Graphs.get(root_id).nodes
+    [saved_node] = Flows.get(root_id).nodes
     assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
   end
 
@@ -456,7 +456,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert_redirect(view, "/admin/flows/#{id}")
 
-    assert [node] = Graphs.get(id).nodes
+    assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
   end
 
@@ -505,7 +505,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert_redirect(view, "/admin/flows/#{id}/edit")
 
     # Nothing was persisted — the edit never went through save
-    assert length(Graphs.get(id).nodes) == 2
+    assert length(Flows.get(id).nodes) == 2
   end
 
   test "cancelling the discard prompt keeps the unsaved edit live", %{conn: conn} do
@@ -524,7 +524,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    assert [node] = Graphs.get(id).nodes
+    assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
   end
 
@@ -554,7 +554,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert_redirect(view, "/admin/flows")
 
-    assert [node] = Graphs.get(id).nodes
+    assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
   end
 
@@ -572,28 +572,28 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute render(view) =~ "unsaved changes"
 
     # Nothing was persisted, and nothing navigated away
-    assert length(Graphs.get(id).nodes) == 2
+    assert length(Flows.get(id).nodes) == 2
 
     # The pending edit is still live on the canvas and can still be saved
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    assert [node] = Graphs.get(id).nodes
+    assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
   end
 
   test "deleting a flow from the show page removes it and its children", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
-    [node] = Graphs.get(root_id).nodes
+    [node] = Flows.get(root_id).nodes
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
 
     view |> element("button", "Delete") |> render_click()
     assert_redirect(view, "/admin/flows")
 
-    assert Graphs.get(root_id) == nil
-    assert Graphs.get(node.subflow_id) == nil
+    assert Flows.get(root_id) == nil
+    assert Flows.get(node.subflow_id) == nil
   end
 
   test "show and edit handle a flow that does not exist", %{conn: conn} do
@@ -626,7 +626,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => "1",
@@ -646,7 +646,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   defp move_subflow_node(view, node_id) do
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => node_id,
@@ -664,7 +664,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   defp edit_step(view) do
     view
     |> element("#flows-edit-editor")
-    |> render_hook("form_flow:graph_changed", %{
+    |> render_hook("form_flow:flow_changed", %{
       "nodes" => [
         %{
           "id" => "1",

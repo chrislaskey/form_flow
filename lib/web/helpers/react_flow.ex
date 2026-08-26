@@ -56,37 +56,38 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       which connection handles it gets
 
   `to_data/1` adds a third key, `labels` — the node's stored
-  `FormFlow.Data.Graph.Node.labels`, shown under the title. It isn't something
-  you set by hand in the map above; see Persistence below.
+  `FormFlow.Data.Templates.Flow.Node.labels`, shown under the title. It isn't
+  something you set by hand in the map above; see Persistence below.
 
   Any other node type you register in the editor is passed through the same way.
 
   ## Persistence
 
-  `to_graph_attrs/1` and `to_data/1` translate between ReactFlow's shape and
-  `FormFlow.Data.Graph` records, and are inverses of each other:
+  `to_flow_attrs/1` and `to_data/1` translate between ReactFlow's shape and
+  `FormFlow.Data.Templates.Flow` records, and are inverses of each other:
 
-    * A ReactFlow node becomes a `FormFlow.Data.Graph.Node` whose `properties`
-      are the node map itself, minus `id` — position, type, data, and anything
-      else ReactFlow supports round-trips untouched.
-    * A ReactFlow edge becomes a `FormFlow.Data.Graph.Relationship` the same
-      way, minus `id`, `source`, and `target`, which become columns. Every
-      relationship gets the label `"CONNECTS_TO"` — the editor's
-      edges all mean the same thing today.
+    * A ReactFlow node becomes a `FormFlow.Data.Templates.Flow.Node` whose
+      `properties` are the node map itself, minus `id` — position, type, data,
+      and anything else ReactFlow supports round-trips untouched.
+    * A ReactFlow edge becomes a `FormFlow.Data.Templates.Flow.Relationship`
+      the same way, minus `id`, `source`, and `target`, which become columns.
+      Every relationship gets the label `"CONNECTS_TO"` — the editor's edges
+      all mean the same thing today.
     * Ids from the editor (`"1"`, `"4"`) are replaced with generated UUIDs at
       save time; ids that already are UUIDs are kept, so unchanged records are
-      updated in place rather than recreated. `to_graph_attrs/1`'s `id_map`
+      updated in place rather than recreated. `to_flow_attrs/1`'s `id_map`
       return value is how a caller finds out what a given editor id became.
 
-  Saved properties also carry a `"graph_id"` key — the schemas keep a copy of
-  the `graph_id` column inside `properties` (see `FormFlow.Data.Graph.Node`).
-  It rides through the editor and back as any other property; the column stays
-  authoritative on save.
+  Saved properties also carry a `"flow_id"` key — the schemas keep a copy of
+  the `flow_id` column inside `properties` (see
+  `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
+  as any other property; the column stays authoritative on save.
 
   One exception to the pure pass-through: `to_data/1` merges the node's stored
-  `labels` (see `FormFlow.Data.Graph.Node`) into `data.labels` for display.
+  `labels` (see `FormFlow.Data.Templates.Flow.Node`) into `data.labels` for
+  display.
   Nothing sets it the other way — the editor never writes labels back, so
-  `to_graph_attrs/1` just carries whatever it finds there like any other
+  `to_flow_attrs/1` just carries whatever it finds there like any other
   property, and the changeset re-derives the authoritative value on save.
   """
 
@@ -103,8 +104,9 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   end
 
   @doc """
-  Converts ReactFlow data into attributes for `FormFlow.Data.Graphs.create/1`
-  and `FormFlow.Data.Graphs.update/2`.
+  Converts ReactFlow data into attributes for
+  `FormFlow.Data.Templates.Flows.create/1` and
+  `FormFlow.Data.Templates.Flows.update/2`.
 
   Accepts the shape the editor reports (string keys) or the shape flows are
   written in Elixir (atom keys). See the module documentation for the mapping.
@@ -117,7 +119,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   navigate straight to it after the save this attrs map is about to go
   into — reads it from here rather than guessing.
   """
-  def to_graph_attrs(data) when is_map(data) do
+  def to_flow_attrs(data) when is_map(data) do
     %{"nodes" => nodes, "edges" => edges} =
       data
       |> string_keys()
@@ -146,14 +148,14 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   end
 
   @doc """
-  Converts a loaded `FormFlow.Data.Graph` back into ReactFlow data — the
-  inverse of `to_graph_attrs/1`. Node and edge ids are the records' UUIDs.
+  Converts a loaded `FormFlow.Data.Templates.Flow` back into ReactFlow data —
+  the inverse of `to_flow_attrs/1`. Node and edge ids are the records' UUIDs.
   """
-  def to_data(%FormFlow.Data.Graph{} = graph) do
+  def to_data(%FormFlow.Data.Templates.Flow{} = flow) do
     %{
-      nodes: Enum.map(graph.nodes, &node_data/1),
+      nodes: Enum.map(flow.nodes, &node_data/1),
       edges:
-        Enum.map(graph.relationships, fn relationship ->
+        Enum.map(flow.relationships, fn relationship ->
           relationship.properties
           |> Map.put("id", relationship.id)
           |> Map.put("source", relationship.source_id)

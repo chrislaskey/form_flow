@@ -9,7 +9,7 @@ defmodule Demo.FormFlowFormsTest do
 
   use Demo.DataCase, async: false
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Form
@@ -291,11 +291,11 @@ defmodule Demo.FormFlowFormsTest do
       # A newer draft exists but does not copy — history stays with the source
       {:ok, _draft} = Forms.create_draft(form.id)
 
-      owner = insert_graph()
-      assert {:ok, copy} = Forms.copy(Forms.get(form.id), owner_graph_id: owner.id)
+      owner = insert_flow()
+      assert {:ok, copy} = Forms.copy(Forms.get(form.id), owner_flow_id: owner.id)
 
       assert copy.copied_from_form_id == form.id
-      assert copy.owner_graph_id == owner.id
+      assert copy.owner_flow_id == owner.id
       assert [v1] = copy.versions
       assert v1.status == "published"
       assert v1.version == 1
@@ -305,8 +305,8 @@ defmodule Demo.FormFlowFormsTest do
     test "a never-published source copies its newest draft as a draft" do
       {:ok, form} = Forms.create(%{name: "Unfinished", definition: %{"wip" => true}})
 
-      owner = insert_graph()
-      assert {:ok, copy} = Forms.copy(form, owner_graph_id: owner.id)
+      owner = insert_flow()
+      assert {:ok, copy} = Forms.copy(form, owner_flow_id: owner.id)
 
       assert [draft] = copy.versions
       assert draft.status == "draft"
@@ -315,102 +315,102 @@ defmodule Demo.FormFlowFormsTest do
     end
   end
 
-  describe "graph integration" do
+  describe "flow integration" do
     test "saving a forms flow auto-creates an owned form per unbacked form node" do
-      {:ok, graph} = Graphs.create(%{name: "Taxes 2026"})
+      {:ok, flow} = Flows.create(%{name: "Taxes 2026"})
 
-      {:ok, _graph} = Graphs.update(graph, %{nodes: [form_node_attrs("W-2 Details")]})
+      {:ok, _flow} = Flows.update(flow, %{nodes: [form_node_attrs("W-2 Details")]})
 
-      [node] = Graphs.get(graph.id).nodes
+      [node] = Flows.get(flow.id).nodes
       form = Forms.get(node.form_id)
 
       assert form.name == "W-2 Details"
-      assert form.owner_graph_id == graph.id
+      assert form.owner_flow_id == flow.id
       assert node.properties["form_id"] == form.id
       assert [%{status: "draft"}] = Forms.list_versions(form.id)
     end
 
     test "a form node keeps its form across editor round-trip saves" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("W-2")]})
-      [node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("W-2")]})
+      [node] = Flows.get(flow.id).nodes
 
       # The editor round-trips properties; the column arrives nil and adopts
       {:ok, _} =
-        Graphs.update(Graphs.get(graph.id), %{
+        Flows.update(Flows.get(flow.id), %{
           nodes: [%{id: node.id, properties: node.properties}]
         })
 
-      [saved] = Graphs.get(graph.id).nodes
+      [saved] = Flows.get(flow.id).nodes
       assert saved.form_id == node.form_id
     end
 
     test "removing a form node sweeps its owned form on save" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("Doomed")]})
-      [node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("Doomed")]})
+      [node] = Flows.get(flow.id).nodes
 
-      {:ok, _} = Graphs.update(Graphs.get(graph.id), %{nodes: []})
+      {:ok, _} = Flows.update(Flows.get(flow.id), %{nodes: []})
 
       assert Forms.get(node.form_id) == nil
     end
 
     test "the sweep refuses when the removed form has fill data" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("Filled")]})
-      [node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("Filled")]})
+      [node] = Flows.get(flow.id).nodes
 
       [draft] = Forms.list_versions(node.form_id)
       {:ok, v1} = Forms.update_status(draft, :published)
       insert_instance(v1)
 
-      assert {:error, changeset} = Graphs.update(Graphs.get(graph.id), %{nodes: []})
+      assert {:error, changeset} = Flows.update(Flows.get(flow.id), %{nodes: []})
       assert %{nodes: [message]} = errors_on(changeset)
       assert message =~ "still has submitted data"
 
       # And nothing was half-deleted — the save rolled back whole
       assert Forms.get(node.form_id) != nil
-      assert [_node] = Graphs.get(graph.id).nodes
+      assert [_node] = Flows.get(flow.id).nodes
     end
 
     test "deleting a flow deletes its owned forms — they never leak into the catalog" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("Private")]})
-      [node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("Private")]})
+      [node] = Flows.get(flow.id).nodes
 
-      {:ok, _} = Graphs.delete(Graphs.get(graph.id))
+      {:ok, _} = Flows.delete(Flows.get(flow.id))
 
       assert Forms.get(node.form_id) == nil
       refute Enum.any?(Forms.list(), &(&1.name == "Private"))
     end
 
     test "deleting a flow is refused while an owned form has fill data" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("Filled")]})
-      [node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("Filled")]})
+      [node] = Flows.get(flow.id).nodes
 
       [draft] = Forms.list_versions(node.form_id)
       {:ok, v1} = Forms.update_status(draft, :published)
       insert_instance(v1)
 
-      assert {:error, changeset} = Graphs.delete(Graphs.get(graph.id))
+      assert {:error, changeset} = Flows.delete(Flows.get(flow.id))
       assert %{id: [message]} = errors_on(changeset)
       assert message =~ "still has submitted data"
     end
 
     test "duplicate copies owned forms into the new domain, with provenance" do
-      {:ok, graph} = Graphs.create()
-      {:ok, _} = Graphs.update(graph, %{nodes: [form_node_attrs("W-2 Details")]})
-      [source_node] = Graphs.get(graph.id).nodes
+      {:ok, flow} = Flows.create()
+      {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("W-2 Details")]})
+      [source_node] = Flows.get(flow.id).nodes
 
-      {:ok, copy} = Graphs.duplicate(Graphs.get(graph.id))
+      {:ok, copy} = Flows.duplicate(Flows.get(flow.id))
       [copied_node] = copy.nodes
 
       assert copied_node.form_id != source_node.form_id
 
       copied_form = Forms.get(copied_node.form_id)
       assert copied_form.copied_from_form_id == source_node.form_id
-      assert copied_form.owner_graph_id == copy.id
+      assert copied_form.owner_flow_id == copy.id
 
       # The stale property copy was overwritten — a copied node must never
       # point back at the original lineage through property adoption
@@ -419,16 +419,16 @@ defmodule Demo.FormFlowFormsTest do
 
     test "duplicate keeps catalog forms as shared references" do
       {:ok, catalog_form} = Forms.create(%{name: "Shared W-2"})
-      {:ok, graph} = Graphs.create()
+      {:ok, flow} = Flows.create()
 
       node_attrs = %{
         form_id: catalog_form.id,
         properties: %{"type" => "step", "data" => %{"label" => "Shared W-2", "kind" => "form"}}
       }
 
-      {:ok, _} = Graphs.update(graph, %{nodes: [node_attrs]})
+      {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
 
-      {:ok, copy} = Graphs.duplicate(Graphs.get(graph.id))
+      {:ok, copy} = Flows.duplicate(Flows.get(flow.id))
       [copied_node] = copy.nodes
 
       assert copied_node.form_id == catalog_form.id
@@ -441,9 +441,9 @@ defmodule Demo.FormFlowFormsTest do
     %{properties: %{"type" => "step", "data" => %{"label" => label, "kind" => "form"}}}
   end
 
-  defp insert_graph do
-    {:ok, graph} = Graphs.create()
-    graph
+  defp insert_flow do
+    {:ok, flow} = Flows.create()
+    flow
   end
 
   defp published_form(definition \\ %{}) do

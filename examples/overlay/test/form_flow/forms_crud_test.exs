@@ -16,7 +16,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   import Phoenix.LiveViewTest
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
 
   test "the admin root is a generic landing linking both indexes", %{conn: conn} do
@@ -58,8 +58,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "No forms yet"
 
     {:ok, form} = Forms.create(%{name: "Catalog form"})
-    {:ok, graph} = Graphs.create()
-    {:ok, _owned} = Forms.create(%{name: "Owned form", owner_graph_id: graph.id})
+    {:ok, flow} = Flows.create()
+    {:ok, _owned} = Forms.create(%{name: "Owned form", owner_flow_id: flow.id})
 
     {:ok, view, html} = live(conn, "/admin/forms")
 
@@ -392,7 +392,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   test "drill-in edit shows the same full breadcrumb as show", %{conn: conn} do
     # The nested case: root flow → subflow → form node, reached by drill-in
-    {:ok, root} = Graphs.create(%{name: "Taxes 2026", label: "subflows"})
+    {:ok, root} = Flows.create(%{name: "Taxes 2026", label: "subflows"})
 
     subflow_attrs = %{
       properties: %{
@@ -401,17 +401,17 @@ defmodule Demo.FormFlowFormsCrudTest do
       }
     }
 
-    {:ok, _} = Graphs.update(root, %{nodes: [subflow_attrs]})
-    [subflow_node] = Graphs.get(root.id).nodes
+    {:ok, _} = Flows.update(root, %{nodes: [subflow_attrs]})
+    [subflow_node] = Flows.get(root.id).nodes
 
-    child = Graphs.get(subflow_node.subflow_id)
+    child = Flows.get(subflow_node.subflow_id)
 
     form_attrs = %{
       properties: %{"type" => "step", "data" => %{"label" => "W-2 Details", "kind" => "form"}}
     }
 
-    {:ok, _} = Graphs.update(child, %{nodes: [form_attrs]})
-    [form_node] = Graphs.get(child.id).nodes
+    {:ok, _} = Flows.update(child, %{nodes: [form_attrs]})
+    [form_node] = Flows.get(child.id).nodes
     [draft] = Forms.list_versions(form_node.form_id)
 
     show_path = "/admin/flows/#{root.id}/nodes/#{form_node.id}/form"
@@ -449,15 +449,15 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   defp flow_with_form_node(flow_name, form_label) do
-    {:ok, graph} = Graphs.create(%{name: flow_name})
+    {:ok, flow} = Flows.create(%{name: flow_name})
 
     node_attrs = %{
       properties: %{"type" => "step", "data" => %{"label" => form_label, "kind" => "form"}}
     }
 
-    {:ok, _} = Graphs.update(graph, %{nodes: [node_attrs]})
-    [node] = Graphs.get(graph.id).nodes
+    {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
+    [node] = Flows.get(flow.id).nodes
 
-    {Graphs.get(graph.id), node}
+    {Flows.get(flow.id), node}
   end
 end

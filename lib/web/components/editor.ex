@@ -14,11 +14,11 @@ defmodule FormFlow.Web.Components.Editor do
     * React to Elixir — `pushEventTo(this.el, ...)`, which lands in the
       `handle_event/3` of the LiveComponent passed as `target`:
       `"form_flow:editor_mounted"` once the bundle has loaded,
-      `"form_flow:graph_changed"` with `%{"nodes" => ..., "edges" => ...}` on
+      `"form_flow:flow_changed"` with `%{"nodes" => ..., "edges" => ...}` on
       every meaningful edit, `"form_flow:open_subflow"` with
       `%{"node_id" => ...}` when a subflow node's Open button is clicked, and
       `"form_flow:open_form"` likewise for a form step's Open button
-    * Elixir to React — `push_event/3` with the `form_flow:set_graph` event,
+    * Elixir to React — `push_event/3` with the `form_flow:set_flow` event,
       picked up by `handleEvent` in the hook
 
   Used by the Flows LiveComponents:
@@ -42,7 +42,7 @@ defmodule FormFlow.Web.Components.Editor do
 
   attr(:flow_label, :string,
     default: "forms",
-    doc: "the graph's declared flavor; picks the editor's add actions"
+    doc: "the flow's declared flavor; picks the editor's add actions"
   )
 
   def editor(assigns) do
@@ -57,7 +57,7 @@ defmodule FormFlow.Web.Components.Editor do
       data-src={Assets.editor_path()}
       data-editable={to_string(@editable)}
       data-flow-label={@flow_label}
-      data-graph={ReactFlow.to_json(@data)}
+      data-flow={ReactFlow.to_json(@data)}
       style="height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
     </div>
@@ -73,17 +73,17 @@ defmodule FormFlow.Web.Components.Editor do
             editor.injectStyles()
 
             this.editor = editor.mount(this.el, {
-              graph: JSON.parse(this.el.dataset.graph),
+              flow: JSON.parse(this.el.dataset.flow),
               editable: this.el.dataset.editable !== "false",
               flowLabel: this.el.dataset.flowLabel,
-              onChange: (graph) => this.pushEventTo(this.el, "form_flow:graph_changed", graph),
+              onChange: (flow) => this.pushEventTo(this.el, "form_flow:flow_changed", flow),
               onOpenSubflow: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId}),
               onOpenForm: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_form", {node_id: nodeId})
             })
 
-            this.handleEvent("form_flow:set_graph", ({graph}) => this.editor.setGraph(graph))
+            this.handleEvent("form_flow:set_flow", ({flow}) => this.editor.setFlow(flow))
 
             this.pushEventTo(this.el, "form_flow:editor_mounted", {})
           } catch (error) {

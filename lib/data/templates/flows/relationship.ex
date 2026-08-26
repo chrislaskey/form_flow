@@ -1,7 +1,7 @@
-defmodule FormFlow.Data.Graph.Relationship do
+defmodule FormFlow.Data.Templates.Flow.Relationship do
   @moduledoc """
-  `FormFlow.Data.Graph.Relationship` Ecto Schema for a directed relationship
-  between two nodes in a graph.
+  `FormFlow.Data.Templates.Flow.Relationship` Ecto Schema for a directed
+  relationship between two nodes in a flow.
 
   Follows Neo4j's property graph model: a relationship connects a `source` node
   to a `target` node, carries a single `label` (where a node carries many), and
@@ -15,11 +15,11 @@ defmodule FormFlow.Data.Graph.Relationship do
   Deleting either endpoint node deletes the relationship (Neo4j's DETACH DELETE
   as the only mode), enforced by the database.
 
-  `graph_id` is written to both locations: the dedicated column, so the
-  database can index membership and cascade deletes, and a `"graph_id"` key
+  `flow_id` is written to both locations: the dedicated column, so the
+  database can index membership and cascade deletes, and a `"flow_id"` key
   inside `properties`, which is the copy that carries over to Neo4j, where
   there is no column. The changeset keeps the copy in sync — the column is
-  authoritative, and a stale `"graph_id"` arriving in `properties` is
+  authoritative, and a stale `"flow_id"` arriving in `properties` is
   overwritten.
 
   The labels `IN`, `EMBEDS`, and `OWNED_BY` are reserved: they become
@@ -31,17 +31,17 @@ defmodule FormFlow.Data.Graph.Relationship do
 
   import Ecto.Changeset
 
-  alias FormFlow.Data.Graph
-  alias FormFlow.Data.Graph.Node
+  alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Flow.Node
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "form_flow_graph_relationships" do
+  schema "form_flow_relationships" do
     field(:label, :string)
     field(:properties, :map, default: %{})
 
-    belongs_to(:graph, Graph)
+    belongs_to(:flow, Flow)
     belongs_to(:source, Node)
     belongs_to(:target, Node)
 
@@ -52,30 +52,31 @@ defmodule FormFlow.Data.Graph.Relationship do
   Builds a changeset for a relationship.
 
   `:id` is castable so callers can supply their own UUIDs — that is how ids
-  stay stable when `FormFlow.Data.Graphs.update/2` replaces a graph's contents.
+  stay stable when `FormFlow.Data.Templates.Flows.update/2` replaces a flow's
+  contents.
   """
   def changeset(relationship, attrs) do
     relationship
-    |> cast(attrs, [:id, :graph_id, :source_id, :target_id, :label, :properties])
-    |> validate_required([:graph_id, :source_id, :target_id, :label])
+    |> cast(attrs, [:id, :flow_id, :source_id, :target_id, :label, :properties])
+    |> validate_required([:flow_id, :source_id, :target_id, :label])
     |> validate_exclusion(:label, ~w(IN EMBEDS OWNED_BY), message: "is reserved by FormFlow")
-    |> copy_graph_id_into_properties()
-    |> foreign_key_constraint(:graph_id)
+    |> copy_flow_id_into_properties()
+    |> foreign_key_constraint(:flow_id)
     |> foreign_key_constraint(:source_id)
     |> foreign_key_constraint(:target_id)
     |> unique_constraint([:source_id, :target_id, :label])
   end
 
-  # The dual-write: properties carry a copy of the graph_id column, for Neo4j
-  defp copy_graph_id_into_properties(changeset) do
-    case get_field(changeset, :graph_id) do
+  # The dual-write: properties carry a copy of the flow_id column, for Neo4j
+  defp copy_flow_id_into_properties(changeset) do
+    case get_field(changeset, :flow_id) do
       nil ->
         changeset
 
-      graph_id ->
+      flow_id ->
         properties = get_field(changeset, :properties) || %{}
 
-        put_change(changeset, :properties, Map.put(properties, "graph_id", graph_id))
+        put_change(changeset, :properties, Map.put(properties, "flow_id", flow_id))
     end
   end
 end

@@ -1,59 +1,59 @@
-defmodule FormFlow.Data.Graph.NodeTest do
+defmodule FormFlow.Data.Templates.Flow.NodeTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Data.Graph.Node
+  alias FormFlow.Data.Templates.Flow.Node
 
-  @graph_id Ecto.UUID.generate()
+  @flow_id Ecto.UUID.generate()
 
-  test "casts graph_id, labels, and properties" do
+  test "casts flow_id, labels, and properties" do
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
+        flow_id: @flow_id,
         labels: ["Step", "Form"],
         properties: %{"label" => "Contact details"}
       })
 
     assert changeset.valid?
-    assert changeset.changes.graph_id == @graph_id
+    assert changeset.changes.flow_id == @flow_id
     assert changeset.changes.labels == ["Step", "Form"]
 
     assert changeset.changes.properties == %{
              "label" => "Contact details",
-             "graph_id" => @graph_id
+             "flow_id" => @flow_id
            }
   end
 
-  test "requires graph_id" do
+  test "requires flow_id" do
     changeset = Node.changeset(%Node{}, %{labels: ["Step"]})
 
     refute changeset.valid?
-    assert %{graph_id: ["can't be blank"]} = errors_on(changeset)
+    assert %{flow_id: ["can't be blank"]} = errors_on(changeset)
   end
 
   test "casts a caller-supplied id, so replaced contents match existing rows" do
     id = Ecto.UUID.generate()
-    changeset = Node.changeset(%Node{}, %{id: id, graph_id: @graph_id})
+    changeset = Node.changeset(%Node{}, %{id: id, flow_id: @flow_id})
 
     assert changeset.valid?
     assert changeset.changes.id == id
   end
 
   test "labels and properties default rather than being required" do
-    changeset = Node.changeset(%Node{}, %{graph_id: @graph_id})
+    changeset = Node.changeset(%Node{}, %{flow_id: @flow_id})
 
     assert changeset.valid?
 
     node = Ecto.Changeset.apply_changes(changeset)
 
     assert node.labels == []
-    assert node.properties == %{"graph_id" => @graph_id}
+    assert node.properties == %{"flow_id" => @flow_id}
   end
 
   test "casts subflow_id and copies it into properties" do
     subflow_id = Ecto.UUID.generate()
 
     changeset =
-      Node.changeset(%Node{}, %{graph_id: @graph_id, subflow_id: subflow_id})
+      Node.changeset(%Node{}, %{flow_id: @flow_id, subflow_id: subflow_id})
 
     assert changeset.valid?
     assert changeset.changes.subflow_id == subflow_id
@@ -66,7 +66,7 @@ defmodule FormFlow.Data.Graph.NodeTest do
 
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
+        flow_id: @flow_id,
         properties: %{"subflow_id" => subflow_id, "type" => "subflow"}
       })
 
@@ -79,7 +79,7 @@ defmodule FormFlow.Data.Graph.NodeTest do
 
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
+        flow_id: @flow_id,
         subflow_id: explicit,
         properties: %{"subflow_id" => Ecto.UUID.generate()}
       })
@@ -90,7 +90,7 @@ defmodule FormFlow.Data.Graph.NodeTest do
 
   test "a non-UUID subflow_id in properties is an error, not a crash" do
     changeset =
-      Node.changeset(%Node{}, %{graph_id: @graph_id, properties: %{"subflow_id" => "nope"}})
+      Node.changeset(%Node{}, %{flow_id: @flow_id, properties: %{"subflow_id" => "nope"}})
 
     refute changeset.valid?
     assert %{subflow_id: ["is invalid"]} = errors_on(changeset)
@@ -99,7 +99,7 @@ defmodule FormFlow.Data.Graph.NodeTest do
   test "casts form_id and copies it into properties" do
     form_id = Ecto.UUID.generate()
 
-    changeset = Node.changeset(%Node{}, %{graph_id: @graph_id, form_id: form_id})
+    changeset = Node.changeset(%Node{}, %{flow_id: @flow_id, form_id: form_id})
 
     assert changeset.valid?
     assert changeset.changes.form_id == form_id
@@ -112,7 +112,7 @@ defmodule FormFlow.Data.Graph.NodeTest do
 
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
+        flow_id: @flow_id,
         properties: %{"form_id" => form_id, "data" => %{"kind" => "form"}}
       })
 
@@ -121,13 +121,13 @@ defmodule FormFlow.Data.Graph.NodeTest do
   end
 
   test "an explicit form_id wins over the properties copy" do
-    # copy_graph relies on this: source properties carry the OLD lineage id,
+    # copy_flow relies on this: source properties carry the OLD lineage id,
     # and adoption would re-point a copied node at the original form
     explicit = Ecto.UUID.generate()
 
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
+        flow_id: @flow_id,
         form_id: explicit,
         properties: %{"form_id" => Ecto.UUID.generate()}
       })
@@ -138,24 +138,24 @@ defmodule FormFlow.Data.Graph.NodeTest do
 
   test "a non-UUID form_id in properties is an error, not a crash" do
     changeset =
-      Node.changeset(%Node{}, %{graph_id: @graph_id, properties: %{"form_id" => "nope"}})
+      Node.changeset(%Node{}, %{flow_id: @flow_id, properties: %{"form_id" => "nope"}})
 
     refute changeset.valid?
     assert %{form_id: ["is invalid"]} = errors_on(changeset)
   end
 
-  test "graph_id is copied into properties, overwriting a stale copy" do
+  test "flow_id is copied into properties, overwriting a stale copy" do
     changeset =
       Node.changeset(%Node{}, %{
-        graph_id: @graph_id,
-        properties: %{"label" => "Start", "graph_id" => Ecto.UUID.generate()}
+        flow_id: @flow_id,
+        properties: %{"label" => "Start", "flow_id" => Ecto.UUID.generate()}
       })
 
-    assert changeset.changes.properties == %{"label" => "Start", "graph_id" => @graph_id}
+    assert changeset.changes.properties == %{"label" => "Start", "flow_id" => @flow_id}
   end
 
   test "rejects labels that are not a list of strings" do
-    changeset = Node.changeset(%Node{}, %{graph_id: @graph_id, labels: "Step"})
+    changeset = Node.changeset(%Node{}, %{flow_id: @flow_id, labels: "Step"})
 
     refute changeset.valid?
     assert %{labels: ["is invalid"]} = errors_on(changeset)

@@ -2,8 +2,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
-  A `Slab.table` over `FormFlow.Data.Graphs.roots_query/0` — summary counts
-  and timestamps, with show and edit actions per row and a link to create a
+  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — summary
+  counts and timestamps, with show and edit actions per row and a link to create a
   new flow. The editor itself lives on those pages, so this one never loads
   the ReactFlow bundle. Slab runs in query mode against the host app's repo,
   so sorting and pagination come from the URL: pass the current `uri` and
@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       />
 
   Without a `sort` param the table sorts by creation time, matching
-  `Graphs.list/0` — injected into the params handed to Slab so pagination
+  `Flows.list/0` — injected into the params handed to Slab so pagination
   stays deterministic instead of leaning on unspecified database order.
 
   The count columns aren't sortable: they are virtual fields populated by
@@ -32,8 +32,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Data.Graphs
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates.Flows
 
   @impl true
   def update(assigns, socket) do
@@ -44,7 +44,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
-    query = Graphs.roots_query()
+    query = Flows.roots_query()
 
     {:ok,
      socket
@@ -83,30 +83,30 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         uri={@uri}
         params={@table_params}
       >
-        <:column :let={graph} field={:name} sortable>
-          <.link navigate={"#{@base}/flows/#{graph.id}"} class="hover:underline">
-            {graph.name || "Untitled"}
+        <:column :let={flow} field={:name} sortable>
+          <.link navigate={"#{@base}/flows/#{flow.id}"} class="hover:underline">
+            {flow.name || "Untitled"}
           </.link>
-          <span class="block font-mono text-[10px] text-zinc-400">{graph.id}</span>
+          <span class="block font-mono text-[10px] text-zinc-400">{flow.id}</span>
         </:column>
-        <:column :let={graph} field={:label} label="Kind">
+        <:column :let={flow} field={:label} label="Kind">
           <span class="text-xs text-zinc-500">
-            {if graph.label == "subflows", do: "Complex", else: "Simple"}
+            {if flow.label == "subflows", do: "Complex", else: "Simple"}
           </span>
         </:column>
         <:column field={:nodes_count} label="Steps" />
         <:column field={:relationships_count} label="Connections" />
-        <:column :let={graph} field={:inserted_at} label="Created" sortable>
+        <:column :let={flow} field={:inserted_at} label="Created" sortable>
           <span class="text-xs text-zinc-500">
-            {Calendar.strftime(graph.inserted_at, "%Y-%m-%d %H:%M")}
+            {Calendar.strftime(flow.inserted_at, "%Y-%m-%d %H:%M")}
           </span>
         </:column>
-        <:column :let={graph} label="Actions">
-          <.link navigate={"#{@base}/flows/#{graph.id}"} class="text-cyan-600 hover:underline">
+        <:column :let={flow} label="Actions">
+          <.link navigate={"#{@base}/flows/#{flow.id}"} class="text-cyan-600 hover:underline">
             Show
           </.link>
           <.link
-            navigate={"#{@base}/flows/#{graph.id}/edit"}
+            navigate={"#{@base}/flows/#{flow.id}/edit"}
             class="ml-3 text-cyan-600 hover:underline"
           >
             Edit

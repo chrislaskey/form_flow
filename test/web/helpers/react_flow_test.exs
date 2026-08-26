@@ -90,10 +90,10 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     end
   end
 
-  describe "to_graph_attrs/1" do
+  describe "to_flow_attrs/1" do
     test "a node's map becomes its properties, minus the id" do
       %{nodes: [node]} =
-        ReactFlow.to_graph_attrs(%{
+        ReactFlow.to_flow_attrs(%{
           "nodes" => [
             %{
               "id" => "1",
@@ -116,7 +116,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       existing = Ecto.UUID.generate()
 
       %{nodes: [kept, fresh], id_map: id_map} =
-        ReactFlow.to_graph_attrs(%{
+        ReactFlow.to_flow_attrs(%{
           "nodes" => [%{"id" => existing}, %{"id" => "4"}],
           "edges" => []
         })
@@ -132,7 +132,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
 
     test "edges follow their nodes through the id mapping" do
       %{nodes: [start, form], relationships: [relationship]} =
-        ReactFlow.to_graph_attrs(%{
+        ReactFlow.to_flow_attrs(%{
           "nodes" => [%{"id" => "1"}, %{"id" => "2"}],
           "edges" => [
             %{
@@ -152,7 +152,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
 
     test "accepts atom keys, the shape flows are written in Elixir" do
       %{nodes: [node, _form], relationships: [relationship]} =
-        ReactFlow.to_graph_attrs(%{
+        ReactFlow.to_flow_attrs(%{
           nodes: [%{id: "1", position: %{x: 0, y: 0}}, %{id: "2", position: %{x: 0, y: 100}}],
           edges: [%{id: "e1-2", source: "1", target: "2"}]
         })
@@ -162,14 +162,14 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     end
 
     test "missing nodes or edges default to empty" do
-      assert ReactFlow.to_graph_attrs(%{}) == %{nodes: [], relationships: [], id_map: %{}}
+      assert ReactFlow.to_flow_attrs(%{}) == %{nodes: [], relationships: [], id_map: %{}}
     end
   end
 
   describe "to_data/1" do
-    test "is the inverse of to_graph_attrs/1" do
+    test "is the inverse of to_flow_attrs/1" do
       attrs =
-        ReactFlow.to_graph_attrs(%{
+        ReactFlow.to_flow_attrs(%{
           "nodes" => [
             %{"id" => "1", "type" => "step", "position" => %{"x" => 240, "y" => 0}},
             %{"id" => "2", "type" => "step", "position" => %{"x" => 240, "y" => 140}}
@@ -177,15 +177,15 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
           "edges" => [%{"id" => "e1-2", "source" => "1", "target" => "2"}]
         })
 
-      graph = %FormFlow.Data.Graph{
+      flow = %FormFlow.Data.Templates.Flow{
         id: Ecto.UUID.generate(),
         nodes:
           Enum.map(attrs.nodes, fn node ->
-            %FormFlow.Data.Graph.Node{id: node.id, properties: node.properties}
+            %FormFlow.Data.Templates.Flow.Node{id: node.id, properties: node.properties}
           end),
         relationships:
           Enum.map(attrs.relationships, fn relationship ->
-            %FormFlow.Data.Graph.Relationship{
+            %FormFlow.Data.Templates.Flow.Relationship{
               id: relationship.id,
               source_id: relationship.source_id,
               target_id: relationship.target_id,
@@ -195,7 +195,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
           end)
       }
 
-      data = ReactFlow.to_data(graph)
+      data = ReactFlow.to_data(flow)
 
       assert [%{"id" => id, "type" => "step", "position" => %{"x" => 240}} | _] = data.nodes
       assert {:ok, _} = Ecto.UUID.cast(id)
@@ -208,7 +208,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       # id_map itself isn't part of that invariant — this second call's ids
       # are already UUIDs, so it's the identity map, unlike the temporary-id
       # mapping the first call produced.
-      round_tripped = ReactFlow.to_graph_attrs(data)
+      round_tripped = ReactFlow.to_flow_attrs(data)
       assert round_tripped.nodes == attrs.nodes
       assert round_tripped.relationships == attrs.relationships
     end

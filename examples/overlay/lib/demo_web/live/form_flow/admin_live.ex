@@ -33,7 +33,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Admin</h1>
           <p class="text-base-content/70">
-            FormFlow's template administration: flows (graphs rendered with
+            FormFlow's template administration: flows (diagrams rendered with
             ReactFlow) and the reusable form catalog. Back to the <.link navigate={~p"/"} class="link">demo index</.link>.
           </p>
         </header>

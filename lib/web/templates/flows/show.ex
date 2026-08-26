@@ -2,16 +2,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Show` LiveComponent displays one flow.
 
-  Loads the graph with `FormFlow.Data.Graphs.get/1` and renders it read-only in
-  the editor canvas (see `FormFlow.Web.Components.Editor`) — pan and zoom work,
-  but changing anything means clicking through to the edit page. The delete
-  button removes the flow and navigates back to the index.
+  Loads the flow with `FormFlow.Data.Templates.Flows.get/1` and renders it
+  read-only in the editor canvas (see `FormFlow.Web.Components.Editor`) — pan
+  and zoom work, but changing anything means clicking through to the edit
+  page. The delete button removes the flow and navigates back to the index.
 
   Two addressing modes, matching the router:
 
-    * `graph_id` — a flow shown directly, `/flows/:id`
+    * `flow_id` — a flow shown directly, `/flows/:id`
     * `root_id` + `node_id` — a subflow reached by drill-in,
-      `/flows/:root_id/nodes/:node_id`; the node's `subflow_id` is the graph
+      `/flows/:root_id/nodes/:node_id`; the node's `subflow_id` is the flow
       shown here, with a breadcrumb back to the root
 
   A subflow node's Open button pushes `form_flow:open_subflow`, which
@@ -20,9 +20,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   Delete means different things in the two modes. At the top level it deletes
   the flow and everything it owns. On a drill-in page it removes the parent's
-  subflow step (`FormFlow.Data.Graphs.delete_node/1`) — the child's graphs go
-  with it through garbage collection when owned, and survive when reusable.
-  Deleting the child *graph* directly would be refused while the parent still
+  subflow step (`FormFlow.Data.Templates.Flows.delete_node/1`) — the child's
+  flows go with it through garbage collection when owned, and survive when
+  reusable.
+  Deleting the child *flow* directly would be refused while the parent still
   references it, which is why that is not what the button does.
   """
 
@@ -30,7 +31,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Data.Graphs
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
 
@@ -48,11 +49,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
 
-    graph = resolve_graph(socket.assigns)
-    data = graph && ReactFlow.to_data(graph)
-    root = socket.assigns.node_id && Graphs.get(socket.assigns.root_id)
+    flow = resolve_flow(socket.assigns)
+    data = flow && ReactFlow.to_data(flow)
+    root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
 
-    {:ok, assign(socket, graph: graph, data: data, root: root)}
+    {:ok, assign(socket, flow: flow, data: data, root: root)}
   end
 
   @impl true
@@ -61,14 +62,14 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   @impl true
-  def handle_event("form_flow:graph_changed", _params, socket) do
+  def handle_event("form_flow:flow_changed", _params, socket) do
     # The canvas is read-only, so this shouldn't fire — ignored if it does
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("form_flow:open_form", %{"node_id" => node_id}, socket) do
-    root_id = socket.assigns.root_id || socket.assigns.graph.id
+    root_id = socket.assigns.root_id || socket.assigns.flow.id
 
     {:noreply,
      push_navigate(socket, to: "#{socket.assigns.base}/flows/#{root_id}/nodes/#{node_id}/form")}
@@ -76,7 +77,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   @impl true
   def handle_event("form_flow:open_subflow", %{"node_id" => node_id}, socket) do
-    root_id = socket.assigns.root_id || socket.assigns.graph.id
+    root_id = socket.assigns.root_id || socket.assigns.flow.id
 
     {:noreply,
      push_navigate(socket, to: "#{socket.assigns.base}/flows/#{root_id}/nodes/#{node_id}")}
@@ -85,24 +86,24 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   @impl true
   def handle_event("delete", _params, %{assigns: %{node_id: node_id}} = socket)
       when is_binary(node_id) do
-    node = Graphs.get_node(node_id)
+    node = Flows.get_node(node_id)
 
-    # Compute the destination before deleting: the *containing* graph's edit
+    # Compute the destination before deleting: the *containing* flow's edit
     # page — edit mode is sticky, and deleting a step is an editing action
     to = parent_edit_path(socket.assigns, node)
 
-    {:ok, _node} = Graphs.delete_node(node)
+    {:ok, _node} = Flows.delete_node(node)
 
     {:noreply, push_navigate(socket, to: to)}
   end
 
   def handle_event("delete", _params, socket) do
-    case Graphs.delete(socket.assigns.graph) do
-      {:ok, _graph} ->
+    case Flows.delete(socket.assigns.flow) do
+      {:ok, _flow} ->
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows")}
 
       {:error, %Ecto.Changeset{}} ->
-        # The context refuses while other flows still reference this graph
+        # The context refuses while other flows still reference this flow
         # as a subflow — deleting it would break their canvases
         {:noreply,
          assign(
@@ -115,7 +116,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   @impl true
-  def render(%{graph: nil} = assigns) do
+  def render(%{flow: nil} = assigns) do
     ~H"""
     <div>
       <p class="text-sm text-zinc-500">
@@ -139,9 +140,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             {@root.name || "Untitled"}
           </.link>
           <span :if={@root} class="text-zinc-400">/</span>
-          {@graph.name || "Untitled"}
+          {@flow.name || "Untitled"}
           <span class="ml-1 text-xs font-normal text-zinc-500">
-            {if @graph.label == "subflows", do: "Complex flow", else: "Simple flow"}
+            {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
         </div>
         <div class="flex items-center gap-2">
@@ -186,30 +187,30 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         data={@data}
         target={@myself}
         editable={false}
-        flow_label={@graph.label}
+        flow_label={@flow.label}
       />
     </div>
     """
   end
 
-  defp resolve_graph(%{node_id: nil} = assigns), do: Graphs.get(assigns.graph_id)
+  defp resolve_flow(%{node_id: nil} = assigns), do: Flows.get(assigns.flow_id)
 
-  defp resolve_graph(assigns) do
-    case Graphs.get_node(assigns.node_id) do
-      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Graphs.get(subflow_id)
+  defp resolve_flow(assigns) do
+    case Flows.get_node(assigns.node_id) do
+      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Flows.get(subflow_id)
       _other -> nil
     end
   end
 
-  # The edit page of the graph containing `node`: the root's editor when the
+  # The edit page of the flow containing `node`: the root's editor when the
   # node sits on the root canvas, otherwise the drill-in editor addressed by
-  # the node that embeds the containing graph
+  # the node that embeds the containing flow
   defp parent_edit_path(assigns, node) do
     cond do
-      node.graph_id == assigns.root_id ->
+      node.flow_id == assigns.root_id ->
         "#{assigns.base}/flows/#{assigns.root_id}/edit"
 
-      parent = Graphs.embedding_node(node.graph_id, assigns.root_id) ->
+      parent = Flows.embedding_node(node.flow_id, assigns.root_id) ->
         "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{parent.id}/edit"
 
       true ->
@@ -217,7 +218,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     end
   end
 
-  defp edit_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.graph.id}/edit"
+  defp edit_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}/edit"
 
   defp edit_path(assigns) do
     "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}/edit"
