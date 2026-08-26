@@ -154,7 +154,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket) do
-    if FormFlow.config(:pubsub_server) do
+    if FormFlow.app_config(:pubsub_server) do
       refresh_preview_by_pubsub(socket)
     else
       refresh_preview_by_re_render(socket)
@@ -165,7 +165,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp refresh_preview_by_pubsub(socket) do
     if socket.assigns.latest_json != socket.assigns.preview_json do
-      pubsub_server = FormFlow.config(:pubsub_server)
+      pubsub_server = FormFlow.app_config(:pubsub_server)
       message = {:form_flow, :update_definition, socket.assigns.latest_json}
 
       Phoenix.PubSub.broadcast(pubsub_server, socket.assigns.preview_topic, message)
@@ -246,7 +246,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   @impl true
   def handle_event("update_preview", _params, socket) do
-    if FormFlow.config(:pubsub_server) do
+    if FormFlow.app_config(:pubsub_server) do
       {:noreply, refresh_preview_by_pubsub(socket)}
     else
       {:noreply, refresh_preview_by_re_render(socket)}

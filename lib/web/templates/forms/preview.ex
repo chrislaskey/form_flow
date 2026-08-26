@@ -42,8 +42,8 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
   @impl true
   def mount(:not_mounted_at_router, session, socket) do
-    if connected?(socket) && FormFlow.config(:pubsub_server) && session["pubsub_topic"] do
-      Phoenix.PubSub.subscribe(FormFlow.config(:pubsub_server), session["pubsub_topic"])
+    if connected?(socket) && FormFlow.app_config(:pubsub_server) && session["pubsub_topic"] do
+      Phoenix.PubSub.subscribe(FormFlow.app_config(:pubsub_server), session["pubsub_topic"])
     end
 
     {:ok,

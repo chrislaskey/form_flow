@@ -90,7 +90,7 @@ defmodule DemoWeb.ReadmeLive do
           </div>
           <p class="text-sm text-base-content/70">
             <.link navigate={~p"/admin"} class="link">/admin</.link>
-            has a dedicated page, <code>DemoWeb.AdminLive</code>, where the same
+            has a dedicated page, <code>DemoWeb.FormFlowLive.Admin</code>, where the same
             FormFlow router — mounted with <code>base="/admin"</code> — serves a
             landing plus the flows and forms CRUD LiveComponents at
             <code>/admin/flows</code> and <code>/admin/forms</code>. The

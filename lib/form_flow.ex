@@ -6,5 +6,5 @@ defmodule FormFlow do
   - `FormFlow.Web`  for all UI, UX, presentation, and web related code
   """
 
-  def config(key), do: Application.get_env(:form_flow, key)
+  def app_config(key), do: Application.get_env(:form_flow, key)
 end

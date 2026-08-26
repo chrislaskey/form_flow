@@ -1,0 +1,56 @@
+defmodule DemoWeb.FormFlowLive.Users do
+  @moduledoc """
+  The dedicated page for FormFlow's user-facing form instances.
+
+  Mounted on `live "/users/*path", FormFlowLive.Users`, so `/users` (a landing
+  linking the two indexes), `/users/flows/*`, and `/users/forms/*` all land
+  here. FormFlow's router dispatches the remaining path to the right
+  LiveComponent — this page just supplies the layout around it.
+  `base="/users"` is what makes every link the components build carry the
+  mount prefix.
+  """
+
+  use DemoWeb, :live_view
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, :page_title, "Users")}
+  end
+
+  @impl true
+  def handle_params(params, uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:path, Map.get(params, "path", []))
+     |> assign(:params, params)
+     |> assign(:uri, uri)}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash}>
+      <div class="space-y-6">
+        <header class="space-y-2">
+          <h1 class="text-2xl font-semibold">Users</h1>
+          <p class="text-base-content/70">
+            FormFlow's user-facing form instances: flows (graphs rendered with
+            ReactFlow) and the reusable form catalog. Back to the <.link navigate={~p"/"} class="link">demo index</.link>.
+          </p>
+        </header>
+
+        <div id="users-pages" class="rounded-lg border border-base-300 p-4">
+          <FormFlow.Web.router
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/users"
+            config={DemoWeb.FormFlowLive.Users.Config}
+            config_data={%{properties: %{hello: "world"}}}
+          />
+        </div>
+      </div>
+    </Layouts.app>
+    """
+  end
+end

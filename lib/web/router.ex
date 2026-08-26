@@ -48,11 +48,22 @@ defmodule FormFlow.Web.Router do
   Users can opt to directly call LiveComponents instead.
   """
 
-  attr(:type, :string, values: ["instances", "templates"], required: true)
+  attr(:type, :string, values: ["instances", "templates"], default: "instances")
   attr(:path, :any, required: true, doc: "the remaining path, as a string or `*path` segments")
 
   attr(:app, :string, default: "default")
   attr(:base, :string, default: "")
+
+  attr(:config, :atom,
+    default: nil,
+    doc: "a module using `FormFlow.Config`, for customizing the router's behavior"
+  )
+
+  attr(:config_data, :map,
+    default: %{},
+    doc:
+      "passed through unmodified to every `:config` callback; ignored when `:config` is not set"
+  )
 
   attr(:uri, :string,
     default: nil,

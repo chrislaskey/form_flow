@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowFormsCrudTest do
   @moduledoc """
   Drives the forms CRUD pages end-to-end through the dedicated
-  `live "/admin/*path", AdminLive` route (mounted with `base="/admin"`):
+  `live "/admin/*path", FormFlowLive.Admin` route (mounted with `base="/admin"`):
   `/admin/forms` is the catalog, `/admin/forms/new` creates a lineage with
   its initial draft, `/admin/forms/:id` shows the resolved version (latest
   published, else newest draft) with the version history and the publish

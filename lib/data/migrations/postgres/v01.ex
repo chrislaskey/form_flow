@@ -210,7 +210,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       index(:form_flow_instance_forms, [:app, :status], prefix: context.prefix)
     )
 
-
     create_if_not_exists table(:form_flow_instance_form_events,
                            primary_key: false,
                            prefix: context.prefix

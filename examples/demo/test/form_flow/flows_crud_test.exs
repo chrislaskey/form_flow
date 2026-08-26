@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowFlowsCrudTest do
   @moduledoc """
   Drives the flows CRUD pages end-to-end through the dedicated
-  `live "/admin/*path", AdminLive` route (mounted with `base="/admin"`):
+  `live "/admin/*path", FormFlowLive.Admin` route (mounted with `base="/admin"`):
   `/admin/flows/new` chooses a flavor and creates a seeded graph,
   `/admin/flows/:id/edit` is the canvas, `/admin/flows/:id` shows it
   read-only, subflows drill in at `/admin/flows/:root/nodes/:node_id`, and

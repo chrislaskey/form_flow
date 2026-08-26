@@ -1,8 +1,8 @@
-defmodule DemoWeb.AdminLive do
+defmodule DemoWeb.FormFlowLive.Admin do
   @moduledoc """
   The dedicated page for FormFlow's template administration.
 
-  Mounted on `live "/admin/*path", AdminLive`, so `/admin` (a landing linking
+  Mounted on `live "/admin/*path", FormFlowLive.Admin`, so `/admin` (a landing linking
   the two indexes), `/admin/flows/*`, and `/admin/forms/*` all land here.
   FormFlow's router dispatches the remaining path to the right LiveComponent —
   this page just supplies the layout around it. `base="/admin"` is what makes
@@ -34,13 +34,20 @@ defmodule DemoWeb.AdminLive do
           <h1 class="text-2xl font-semibold">Admin</h1>
           <p class="text-base-content/70">
             FormFlow's template administration: flows (graphs rendered with
-            ReactFlow) and the reusable form catalog. Back to the
-            <.link navigate={~p"/"} class="link">demo index</.link>.
+            ReactFlow) and the reusable form catalog. Back to the <.link navigate={~p"/"} class="link">demo index</.link>.
           </p>
         </header>
 
         <div id="admin-pages" class="rounded-lg border border-base-300 p-4">
-          <FormFlow.Web.router type="templates" path={@path} base="/admin" uri={@uri} params={@params} />
+          <FormFlow.Web.router
+            type="templates"
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/admin"
+            config={DemoWeb.FormFlowLive.Admin.Config}
+            config_data={%{hello: "world"}}
+          />
         </div>
       </div>
     </Layouts.app>

@@ -205,7 +205,7 @@ defmodule Demo.FormFlowFormsTest do
       in_progress = insert_instance(v1, data: %{"name" => "Ada"})
       completed = insert_instance(v1, status: "completed", completed_at: DateTime.utc_now())
 
-      {:ok, v2} = publish_next(form, v1, preset: :bug_fix, actor: "admin-7")
+      {:ok, v2} = publish_next(form, v1, preset: :bug_fix, user_id: "admin-7")
 
       carried = reload(in_progress)
       assert carried.template_form_version_id == v2.id
@@ -215,7 +215,7 @@ defmodule Demo.FormFlowFormsTest do
       assert event.event == "migrated"
       assert event.from_version_id == v1.id
       assert event.to_version_id == v2.id
-      assert event.actor == "admin-7"
+      assert event.user_id == "admin-7"
 
       # Completed pins are attestation records — untouched by default
       assert reload(completed).template_form_version_id == v1.id
