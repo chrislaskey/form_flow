@@ -120,7 +120,7 @@ defmodule Demo.FormFlowTypesTest do
 
       {:ok, view, html} = live(conn, edit_path(instance, [name.id]))
 
-      assert has_element?(view, "#instance-forms-show-flow-progress")
+      assert has_element?(view, "#instance-forms-edit-flow-progress")
       assert html =~ "Name"
       assert html =~ "Address"
       assert html =~ ~s(aria-current="step")
@@ -142,7 +142,54 @@ defmodule Demo.FormFlowTypesTest do
 
       {:ok, view, _html} = live(conn, edit_path(instance, [only.id]))
 
-      refute has_element?(view, "#instance-forms-show-flow-progress")
+      refute has_element?(view, "#instance-forms-edit-flow-progress")
+    end
+  end
+
+  describe "show and edit are separate pages" do
+    test "show renders the answers with no way to submit them", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+      {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
+
+      {:ok, view, html} = live(conn, form_path(instance, [name.id]))
+
+      assert html =~ "Name"
+      refute has_element?(view, "button[type='submit']")
+      assert has_element?(view, "fieldset[disabled]")
+      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+    end
+
+    test "edit renders a submittable form", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
+
+      assert has_element?(view, "button[type='submit']")
+      refute has_element?(view, "fieldset[disabled]")
+    end
+
+    test "edit sends an already-submitted form back to show", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+      complete(instance, [name.id])
+
+      {:ok, view, html} = live(conn, edit_path(instance, [name.id]))
+
+      assert html =~ "already been submitted"
+      refute has_element?(view, "button[type='submit']")
+      assert has_element?(view, "a[href='#{form_path(instance, [name.id])}']")
+    end
+
+    test "reopen lives with the answers, on show, and lands on edit", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+      complete(instance, [name.id])
+
+      {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
+
+      view |> element("button", "Reopen") |> render_click()
+
+      assert {path, _flash} = assert_redirect(view)
+      assert path == edit_path(instance, [name.id])
+      assert %{status: "in_progress"} = instance_at(instance, [name.id])
     end
   end
 
@@ -196,7 +243,7 @@ defmodule Demo.FormFlowTypesTest do
       {:ok, view, _html} = live(conn, edit_path(instance, [only.id]))
 
       # Where a wizard would draw nothing, the checklist draws its one entry
-      assert has_element?(view, "#instance-forms-show-flow-progress")
+      assert has_element?(view, "#instance-forms-edit-flow-progress")
     end
   end
 

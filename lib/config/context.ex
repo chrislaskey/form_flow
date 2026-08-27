@@ -3,12 +3,11 @@ defmodule FormFlow.Config.Context do
   The value passed to every `FormFlow.Config` callback, alongside its own
   `config_data` argument.
 
-  One common shape lets high-granularity callbacks (`properties`, `example`,
-  and future ones) all read the same fields instead of each expecting a
-  different payload. Every field is optional — a callback firing near the top
-  of the router (before anything has been loaded) sees mostly `nil`; one
-  firing deep inside a specific LiveComponent sees whatever that call site
-  has in scope.
+  One common shape lets high-granularity config callbacks all read the same
+  fields instead of each expecting a different payload. Every field is optional
+  — a callback firing near the top of the router (before anything has been
+      loaded) sees mostly `nil`; one firing deep inside a specific
+  LiveComponent sees whatever that call site has in scope.
 
   ## Fields
 

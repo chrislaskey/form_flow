@@ -208,6 +208,43 @@ all, since "flow instance" alone reads as one step's worth of work.
   it: deleting a flow that is in use now reports `"cannot be deleted: flow
   instances have been started against it"`.
 
+### The user-facing form page is two pages
+
+`FormFlow.Web.Instances.Forms.Show` carried a `mode` attr and branched on it
+throughout — read-only or fillable, one file. The two URLs are two pages, so
+they are now two components, the way the template side has always had
+`Templates.Forms.Show` and `.Edit`:
+
+- **`FormFlow.Web.Instances.Forms.Show`** (`/flows/:id/forms/*path`) renders
+  the answers read-only and never opens anything. Reopen lives here, beside
+  the answers it reopens, and lands on Edit.
+- **`FormFlow.Web.Instances.Forms.Edit`** (`/flows/:id/forms/*path/edit`) is
+  the page that opens a position, and the only one that renders a submittable
+  form. An already-submitted position renders no form at all: it points back
+  to Show, so exactly one page renders answers read-only and exactly one
+  reopens them.
+
+`mode` is gone — the module *is* the mode — and with it the `read_only?/1`
+branch, the mode-keyed DynamicForm id, and the `:if={@mode == :show}` guards.
+
+Two pieces are shared rather than duplicated, since two copies of a gate can
+drift apart:
+
+- **New: `FormFlow.Web.Instances.Forms.Position`** resolves what is at the
+  position both pages address — which form the path names, its flow's
+  `FormFlow.Flows.Types` module, whether the type allows work there, the live
+  instance, and the parsed definition. `resolve/2` reads the page's assigns
+  and writes the answers back; `open: true` is Edit's mode and the one write
+  in it.
+- **New: `FormFlow.Web.Instances.Components.FormPage`** holds the frame both
+  pages put around their content: the breadcrumb, and the panel that stands in
+  for a form when there is none. The wording of that panel stays with the
+  page, since Show and Edit have different things to say about an absent form.
+
+While the opening moved: the progress bar is now derived *after* a position is
+opened, so the form being filled reads as in progress rather than available —
+it was drawn from statuses derived a moment before the open.
+
 ## v0.6.0
 
 ### Breaking: Renamed Graph to Flow

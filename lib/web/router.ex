@@ -46,7 +46,7 @@ defmodule FormFlow.Web.Router do
   | `/flows`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
   | `/flows/:id`                    | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
   | `/flows/:id/forms/*path`        | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
-  | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Show` (the fillable form — the page that opens the position) |
+  | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
 
   The two sides use the same nouns on purpose: the mount root already says
   which world you are in, so `/admin/flows/:id` is a flow *template* and
@@ -68,7 +68,7 @@ defmodule FormFlow.Web.Router do
   of answers. Addressing the position also means the URL exists before the
   row does, which is what makes every navigation to a form an ordinary link:
   `/edit` is the one page that opens a position (see
-  `FormFlow.Web.Instances.Forms.Show`), and `FormFlow.Web.Instances.Paths`
+  `FormFlow.Web.Instances.Forms.Edit`), and `FormFlow.Web.Instances.Paths`
   builds all of them.
 
   `base` is the path prefix the catch-all is mounted under, so the components
@@ -274,13 +274,23 @@ defmodule FormFlow.Web.Router do
               config={@config}
               config_data={@config_data}
             />
-          <% {:form, id, form_path, mode} -> %>
+          <% {:form, id, form_path} -> %>
             <.live_component
               module={Instances.Forms.Show}
               id="instance-forms-show"
               flow_instance_id={id}
               path={form_path}
-              mode={mode}
+              base={@base}
+              user_id={@user_id}
+              config={@config}
+              config_data={@config_data}
+            />
+          <% {:form_edit, id, form_path} -> %>
+            <.live_component
+              module={Instances.Forms.Edit}
+              id="instance-forms-edit"
+              flow_instance_id={id}
+              path={form_path}
               base={@base}
               user_id={@user_id}
               config={@config}
@@ -309,8 +319,8 @@ defmodule FormFlow.Web.Router do
   defp form_route(id, rest) do
     case Enum.split(rest, -1) do
       {[], ["edit"]} -> nil
-      {path, ["edit"]} -> {:form, id, path, :edit}
-      _no_suffix -> {:form, id, rest, :show}
+      {path, ["edit"]} -> {:form_edit, id, path}
+      _no_suffix -> {:form, id, rest}
     end
   end
 
