@@ -66,24 +66,47 @@ defmodule FormFlow.Data.Instances.Forms do
 
   def update_status(%Instances.Flow{} = journey, path, status, opts)
       when is_list(path) and path != [] and status in [:in_progress, :completed] do
-    instance =
-      Repo.one(
-        from(f in Instances.Form,
-          where:
-            f.instance_flow_id == ^journey.id and f.path == ^path and
-              is_nil(f.superseded_at)
-        )
-      )
-
-    case {instance, status} do
-      {nil, :in_progress} -> create_at(journey, path, opts)
-      {nil, :completed} -> {:error, :not_found}
-      {%Instances.Form{status: "in_progress"}, :in_progress} -> {:ok, instance}
-      {%Instances.Form{}, :in_progress} -> reopen(instance, opts)
-      {%Instances.Form{status: "completed"}, :completed} -> {:ok, instance}
-      {%Instances.Form{}, :completed} -> complete(instance, opts)
-    end
+    journey
+    |> find_instance(path)
+    |> apply_status(status, journey, path, opts)
   end
+
+  defp find_instance(journey, path) do
+    Repo.one(
+      from(f in Instances.Form,
+        where:
+          f.instance_flow_id == ^journey.id and f.path == ^path and
+            is_nil(f.superseded_at)
+      )
+    )
+  end
+
+  defp apply_status(nil, :in_progress, journey, path, opts), do: create_at(journey, path, opts)
+  defp apply_status(nil, :completed, _journey, _path, _opts), do: {:error, :not_found}
+
+  defp apply_status(
+         %Instances.Form{status: "in_progress"} = instance,
+         :in_progress,
+         _journey,
+         _path,
+         _opts
+       ),
+       do: {:ok, instance}
+
+  defp apply_status(%Instances.Form{} = instance, :in_progress, _journey, _path, opts),
+    do: reopen(instance, opts)
+
+  defp apply_status(
+         %Instances.Form{status: "completed"} = instance,
+         :completed,
+         _journey,
+         _path,
+         _opts
+       ),
+       do: {:ok, instance}
+
+  defp apply_status(%Instances.Form{} = instance, :completed, _journey, _path, opts),
+    do: complete(instance, opts)
 
   @doc """
   Deletes an instance and its event trail, deliberately and in order:

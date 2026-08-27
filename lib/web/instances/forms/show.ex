@@ -69,16 +69,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     journey = Instances.Flows.get(journey_id)
     form_instance = Instances.Forms.get(instance_id)
 
-    cond do
-      is_nil(journey) or is_nil(form_instance) or form_instance.instance_flow_id != journey.id ->
-        assign(socket, journey: journey, form_instance: nil, parsed: nil, parse_error: nil)
+    if is_nil(journey) or is_nil(form_instance) or form_instance.instance_flow_id != journey.id do
+      assign(socket, journey: journey, form_instance: nil, parsed: nil, parse_error: nil)
+    else
+      version = Templates.Forms.get_version(form_instance.template_form_version_id)
 
-      true ->
-        version = Templates.Forms.get_version(form_instance.template_form_version_id)
-
-        socket
-        |> assign(journey: journey, form_instance: form_instance)
-        |> parse(version.definition)
+      socket
+      |> assign(journey: journey, form_instance: form_instance)
+      |> parse(version.definition)
     end
   end
 
@@ -158,15 +156,20 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         </button>
       </div>
 
-      <div class="max-w-md">
+      <%!-- A completed instance shows its answers read-only: the disabled
+            fieldset switches off every control inside (a native HTML
+            behavior), and the submit button is hidden. DynamicForm's
+            render_only is NOT this — it is a parent-owns-the-form mode
+            requiring a Phoenix.HTML.Form. --%>
+      <fieldset disabled={@form_instance.status == "completed"} class="max-w-md">
         <DynamicForm.form
           id={"#{@id}-#{@form_instance.id}-#{@form_instance.status}"}
           instance={@parsed}
           data={@form_instance.data}
-          render_only={@form_instance.status == "completed"}
+          hide_submit={@form_instance.status == "completed"}
           on_success={&submitted(&1, @id)}
         />
-      </div>
+      </fieldset>
     </div>
     """
   end

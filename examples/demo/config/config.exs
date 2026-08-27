@@ -20,7 +20,7 @@ config :demo, DemoWeb.Endpoint,
     layout: false
   ],
   pubsub_server: Demo.PubSub,
-  live_view: [signing_salt: "NNwk1+Zj"]
+  live_view: [signing_salt: "4tl8Mkl6"]
 
 # Configure esbuild (the version is required)
 config :esbuild,
@@ -51,9 +51,8 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :form_flow,
-  repo: Demo.Repo,
-  pubsub_server: Demo.PubSub
+# FormFlow.Data.Repo wraps the parent app's repo
+config :form_flow, repo: Demo.Repo
 
 # Slab query mode uses this repo unless a table passes one explicitly
 config :slab, repo: Demo.Repo

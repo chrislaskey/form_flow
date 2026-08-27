@@ -101,6 +101,13 @@ echo "==> Registering a stub uploader for DynamicForm's file uploads"
 perl -0777 -pi -e 's{(const liveSocket = new LiveSocket)}{// Stub uploader for DynamicForm\x27s direct-upload fields: simulates a\n// successful upload without a real cloud bucket. Real apps PUT the file to\n// the presigned URL in entry.meta.url.\nconst GoogleStorage = (entries, _onViewError) => {\n  entries.forEach(entry => setTimeout(() => entry.progress(100), 300))\n}\n\n$1}' demo/assets/js/app.js
 perl -pi -e 's{params: \{_csrf_token: csrfToken\},}{$&\n  uploaders: {GoogleStorage},}' demo/assets/js/app.js
 
+echo "==> Pointing the dev server at port 4001 (avoids clashing with other 4000 apps)"
+# runtime.exs sets http: [port: ...] outside the prod-only block, so it runs
+# (and wins, deep-merged over dev.exs) on every `mix phx.server` boot, not
+# just releases — swapping its "4000" default here is what actually moves
+# the dev server's port.
+grep -rl '4000' demo | while IFS= read -r file; do perl -pi -e 's/4000/4001/g' "$file"; done
+
 echo "==> Configuring the repos"
 # FormFlow.Data.Repo wraps the parent app's repo, and Slab's query mode uses
 # its own configured repo unless a table passes one explicitly.
