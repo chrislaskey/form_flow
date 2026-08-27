@@ -37,11 +37,32 @@
 }
 
 .ff-node__title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 13px;
   font-weight: 600;
 
   /* Room for the ⋮ menu button in the corner */
   padding-right: 16px;
+}
+
+/* The inline rename input (edit mode): indistinguishable from the static
+   title — no box, no hover or focus chrome — so renaming reads as editing
+   the text in place. The caret and text selection are the focus indicator. */
+.ff-node__title-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+
+.ff-node__title-input:focus {
+  outline: none;
 }
 
 /* The ⋮ node menu: the button sits in the node's top-right corner, the open

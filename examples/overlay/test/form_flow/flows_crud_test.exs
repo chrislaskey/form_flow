@@ -16,6 +16,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   import Phoenix.LiveViewTest
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Forms
 
   test "every flows path renders on the dedicated page", %{conn: conn} do
     for path <- ["/admin/flows", "/admin/flows/new"] do
@@ -222,6 +223,66 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
 
     assert Flows.get(node.subflow_id).properties == %{}
+  end
+
+  test "renaming a subflow node on the canvas renames the embedded flow", %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+    assert Flows.get(node.subflow_id).name == "Subflow 1"
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [subflow_node_attrs(node, %{"label" => "Collect documents"})],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    # The rename reached the entity the node embeds — the same name its own
+    # pages edit — and loading projects it back into the node's title
+    assert Flows.get(node.subflow_id).name == "Collect documents"
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert html =~ "Collect documents"
+  end
+
+  test "renaming a form step on the canvas renames its form", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    # First save creates the owned form, named from the canvas label
+    edit_step(view)
+    view |> element("button", "Save") |> render_click()
+
+    [node] = Flows.get(id).nodes
+    assert Forms.get(node.form_id).name == "Renamed step"
+
+    # Second save renames the existing form through the node's label
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        %{
+          "id" => node.id,
+          "type" => "step",
+          "form_id" => node.form_id,
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "W-2 Details", "kind" => "form"}
+        }
+      ],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    assert Forms.get(node.form_id).name == "W-2 Details"
   end
 
   test "the show canvas is read-only; the edit canvas is not", %{conn: conn} do

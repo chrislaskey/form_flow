@@ -38,19 +38,29 @@ defmodule FormFlow.Data.Templates.Flows do
   from the node's `data.subflow_label` (declared when the node was added in
   the editor) — and the node is pointed at it.
 
-  ## Form flow types
+  ## Canvas write-throughs
 
-  A `"forms"` flow's presentation type lives in one place: its own
-  `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`). The
-  parent canvas still offers the choice on subflow nodes, but the node's
-  `data.form_flow_type` is transport, not storage: `update/2` pops it out of
-  every incoming node's properties and writes it through to the embedded
-  flow's `properties` — an absent key clears it, so picking "default" on the
-  canvas un-pins the child rather than freezing a value. Loading goes the
-  other way: `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the child's
-  stored type back into the node's `data` for display. Writing through to a
-  *reusable* child changes it for every consumer, like any other edit to a
-  reusable subflow.
+  Some of what a canvas edits on a node really belongs to the entity behind
+  the node, and `update/2` writes those edits through rather than storing a
+  second copy. Loading goes the other way:
+  `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
+  values back into the node's `data` for display. Writing through to a
+  *reusable* child (or a shared catalog form) changes it for every consumer,
+  like any other edit to a shared entity. Two write-throughs exist:
+
+    * `data.form_flow_type` on a subflow node — the embedded flow's
+      presentation type, stored only in that flow's
+      `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`).
+      Popped from the node's properties at save; an absent key clears the
+      child's property, so picking "default" un-pins rather than freezing a
+      value.
+    * `data.label` on a subflow or form node — renaming the node renames the
+      embedded flow or the collected form, the same value the entity's own
+      pages edit. Unlike `form_flow_type` the label *stays* on the node too:
+      entity-less nodes (Start/End, fresh nodes) have no other home for it,
+      and save-time child creation names fresh children from it. A blank or
+      missing label renames nothing — names are never blanked from the
+      canvas.
 
   See the Neo4j guide (`guides/neo4j.md`) for how all of this maps onto a
   graph database when the dual-write extension lands.
@@ -135,9 +145,10 @@ defmodule FormFlow.Data.Templates.Flows do
   def get(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Flow{} = flow <- Repo.get(Flow, id) do
-      # Subflows come along so ReactFlow.to_data/1 can project each embedded
-      # flow's form_flow_type into its node's data
-      Repo.preload(flow, [:relationships, nodes: :subflow])
+      # Each node's entity comes along so ReactFlow.to_data/1 can project the
+      # embedded flow's form_flow_type and name (or the form's name) into the
+      # node's data
+      Repo.preload(flow, [:relationships, nodes: [:subflow, :form]])
     else
       _other -> nil
     end
@@ -471,7 +482,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp replace_contents(flow, attrs) do
     if contents?(attrs) do
-      {nodes_attrs, form_flow_types} = pop_form_flow_types(Map.get(attrs, :nodes, []))
+      {nodes_attrs, intents} = pop_canvas_intents(Map.get(attrs, :nodes, []))
 
       with :ok <- validate_flavor(flow, nodes_attrs),
            :ok <- clear_contents(flow),
@@ -480,7 +491,7 @@ defmodule FormFlow.Data.Templates.Flows do
              insert_contents(flow, Relationship, Map.get(attrs, :relationships, [])),
            {:ok, _children} <- create_missing_subflows(flow, nodes),
            {:ok, _forms} <- create_missing_forms(flow, nodes),
-           :ok <- apply_form_flow_types(flow, form_flow_types) do
+           :ok <- apply_canvas_intents(flow, intents) do
         {:ok, flow}
       end
     else
@@ -488,19 +499,21 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # A subflow node's `data.form_flow_type` is the canvas editing the *embedded
-  # flow's* type — transport, not storage (see "Form flow types" above). Popped
-  # from every node before insert so exactly one copy exists, with the intent
-  # recorded per node id: nil included, because the editor removes the key when
-  # "default" is picked, and that must clear the child's property.
-  defp pop_form_flow_types(nodes_attrs) do
+  # What a canvas save edits *through* a node rather than on it (see "Canvas
+  # write-throughs" above), collected per node id. form_flow_type is popped
+  # from the node's properties so exactly one copy exists — nil intents
+  # included, because the editor removes the key when "default" is picked, and
+  # that must clear the child's property. The label is only read: it stays on
+  # the node as well, for entity-less nodes and save-time child naming.
+  defp pop_canvas_intents(nodes_attrs) do
     Enum.map_reduce(nodes_attrs, %{}, fn attrs, intents ->
       {type, properties} = pop_form_flow_type(node_properties(attrs))
+      intent = %{form_flow_type: type, label: get_in(properties, ["data", "label"])}
 
       intents =
         case attrs[:id] || attrs["id"] do
           nil -> intents
-          id -> Map.put(intents, id, type)
+          id -> Map.put(intents, id, intent)
         end
 
       {put_node_properties(attrs, properties), intents}
@@ -525,35 +538,77 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp put_node_properties(attrs, _properties), do: attrs
 
-  # The write-through, last so save-time child creation has run and every
-  # subflow node has its child. Two nodes referencing the same reusable child
-  # apply in turn — last write wins. No-ops skip the update, so routine saves
-  # don't touch every child's timestamps.
-  defp apply_form_flow_types(flow, intents) do
+  # The write-throughs, last so save-time entity creation has run and every
+  # subflow or form node has its entity. Two nodes referencing the same shared
+  # entity apply in turn — last write wins. No-ops skip the update, so routine
+  # saves don't touch every entity's timestamps.
+  defp apply_canvas_intents(flow, intents) do
     nodes =
-      Repo.all(from(n in Node, where: n.flow_id == ^flow.id and not is_nil(n.subflow_id)))
+      Repo.all(
+        from(n in Node,
+          where:
+            n.flow_id == ^flow.id and
+              (not is_nil(n.subflow_id) or not is_nil(n.form_id))
+        )
+      )
 
     Enum.reduce_while(nodes, :ok, fn node, :ok ->
-      case apply_form_flow_type(node, Map.get(intents, node.id)) do
+      case apply_canvas_intent(node, Map.get(intents, node.id)) do
         {:error, changeset} -> {:halt, {:error, changeset}}
         _applied_or_unchanged -> {:cont, :ok}
       end
     end)
   end
 
-  defp apply_form_flow_type(node, type) do
-    child = Repo.get(Flow, node.subflow_id)
+  # An id-less programmatic node recorded no intent — nothing to apply
+  defp apply_canvas_intent(_node, nil), do: :unchanged
+
+  defp apply_canvas_intent(%{subflow_id: subflow_id}, intent)
+       when not is_nil(subflow_id) do
+    child = Repo.get(Flow, subflow_id)
 
     properties =
-      case type do
+      case intent.form_flow_type do
         nil -> Map.delete(child.properties, "form_flow_type")
         type -> Map.put(child.properties, "form_flow_type", type)
       end
 
-    if properties == child.properties do
+    changes = rename_change(child.name, intent.label)
+
+    changes =
+      if properties == child.properties,
+        do: changes,
+        else: Map.put(changes, :properties, properties)
+
+    if changes == %{} do
       :unchanged
     else
-      Repo.update(Flow.changeset(child, %{properties: properties}))
+      Repo.update(Flow.changeset(child, changes))
+    end
+  end
+
+  defp apply_canvas_intent(%{form_id: form_id}, intent) when not is_nil(form_id) do
+    form = Repo.get(Templates.Form, form_id)
+
+    case rename_change(form.name, intent.label) do
+      changes when changes == %{} ->
+        :unchanged
+
+      changes ->
+        # The schema changeset, for its unique_constraint mapping: renaming a
+        # shared catalog form into a taken name must be a refused save, not a
+        # raised ConstraintError
+        Repo.update(Templates.Form.changeset(form, changes))
+    end
+  end
+
+  # A rename only when the canvas holds a real name that differs — a blank or
+  # missing label never blanks an entity's name
+  defp rename_change(current, label) do
+    if is_binary(label) and label != "" and label != current do
+      %{name: label}
+    else
+      %{}
     end
   end
 

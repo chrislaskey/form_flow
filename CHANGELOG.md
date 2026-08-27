@@ -8,11 +8,27 @@ Every node in the flow editor now carries a ⋮ menu — the home for managing a
 node through the UI. ReactFlow has no native menu component, so this is
 form_flow's own: a general-purpose dropdown each node type composes from
 shared entries plus (in the future) its own. The first entry is **Delete**,
-which routes through ReactFlow's `deleteElements` — the same path as the
-Backspace key, so connected edges cascade, pinned Start/End nodes
-(`deletable: false`) don't offer it, and the removal stays pending until
-Save like every other canvas edit. Read-only canvases show no menu, since
+which asks for confirmation and then routes through ReactFlow's
+`deleteElements` — the same path as the Backspace key, so connected edges
+cascade, pinned Start/End nodes (`deletable: false`) don't offer it, and the
+removal stays pending until Save like every other canvas edit. Menu items
+declare `confirm` individually, so future destructive entries get the same
+misclick protection. Read-only canvases show no menu, since
 its only entry is an editing action. The editor bundle was rebuilt.
+
+### Inline node renames on the canvas
+
+In edit mode every node's title is a text input, so renaming no longer
+requires drilling into each node's dedicated page (which still works — both
+paths edit the same value). For nodes backed by a real entity the rename
+writes through at save: a subflow node renames its embedded flow, a form
+step renames its collected form — including shared/reusable ones, consistent
+with their edit-everywhere semantics — and loading projects the entity's
+current name back into the node's title, so the canvas and the entity's own
+pages can't drift. Blank labels never blank a name. Entity-less nodes
+(Start/End) keep the label as node-local data. A freshly added node
+autofocuses its name input with the placeholder name selected, so it can be
+renamed by just typing. Show mode renders plain text titles as before.
 
 ### Form flow types (`form_flow_type`)
 

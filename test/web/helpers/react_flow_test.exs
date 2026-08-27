@@ -237,6 +237,41 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert data["label"] == "Collect address"
     end
 
+    test "projects the backing entity's name into a node's data.label" do
+      subflow_node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Stale label"}},
+        subflow: %FormFlow.Data.Templates.Flow{name: "Collect address"}
+      }
+
+      form_node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "step", "data" => %{"label" => "Stale label", "kind" => "form"}},
+        form: %FormFlow.Data.Templates.Form{name: "W-2 Details"}
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [subflow_node, form_node], relationships: []}
+
+      assert [
+               %{"data" => %{"label" => "Collect address"}},
+               %{"data" => %{"label" => "W-2 Details"}}
+             ] =
+               ReactFlow.to_data(flow).nodes
+    end
+
+    test "an entity-less or unloaded node keeps its stored label" do
+      # Start/End steps have no backing entity; associations as built are
+      # %Ecto.Association.NotLoaded{} — to_data must not require the preload
+      node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "step", "data" => %{"label" => "Start", "kind" => "start"}}
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [node], relationships: []}
+
+      assert [%{"data" => %{"label" => "Start"}}] = ReactFlow.to_data(flow).nodes
+    end
+
     test "projects nothing from an untyped or unloaded subflow" do
       untyped = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),

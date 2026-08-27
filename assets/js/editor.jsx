@@ -36,14 +36,72 @@ const EditorContext = createContext({
   onNodeDataChange: null,
   editable: true,
   formFlowTypeOptions: [],
+  focusId: null,
+  clearFocus: null,
 });
+
+// The node's name as an inline input (edit mode only) — renaming without the
+// drill-in to each node's dedicated page. The label lives in node.data like
+// every canvas edit; for nodes backed by a real entity (a subflow's embedded
+// flow, a form step's form) the server writes the rename through to that
+// entity's name at save, so this and the dedicated page's Name field edit the
+// same value. A just-created node's input autofocuses with its placeholder
+// name selected, so typing renames it immediately (focusId, set by the node
+// creators).
+function NodeTitleInput({ id, label }) {
+  const { onNodeDataChange, focusId, clearFocus } = useContext(EditorContext);
+  const ref = useRef(null);
+
+  // The just-created-node autofocus, with the placeholder name selected so
+  // typing replaces it. Not React's autoFocus attribute: ReactFlow renders a
+  // fresh node with visibility: hidden until it has been measured, and
+  // focus() on a hidden element silently does nothing — so this retries
+  // across a few frames until the focus actually takes.
+  useEffect(() => {
+    if (focusId !== id) return undefined;
+
+    let attempts = 0;
+    let frame;
+
+    const tryFocus = () => {
+      const input = ref.current;
+      if (!input) return;
+
+      input.focus({ preventScroll: true });
+
+      if (document.activeElement === input) {
+        input.select();
+      } else if ((attempts += 1) < 30) {
+        frame = requestAnimationFrame(tryFocus);
+      }
+    };
+
+    frame = requestAnimationFrame(tryFocus);
+    return () => cancelAnimationFrame(frame);
+  }, [focusId, id]);
+
+  return (
+    <input
+      ref={ref}
+      type="text"
+      className="ff-node__title-input nodrag nopan"
+      value={label ?? ""}
+      aria-label="Node name"
+      onBlur={() => focusId === id && clearFocus?.()}
+      onChange={(event) => onNodeDataChange?.(id, { label: event.target.value })}
+      onKeyDown={(event) => event.key === "Enter" && event.target.blur()}
+    />
+  );
+}
 
 // The ⋮ menu every node carries: a general-purpose dropdown for managing the
 // node through the UI. ReactFlow has no native menu component (its closest
 // natives are <NodeToolbar> and the hand-rolled context-menu example), so this
-// is ours: `items` is a list of {label, destructive?, onSelect} — node types
-// compose it from the shared entries (useNodeMenuItems) plus their own.
-// Renders nothing with no items, e.g. read-only canvases today.
+// is ours: `items` is a list of {label, destructive?, confirm?, onSelect} —
+// node types compose it from the shared entries (useNodeMenuItems) plus their
+// own. An item with `confirm` asks before acting, so a misclick in a growing
+// menu can't fire anything destructive. Renders nothing with no items, e.g.
+// read-only canvases today.
 function NodeMenu({ items }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -97,6 +155,9 @@ function NodeMenu({ items }) {
               onClick={(event) => {
                 event.stopPropagation();
                 setOpen(false);
+
+                if (item.confirm && !window.confirm(item.confirm)) return;
+
                 item.onSelect();
               }}
             >
@@ -124,6 +185,7 @@ function useNodeMenuItems(id, deletable) {
     items.push({
       label: "Delete",
       destructive: true,
+      confirm: "Delete this node? Its connections go with it. Nothing is final until you save.",
       onSelect: () => deleteElements({ nodes: [{ id }] }),
     });
   }
@@ -135,7 +197,7 @@ function useNodeMenuItems(id, deletable) {
 // delivers nodesConnectable to custom nodes, and Handle defaults to true
 // when it is omitted — which would leave handles live on read-only canvases.
 function StepNode({ id, data, selected, isConnectable, deletable }) {
-  const { onOpenForm } = useContext(EditorContext);
+  const { onOpenForm, editable } = useContext(EditorContext);
   const menuItems = useNodeMenuItems(id, deletable);
 
   return (
@@ -144,7 +206,9 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
       {data.kind !== "start" && (
         <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
       )}
-      <div className="ff-node__title">{data.label}</div>
+      <div className="ff-node__title">
+        {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
+      </div>
       <div className="ff-node__meta">{(data.labels ?? []).join(", ")}</div>
       {data.kind === "form" && (
         <button
@@ -183,7 +247,10 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
     <div className={`ff-node ff-node--subflow ${selected ? "is-selected" : ""}`}>
       <NodeMenu items={menuItems} />
       <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
-      <div className="ff-node__title">⧉ {data.label}</div>
+      <div className="ff-node__title">
+        <span aria-hidden="true">⧉</span>
+        {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
+      </div>
       <div className="ff-node__meta">
         {data.subflow_label === "subflows" ? "Complex subflow" : "Form subflow"}
       </div>
@@ -298,6 +365,13 @@ function FlowEditor({
   // current picture.
   const [state, setState] = useState(() => normalize(flow));
 
+  // The node whose name input should grab the keyboard: set when a node is
+  // created (so its placeholder name can be typed over immediately), cleared
+  // when that input blurs. autoFocus only acts at mount, so a stale id is
+  // inert — the clear just keeps re-renders honest.
+  const [focusId, setFocusId] = useState(null);
+  const clearFocus = useCallback(() => setFocusId(null), []);
+
   const { screenToFlowPosition } = useReactFlow();
 
   // Elixir can push new data at any time (see form_flow:set_flow). useState
@@ -391,6 +465,7 @@ function FlowEditor({
           edges: current.edges.concat(stepEdge(source, id)),
         };
 
+        setFocusId(id);
         report(next);
         return next;
       });
@@ -433,6 +508,7 @@ function FlowEditor({
           nodes: current.nodes.concat(newNode(flowLabel, subflowLabel, id, position)),
         };
 
+        setFocusId(id);
         report(next);
         return next;
       });
@@ -442,7 +518,15 @@ function FlowEditor({
 
   return (
     <EditorContext.Provider
-      value={{ onOpenSubflow, onOpenForm, onNodeDataChange, editable, formFlowTypeOptions }}
+      value={{
+        onOpenSubflow,
+        onOpenForm,
+        onNodeDataChange,
+        editable,
+        formFlowTypeOptions,
+        focusId,
+        clearFocus,
+      }}
     >
     <ReactFlow
       nodes={state.nodes}

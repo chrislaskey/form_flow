@@ -26,8 +26,10 @@ defmodule Demo.FormFlowEditorTest do
       assert conn.resp_body =~ "injectStyles"
       assert conn.resp_body =~ "ff-node"
 
-      # The ⋮ node menu ships in the bundle (React itself can't run here)
+      # The ⋮ node menu and inline rename input ship in the bundle (React
+      # itself can't run here)
       assert conn.resp_body =~ "ff-node__menu"
+      assert conn.resp_body =~ "ff-node__title-input"
     end
 
     test "is cached immutably, since the path carries a content hash", %{conn: conn} do

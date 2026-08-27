@@ -83,7 +83,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
 
-  Two exceptions to the pure pass-through, both display projections
+  Three exceptions to the pure pass-through, all display projections
   `to_data/1` merges into a node's `data`:
 
     * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
@@ -96,6 +96,12 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       the canvas dropdown edits it, and `FormFlow.Data.Templates.Flows`
       pops it out of the node's properties at save and writes it through to
       the embedded flow — the single stored copy.
+    * `label` — on nodes backed by a real entity, the entity's current `name`:
+      the embedded flow's (`:subflow` preloaded) or the collected form's
+      (`:form` preloaded). The canvas's inline rename edits it, and saves
+      write it through to the entity, so the node title and the entity's own
+      pages always show the same name. Entity-less nodes (Start/End, fresh
+      nodes) keep their stored label untouched.
   """
 
   @edge_label "CONNECTS_TO"
@@ -176,6 +182,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     |> Map.put("id", node.id)
     |> put_labels(node.labels)
     |> put_form_flow_type(node)
+    |> put_entity_name(node)
   end
 
   # A node with no labels (nothing has run its changeset yet) is left exactly
@@ -185,6 +192,25 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   defp put_labels(properties, labels) do
     Map.update(properties, "data", %{"labels" => labels}, &Map.put(&1, "labels", labels))
   end
+
+  # The backing entity's name, projected into data.label so the node's title
+  # is the same name the entity's own pages show — the load side of the rename
+  # write-through in FormFlow.Data.Templates.Flows. A node with no entity, a
+  # nameless entity, or an unloaded association (%Ecto.Association.NotLoaded{}
+  # has no :name) keeps its stored label.
+  defp put_entity_name(properties, node) do
+    case entity_name(node) do
+      nil ->
+        properties
+
+      name ->
+        Map.update(properties, "data", %{"label" => name}, &Map.put(&1, "label", name))
+    end
+  end
+
+  defp entity_name(%{subflow: %{name: name}}) when is_binary(name), do: name
+  defp entity_name(%{form: %{name: name}}) when is_binary(name), do: name
+  defp entity_name(_node), do: nil
 
   # The embedded flow's type, projected into data for the canvas dropdown —
   # the load-side mirror of the save-side pop in
