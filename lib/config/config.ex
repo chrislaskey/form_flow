@@ -11,8 +11,8 @@ defmodule FormFlow.Config do
 
   alias FormFlow.Config.Context
 
-  @callback form_flow_type_options(Context.t(), map()) :: map()
-  @callback form_flow_type_module(String.t(), Context.t(), map()) :: map()
+  @callback form_flow_type_options(Context.t(), map()) :: [{String.t(), String.t()}]
+  @callback form_flow_type_module(String.t(), Context.t(), map()) :: module()
 
   defmacro __using__(_opts) do
     quote do
@@ -42,10 +42,8 @@ defmodule FormFlow.Config do
 
   def form_flow_type_options(_context, _config_data) do
     [
-      "Wizard (any order)",
-      "wizard_any_order",
-      "Wizard (in order)",
-      "wizard_in_order"
+      {"Wizard (any order)", "wizard_any_order"},
+      {"Wizard (in order)", "wizard_in_order"}
     ]
   end
 

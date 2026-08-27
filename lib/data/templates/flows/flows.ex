@@ -38,6 +38,20 @@ defmodule FormFlow.Data.Templates.Flows do
   from the node's `data.subflow_label` (declared when the node was added in
   the editor) — and the node is pointed at it.
 
+  ## Form flow types
+
+  A `"forms"` flow's presentation type lives in one place: its own
+  `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`). The
+  parent canvas still offers the choice on subflow nodes, but the node's
+  `data.form_flow_type` is transport, not storage: `update/2` pops it out of
+  every incoming node's properties and writes it through to the embedded
+  flow's `properties` — an absent key clears it, so picking "default" on the
+  canvas un-pins the child rather than freezing a value. Loading goes the
+  other way: `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the child's
+  stored type back into the node's `data` for display. Writing through to a
+  *reusable* child changes it for every consumer, like any other edit to a
+  reusable subflow.
+
   See the Neo4j guide (`guides/neo4j.md`) for how all of this maps onto a
   graph database when the dual-write extension lands.
   """
@@ -121,7 +135,9 @@ defmodule FormFlow.Data.Templates.Flows do
   def get(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Flow{} = flow <- Repo.get(Flow, id) do
-      Repo.preload(flow, [:nodes, :relationships])
+      # Subflows come along so ReactFlow.to_data/1 can project each embedded
+      # flow's form_flow_type into its node's data
+      Repo.preload(flow, [:relationships, nodes: :subflow])
     else
       _other -> nil
     end
@@ -455,17 +471,89 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp replace_contents(flow, attrs) do
     if contents?(attrs) do
-      with :ok <- validate_flavor(flow, Map.get(attrs, :nodes, [])),
+      {nodes_attrs, form_flow_types} = pop_form_flow_types(Map.get(attrs, :nodes, []))
+
+      with :ok <- validate_flavor(flow, nodes_attrs),
            :ok <- clear_contents(flow),
-           {:ok, nodes} <- insert_contents(flow, Node, Map.get(attrs, :nodes, [])),
+           {:ok, nodes} <- insert_contents(flow, Node, nodes_attrs),
            {:ok, _rels} <-
              insert_contents(flow, Relationship, Map.get(attrs, :relationships, [])),
            {:ok, _children} <- create_missing_subflows(flow, nodes),
-           {:ok, _forms} <- create_missing_forms(flow, nodes) do
+           {:ok, _forms} <- create_missing_forms(flow, nodes),
+           :ok <- apply_form_flow_types(flow, form_flow_types) do
         {:ok, flow}
       end
     else
       {:ok, flow}
+    end
+  end
+
+  # A subflow node's `data.form_flow_type` is the canvas editing the *embedded
+  # flow's* type — transport, not storage (see "Form flow types" above). Popped
+  # from every node before insert so exactly one copy exists, with the intent
+  # recorded per node id: nil included, because the editor removes the key when
+  # "default" is picked, and that must clear the child's property.
+  defp pop_form_flow_types(nodes_attrs) do
+    Enum.map_reduce(nodes_attrs, %{}, fn attrs, intents ->
+      {type, properties} = pop_form_flow_type(node_properties(attrs))
+
+      intents =
+        case attrs[:id] || attrs["id"] do
+          nil -> intents
+          id -> Map.put(intents, id, type)
+        end
+
+      {put_node_properties(attrs, properties), intents}
+    end)
+  end
+
+  defp pop_form_flow_type(%{"data" => %{} = data} = properties) do
+    {type, data} = Map.pop(data, "form_flow_type")
+
+    {type, Map.put(properties, "data", data)}
+  end
+
+  defp pop_form_flow_type(properties), do: {nil, properties}
+
+  defp put_node_properties(%{properties: _properties} = attrs, properties) do
+    %{attrs | properties: properties}
+  end
+
+  defp put_node_properties(%{"properties" => _properties} = attrs, properties) do
+    %{attrs | "properties" => properties}
+  end
+
+  defp put_node_properties(attrs, _properties), do: attrs
+
+  # The write-through, last so save-time child creation has run and every
+  # subflow node has its child. Two nodes referencing the same reusable child
+  # apply in turn — last write wins. No-ops skip the update, so routine saves
+  # don't touch every child's timestamps.
+  defp apply_form_flow_types(flow, intents) do
+    nodes =
+      Repo.all(from(n in Node, where: n.flow_id == ^flow.id and not is_nil(n.subflow_id)))
+
+    Enum.reduce_while(nodes, :ok, fn node, :ok ->
+      case apply_form_flow_type(node, Map.get(intents, node.id)) do
+        {:error, changeset} -> {:halt, {:error, changeset}}
+        _applied_or_unchanged -> {:cont, :ok}
+      end
+    end)
+  end
+
+  defp apply_form_flow_type(node, type) do
+    child = Repo.get(Flow, node.subflow_id)
+
+    properties =
+      case type do
+        nil -> Map.delete(child.properties, "form_flow_type")
+        type -> Map.put(child.properties, "form_flow_type", type)
+      end
+
+    if properties == child.properties do
+      :unchanged
+    else
+      Repo.update(Flow.changeset(child, %{properties: properties}))
     end
   end
 

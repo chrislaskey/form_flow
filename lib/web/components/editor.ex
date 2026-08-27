@@ -45,7 +45,22 @@ defmodule FormFlow.Web.Components.Editor do
     doc: "the flow's declared flavor; picks the editor's add actions"
   )
 
+  attr(:form_flow_type_options, :list,
+    default: [],
+    doc:
+      "form_flow_type choices as {label, value} tuples (see " <>
+        "FormFlow.Config.form_flow_type_options/2); form-subflow nodes render " <>
+        "them as a dropdown when editable and as the value's label when not"
+  )
+
   def editor(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :form_flow_type_options_json,
+        for({label, value} <- assigns.form_flow_type_options, do: %{label: label, value: value})
+      )
+
     ~H"""
     <%!-- ReactFlow needs explicit dimensions, and the canvas should not depend
           on the host application's CSS to be visible at all --%>
@@ -57,6 +72,7 @@ defmodule FormFlow.Web.Components.Editor do
       data-src={Assets.editor_path()}
       data-editable={to_string(@editable)}
       data-flow-label={@flow_label}
+      data-form-flow-type-options={Phoenix.json_library().encode!(@form_flow_type_options_json)}
       data-flow={ReactFlow.to_json(@data)}
       style="height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
@@ -76,6 +92,7 @@ defmodule FormFlow.Web.Components.Editor do
               flow: JSON.parse(this.el.dataset.flow),
               editable: this.el.dataset.editable !== "false",
               flowLabel: this.el.dataset.flowLabel,
+              formFlowTypeOptions: JSON.parse(this.el.dataset.formFlowTypeOptions),
               onChange: (flow) => this.pushEventTo(this.el, "form_flow:flow_changed", flow),
               onOpenSubflow: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId}),

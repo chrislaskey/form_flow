@@ -4,6 +4,8 @@
    cannot collide with its classes. */
 
 .ff-node {
+  /* The anchor for the ⋮ menu's absolute positioning */
+  position: relative;
   min-width: 160px;
   padding: 10px 12px;
   border: 1px solid #d4d4d8;
@@ -37,6 +39,80 @@
 .ff-node__title {
   font-size: 13px;
   font-weight: 600;
+
+  /* Room for the ⋮ menu button in the corner */
+  padding-right: 16px;
+}
+
+/* The ⋮ node menu: the button sits in the node's top-right corner, the open
+   list hangs below it. Both live inside the node, so they scale with zoom
+   like everything else on the node. */
+.ff-node__menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.ff-node__menu-button {
+  padding: 0 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 18px;
+  color: #71717a;
+  cursor: pointer;
+
+  /* Like a subflow's Open button: read-only canvases set pointer-events: none
+     on the whole node wrapper, and future menu entries may be navigation, not
+     editing — the menu opts back in and decides per entry what to offer. */
+  pointer-events: all;
+}
+
+.ff-node__menu-button:hover,
+.ff-node__menu-button[aria-expanded="true"] {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.ff-node__menu-list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+  margin-top: 2px;
+  padding: 2px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+  pointer-events: all;
+}
+
+.ff-node__menu-item {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font-size: 11px;
+  text-align: left;
+  color: #18181b;
+  cursor: pointer;
+}
+
+.ff-node__menu-item:hover {
+  background: #f4f4f5;
+}
+
+.ff-node__menu-item.is-destructive {
+  color: #dc2626;
+}
+
+.ff-node__menu-item.is-destructive:hover {
+  background: #fef2f2;
 }
 
 .ff-node__meta {
@@ -61,6 +137,30 @@
 
 .ff-node--subflow {
   border-left-color: #ca8a04;
+}
+
+/* The form_flow_type dropdown on form subflow nodes (edit mode) */
+.ff-node__type {
+  margin-top: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  color: #18181b;
+  cursor: pointer;
+}
+
+.ff-node__type:hover {
+  border-color: #ca8a04;
+}
+
+/* The same value as plain text (show mode) */
+.ff-node__type-label {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #71717a;
 }
 
 .ff-node__open {

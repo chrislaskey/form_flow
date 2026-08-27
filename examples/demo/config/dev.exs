@@ -16,11 +16,11 @@ config :demo, Demo.Repo,
 config :demo, DemoWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: 4001],
+  http: [ip: {127, 0, 0, 1}],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "eF8fKM6Fq3pdMUKr/MZ4rJkjt98zNcJ3ljKxjOvPszRVjyaJ2SBriWf1m5Y2qYQE",
+  secret_key_base: "vZGdHWjCQXGUd72lGxw6OGN9zuL1Y3r46My0HdqNvRacEB2ItBFJQ0bN/9nh/z+q",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:demo, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]}

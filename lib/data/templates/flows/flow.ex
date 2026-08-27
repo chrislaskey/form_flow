@@ -54,6 +54,12 @@ defmodule FormFlow.Data.Templates.Flow do
     # becomes the second label on the :Flow node — :Flow:Forms / :Flow:Subflows.
     field(:label, :string, default: "forms")
 
+    # Open domain data in the Neo4j property-graph style, like a node's
+    # properties. Carries "form_flow_type" for "forms" flows — how the flow's
+    # steps are presented to a user filling it out; absent means the
+    # `FormFlow.Config` default decides.
+    field(:properties, :map, default: %{})
+
     has_many(:nodes, Node)
     has_many(:relationships, Relationship)
 
@@ -71,15 +77,15 @@ defmodule FormFlow.Data.Templates.Flow do
   @doc """
   Builds a changeset for a flow.
 
-  `:name` and `:owner_flow_id` are castable; `:label` is castable at creation
-  and immutable afterwards — the declared flavor is a commitment, and the
+  `:name`, `:properties`, and `:owner_flow_id` are castable; `:label` is
+  castable at creation and immutable afterwards — the declared flavor is a commitment, and the
   escape hatch is wrapping in a new parent flow, not converting.
   `:made_reusable_at` is deliberately not castable — it is only stamped by
   `FormFlow.Data.Templates.Flows.make_reusable/1`.
   """
   def changeset(flow, attrs \\ %{}) do
     flow
-    |> cast(attrs, [:name, :label, :owner_flow_id])
+    |> cast(attrs, [:name, :label, :properties, :owner_flow_id])
     |> validate_inclusion(:label, ~w(forms subflows))
     |> validate_label_immutable()
     |> validate_owned_flows_are_not_reusable()

@@ -4,7 +4,7 @@
 //
 // The public surface is mount/unmount/injectStyles, called by the colocated
 // hook in FormFlow.Web.Templates.Forms.Index.
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
@@ -27,18 +27,120 @@ import editorStyles from "../css/editor.css";
 
 /* ------------------------------------------------------------------ nodes -- */
 
-// Callbacks the custom nodes need but that must never live in node.data —
-// data round-trips to the server as JSON, and functions don't survive that
-const EditorContext = createContext({ onOpenSubflow: null, onOpenForm: null });
+// Callbacks and editor-level settings the custom nodes need but that must
+// never live in node.data — data round-trips to the server as JSON, and
+// functions don't survive that
+const EditorContext = createContext({
+  onOpenSubflow: null,
+  onOpenForm: null,
+  onNodeDataChange: null,
+  editable: true,
+  formFlowTypeOptions: [],
+});
+
+// The ⋮ menu every node carries: a general-purpose dropdown for managing the
+// node through the UI. ReactFlow has no native menu component (its closest
+// natives are <NodeToolbar> and the hand-rolled context-menu example), so this
+// is ours: `items` is a list of {label, destructive?, onSelect} — node types
+// compose it from the shared entries (useNodeMenuItems) plus their own.
+// Renders nothing with no items, e.g. read-only canvases today.
+function NodeMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close on click-away or Escape. pointerdown (not click) so starting any
+  // interaction elsewhere — a drag, another node's menu — dismisses this one.
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onPointerDown = (event) => {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  if (!items.length) return null;
+
+  return (
+    <div className="ff-node__menu nodrag nopan" ref={ref}>
+      <button
+        type="button"
+        className="ff-node__menu-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Node actions"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="ff-node__menu-list" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={`ff-node__menu-item ${item.destructive ? "is-destructive" : ""}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The menu entries every node type shares; specific node types concat their
+// own after these. Delete goes through ReactFlow's deleteElements — the same
+// path as the Backspace key — so connected edges cascade, deletable: false is
+// respected, and the removal reaches the server through the ordinary
+// onNodesChange/onEdgesChange reports.
+function useNodeMenuItems(id, deletable) {
+  const { editable } = useContext(EditorContext);
+  const { deleteElements } = useReactFlow();
+
+  const items = [];
+
+  if (editable && deletable !== false) {
+    items.push({
+      label: "Delete",
+      destructive: true,
+      onSelect: () => deleteElements({ nodes: [{ id }] }),
+    });
+  }
+
+  return items;
+}
 
 // isConnectable must be passed through to every Handle: it is how ReactFlow
 // delivers nodesConnectable to custom nodes, and Handle defaults to true
 // when it is omitted — which would leave handles live on read-only canvases.
-function StepNode({ id, data, selected, isConnectable }) {
+function StepNode({ id, data, selected, isConnectable, deletable }) {
   const { onOpenForm } = useContext(EditorContext);
+  const menuItems = useNodeMenuItems(id, deletable);
 
   return (
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
+      <NodeMenu items={menuItems} />
       {data.kind !== "start" && (
         <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
       )}
@@ -63,16 +165,48 @@ function StepNode({ id, data, selected, isConnectable }) {
   );
 }
 
-function SubflowNode({ id, data, selected, isConnectable }) {
-  const { onOpenSubflow } = useContext(EditorContext);
+function SubflowNode({ id, data, selected, isConnectable, deletable }) {
+  const { onOpenSubflow, onNodeDataChange, editable, formFlowTypeOptions } =
+    useContext(EditorContext);
+  const menuItems = useNodeMenuItems(id, deletable);
+
+  // The form_flow_type dropdown, on form subflows only: how the embedded
+  // flow's steps are presented to the user filling it out. Stored in
+  // node.data, so it rides the ordinary properties round-trip to the server.
+  // Unset means the server-side FormFlow.Config default decides.
+  const isFormSubflow = data.subflow_label !== "subflows";
+  const typeLabel =
+    formFlowTypeOptions.find((option) => option.value === data.form_flow_type)?.label ??
+    data.form_flow_type;
 
   return (
     <div className={`ff-node ff-node--subflow ${selected ? "is-selected" : ""}`}>
+      <NodeMenu items={menuItems} />
       <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
       <div className="ff-node__title">⧉ {data.label}</div>
       <div className="ff-node__meta">
         {data.subflow_label === "subflows" ? "Complex subflow" : "Form subflow"}
       </div>
+      {isFormSubflow &&
+        (editable ? (
+          // nodrag/nopan: interacting with the select must not move the canvas
+          <select
+            className="ff-node__type nodrag nopan"
+            value={data.form_flow_type ?? ""}
+            onChange={(event) =>
+              onNodeDataChange?.(id, { form_flow_type: event.target.value || undefined })
+            }
+          >
+            <option value="">Type: default</option>
+            {formFlowTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          data.form_flow_type && <div className="ff-node__type-label">{typeLabel}</div>
+        ))}
       <button
         type="button"
         className="ff-node__open"
@@ -152,6 +286,7 @@ function FlowEditor({
   onChange,
   editable = true,
   flowLabel = "forms",
+  formFlowTypeOptions = [],
   onOpenSubflow,
   onOpenForm,
 }) {
@@ -263,6 +398,26 @@ function FlowEditor({
     [editable, flowLabel, report, screenToFlowPosition],
   );
 
+  // In-node controls (the form_flow_type dropdown) editing node.data. Merges
+  // the patch and reports immediately — a picked value is worth persisting,
+  // like a drag-end. A key set to undefined disappears in JSON serialization,
+  // which is how "back to default" removes the property instead of storing "".
+  const onNodeDataChange = useCallback(
+    (id, patch) =>
+      setState((current) => {
+        const next = {
+          ...current,
+          nodes: current.nodes.map((node) =>
+            node.id === id ? { ...node, data: { ...node.data, ...patch } } : node,
+          ),
+        };
+
+        report(next);
+        return next;
+      }),
+    [report],
+  );
+
   const addNode = useCallback(
     (subflowLabel) => {
       setState((current) => {
@@ -286,7 +441,9 @@ function FlowEditor({
   );
 
   return (
-    <EditorContext.Provider value={{ onOpenSubflow, onOpenForm }}>
+    <EditorContext.Provider
+      value={{ onOpenSubflow, onOpenForm, onNodeDataChange, editable, formFlowTypeOptions }}
+    >
     <ReactFlow
       nodes={state.nodes}
       edges={state.edges}
@@ -368,6 +525,11 @@ export function injectStyles(doc = document) {
  * autocreate makes; `onOpenSubflow(nodeId)` is called by a subflow node's
  * Open button, `onOpenForm(nodeId)` by a form step's.
  *
+ * `formFlowTypeOptions` ([{label, value}]) are the form_flow_type choices a
+ * form subflow node offers: a dropdown when editable, the stored value's
+ * label when not. The chosen value lives in the node's data and rides the
+ * ordinary onChange round-trip.
+ *
  * Returns a handle with `setFlow/1` so the server can push a new flow in, and
  * `unmount/0` for teardown.
  */
@@ -382,6 +544,7 @@ export function mount(el, opts = {}) {
           onChange={opts.onChange}
           editable={opts.editable !== false}
           flowLabel={opts.flowLabel}
+          formFlowTypeOptions={opts.formFlowTypeOptions}
           onOpenSubflow={opts.onOpenSubflow}
           onOpenForm={opts.onOpenForm}
         />

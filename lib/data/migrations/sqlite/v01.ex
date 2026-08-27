@@ -17,6 +17,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:id, :uuid, primary_key: true)
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
+      add(:properties, :map, null: false, default: %{})
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :delete_all))
       add(:made_reusable_at, :utc_datetime_usec)
 

@@ -25,6 +25,9 @@ defmodule Demo.FormFlowEditorTest do
       # The public surface the hook calls, and the CSS the bundle carries inline
       assert conn.resp_body =~ "injectStyles"
       assert conn.resp_body =~ "ff-node"
+
+      # The ⋮ node menu ships in the bundle (React itself can't run here)
+      assert conn.resp_body =~ "ff-node__menu"
     end
 
     test "is cached immutably, since the path carries a content hash", %{conn: conn} do

@@ -36,6 +36,14 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert Flow.changeset(persisted, %{name: "Renamed"}).valid?
   end
 
+  test "casts properties — the flow-level domain data, like form_flow_type" do
+    changeset =
+      Flow.changeset(%Flow{}, %{properties: %{"form_flow_type" => "wizard_any_order"}})
+
+    assert changeset.valid?
+    assert changeset.changes.properties == %{"form_flow_type" => "wizard_any_order"}
+  end
+
   test "casts owner_flow_id, so owned subflows can be created" do
     owner_id = Ecto.UUID.generate()
     changeset = Flow.changeset(%Flow{}, %{owner_flow_id: owner_id})

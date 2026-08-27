@@ -1,12 +1,17 @@
 defmodule DemoWeb.FormFlowLive.Admin.Config do
+  @moduledoc """
+  The admin page's `FormFlow.Config`: demonstrates extending a callback while
+  keeping the library's defaults — the demo offers one custom form flow type
+  on top of the built-in wizards. The public function on `FormFlow.Config`
+  is reusable exactly for this, so an override doesn't have to restate the
+  core options.
+  """
+
   use FormFlow.Config
 
-  @doc """
-  Example of definine a custom config value, maybe modifying data, and then calling
-  the original implementation.
-  """
   @impl true
-  def form_flow_type_module(value, context, config_data) do
-    FormFlow.Config.form_flow_type_module(value, context, config_data)
+  def form_flow_type_options(context, config_data) do
+    FormFlow.Config.form_flow_type_options(context, config_data) ++
+      [{"Demo checklist", "demo_checklist"}]
   end
 end

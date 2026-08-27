@@ -220,5 +220,42 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert round_tripped.nodes == attrs.nodes
       assert round_tripped.relationships == attrs.relationships
     end
+
+    test "projects the embedded flow's form_flow_type into a subflow node's data" do
+      node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Collect address"}},
+        subflow: %FormFlow.Data.Templates.Flow{
+          properties: %{"form_flow_type" => "wizard_any_order"}
+        }
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [node], relationships: []}
+
+      assert [%{"data" => data}] = ReactFlow.to_data(flow).nodes
+      assert data["form_flow_type"] == "wizard_any_order"
+      assert data["label"] == "Collect address"
+    end
+
+    test "projects nothing from an untyped or unloaded subflow" do
+      untyped = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Untyped"}},
+        subflow: %FormFlow.Data.Templates.Flow{properties: %{}}
+      }
+
+      # %Ecto.Association.NotLoaded{}, as built — to_data must not require
+      # the preload
+      unloaded = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Unloaded"}}
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [untyped, unloaded], relationships: []}
+
+      for %{"data" => data} <- ReactFlow.to_data(flow).nodes do
+        refute Map.has_key?(data, "form_flow_type")
+      end
+    end
   end
 end

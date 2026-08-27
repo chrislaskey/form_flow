@@ -30,8 +30,9 @@ defmodule Demo.FormFlowFormsTest do
       assert {:error, %Ecto.Changeset{}} = Forms.create(%{definition: %{}})
     end
 
-    test "list is the catalog: unowned forms, oldest first" do
+    test "list is the catalog: unowned forms for one app, oldest first" do
       {:ok, first} = Forms.create(%{name: "First"})
+      {:ok, _other_app} = Forms.create(%{name: "Elsewhere", app: "other"})
       {:ok, second} = Forms.create(%{name: "Second"})
 
       assert Enum.map(Forms.list(), & &1.id) == [first.id, second.id]
@@ -43,11 +44,11 @@ defmodule Demo.FormFlowFormsTest do
       assert {:ok, %Form{name: "After"}} = Forms.update(Forms.get(form.id), %{name: "After"})
     end
 
-    test "catalog names are unique" do
+    test "catalog names are unique per app" do
       {:ok, _} = Forms.create(%{name: "Enrollment"})
 
       assert {:error, changeset} = Forms.create(%{name: "Enrollment"})
-      assert %{name: _} = errors_on(changeset)
+      assert %{app: _} = errors_on(changeset)
     end
 
     test "delete removes versions then the lineage" do
@@ -461,28 +462,22 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   defp insert_instance(version, attrs \\ []) do
-    attrs = Enum.into(attrs, %{template_form_version_id: version.id, data: %{}})
-
-    # status/completed_at are stamp-only (never castable) — tests stamp them
-    # the way completion machinery does, with a bare change/2
-    {stamps, attrs} = Map.split(attrs, [:status, :completed_at])
+    attrs =
+      Enum.into(attrs, %{
+        template_form_version_id: version.id,
+        data: %{},
+        status: "in_progress"
+      })
 
     {:ok, instance} =
       FormFlowRepo.insert(Instances.Form.changeset(%Instances.Form{}, attrs))
 
-    if stamps == %{} do
-      instance
-    else
-      {:ok, stamped} = FormFlowRepo.update(Ecto.Changeset.change(instance, stamps))
-      stamped
-    end
+    instance
   end
 
   defp reload(instance), do: Instances.Forms.get(instance.id)
 
   defp events_for(instance) do
-    FormFlowRepo.all(
-      from(e in Instances.Form.Event, where: e.instance_form_id == ^instance.id)
-    )
+    FormFlowRepo.all(from(e in Instances.Form.Event, where: e.instance_form_id == ^instance.id))
   end
 end

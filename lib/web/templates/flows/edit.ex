@@ -84,6 +84,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Config.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor
@@ -95,7 +96,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      assign(socket, error: nil, notice: nil, pending_navigation: nil, confirming_discard?: false)}
   end
 
+  # DynamicForm's on_change routed back through send_update: the flow form's
+  # values are tracked like canvas edits — nothing persists until Save, and
+  # they count as unsaved changes for the navigation guard.
   @impl true
+  def update(%{event: "change", payload: payload}, socket) do
+    {:ok,
+     socket
+     |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
+     |> assign(:pending_type, pending_type(payload, socket.assigns.pending_type))
+     |> assign(:notice, nil)}
+  end
+
   def update(assigns, socket) do
     socket =
       socket
@@ -103,8 +115,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
 
-    flow = resolve_flow(socket.assigns)
+    subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
+    flow = resolve_flow(socket.assigns, subflow_node)
     data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
 
@@ -114,9 +129,30 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        data: data,
        current: data,
        root: root,
-       pending_name: flow && flow.name
+       pending_name: flow && flow.name,
+       pending_type: flow && flow.properties["form_flow_type"],
+       form_flow_type_options: form_flow_type_options(socket.assigns, flow, root, subflow_node)
      )}
   end
+
+  # The configured (or default) form_flow_type choices — see FormFlow.Config
+  defp form_flow_type_options(assigns, flow, root, subflow_node) do
+    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
+
+    (assigns.config || FormFlow.Config).form_flow_type_options(context, assigns.config_data)
+  end
+
+  # The raw param, not the applied changeset data: picking the prompt again
+  # ("") must clear the pending type, and Ecto's cast treats "" as a missing
+  # param rather than a change to nil — payload.data would keep the old value
+  defp pending_type(%{changeset: %{params: %{"form_flow_type" => value}}}, _current) do
+    presence(value)
+  end
+
+  defp pending_type(_payload, current), do: current
+
+  defp presence(""), do: nil
+  defp presence(value), do: value
 
   @impl true
   def handle_event("form_flow:editor_mounted", _params, socket) do
@@ -167,13 +203,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
-  def handle_event("name_changed", %{"name" => name}, socket) do
-    # Tracked like canvas edits: nothing persists until Save. An edited name
-    # counts as an unsaved change, so it rides the same guard and prompt.
-    {:noreply, socket |> assign(:pending_name, name) |> assign(:notice, nil)}
-  end
-
-  @impl true
   def handle_event("save", _params, socket) do
     case persist_current(socket) do
       {:ok, socket, _id_map} -> {:noreply, assign(socket, :notice, "Saved.")}
@@ -218,9 +247,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # Whether the page has edits the last save doesn't reflect yet — `current`
   # tracks every reported `flow_changed` against what `Flows.update/2` last
-  # persisted, and the pending name against the flow's saved name.
+  # persisted, and the pending form values against the flow's saved ones.
   defp unsaved_changes?(assigns) do
-    assigns.current != assigns.data or assigns.pending_name != assigns.flow.name
+    assigns.current != assigns.data or
+      assigns.pending_name != assigns.flow.name or
+      assigns.pending_type != assigns.flow.properties["form_flow_type"]
   end
 
   defp navigate_to_node(socket, node_id) do
@@ -294,6 +325,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       socket.assigns.current
       |> ReactFlow.to_flow_attrs()
       |> Map.put(:name, socket.assigns.pending_name)
+      |> Map.put(:properties, pending_properties(socket.assigns))
 
     case Flows.update(socket.assigns.flow, attrs) do
       {:ok, flow} ->
@@ -307,6 +339,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             data: data,
             current: data,
             pending_name: flow.name,
+            pending_type: flow.properties["form_flow_type"],
             error: nil
           )
           |> push_event("form_flow:set_flow", %{flow: data})
@@ -315,6 +348,16 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       {:error, %Ecto.Changeset{}} ->
         {:error, assign(socket, :error, "Could not save the flow. Please try again.")}
+    end
+  end
+
+  # The saved properties with the form's pending values applied — an unset
+  # type removes the key, so "no choice" stays "use the configured default"
+  # rather than pinning whatever the default happened to be at save time
+  defp pending_properties(assigns) do
+    case assigns.pending_type do
+      nil -> Map.delete(assigns.flow.properties, "form_flow_type")
+      type -> Map.put(assigns.flow.properties, "form_flow_type", type)
     end
   end
 
@@ -459,25 +502,38 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
       <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
 
-      <%!-- Edits here are pending like canvas edits: nothing persists until
-            Save, and a changed name counts as an unsaved change --%>
-      <form id={"#{@id}-name-form"} phx-change="name_changed" phx-target={@myself} class="mb-3 max-w-md">
-        <label class="block">
-          <span class="text-xs font-medium text-zinc-600">Name</span>
-          <input
-            type="text"
-            name="name"
-            value={@pending_name}
-            class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
+      <%!-- The flow's own fields, beside the canvas. Edits here are pending
+            like canvas edits: nothing persists until the header's Save, which
+            writes both — on_change reports values back through send_update,
+            so there is no submit of its own (hide_submit). `data` carries the
+            *saved* values; pending ones live in this component's assigns.
+            The type dropdown only exists on "forms" flows — how the steps
+            are presented belongs to the flow of forms itself — with choices
+            from the `FormFlow.Config` behaviour (form_flow_type_options). --%>
+      <div class="mb-3 max-w-md">
+        <DynamicForm.form
+          id={"#{@id}-flow-form"}
+          data={%{name: @flow.name, form_flow_type: @flow.properties["form_flow_type"]}}
+          hide_submit
+          on_change={&changed(&1, @id)}
+        >
+          <:field type="text" name="name" label="Name" />
+          <:field
+            :if={@flow.label == "forms"}
+            type="dropdown"
+            name="form_flow_type"
+            label="Form flow type"
+            options={@form_flow_type_options}
           />
-        </label>
-      </form>
+        </DynamicForm.form>
+      </div>
 
       <Editor.editor
         id={"#{@id}-editor"}
         data={@data}
         target={@myself}
         flow_label={@flow.label}
+        form_flow_type_options={@form_flow_type_options}
       />
 
       <div
@@ -541,13 +597,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     """
   end
 
-  defp resolve_flow(%{node_id: nil} = assigns), do: Flows.get(assigns.flow_id)
+  defp resolve_flow(%{node_id: nil} = assigns, _node), do: Flows.get(assigns.flow_id)
 
-  defp resolve_flow(assigns) do
-    case Flows.get_node(assigns.node_id) do
-      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Flows.get(subflow_id)
-      _other -> nil
-    end
+  defp resolve_flow(_assigns, %{subflow_id: subflow_id}) when not is_nil(subflow_id) do
+    Flows.get(subflow_id)
+  end
+
+  defp resolve_flow(_assigns, _node), do: nil
+
+  defp changed(payload, component_id) do
+    Phoenix.LiveView.send_update(__MODULE__, %{
+      id: component_id,
+      event: "change",
+      payload: payload
+    })
+
+    payload
   end
 
   defp show_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}"

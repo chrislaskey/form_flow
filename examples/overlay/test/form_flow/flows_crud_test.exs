@@ -114,8 +114,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
 
     view
-    |> element(~s(form[phx-change="name_changed"]))
-    |> render_change(%{"name" => "Better name"})
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"name" => "Better name"}})
 
     # Nothing persists until Save — a pending name is an unsaved change,
     # riding the same guard as canvas edits
@@ -126,6 +126,102 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert Flows.get(id).name == "Better name"
     refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "picking a form_flow_type persists it into the flow's properties", %{conn: conn} do
+    id = create_flow(conn)
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+
+    # The dropdown carries the FormFlow.Config defaults plus the option the
+    # demo's Admin.Config adds — proof the router's config attr reaches the
+    # page
+    assert html =~ "Form flow type"
+    assert html =~ "Wizard (any order)"
+    assert html =~ "Wizard (in order)"
+    assert html =~ "Demo checklist"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_any_order"}})
+
+    # Nothing persists until Save — a pending type is an unsaved change
+    assert Flows.get(id).properties == %{}
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(id).properties == %{"form_flow_type" => "wizard_any_order"}
+    refute has_element?(view, "button", "Discard changes")
+
+    # Show mode renders the stored type as a string, not a dropdown
+    {:ok, _view, html} = live(conn, "/admin/flows/#{id}")
+    assert html =~ "Wizard (any order)"
+
+    # Picking "default" again removes the key rather than pinning a value
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"form_flow_type" => ""}})
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(id).properties == %{}
+  end
+
+  test "a complex flow has no type dropdown of its own", %{conn: conn} do
+    id = create_flow(conn, "Onboarding", "subflows")
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{id}/edit")
+
+    refute html =~ "Form flow type"
+  end
+
+  test "a subflow node's form_flow_type writes through to the embedded flow", %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [subflow_node_attrs(node, %{"form_flow_type" => "wizard_any_order"})],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    # One stored copy — the embedded flow's properties; the node keeps none
+    [saved_node] = Flows.get(root_id).nodes
+    assert Flows.get(node.subflow_id).properties == %{"form_flow_type" => "wizard_any_order"}
+    refute Map.has_key?(saved_node.properties["data"], "form_flow_type")
+
+    # Loading projects the stored type back into the node's data, so the
+    # canvas dropdown (and show mode's string) reflect it
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    assert view |> element("#flows-show-editor") |> render() =~ "wizard_any_order"
+
+    # ...and the embedded flow's own pages read the same value
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert html =~ "Wizard (any order)"
+
+    # Picking "default" on the canvas clears the child's property
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [subflow_node_attrs(node, %{})],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(node.subflow_id).properties == %{}
   end
 
   test "the show canvas is read-only; the edit canvas is not", %{conn: conn} do
@@ -639,6 +735,19 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
+  end
+
+  # A saved subflow node the way the editor reports it: the stored properties
+  # (subflow_id reference included) round-trip through the canvas, with `data`
+  # merged over the defaults — e.g. a picked form_flow_type
+  defp subflow_node_attrs(node, data) do
+    %{
+      "id" => node.id,
+      "type" => "subflow",
+      "subflow_id" => node.subflow_id,
+      "position" => %{"x" => 0, "y" => 0},
+      "data" => Map.merge(%{"label" => "Subflow 1", "subflow_label" => "forms"}, data)
+    }
   end
 
   # Reports a moved node without saving — the canvas ends up with unsaved

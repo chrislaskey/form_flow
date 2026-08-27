@@ -83,12 +83,19 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
 
-  One exception to the pure pass-through: `to_data/1` merges the node's stored
-  `labels` (see `FormFlow.Data.Templates.Flow.Node`) into `data.labels` for
-  display.
-  Nothing sets it the other way — the editor never writes labels back, so
-  `to_flow_attrs/1` just carries whatever it finds there like any other
-  property, and the changeset re-derives the authoritative value on save.
+  Two exceptions to the pure pass-through, both display projections
+  `to_data/1` merges into a node's `data`:
+
+    * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
+      Nothing sets it the other way — the editor never writes labels back, so
+      `to_flow_attrs/1` just carries whatever it finds there like any other
+      property, and the changeset re-derives the authoritative value on save.
+    * `form_flow_type` — the *embedded flow's* `properties["form_flow_type"]`,
+      on subflow nodes (requires the node's `:subflow` preloaded, which
+      `FormFlow.Data.Templates.Flows.get/1` does). This one does flow back:
+      the canvas dropdown edits it, and `FormFlow.Data.Templates.Flows`
+      pops it out of the node's properties at save and writes it through to
+      the embedded flow — the single stored copy.
   """
 
   @edge_label "CONNECTS_TO"
@@ -168,6 +175,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     node.properties
     |> Map.put("id", node.id)
     |> put_labels(node.labels)
+    |> put_form_flow_type(node)
   end
 
   # A node with no labels (nothing has run its changeset yet) is left exactly
@@ -176,6 +184,25 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
 
   defp put_labels(properties, labels) do
     Map.update(properties, "data", %{"labels" => labels}, &Map.put(&1, "labels", labels))
+  end
+
+  # The embedded flow's type, projected into data for the canvas dropdown —
+  # the load-side mirror of the save-side pop in
+  # FormFlow.Data.Templates.Flows. An untyped, absent, or unloaded subflow
+  # (%Ecto.Association.NotLoaded{} has no :properties) merges nothing.
+  defp put_form_flow_type(properties, node) do
+    case node.subflow do
+      %{properties: %{"form_flow_type" => type}} ->
+        Map.update(
+          properties,
+          "data",
+          %{"form_flow_type" => type},
+          &Map.put(&1, "form_flow_type", type)
+        )
+
+      _other ->
+        properties
+    end
   end
 
   # Atom or string keys in, string keys out — the same normalization the data

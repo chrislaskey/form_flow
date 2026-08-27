@@ -135,9 +135,23 @@ defmodule FormFlow.Web.Router do
           <% :new -> %>
             <.live_component module={Flows.New} id="flows-new" base={@base} />
           <% {:show, id} -> %>
-            <.live_component module={Flows.Show} id="flows-show" flow_id={id} base={@base} />
+            <.live_component
+              module={Flows.Show}
+              id="flows-show"
+              flow_id={id}
+              base={@base}
+              config={@config}
+              config_data={@config_data}
+            />
           <% {:edit, id} -> %>
-            <.live_component module={Flows.Edit} id="flows-edit" flow_id={id} base={@base} />
+            <.live_component
+              module={Flows.Edit}
+              id="flows-edit"
+              flow_id={id}
+              base={@base}
+              config={@config}
+              config_data={@config_data}
+            />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
               module={Flows.Show}
@@ -145,6 +159,8 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% {:node_edit, root_id, node_id} -> %>
             <.live_component
@@ -153,6 +169,8 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% nil -> %>
             <%!-- not a /flows path --%>

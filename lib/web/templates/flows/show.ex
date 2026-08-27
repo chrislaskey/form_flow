@@ -31,6 +31,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Config.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -48,12 +49,29 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
 
-    flow = resolve_flow(socket.assigns)
+    subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
+    flow = resolve_flow(socket.assigns, subflow_node)
     data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
 
-    {:ok, assign(socket, flow: flow, data: data, root: root)}
+    {:ok,
+     assign(socket,
+       flow: flow,
+       data: data,
+       root: root,
+       form_flow_type_options: form_flow_type_options(socket.assigns, flow, root, subflow_node)
+     )}
+  end
+
+  # The configured (or default) form_flow_type choices — see FormFlow.Config.
+  # Read-only pages still need them, to render a stored value as its label.
+  defp form_flow_type_options(assigns, flow, root, subflow_node) do
+    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
+
+    (assigns.config || FormFlow.Config).form_flow_type_options(context, assigns.config_data)
   end
 
   @impl true
@@ -144,6 +162,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <span class="ml-1 text-xs font-normal text-zinc-500">
             {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
+          <%!-- Show mode renders the stored type as plain text; the Edit
+                page is where it becomes a dropdown --%>
+          <span :if={type_label(assigns)} class="text-xs font-normal text-zinc-500">
+            · {type_label(assigns)}
+          </span>
         </div>
         <div class="flex items-center gap-2">
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
@@ -188,19 +211,30 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         target={@myself}
         editable={false}
         flow_label={@flow.label}
+        form_flow_type_options={@form_flow_type_options}
       />
     </div>
     """
   end
 
-  defp resolve_flow(%{node_id: nil} = assigns), do: Flows.get(assigns.flow_id)
-
-  defp resolve_flow(assigns) do
-    case Flows.get_node(assigns.node_id) do
-      %{subflow_id: subflow_id} when not is_nil(subflow_id) -> Flows.get(subflow_id)
-      _other -> nil
+  # The stored form_flow_type rendered as its human label — nil when unset
+  # (the configured default applies) or on "subflows" flows
+  defp type_label(assigns) do
+    with type when is_binary(type) <- assigns.flow.properties["form_flow_type"] do
+      case List.keyfind(assigns.form_flow_type_options, type, 1) do
+        {label, _value} -> label
+        nil -> type
+      end
     end
   end
+
+  defp resolve_flow(%{node_id: nil} = assigns, _node), do: Flows.get(assigns.flow_id)
+
+  defp resolve_flow(_assigns, %{subflow_id: subflow_id}) when not is_nil(subflow_id) do
+    Flows.get(subflow_id)
+  end
+
+  defp resolve_flow(_assigns, _node), do: nil
 
   # The edit page of the flow containing `node`: the root's editor when the
   # node sits on the root canvas, otherwise the drill-in editor addressed by
