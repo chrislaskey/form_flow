@@ -507,7 +507,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             writes both — on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
             *saved* values; pending ones live in this component's assigns.
-            The type dropdown only exists on "forms" flows — how the steps
+            The type dropdown only exists on "forms" flows — how the forms
             are presented belongs to the flow of forms itself — with choices
             from the `FormFlow.Config` behaviour (form_flow_type_options). --%>
       <div class="mb-3 max-w-md">

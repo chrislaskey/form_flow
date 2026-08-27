@@ -32,13 +32,13 @@ renamed by just typing. Show mode renders plain text titles as before.
 
 ### Form flow types (`form_flow_type`)
 
-How a "forms" flow presents its steps to the user filling it out is now a
-stored, configurable property: `"wizard_in_order"` (steps completed one after
-another) or `"wizard_any_order"` (every step visible, completable in any
+How a "forms" flow presents its forms to the user filling them out is now a
+stored, configurable property: `"wizard_in_order"` (forms completed one after
+another) or `"wizard_any_order"` (every form visible, completable in any
 order), with the choices supplied by the `FormFlow.Config` behaviour's
-`form_flow_type_options/2` callback. Rendering instances against the chosen
-type (`form_flow_type_module/3`) comes in a future release — this release
-stores the choice and hooks up the config pattern.
+`form_flow_type_options/2` callback. What each type *does* is the section
+below; this one is where the choice is stored and the config pattern hooked
+up.
 
 - **Breaking: `form_flow_flows` gained a `properties` column** (a map,
   Neo4j-style, like nodes and relationships already had). The initial schema
@@ -64,6 +64,74 @@ stores the choice and hooks up the config pattern.
   node's data. The editor bundle was rebuilt
   (`FormFlow.Web.Components.Editor` passes the options in via
   `formFlowTypeOptions`).
+
+### Flow types: which forms a filler may open, and where they land next
+
+`form_flow_type` now decides what a filler actually sees. A "forms" flow's
+stored type resolves — through `FormFlow.Config`'s `form_flow_type_module/3`
+— to a module implementing the new `FormFlow.Flows.Types` behaviour, and the
+user-facing pages ask it rather than deciding for themselves:
+
+- `FormFlow.Flows.Types.WizardInOrder` (`"wizard_in_order"`) — the flow's
+  forms are completed front to back, as before. Their progress is now
+  *shown*, which is the new part, but not navigable: no jumping ahead.
+- `FormFlow.Flows.Types.WizardAnyOrder` (`"wizard_any_order"`) — every form
+  that isn't done is navigable, so a filler can jump ahead. Submitting one
+  moves them to the next form still open, wrapping back to the beginning (a
+  skipped form is still waiting there); when nothing in the flow is open any
+  more, the journey takes over.
+
+An unset or unrecognized type resolves to the in-order wizard, which is also
+`FormFlow.Flows.Types`' set of defaults — so a custom type `use`s the
+behaviour and overrides only what it changes, exactly as a custom config
+module extends `FormFlow.Config`. Three callbacks: `show_progress?/1`,
+`openable?/2`, and `next_form/2`.
+
+A type governs one "forms" flow, because that is where `form_flow_type` is
+stored: a journey holds as many of them as it has "forms" flows, each with
+its own type, and every question is asked of the flow the form belongs to.
+
+- **Breaking: `FormFlow.Data.Instances.Progress` is now
+  `FormFlow.Data.Instances.FlowProgress`** — it derives one flow instance's
+  progress, and the name now says so. `derive/2`, `complete?/2`, and
+  `next_path_position/2` are unchanged; nothing about how progress is
+  *derived* changed.
+- `FlowProgress.forms/2` is the new second view of that derivation: the
+  journey's form positions as an ordered list of
+  `FormFlow.Data.Instances.FormProgress` structs — one per form, carrying its
+  label, the subflow nodes drilled through to reach it, its live form
+  instance, and the "forms" flow it belongs to, alongside the derived status.
+  Order is the order a filler works them. `forms_in_flow/2` narrows the list
+  to one flow's own, which is what every `FormFlow.Flows.Types` callback
+  takes; `find_form/2` and `qualified_label/1` round it out.
+- **New: `FormFlow.Web.Instances.Components.FlowProgress`** draws a flow's
+  forms above the one being filled, each with its state, the current one
+  marked `aria-current="step"`. A single-form flow draws nothing —
+  `show_progress?/1` — and a form that can't be navigated to renders as the
+  same button, disabled, so the row doesn't shift as forms become reachable.
+  Its `badge/1` is now the one home for the wording and colors of a form's
+  state, shared with the journey page's listing.
+- The journey page's Open button now appears wherever the form's own flow
+  type says `openable?/2` — an any-order wizard offers forms an in-order one
+  keeps closed. Continue, View, and Reopen are unchanged.
+- Submitting a form asks the type where to go next (`next_form/2`, against
+  freshly derived statuses) and falls back to the journey's next actionable
+  position when that flow has nothing left — which is what still carries a
+  filler out of a finished subflow and into the next one. Nothing actionable
+  anywhere: the journey page, as before.
+- `FormFlow.Web.Router` now forwards `config` and `config_data` to the
+  journey and form-instance pages too, so a host's config module answers on
+  the user-facing side.
+- **New: `FormFlow.Web.Instances.Positions.open/3`** — opening a position
+  (create-on-open, which pins the version) with the failure wording both
+  pages share.
+- **New: `FormFlow.Flows`** namespace, for how a flow *behaves* as opposed to
+  how it is stored (`FormFlow.Data`) or presented (`FormFlow.Web`).
+- The demo grows a custom type end to end: the admin page's config offers
+  "Demo checklist" (as before) and the users page's config now resolves it to
+  `DemoWeb.FormFlowLive.Users.Checklist`, which overrides all three callbacks
+  — every form open, finishing one returns to the top of the list, and the
+  list is drawn even for a single-form flow.
 
 ## v0.6.0
 

@@ -19,8 +19,8 @@ defmodule FormFlow.Data.Instances.Forms do
     * `update_status(journey, path, :completed, data: answers)` — submit:
       the answers land in `data`, `status`/`completed_at` are stamped, and
       a `status_changed` event is written. Completion is what unlocks
-      successor positions in `FormFlow.Data.Instances.Progress`. Completing
-      a completed instance is a no-op — reopen first.
+      successor positions in `FormFlow.Data.Instances.FlowProgress`.
+      Completing a completed instance is a no-op — reopen first.
 
   Deletion stays its own named operation: `delete_instance/2` is the host's
   retention decision, made visibly. Events never cascade-delete with their

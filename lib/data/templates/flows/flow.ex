@@ -56,7 +56,8 @@ defmodule FormFlow.Data.Templates.Flow do
 
     # Open domain data in the Neo4j property-graph style, like a node's
     # properties. Carries "form_flow_type" for "forms" flows — how the flow's
-    # steps are presented to a user filling it out; absent means the
+    # forms are presented to a user filling them out, and which of them that
+    # user may open (see `FormFlow.Flows.Types`); absent means the
     # `FormFlow.Config` default decides.
     field(:properties, :map, default: %{})
 

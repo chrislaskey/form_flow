@@ -44,8 +44,8 @@ defmodule FormFlow.Web.Router do
   |---------------------------------------|---------------|
   | `/`                                   | a landing linking Journeys |
   | `/journeys`                           | `FormFlow.Web.Instances.Flows.Index` (the user's journeys + starting new ones) |
-  | `/journeys/:id`                       | `FormFlow.Web.Instances.Flows.Show` (positions and their progress) |
-  | `/journeys/:id/instances/:instance_id`| `FormFlow.Web.Instances.Forms.Show` (the form itself) |
+  | `/journeys/:id`                       | `FormFlow.Web.Instances.Flows.Show` (the flow's forms and their progress) |
+  | `/journeys/:id/instances/:instance_id`| `FormFlow.Web.Instances.Forms.Show` (the form itself, under its flow's progress) |
 
   Drill-in URLs carry the *node* id, not the child flow's or form's id — a
   reusable subflow or form used twice in one root is two nodes, so two
@@ -252,6 +252,8 @@ defmodule FormFlow.Web.Router do
               journey_id={id}
               base={@base}
               user_id={@user_id}
+              config={@config}
+              config_data={@config_data}
             />
           <% {:fill, journey_id, instance_id} -> %>
             <.live_component
@@ -261,6 +263,8 @@ defmodule FormFlow.Web.Router do
               instance_id={instance_id}
               base={@base}
               user_id={@user_id}
+              config={@config}
+              config_data={@config_data}
             />
           <% nil -> %>
             <%!-- not a /journeys path --%>

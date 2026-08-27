@@ -1,22 +1,33 @@
 defmodule FormFlow.Web.Instances.Flows.Show do
   @moduledoc """
   `FormFlow.Web.Instances.Flows.Show` LiveComponent is a journey's detail page:
-  every form position in flow order with its derived state — Available /
-  In progress / Done / Pending — plus any stranded answers (filled at a
-  position the flow no longer has).
+  every form in flow order with its derived state — Available / In progress /
+  Done / Pending — plus any stranded answers (filled at a position the flow no
+  longer has).
 
-  Opening an Available position is what creates its form instance
-  (`FormFlow.Data.Instances.Forms.update_status/4` with `:in_progress` —
-  create-on-open, which is the moment the form version is pinned) before
-  navigating to the fill page. Reopen is the same call on a Done form:
-  `:in_progress` on a completed instance sends it back.
+  Which forms offer to open is not this page's decision: each form belongs to
+  a "forms" flow, and that flow's `FormFlow.Flows.Types` module answers
+  `openable?/2` for it. An in-order wizard offers only where the flow allows
+  work; an any-order one offers every form of its own that isn't done, which
+  is how a filler jumps ahead. One journey can hold several "forms" flows
+  with different types, so the question is asked per form.
+
+  Opening a form is what creates its instance
+  (`FormFlow.Web.Instances.Positions.open/3` — create-on-open, which is the
+  moment the form version is pinned) before navigating to the fill page.
+  Reopen is the same call on a Done form: `:in_progress` on a completed
+  instance sends it back.
   """
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Config.Context
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Instances.Progress
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Flows.Types
+  alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Positions
 
   @impl true
   def update(assigns, socket) do
@@ -24,25 +35,25 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
   end
 
   @impl true
-  def handle_event("open", %{"path" => joined}, socket) do
-    path = String.split(joined, ",")
+  def handle_event("open_form", %{"path" => joined}, socket) do
     journey = socket.assigns.journey
+    path = String.split(joined, ",")
 
-    case Instances.Forms.update_status(journey, path, :in_progress,
-           user_id: socket.assigns.user_id
-         ) do
+    case Positions.open(journey, path, socket.assigns.user_id) do
       {:ok, instance} ->
         to = "#{socket.assigns.base}/journeys/#{journey.id}/instances/#{instance.id}"
         {:noreply, push_navigate(socket, to: to)}
 
-      {:error, reason} ->
-        {:noreply, assign(socket, :error, open_error(reason))}
+      {:error, message} ->
+        {:noreply, assign(socket, :error, message)}
     end
   end
 
@@ -64,87 +75,39 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       journey ->
         tree = Templates.Flows.resolve_tree(journey.flow_id)
-        instances = Instances.Flows.form_instances(journey)
-        statuses = Progress.derive(tree, instances)
-
-        by_path =
-          for instance <- instances, is_nil(instance.superseded_at), into: %{} do
-            {instance.path, instance}
-          end
-
-        rows =
-          for {path, label} <- form_positions(tree, [], nil) do
-            %{path: path, label: label, status: statuses[path], instance: by_path[path]}
-          end
-
-        stranded =
-          for instance <- Instances.Flows.list_stranded(journey), do: instance
+        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(journey))
 
         assign(socket,
           journey: journey,
-          rows: rows,
-          stranded: stranded,
+          rows: rows(forms, tree, socket.assigns),
+          stranded: Instances.Flows.list_stranded(journey),
           flow_name: (tree && tree.flow.name) || "Untitled flow"
         )
     end
   end
 
-  # Form positions in flow order — breadth-first from Start within each
-  # flow, descending into subflows — labeled from the node's canvas label,
-  # prefixed with the subflow chain ("Documents / Proof of address").
-  defp form_positions(nil, _prefix, _label_prefix), do: []
+  # Every form with the one question its own flow's type answers here.
+  defp rows(forms, tree, assigns) do
+    for form <- forms do
+      in_flow = FlowProgress.forms_in_flow(forms, form.path)
+      type = type_module(assigns, tree, form)
 
-  defp form_positions(tree, prefix, label_prefix) do
-    outgoing = Enum.group_by(tree.relationships, & &1.source_id)
-    nodes_by_id = Map.new(tree.nodes, &{&1.id, &1})
-    starts = for node <- tree.nodes, "Start" in node.labels, do: node.id
-
-    walk(starts, MapSet.new(), tree, prefix, label_prefix, outgoing, nodes_by_id)
-  end
-
-  defp walk([], _seen, _tree, _prefix, _label_prefix, _outgoing, _nodes_by_id), do: []
-
-  defp walk([id | rest], seen, tree, prefix, label_prefix, outgoing, nodes_by_id) do
-    if MapSet.member?(seen, id) do
-      walk(rest, seen, tree, prefix, label_prefix, outgoing, nodes_by_id)
-    else
-      seen = MapSet.put(seen, id)
-      node = nodes_by_id[id]
-      successors = for relationship <- Map.get(outgoing, id, []), do: relationship.target_id
-      label = join_label(label_prefix, node_label(node))
-
-      found =
-        cond do
-          node.form_id || "Form" in node.labels ->
-            [{prefix ++ [id], label}]
-
-          node.subflow_id ->
-            form_positions(tree.subflows[id], prefix ++ [id], label)
-
-          true ->
-            []
-        end
-
-      found ++ walk(rest ++ successors, seen, tree, prefix, label_prefix, outgoing, nodes_by_id)
+      %{form: form, openable?: type.openable?(form, in_flow)}
     end
   end
 
-  defp node_label(node) do
-    get_in(node.properties, ["data", "label"]) || List.first(node.labels) || "Untitled"
+  # The form's flow type: its "forms" flow's stored form_flow_type, resolved
+  # through the host's FormFlow.Config (or the library's defaults).
+  defp type_module(assigns, tree, form) do
+    context = %Context{
+      user_id: assigns.user_id,
+      flow: tree.flow,
+      subflow: form.flow,
+      subflow_node: List.last(form.ancestors)
+    }
+
+    Types.for_flow(form.flow, context, assigns.config, assigns.config_data)
   end
-
-  defp join_label(nil, label), do: label
-  defp join_label(prefix, label), do: "#{prefix} / #{label}"
-
-  defp open_error(:no_published_version),
-    do: "That form has no published version yet — ask an administrator to publish it."
-
-  defp open_error(_reason), do: "Could not open the form. The flow may have changed — reload."
-
-  defp badge(:completed), do: {"Done", "bg-emerald-50 text-emerald-700 border-emerald-200"}
-  defp badge(:in_progress), do: {"In progress", "bg-amber-50 text-amber-700 border-amber-200"}
-  defp badge(:available), do: {"Available", "bg-cyan-50 text-cyan-700 border-cyan-200"}
-  defp badge(_pending), do: {"Pending", "bg-zinc-50 text-zinc-500 border-zinc-200"}
 
   @impl true
   def render(%{journey: nil} = assigns) do
@@ -172,37 +135,40 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       <ul class="space-y-1.5 text-sm">
         <li :for={row <- @rows} class="flex items-center gap-3">
-          <% {text, classes} = badge(row.status) %>
+          <% {text, classes} = Components.FlowProgress.badge(row.form.status) %>
           <span class={"rounded-full border px-2 py-0.5 text-xs #{classes}"}>{text}</span>
-          <span>{row.label}</span>
+          <span>{FlowProgress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
+            <%!-- Open is the offer to start work here — an any-order wizard
+                  makes it on forms an in-order one keeps closed. A form
+                  already started continues instead. --%>
             <button
-              :if={row.status == :available}
-              phx-click="open"
-              phx-value-path={Enum.join(row.path, ",")}
+              :if={row.openable? && is_nil(row.form.instance)}
+              phx-click="open_form"
+              phx-value-path={Enum.join(row.form.path, ",")}
               phx-target={@myself}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >
               Open
             </button>
             <.link
-              :if={row.status == :in_progress && row.instance}
-              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.instance.id}"}
+              :if={row.form.status == :in_progress && row.form.instance}
+              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.form.instance.id}"}
               class="text-cyan-600 hover:underline"
             >
               Continue →
             </.link>
             <.link
-              :if={row.status == :completed && row.instance}
-              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.instance.id}"}
+              :if={row.form.status == :completed && row.form.instance}
+              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.form.instance.id}"}
               class="text-cyan-600 hover:underline"
             >
               View →
             </.link>
             <button
-              :if={row.status == :completed && row.instance}
+              :if={row.form.status == :completed && row.form.instance}
               phx-click="reopen"
-              phx-value-path={Enum.join(row.path, ",")}
+              phx-value-path={Enum.join(row.form.path, ",")}
               phx-target={@myself}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >

@@ -12,7 +12,7 @@ defmodule FormFlow.Config do
   alias FormFlow.Config.Context
 
   @callback form_flow_type_options(Context.t(), map()) :: [{String.t(), String.t()}]
-  @callback form_flow_type_module(String.t(), Context.t(), map()) :: module()
+  @callback form_flow_type_module(String.t() | nil, Context.t(), map()) :: module()
 
   defmacro __using__(_opts) do
     quote do
@@ -21,11 +21,11 @@ defmodule FormFlow.Config do
       # Callbacks
 
       def form_flow_type_options(context, config_data) do
-        FormFlow.Config.form_flow_type_options(context, config_data)
+        unquote(__MODULE__).form_flow_type_options(context, config_data)
       end
 
       def form_flow_type_module(value, context, config_data) do
-        FormFlow.Config.form_flow_type_module(value, context, config_data)
+        unquote(__MODULE__).form_flow_type_module(value, context, config_data)
       end
 
       defoverridable form_flow_type_options: 2,
@@ -47,21 +47,20 @@ defmodule FormFlow.Config do
     ]
   end
 
+  @doc """
+  The `FormFlow.Flows.Types` module for a stored `form_flow_type`. An unset (`nil`)
+  or unrecognized value resolves to the in-order wizard — the baseline, so a
+  flow always has a type even before anyone picks one.
+  """
   def form_flow_type_module(value, context, _config_data) do
     case value do
       "wizard_any_order" -> form_flow_type_wizard_any_order(context)
       "wizard_in_order" -> form_flow_type_wizard_in_order(context)
-      _ -> form_flow_type_wizard_in_order(context)
+      _unset_or_unknown -> form_flow_type_wizard_in_order(context)
     end
   end
 
-  def form_flow_type_wizard_any_order(_context) do
-    # TODO: replace with real module
-    FormFlow.Config
-  end
+  def form_flow_type_wizard_any_order(_context), do: FormFlow.Flows.Types.WizardAnyOrder
 
-  def form_flow_type_wizard_in_order(_context) do
-    # TODO: replace with real module
-    FormFlow.Config
-  end
+  def form_flow_type_wizard_in_order(_context), do: FormFlow.Flows.Types.WizardInOrder
 end

@@ -25,3 +25,5 @@ form_flow-*.tar
 
 # Editor bundle dependencies (the built file in priv/static is committed)
 /assets/node_modules/
+
+archive

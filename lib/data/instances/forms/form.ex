@@ -32,7 +32,7 @@ defmodule FormFlow.Data.Instances.Form do
   through `visit_changeset/4`, never castable, never updated; there is
   deliberately no node FK beside it (a derivable copy of `last(path)` that
   no FK action would survive — editor saves replace all nodes). Stranded is
-  not a column state: `FormFlow.Data.Instances.Progress` derives it when a
+  not a column state: `FormFlow.Data.Instances.FlowProgress` derives it when a
   path matches no position in the current tree. `superseded_at` is stamped
   by strand reconciliation on a replaced instance; derivation skips
   superseded rows, and the partial unique index enforces one *active*

@@ -8,10 +8,18 @@ defmodule FormFlow.Web.Instances do
 
     * `FormFlow.Web.Instances.Flows.Index` — the user's journeys, and
       starting new ones
-    * `FormFlow.Web.Instances.Flows.Show` — one journey's positions with
+    * `FormFlow.Web.Instances.Flows.Show` — one journey's forms with
       derived progress
     * `FormFlow.Web.Instances.Forms.Show` — one form instance, rendered with
       `DynamicForm`
+
+  plus two pieces both pages share:
+  `FormFlow.Web.Instances.Components.FlowProgress` (a flow's forms and their
+  state, drawn) and `FormFlow.Web.Instances.Positions` (opening one).
+
+  Which forms a filler may navigate to, and where submitting takes them, is
+  the `FormFlow.Flows.Types` module a flow's `form_flow_type` resolves to —
+  the pages ask, they don't decide.
 
   The namespaces mirror the data side (`FormFlow.Data.Instances.Flows` /
   `.Forms`), the same way `FormFlow.Web.Templates` mirrors

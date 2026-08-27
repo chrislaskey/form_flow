@@ -1,4 +1,4 @@
-defmodule FormFlow.Data.Instances.Progress do
+defmodule FormFlow.Data.Instances.FlowProgress do
   @moduledoc """
   Derives a journey's traversal state — a pure function of the live flow
   tree and the journey's form instances. Nothing here is persisted, which
@@ -14,6 +14,21 @@ defmodule FormFlow.Data.Instances.Progress do
   parallel-branch semantics (OR-joins, N-of-M) stay deferred (subflows
   plan, R1) and land in this module when decided.
 
+  Two views of that one derivation:
+
+    * `derive/2` — every position's status, keyed by path. The primitive the
+      join rule is expressed in.
+    * `forms/2` — the journey's *form* positions only, as an ordered list of
+      `FormFlow.Data.Instances.FormProgress` structs carrying the label,
+      live instance, and owning flow alongside the status. This is what a
+      flow's `FormFlow.Flows.Types` module reasons about and what the
+      user-facing pages render.
+
+  Order, for `forms/2`, is the order a filler works them: breadth-first from
+  Start, descending into subflows the moment one is reached — the same scan
+  `next_path_position/2` performs. `forms_in_flow/2` narrows the list to one
+  "forms" flow's own, which is the unit a `form_flow_type` governs.
+
   Form instances with `superseded_at` set are skipped everywhere — they are
   attestation records left behind by strand reconciliation, not live
   traversal state.
@@ -23,6 +38,8 @@ defmodule FormFlow.Data.Instances.Progress do
   may legitimately diverge after a template edit — `complete?/2` is the
   derivation-side answer.
   """
+
+  alias FormFlow.Data.Instances.FormProgress
 
   @type status :: :pending | :available | :in_progress | :completed | :stranded
   @type path :: [binary()]
@@ -73,6 +90,50 @@ defmodule FormFlow.Data.Instances.Progress do
     search_flow(tree, [], statuses)
   end
 
+  @doc """
+  The journey's form positions in the order they are worked, each as a
+  `FormFlow.Data.Instances.FormProgress`.
+
+  Positions the tree no longer has are absent — a stranded instance is not a
+  form of the flow any more (`FormFlow.Data.Instances.Flows.list_stranded/2`
+  is where those surface).
+  """
+  @spec forms(tree :: map() | nil, form_instances :: [struct()]) :: [FormProgress.t()]
+  def forms(tree, form_instances) do
+    ctx = %{statuses: derive(tree, form_instances), instances: active_by_path(form_instances)}
+
+    flow_forms(tree, [], [], ctx)
+  end
+
+  @doc """
+  The forms sharing a position's "forms" flow, in order — everything one
+  `form_flow_type` governs.
+
+  Positions are compared by their parent path rather than by flow id: a
+  reusable subflow used twice in one journey is two traversals, tracked
+  separately, and they share a flow.
+  """
+  @spec forms_in_flow([FormProgress.t()], path()) :: [FormProgress.t()]
+  def forms_in_flow(forms, path) do
+    flow = Enum.drop(path, -1)
+
+    Enum.filter(forms, &(Enum.drop(&1.path, -1) == flow))
+  end
+
+  @doc "The form at a position, or nil when the tree no longer has it."
+  @spec find_form([FormProgress.t()], path()) :: FormProgress.t() | nil
+  def find_form(forms, path), do: Enum.find(forms, &(&1.path == path))
+
+  @doc """
+  A form's label prefixed with the subflows drilled through to reach it —
+  "Documents / Proof of address". Unqualified for a form in the root flow,
+  where there is nothing to prefix.
+  """
+  @spec qualified_label(FormProgress.t()) :: String.t()
+  def qualified_label(%FormProgress{} = form) do
+    Enum.join(Enum.map(form.ancestors, &node_label/1) ++ [form.label], " / ")
+  end
+
   # One flow scope: build its edge/node lookups and scan it in flow order,
   # starting the queue at its Start nodes.
   defp search_flow(nil, _prefix, _statuses), do: nil
@@ -117,6 +178,62 @@ defmodule FormFlow.Data.Instances.Progress do
       hit ||
         first_actionable(rest ++ successors, seen, tree, prefix, statuses, outgoing, nodes_by_id)
     end
+  end
+
+  # The same per-flow scan as search_flow, collecting every form position
+  # instead of stopping at the first actionable one.
+  defp flow_forms(nil, _prefix, _ancestors, _ctx), do: []
+
+  defp flow_forms(tree, prefix, ancestors, ctx) do
+    scope = %{
+      tree: tree,
+      prefix: prefix,
+      ancestors: ancestors,
+      outgoing: Enum.group_by(tree.relationships, & &1.source_id),
+      nodes_by_id: Map.new(tree.nodes, &{&1.id, &1})
+    }
+
+    starts = for node <- tree.nodes, kind(node) == :start, do: node.id
+
+    collect(starts, MapSet.new(), scope, ctx)
+  end
+
+  defp collect([], _seen, _scope, _ctx), do: []
+
+  defp collect([id | rest], seen, scope, ctx) do
+    if MapSet.member?(seen, id) do
+      collect(rest, seen, scope, ctx)
+    else
+      seen = MapSet.put(seen, id)
+      node = scope.nodes_by_id[id]
+      successors = for relationship <- Map.get(scope.outgoing, id, []), do: relationship.target_id
+      path = scope.prefix ++ [id]
+
+      found =
+        case kind(node) do
+          :form ->
+            [form_progress(node, path, scope, ctx)]
+
+          :subflow ->
+            flow_forms(scope.tree.subflows[id], path, scope.ancestors ++ [node], ctx)
+
+          _other ->
+            []
+        end
+
+      found ++ collect(rest ++ successors, seen, scope, ctx)
+    end
+  end
+
+  defp form_progress(node, path, scope, ctx) do
+    %FormProgress{
+      path: path,
+      label: node_label(node),
+      ancestors: scope.ancestors,
+      status: ctx.statuses[path],
+      instance: ctx.instances[path],
+      flow: scope.tree.flow
+    }
   end
 
   defp active_by_path(form_instances) do
@@ -231,5 +348,9 @@ defmodule FormFlow.Data.Instances.Progress do
       "End" in node.labels -> :end
       true -> :other
     end
+  end
+
+  defp node_label(node) do
+    get_in(node.properties, ["data", "label"]) || List.first(node.labels) || "Untitled"
   end
 end
