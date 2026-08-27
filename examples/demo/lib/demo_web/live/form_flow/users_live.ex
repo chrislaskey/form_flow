@@ -46,8 +46,6 @@ defmodule DemoWeb.FormFlowLive.Users do
             params={@params}
             path={@path}
             base="/users"
-            config={DemoWeb.FormFlowLive.Users.Config}
-            config_data={%{properties: %{hello: "world"}}}
           />
         </div>
       </div>

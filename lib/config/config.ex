@@ -11,18 +11,59 @@ defmodule FormFlow.Config do
 
   alias FormFlow.Config.Context
 
-  @callback example(map(), Context.t(), map()) :: map()
-  @callback properties(map(), Context.t(), map()) :: map()
+  @callback form_flow_type_options(Context.t(), map()) :: map()
+  @callback form_flow_type_module(String.t(), Context.t(), map()) :: map()
 
   defmacro __using__(_opts) do
     quote do
       @behaviour FormFlow.Config
 
-      def example(value, _context, _config_data), do: value
+      # Callbacks
 
-      def properties(default, _context, _config_data), do: default
+      def form_flow_type_options(context, config_data) do
+        FormFlow.Config.form_flow_type_options(context, config_data)
+      end
 
-      defoverridable example: 3, properties: 3
+      def form_flow_type_module(value, context, config_data) do
+        FormFlow.Config.form_flow_type_module(value, context, config_data)
+      end
+
+      defoverridable form_flow_type_options: 2,
+                     form_flow_type_module: 3
     end
+  end
+
+  # Public functions
+  #
+  # Defined outside the macro so these can be called from custom config
+  # modules. Sometimes it's useful to override just part of a behaviour, so
+  # this makes it possible to reuse the core logic from within custom config
+  # modules too.
+
+  def form_flow_type_options(_context, _config_data) do
+    [
+      "Wizard (any order)",
+      "wizard_any_order",
+      "Wizard (in order)",
+      "wizard_in_order"
+    ]
+  end
+
+  def form_flow_type_module(value, context, _config_data) do
+    case value do
+      "wizard_any_order" -> form_flow_type_wizard_any_order(context)
+      "wizard_in_order" -> form_flow_type_wizard_in_order(context)
+      _ -> form_flow_type_wizard_in_order(context)
+    end
+  end
+
+  def form_flow_type_wizard_any_order(_context) do
+    # TODO: replace with real module
+    FormFlow.Config
+  end
+
+  def form_flow_type_wizard_in_order(_context) do
+    # TODO: replace with real module
+    FormFlow.Config
   end
 end
