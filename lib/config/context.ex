@@ -22,7 +22,7 @@ defmodule FormFlow.Config.Context do
       flow (`node.subflow`); when viewing a node's embedded form, this is the
       flow the node itself lives in (`node.flow`), since there is no deeper
       flow to embed
-    * `:node` - the `FormFlow.Data.Templates.Flow.Node` in scope, or `nil`
+    * `:subflow_node` - the `FormFlow.Data.Templates.Flow.Node` in scope, or `nil`
       when viewing a flow directly with no node drill-in
     * `:form` - the `FormFlow.Data.Templates.Form` lineage in scope, or `nil`
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
@@ -37,7 +37,7 @@ defmodule FormFlow.Config.Context do
     :user_id,
     :flow,
     :subflow,
-    :node,
+    :subflow_node,
     :form,
     :form_version
   ]
@@ -46,7 +46,7 @@ defmodule FormFlow.Config.Context do
           user_id: String.t() | nil,
           flow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow: FormFlow.Data.Templates.Flow.t() | nil,
-          node: FormFlow.Data.Templates.Flow.Node.t() | nil,
+          subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,
           form: FormFlow.Data.Templates.Form.t() | nil,
           form_version: FormFlow.Data.Templates.Form.Version.t() | nil
         }
