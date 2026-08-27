@@ -263,6 +263,8 @@ defmodule FormFlow.Web.Router do
               id="instance-flows-index"
               base={@base}
               user_id={@user_id}
+              uri={@uri}
+              params={@params}
             />
           <% {:flow, id} -> %>
             <.live_component

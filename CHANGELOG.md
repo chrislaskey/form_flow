@@ -245,6 +245,36 @@ While the opening moved: the progress bar is now derived *after* a position is
 opened, so the form being filled reads as in progress rather than available —
 it was drawn from statuses derived a moment before the open.
 
+### Every listing is a `Slab.table`
+
+The user-facing flow listing was the last hand-rolled `<table>` in the
+library — plain `thead`/`tbody`, no sorting, no pagination, the whole list
+fetched at once. It is now a `Slab.table` in query mode, like both template
+indexes:
+
+- **New: `FormFlow.Data.Instances.Flows.list_query/1`** — the same listing as
+  a composable query, unordered and unpreloaded so `order_by`,
+  `limit`/`offset`, `Repo.aggregate(:count)`, and preloads can be layered on
+  top. `list/1` is now built from it and behaves exactly as before.
+- The flow's name comes from the `:flow` association through Slab's `preload`
+  attr, which it applies *after* filtering, sorting, and counting — so the
+  query stays aggregate-safe. That column is deliberately not sortable: it is
+  a joined value, not a column Slab could compile into `ORDER BY`.
+- Sorting defaults to newest first, matching `list/1`, and the default is only
+  injected when the URL carries no sort of its own — a bare `sort_direction`
+  default would make every other column start descending.
+- `FormFlow.Web.Router` now forwards `uri` and `params` to the flow listing,
+  which URL-driven sorting and pagination need. Hosts calling the component
+  directly should pass both from `handle_params/3`.
+- "Start a new flow" stays a plain list rather than becoming a second table:
+  Slab reads `sort` and `page` straight from the URL, so two Slab tables on
+  one page would share — and fight over — the same params.
+
+Two listings stay lists on purpose, and say so: the forms on a flow instance's
+page are in *flow order*, which sorting would destroy, and are derived
+`FormFlow.Data.Instances.FormProgress` structs rather than rows; the version
+sidebar on a form's page is navigation, not data.
+
 ## v0.6.0
 
 ### Breaking: Renamed Graph to Flow

@@ -28,15 +28,24 @@ defmodule FormFlow.Data.Instances.Flows do
   access control: the library never enforces visibility.
   """
   def list(opts \\ []) do
-    query = from(i in Instances.Flow, order_by: [desc: i.inserted_at], preload: [:flow])
+    Repo.all(from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:flow]))
+  end
 
-    query =
-      case Keyword.get(opts, :user_id) do
-        nil -> query
-        user_id -> from(i in query, where: i.user_id == ^user_id)
-      end
+  @doc """
+  The same listing as a composable query: unordered and unpreloaded, so
+  callers (like Slab's table in query mode) can layer `order_by`,
+  `limit`/`offset`, `Repo.aggregate(:count)`, and their own preloads on top.
 
-    Repo.all(query)
+  `opts[:user_id]` narrows to one creator, exactly as in `list/1` — and with
+  the same caveat: a listing convenience, not access control.
+  """
+  def list_query(opts \\ []) do
+    query = from(i in Instances.Flow)
+
+    case Keyword.get(opts, :user_id) do
+      nil -> query
+      user_id -> from(i in query, where: i.user_id == ^user_id)
+    end
   end
 
   @doc """
