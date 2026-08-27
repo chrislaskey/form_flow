@@ -1,22 +1,22 @@
 defmodule FormFlow.Web.Instances.Flows.Show do
   @moduledoc """
-  `FormFlow.Web.Instances.Flows.Show` LiveComponent is a journey's detail page:
-  every form in flow order with its derived state — Available / In progress /
-  Done / Pending — plus any stranded answers (filled at a position the flow no
-  longer has).
+  `FormFlow.Web.Instances.Flows.Show` LiveComponent is one flow instance's
+  detail page: every form in flow order with its derived state — Available /
+  In progress / Done / Pending — plus any stranded answers (filled at a
+  position the flow no longer has).
 
   Which forms offer to open is not this page's decision: each form belongs to
   a "forms" flow, and that flow's `FormFlow.Flows.Types` module answers
   `openable?/2` for it. An in-order wizard offers only where the flow allows
   work; an any-order one offers every form of its own that isn't done, which
-  is how a filler jumps ahead. One journey can hold several "forms" flows
+  is how a filler jumps ahead. One instance can hold several "forms" flows
   with different types, so the question is asked per form.
 
-  Opening a form is what creates its instance
-  (`FormFlow.Web.Instances.Positions.open/3` — create-on-open, which is the
-  moment the form version is pinned) before navigating to the fill page.
-  Reopen is the same call on a Done form: `:in_progress` on a completed
-  instance sends it back.
+  Every action here is an ordinary link, because a form's URL addresses its
+  *position* and so exists before its instance row does — opening happens on
+  the form page itself (see `FormFlow.Web.Instances.Forms.Show`). Reopen is
+  the exception, since it changes state: it is a button, and it lives beside
+  the answers it reopens.
   """
 
   use Phoenix.LiveComponent
@@ -27,7 +27,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   alias FormFlow.Data.Templates
   alias FormFlow.Flows.Types
   alias FormFlow.Web.Instances.Components
-  alias FormFlow.Web.Instances.Positions
+  alias FormFlow.Web.Instances.Paths
 
   @impl true
   def update(assigns, socket) do
@@ -43,24 +43,10 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   end
 
   @impl true
-  def handle_event("open_form", %{"path" => joined}, socket) do
-    journey = socket.assigns.journey
-    path = String.split(joined, ",")
-
-    case Positions.open(journey, path, socket.assigns.user_id) do
-      {:ok, instance} ->
-        to = "#{socket.assigns.base}/journeys/#{journey.id}/instances/#{instance.id}"
-        {:noreply, push_navigate(socket, to: to)}
-
-      {:error, message} ->
-        {:noreply, assign(socket, :error, message)}
-    end
-  end
-
   def handle_event("reopen", %{"path" => joined}, socket) do
     path = String.split(joined, ",")
 
-    case Instances.Forms.update_status(socket.assigns.journey, path, :in_progress,
+    case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
            user_id: socket.assigns.user_id
          ) do
       {:ok, _reopened} -> {:noreply, load(socket)}
@@ -68,19 +54,19 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     end
   end
 
-  defp load(%{assigns: %{journey_id: journey_id}} = socket) do
-    case Instances.Flows.get(journey_id) do
+  defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
+    case Instances.Flows.get(flow_instance_id) do
       nil ->
-        assign(socket, journey: nil, rows: [], stranded: [], flow_name: nil)
+        assign(socket, flow_instance: nil, rows: [], stranded: [], flow_name: nil)
 
-      journey ->
-        tree = Templates.Flows.resolve_tree(journey.flow_id)
-        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(journey))
+      flow_instance ->
+        tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
         assign(socket,
-          journey: journey,
+          flow_instance: flow_instance,
           rows: rows(forms, tree, socket.assigns),
-          stranded: Instances.Flows.list_stranded(journey),
+          stranded: Instances.Flows.list_stranded(flow_instance),
           flow_name: (tree && tree.flow.name) || "Untitled flow"
         )
     end
@@ -110,9 +96,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   end
 
   @impl true
-  def render(%{journey: nil} = assigns) do
+  def render(%{flow_instance: nil} = assigns) do
     ~H"""
-    <p class="text-sm text-zinc-500">This journey no longer exists.</p>
+    <p class="text-sm text-zinc-500">This flow no longer exists.</p>
     """
   end
 
@@ -120,11 +106,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">
-        <.link navigate={"#{@base}/journeys"} class="hover:underline">Journeys</.link>
+        <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
         <span class="text-zinc-400">/</span>
         {@flow_name}
         <span
-          :if={@journey.status == "completed"}
+          :if={@flow_instance.status == "completed"}
           class="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
         >
           Completed
@@ -141,26 +127,25 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           <span class="ml-auto flex items-center gap-2">
             <%!-- Open is the offer to start work here — an any-order wizard
                   makes it on forms an in-order one keeps closed. A form
-                  already started continues instead. --%>
-            <button
+                  already started continues instead; both land on the same
+                  page, which is the one that opens the position. --%>
+            <.link
               :if={row.openable? && is_nil(row.form.instance)}
-              phx-click="open_form"
-              phx-value-path={Enum.join(row.form.path, ",")}
-              phx-target={@myself}
+              navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >
               Open
-            </button>
+            </.link>
             <.link
               :if={row.form.status == :in_progress && row.form.instance}
-              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.form.instance.id}"}
+              navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
               class="text-cyan-600 hover:underline"
             >
               Continue →
             </.link>
             <.link
               :if={row.form.status == :completed && row.form.instance}
-              navigate={"#{@base}/journeys/#{@journey.id}/instances/#{row.form.instance.id}"}
+              navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
               class="text-cyan-600 hover:underline"
             >
               View →

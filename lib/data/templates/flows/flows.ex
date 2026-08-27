@@ -267,8 +267,9 @@ defmodule FormFlow.Data.Templates.Flows do
 
   Refused with an error changeset while other flows still reference the flow
   as a subflow — remove those references (or `duplicate/2` first) and retry —
-  or while journeys have been started against it: journeys reference their
-  root live and can never be orphaned by template deletion (the `:restrict`
+  or while instances of the whole flow have been started against it —
+  journeys, `FormFlow.Data.Instances.Flow` records: they reference their root
+  live and can never be orphaned by template deletion (the `:restrict`
   FK on `instance_flows.flow_id` is the database backstop; this guard gives
   the friendly error first). Note the owned-forms guard alone would miss a
   flow built entirely from catalog forms.
@@ -293,7 +294,7 @@ defmodule FormFlow.Data.Templates.Flows do
           |> Ecto.Changeset.change()
           |> Ecto.Changeset.add_error(
             :id,
-            "cannot be deleted: journeys have been started against it"
+            "cannot be deleted: flow instances have been started against it"
           )
           |> Repo.rollback()
 

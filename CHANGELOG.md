@@ -133,6 +133,81 @@ its own type, and every question is asked of the flow the form belongs to.
   — every form open, finishing one returns to the top of the list, and the
   list is drawn even for a single-form flow.
 
+### Breaking: the user-facing URLs mirror the template URLs
+
+`/journeys` and `/instances` are gone. They were the only nouns in the URL
+space that named nothing in the data model — the schemas are
+`FormFlow.Data.Instances.Flow` and `FormFlow.Data.Instances.Form`, and
+"journey" was prose from the design notes — and the form URL addressed its
+*database row* rather than its place in the flow, because opening created the
+row before navigating. Both sides now use the same nouns, since the mount root
+already says which world you are in:
+
+| Before | After |
+|--------|-------|
+| `/journeys` | `/flows` |
+| `/journeys/:id` | `/flows/:id` |
+| `/journeys/:id/instances/:instance_id` | `/flows/:id/forms/*path` (read-only) |
+| — | `/flows/:id/forms/*path/edit` (fillable) |
+
+`/admin/flows/:id` is a flow template and `/users/flows/:id` is a flow
+instance, page for page.
+
+A form is now addressed by its **position**: `*path` is the chain of node ids
+from the root flow down to the form node — the same `path` the instance row
+stamps — so a form two subflows deep has three segments. The template side
+needs no such chain, because every path to a shared subflow reaches the same
+template; two paths through an *instance* are two different sets of answers.
+
+That the URL of a position exists before its row does is what the rest of this
+follows from:
+
+- **`/edit` is the only page that writes.** It opens the position it addresses
+  — create-on-open, which is what pins the form version — gated by the same
+  `FormFlow.Flows.Types` `openable?/2` the listing asks, and idempotent
+  afterwards. So the address bar cannot walk around a flow's type, and a
+  refresh, a Back, or a bookmark all land where they should.
+- **Every navigation to a form is an ordinary link.** Open, Continue, and the
+  drawn progress's jumps were `phx-click` handlers that created a row and then
+  redirected; they are now `<.link navigate>`. The `"open_form"` event and
+  `FormFlow.Web.Instances.Positions` are both gone, and submitting no longer
+  opens the next position itself — it navigates to that position's `/edit`,
+  which does.
+- **Bare `/forms/*path` is the read-only view** and never writes: with nothing
+  filled in yet it says so and offers the Start link when the flow's type
+  allows work there; with answers it shows them, submit hidden. Reopen is
+  still an explicit button, since it changes state, and now lands on `/edit`.
+- **New: `FormFlow.Web.Instances.Paths`** builds all four URLs, so the shape
+  lives in one place.
+- **New: `FormFlow.Data.Instances.Forms.get_at/2`** — the live (not
+  superseded) instance at a position, which is how a position-addressed page
+  finds its row.
+- `FormFlow.Web.Instances.Components.FlowProgress` takes `base` and
+  `flow_instance_id` instead of `target`, since it renders links now.
+- The pages' `journey_id` assign is `flow_instance_id`, and the UI says
+  "Flows" where it said "Journeys".
+
+### "Journey" is grounded where it is used
+
+The docs use "journey" freely for the thing a user works through, and nothing
+in the schema carries that name, so `FormFlow.Data.Instances` now defines it
+once: an instance of a *whole* root flow — the `FormFlow.Data.Instances.Flow`
+row plus every `FormFlow.Data.Instances.Form` filled at a position inside it
+— is what the docs call a **journey**. Along with why the shorthand exists at
+all, since "flow instance" alone reads as one step's worth of work.
+
+- Every moduledoc that reaches for the word now grounds it on first mention
+  rather than assuming it (`FlowProgress`, `FormProgress`, both `Flows` and
+  `Forms` contexts, the `Flow` and `Form` schemas, `Flow.Event`, and the
+  template-side delete guard) — always concrete first, shorthand second: "a
+  whole root flow instance — a journey", never the other way round, so the
+  term is never load-bearing before it is defined. `FormFlow.Flows.Types` had
+  one incidental use and now says "flow instance", the concrete term, rather
+  than introducing a word it never defines.
+- The one user-visible string that had nowhere to ground itself changed with
+  it: deleting a flow that is in use now reports `"cannot be deleted: flow
+  instances have been started against it"`.
+
 ## v0.6.0
 
 ### Breaking: Renamed Graph to Flow

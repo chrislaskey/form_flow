@@ -1,12 +1,12 @@
 defmodule FormFlow.Web.Instances.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Instances.Flows.Index` LiveComponent lists the current user's
-  journeys and starts new ones.
+  flow instances and starts new ones.
 
-  "The current user" means the router's `user_id` attr: the journey list is
-  narrowed to journeys that user created, and starting a journey stamps
-  them as its creator. This is a listing convenience, not access control —
-  auth stays the host's job (see `FormFlow.Web.Router`).
+  "The current user" means the router's `user_id` attr: the list is narrowed
+  to instances that user created, and starting one stamps them as its
+  creator. This is a listing convenience, not access control — auth stays the
+  host's job (see `FormFlow.Web.Router`).
   """
 
   use Phoenix.LiveComponent
@@ -14,6 +14,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Web.Instances.Paths
 
   @impl true
   def update(assigns, socket) do
@@ -28,7 +29,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
     {:ok,
      socket
-     |> assign(:journeys, Instances.Flows.list(user_id: socket.assigns.user_id))
+     |> assign(:flow_instances, Instances.Flows.list(user_id: socket.assigns.user_id))
      |> assign(:flows, flows)
      |> assign_new(:error, fn -> nil end)}
   end
@@ -38,11 +39,12 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     attrs = %{flow_id: flow_id, user_id: socket.assigns.user_id}
 
     case Instances.Flows.create(attrs) do
-      {:ok, journey} ->
-        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/journeys/#{journey.id}")}
+      {:ok, flow_instance} ->
+        to = Paths.flow_path(socket.assigns.base, flow_instance.id)
+        {:noreply, push_navigate(socket, to: to)}
 
       {:error, _changeset} ->
-        {:noreply, assign(socket, :error, "Could not start the journey. Please try again.")}
+        {:noreply, assign(socket, :error, "Could not start the flow. Please try again.")}
     end
   end
 
@@ -51,16 +53,16 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">
-        Journeys
+        Flows
       </div>
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
 
-      <div :if={@journeys == []} class="mb-4 text-sm text-zinc-500">
-        No journeys yet — start one below.
+      <div :if={@flow_instances == []} class="mb-4 text-sm text-zinc-500">
+        Nothing started yet — start a flow below.
       </div>
 
-      <table :if={@journeys != []} class="mb-6 w-full text-left text-sm">
+      <table :if={@flow_instances != []} class="mb-6 w-full text-left text-sm">
         <thead>
           <tr class="border-b border-zinc-200 text-xs uppercase text-zinc-500">
             <th class="py-1 pr-4">Flow</th>
@@ -70,15 +72,15 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           </tr>
         </thead>
         <tbody>
-          <tr :for={journey <- @journeys} class="border-b border-zinc-100">
-            <td class="py-1.5 pr-4">{journey.flow.name || "Untitled flow"}</td>
-            <td class="py-1.5 pr-4">{journey.status}</td>
+          <tr :for={flow_instance <- @flow_instances} class="border-b border-zinc-100">
+            <td class="py-1.5 pr-4">{flow_instance.flow.name || "Untitled flow"}</td>
+            <td class="py-1.5 pr-4">{flow_instance.status}</td>
             <td class="py-1.5 pr-4 text-zinc-500">
-              {Calendar.strftime(journey.inserted_at, "%Y-%m-%d")}
+              {Calendar.strftime(flow_instance.inserted_at, "%Y-%m-%d")}
             </td>
             <td class="py-1.5 text-right">
               <.link
-                navigate={"#{@base}/journeys/#{journey.id}"}
+                navigate={Paths.flow_path(@base, flow_instance.id)}
                 class="text-cyan-600 hover:underline"
               >
                 Open →
@@ -88,7 +90,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         </tbody>
       </table>
 
-      <h3 class="mb-1 text-sm font-semibold">Start a new journey</h3>
+      <h3 class="mb-1 text-sm font-semibold">Start a new flow</h3>
       <p :if={@flows == []} class="text-sm text-zinc-500">
         No flows have been published yet.
       </p>

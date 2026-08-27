@@ -1,7 +1,9 @@
 defmodule FormFlow.Data.Instances.Flows do
   @moduledoc """
-  `FormFlow.Data.Instances.Flows` context module for journeys —
-  `FormFlow.Data.Instances.Flow` records.
+  `FormFlow.Data.Instances.Flows` context module for whole-root-flow
+  instances — journeys: a `FormFlow.Data.Instances.Flow` row plus every form
+  instance filled at a position inside it (see `FormFlow.Data.Instances` for
+  the term).
 
   Deliberately minimal until the runner lands: creation (with its `created`
   event), the completion stamp, the derived-progress helpers, stranded

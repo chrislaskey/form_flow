@@ -8,18 +8,24 @@ defmodule FormFlow.Web.Instances.Components.FlowProgress do
   it at all (`FormFlow.Flows.Types.show_progress?/1` — a single-form flow
   isn't a sequence) and which forms can be jumped to (`clickable`, from
   `FormFlow.Flows.Types.openable?/2`) are the caller's questions to ask its
-  `FormFlow.Flows.Types` module. A jumpable form is a button sending
-  `"open_form"` to `target`; every other one renders as the same button,
-  disabled — one element either way, so the row doesn't shift as forms become
-  reachable.
+  `FormFlow.Flows.Types` module.
+
+  A jumpable form is a link to that position's fill page — which is the page
+  that opens it, so jumping needs no event of its own — and every other one
+  is the same pill as plain text. Both carry identical classes, so the row
+  doesn't shift as forms become reachable.
 
   `badge/1` lives here too: the wording and colors of a form's state, shared
-  with the journey page's listing so the two can't drift.
+  with the flow instance page's listing so the two can't drift.
   """
 
   use Phoenix.Component
 
+  alias FormFlow.Web.Instances.Paths
+
   attr(:id, :string, required: true)
+  attr(:base, :string, required: true, doc: "the router's mount prefix, for the links")
+  attr(:flow_instance_id, :string, required: true)
   attr(:forms, :list, required: true, doc: "one \"forms\" flow's forms, in order")
   attr(:current_path, :list, default: nil, doc: "the form being filled, if any")
 
@@ -30,34 +36,40 @@ defmodule FormFlow.Web.Instances.Components.FlowProgress do
         "belongs in it only if navigating to it would do something; nil for none"
   )
 
-  attr(:target, :any, default: nil, doc: "the LiveComponent receiving open_form")
-
   def flow_progress(assigns) do
     ~H"""
     <ol id={@id} class="mb-4 flex flex-wrap items-center gap-1 text-xs">
       <li :for={{form, index} <- Enum.with_index(@forms, 1)} class="flex items-center gap-1">
-        <% {text, classes} = badge(form.status) %>
+        <% classes = classes(form, @current_path) %>
         <span :if={index > 1} aria-hidden="true" class="text-zinc-300">→</span>
-        <button
-          type="button"
-          disabled={not clickable?(@clickable, form)}
-          phx-click="open_form"
-          phx-value-path={Enum.join(form.path, ",")}
-          phx-target={@target}
-          aria-current={form.path == @current_path && "step"}
-          class={[
-            "flex items-center gap-1.5 rounded-full border px-2 py-0.5",
-            classes,
-            form.path == @current_path && "font-semibold ring-1 ring-cyan-500",
-            if(clickable?(@clickable, form), do: "hover:border-zinc-400", else: "cursor-default")
-          ]}
+        <.link
+          :if={clickable?(@clickable, form)}
+          navigate={Paths.form_edit_path(@base, @flow_instance_id, form.path)}
+          class={[classes, "hover:border-zinc-400"]}
         >
-          <span class="font-mono">{marker(form.status, index)}</span>
-          <span>{form.label}</span>
-          <span class="sr-only">— {text}</span>
-        </button>
+          <.entry form={form} index={index} />
+        </.link>
+        <span
+          :if={not clickable?(@clickable, form)}
+          aria-current={form.path == @current_path && "step"}
+          class={[classes, "cursor-default"]}
+        >
+          <.entry form={form} index={index} />
+        </span>
       </li>
     </ol>
+    """
+  end
+
+  @doc false
+  attr(:form, :map, required: true)
+  attr(:index, :integer, required: true)
+
+  def entry(assigns) do
+    ~H"""
+    <span class="font-mono">{marker(@form.status, @index)}</span>
+    <span>{@form.label}</span>
+    <span class="sr-only">— {elem(badge(@form.status), 0)}</span>
     """
   end
 
@@ -69,6 +81,14 @@ defmodule FormFlow.Web.Instances.Components.FlowProgress do
   def badge(:in_progress), do: {"In progress", "bg-amber-50 text-amber-700 border-amber-200"}
   def badge(:available), do: {"Available", "bg-cyan-50 text-cyan-700 border-cyan-200"}
   def badge(_pending), do: {"Pending", "bg-zinc-50 text-zinc-500 border-zinc-200"}
+
+  defp classes(form, current_path) do
+    [
+      "flex items-center gap-1.5 rounded-full border px-2 py-0.5",
+      elem(badge(form.status), 1),
+      form.path == current_path && "font-semibold ring-1 ring-cyan-500"
+    ]
+  end
 
   defp clickable?(nil, _form), do: false
   defp clickable?(clickable, form), do: MapSet.member?(clickable, form.path)

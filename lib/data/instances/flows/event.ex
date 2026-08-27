@@ -1,7 +1,8 @@
 defmodule FormFlow.Data.Instances.Flow.Event do
   @moduledoc """
   `FormFlow.Data.Instances.Flow.Event` Ecto Schema for the append-only
-  audit trail of a journey, mirroring `FormFlow.Data.Instances.Form.Event`
+  audit trail of a whole root flow instance — a journey — mirroring
+  `FormFlow.Data.Instances.Form.Event`
   discipline: every row carries the responsible user (`user_id`, an opaque
   host-app identity — any principal, including system ones), rows are never
   updated, and events never cascade-delete with their journey — removal

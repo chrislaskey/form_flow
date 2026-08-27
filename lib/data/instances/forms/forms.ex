@@ -2,10 +2,12 @@ defmodule FormFlow.Data.Instances.Forms do
   @moduledoc """
   `FormFlow.Data.Instances.Forms` context module for form instances.
 
-  The lifecycle of an in-journey form instance runs through one entry
-  point, `update_status/4`, addressed by journey + position — the same
-  consolidation `FormFlow.Data.Templates.Forms.update_status/3` gives the
-  template side. The two statuses make three transitions:
+  The lifecycle of a form instance filled inside a whole root flow instance —
+  a journey (see `FormFlow.Data.Instances`) — runs through one entry point,
+  `update_status/4`, addressed by that journey plus the position within it:
+  the `path` through the flow's tree. That is the same consolidation
+  `FormFlow.Data.Templates.Forms.update_status/3` gives the template side.
+  The two statuses make three transitions:
 
     * `update_status(journey, path, :in_progress)` — "the user is working
       here." On an empty position this *creates* the instance — created on
@@ -44,6 +46,15 @@ defmodule FormFlow.Data.Instances.Forms do
 
   @doc "Fetches an instance by id, or nil."
   def get(instance_form_id), do: Repo.get(Instances.Form, instance_form_id)
+
+  @doc """
+  The live instance at a journey position, or nil — the row a position is
+  addressed by. Superseded instances are skipped: they are attestation
+  records, not the answers being worked on.
+  """
+  def get_at(%Instances.Flow{} = journey, path) when is_list(path) and path != [] do
+    find_instance(journey, path)
+  end
 
   @doc """
   Moves the form instance at a journey position to `status` — the one entry

@@ -40,17 +40,36 @@ defmodule FormFlow.Web.Router do
   The routes above serve `type="templates"` (the admin editor).
   `type="instances"` (the default) serves the user-facing side:
 
-  | Path                                  | LiveComponent |
-  |---------------------------------------|---------------|
-  | `/`                                   | a landing linking Journeys |
-  | `/journeys`                           | `FormFlow.Web.Instances.Flows.Index` (the user's journeys + starting new ones) |
-  | `/journeys/:id`                       | `FormFlow.Web.Instances.Flows.Show` (the flow's forms and their progress) |
-  | `/journeys/:id/instances/:instance_id`| `FormFlow.Web.Instances.Forms.Show` (the form itself, under its flow's progress) |
+  | Path                            | LiveComponent |
+  |---------------------------------|---------------|
+  | `/`                             | a landing linking Flows |
+  | `/flows`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
+  | `/flows/:id`                    | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
+  | `/flows/:id/forms/*path`        | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
+  | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Show` (the fillable form — the page that opens the position) |
+
+  The two sides use the same nouns on purpose: the mount root already says
+  which world you are in, so `/admin/flows/:id` is a flow *template* and
+  `/users/flows/:id` is a flow *instance* — the names
+  `FormFlow.Data.Templates.Flow` and `FormFlow.Data.Instances.Flow` already
+  give themselves.
 
   Drill-in URLs carry the *node* id, not the child flow's or form's id — a
   reusable subflow or form used twice in one root is two nodes, so two
   unambiguous URLs. Versions get an explicit id suffix because several drafts
   may coexist and nothing else disambiguates them.
+
+  On the instances side a form is addressed by its **position** rather than by
+  its instance row: `*path` is the chain of node ids from the root flow down
+  to the form node — the same `path` a `FormFlow.Data.Instances.Form` stamps
+  at creation — so a form two subflows deep has three segments. The template
+  side needs no such chain, because every path to a shared subflow reaches
+  the same template; two paths through an *instance* are two different sets
+  of answers. Addressing the position also means the URL exists before the
+  row does, which is what makes every navigation to a form an ordinary link:
+  `/edit` is the one page that opens a position (see
+  `FormFlow.Web.Instances.Forms.Show`), and `FormFlow.Web.Instances.Paths`
+  builds all of them.
 
   `base` is the path prefix the catch-all is mounted under, so the components
   build working navigation links — `live "/admin/*path", ...` needs
@@ -68,7 +87,7 @@ defmodule FormFlow.Web.Router do
     required: true,
     doc:
       "opaque host identity of the current user — stamped as the creator " <>
-        "of journeys started here and as the acting user on instance " <>
+        "of flow instances started here and as the acting user on instance " <>
         "events. Never interpreted by the library; auth stays the host's job"
   )
 
@@ -229,57 +248,69 @@ defmodule FormFlow.Web.Router do
           <h2 class="mb-2 text-sm font-semibold">Instances</h2>
           <ul class="space-y-1 text-sm">
             <li>
-              <.link navigate={"#{@base}/journeys"} class="text-cyan-600 hover:underline">
-                Journeys
+              <.link navigate={Instances.Paths.flows_path(@base)} class="text-cyan-600 hover:underline">
+                Flows
               </.link>
               <span class="text-xs text-zinc-500">— flows being filled out</span>
             </li>
           </ul>
         </div>
 
-        <%= case journeys_route(@path) do %>
+        <%= case instances_route(@path) do %>
           <% :index -> %>
             <.live_component
               module={Instances.Flows.Index}
-              id="journeys-index"
+              id="instance-flows-index"
               base={@base}
               user_id={@user_id}
             />
-          <% {:show, id} -> %>
+          <% {:flow, id} -> %>
             <.live_component
               module={Instances.Flows.Show}
-              id="journeys-show"
-              journey_id={id}
+              id="instance-flows-show"
+              flow_instance_id={id}
               base={@base}
               user_id={@user_id}
               config={@config}
               config_data={@config_data}
             />
-          <% {:fill, journey_id, instance_id} -> %>
+          <% {:form, id, form_path, mode} -> %>
             <.live_component
               module={Instances.Forms.Show}
               id="instance-forms-show"
-              journey_id={journey_id}
-              instance_id={instance_id}
+              flow_instance_id={id}
+              path={form_path}
+              mode={mode}
               base={@base}
               user_id={@user_id}
               config={@config}
               config_data={@config_data}
             />
           <% nil -> %>
-            <%!-- not a /journeys path --%>
+            <%!-- not an instances path --%>
         <% end %>
       <% end %>
     </div>
     """
   end
 
-  defp journeys_route(path) do
+  defp instances_route(path) do
     case segments(path) do
-      ["journeys"] -> :index
-      ["journeys", id] -> {:show, id}
-      ["journeys", journey_id, "instances", instance_id] -> {:fill, journey_id, instance_id}
+      ["flows"] -> :index
+      ["flows", id] -> {:flow, id}
+      ["flows", id, "forms" | rest] when rest != [] -> form_route(id, rest)
       _other -> nil
+    end
+  end
+
+  # Everything after `/forms/` is the position — a chain of node ids — with an
+  # optional `edit` suffix. Node ids are UUIDs, so "edit" can never be one of
+  # them.
+  defp form_route(id, rest) do
+    case Enum.split(rest, -1) do
+      {[], ["edit"]} -> nil
+      {path, ["edit"]} -> {:form, id, path, :edit}
+      _no_suffix -> {:form, id, rest, :show}
     end
   end
 

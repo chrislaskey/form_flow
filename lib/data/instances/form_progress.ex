@@ -1,7 +1,8 @@
 defmodule FormFlow.Data.Instances.FormProgress do
   @moduledoc """
-  One form's place and state in a journey — where it is, what it is called,
-  how far along it is, and which "forms" flow it belongs to.
+  One form's place and state within a whole root flow instance — a journey:
+  where the form is, what it is called, how far along it is, and which
+  "forms" flow it belongs to.
 
   Built by `FormFlow.Data.Instances.FlowProgress.forms/2` and the shape every
   `FormFlow.Flows.Types` module reasons about. Nothing here is persisted: it

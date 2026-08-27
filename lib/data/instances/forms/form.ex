@@ -25,14 +25,15 @@ defmodule FormFlow.Data.Instances.Form do
   including who a form instance concerns, until about-ness earns a named column.
   FormFlow never interprets it.
 
-  An in-journey form instance carries its visit identity: `instance_flow_id`
-  and `path` — the chain of node ids from the root flow through each
-  embedding subflow node down to the form node itself — both present or
-  both absent (a standalone fill). `path` is a snapshot stamped at creation
-  through `visit_changeset/4`, never castable, never updated; there is
-  deliberately no node FK beside it (a derivable copy of `last(path)` that
-  no FK action would survive — editor saves replace all nodes). Stranded is
-  not a column state: `FormFlow.Data.Instances.FlowProgress` derives it when a
+  A form instance filled inside a whole root flow instance — a journey —
+  rather than on its own carries its visit identity: `instance_flow_id` and
+  `path`, the chain of node ids from the root flow
+  through each embedding subflow node down to the form node itself. Both are
+  present or both absent (a standalone fill), and `path` is a snapshot
+  stamped at creation through `visit_changeset/4`, never castable, never
+  updated; there is deliberately no node FK beside it (a derivable copy of
+  `last(path)` that no FK action would survive — editor saves replace all
+  nodes). Stranded is not a column state: `FormFlow.Data.Instances.FlowProgress` derives it when a
   path matches no position in the current tree. `superseded_at` is stamped
   by strand reconciliation on a replaced instance; derivation skips
   superseded rows, and the partial unique index enforces one *active*

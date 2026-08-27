@@ -1,11 +1,12 @@
 defmodule FormFlow.Data.Instances.FlowProgress do
   @moduledoc """
-  Derives a journey's traversal state — a pure function of the live flow
-  tree and the journey's form instances. Nothing here is persisted, which
-  is the point: derived state cannot desync from the template (instances
-  plan, D2). Statuses fold upward through the tree; a form instance whose
-  `path` matches no position in the current tree surfaces as `:stranded`
-  rather than being silently dropped or reconciled.
+  Derives the traversal state of a whole root flow instance — a journey (see
+  `FormFlow.Data.Instances` for the term) — as a pure function of the live
+  flow tree and the form instances filled inside it.
+  Nothing here is persisted, which is the point: derived state cannot desync
+  from the template (instances plan, D2). Statuses fold upward through the
+  tree; a form instance whose `path` matches no position in the current tree
+  surfaces as `:stranded` rather than being silently dropped or reconciled.
 
   The committed minimal join rule (revisable here, and only here): **a
   position is available when every source of its incoming edges is

@@ -17,7 +17,7 @@ defmodule FormFlow.Flows.Types do
   Every callback takes the forms of *one* flow — one "forms" flow's
   `FormFlow.Data.Instances.FormProgress` structs in order, which is what
   `FormFlow.Data.Instances.FlowProgress.forms_in_flow/2` returns — so a type
-  never has to reason about the rest of the journey. A type that declines
+  never has to reason about the rest of the flow instance. A type that declines
   (`next_form/2` returning `nil`) hands the filler back to the flow, which
   carries them on to whatever comes after this one.
 

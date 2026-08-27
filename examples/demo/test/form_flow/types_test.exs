@@ -1,15 +1,16 @@
 defmodule Demo.FormFlowTypesTest do
   @moduledoc """
-  Exercises the user-facing pages — the journey listing and the form fill
-  page — against a real database and a real LiveView mount.
+  Exercises the user-facing pages — the flow instance's listing and the form
+  pages — against a real database and a real LiveView mount.
 
-  The library's own tests stop at the `FormFlow.Flows.Types` modules and the
-  `FormFlow.Data.Instances.FlowProgress` list they reason about; this is where
-  a stored `form_flow_type` is proven to actually change what a filler sees:
-  which forms offer to open, which of them are navigable, and where
-  submitting leads. It covers the demo's own type too, which is the only
-  place the whole `FormFlow.Config` → `FormFlow.Flows.Types` path runs end to
-  end.
+  Two things are proven here that the library's own tests can't reach. First,
+  that a stored `form_flow_type` changes what a filler sees: which forms offer
+  to open, which of them are navigable, and where submitting leads — the
+  demo's own type included, which is the only place the whole
+  `FormFlow.Config` → `FormFlow.Flows.Types` path runs end to end. Second,
+  that the URLs address *positions*: `/edit` opens the position it names, on
+  an ordinary page load, and only where the flow's type allows work — so the
+  address bar can't walk around the flow.
   """
 
   use DemoWeb.ConnCase, async: false
@@ -22,67 +23,130 @@ defmodule Demo.FormFlowTypesTest do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
 
-  describe "one flow: the journey listing" do
+  describe "a flow instance's page" do
     test "in order offers the first form only", %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two("wizard_in_order")
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
 
-      {:ok, view, html} = live(conn, "/users/journeys/#{journey.id}")
+      {:ok, view, html} = live(conn, flow_path(instance))
 
       assert html =~ "Available"
       assert html =~ "Pending"
-      assert has_element?(view, "button[phx-value-path='#{name.id}']")
-      refute has_element?(view, "button[phx-value-path='#{address.id}']")
+      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      refute has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
 
     test "any order offers every form, so a filler can start anywhere", %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two("wizard_any_order")
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_any_order")
 
-      {:ok, view, _html} = live(conn, "/users/journeys/#{journey.id}")
+      {:ok, view, _html} = live(conn, flow_path(instance))
 
-      assert has_element?(view, "button[phx-value-path='#{name.id}']")
-      assert has_element?(view, "button[phx-value-path='#{address.id}']")
+      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      assert has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
+    end
+
+    test "a completed form links to its answers, not to its form", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+      complete(instance, [name.id])
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+
+      assert has_element?(view, "a[href='#{form_path(instance, [name.id])}']")
+      refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
     end
   end
 
-  describe "one flow: the form fill page" do
-    test "in order draws the progress, none of it navigable", %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two("wizard_in_order")
+  describe "a form's URL addresses its position" do
+    test "edit opens the position it names, on an ordinary page load", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_in_order")
 
-      {:ok, view, html} = live(conn, fill_path(journey, open_form(journey, name)))
+      refute instance_at(instance, [name.id])
 
+      {:ok, _view, html} = live(conn, edit_path(instance, [name.id]))
+
+      assert %{status: "in_progress"} = instance_at(instance, [name.id])
+      assert html =~ "Name"
+    end
+
+    test "opening twice is the same position, not a second one", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_in_order")
+
+      {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
+      opened = instance_at(instance, [name.id])
+
+      {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
+
+      assert instance_at(instance, [name.id]).id == opened.id
+      assert length(Instances.Flows.form_instances(instance)) == 1
+    end
+
+    test "show never opens anything — it offers the start instead", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_in_order")
+
+      {:ok, view, html} = live(conn, form_path(instance, [name.id]))
+
+      refute instance_at(instance, [name.id])
+      assert html =~ "haven&#39;t started this form yet"
+      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+    end
+
+    test "the address bar cannot walk around the flow's type", %{conn: conn} do
+      %{instance: instance, forms: [_name, address]} = flow_of_two("wizard_in_order")
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [address.id]))
+
+      # The in-order wizard gates it, so nothing was created and nothing is
+      # rendered but the explanation
+      refute instance_at(instance, [address.id])
+      assert html =~ "isn&#39;t available yet"
+    end
+
+    test "a form inside a subflow carries the whole path", %{conn: conn} do
+      %{instance: instance, subflow_node: node, forms: [first, _second]} = nested_flow()
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+
+      assert has_element?(view, "a[href='#{edit_path(instance, [node.id, first.id])}']")
+
+      {:ok, _view, _html} = live(conn, edit_path(instance, [node.id, first.id]))
+
+      assert %{path: path} = instance_at(instance, [node.id, first.id])
+      assert path == [node.id, first.id]
+    end
+  end
+
+  describe "a form's page draws the flow's progress" do
+    test "in order draws it, none of it navigable", %{conn: conn} do
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
+
+      {:ok, view, html} = live(conn, edit_path(instance, [name.id]))
+
+      assert has_element?(view, "#instance-forms-show-flow-progress")
       assert html =~ "Name"
       assert html =~ "Address"
       assert html =~ ~s(aria-current="step")
-      assert has_element?(view, "button[phx-value-path='#{name.id}'][disabled]")
-      assert has_element?(view, "button[phx-value-path='#{address.id}'][disabled]")
+      refute has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
 
-    test "any order makes the other forms navigable, and jumping opens them", %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two("wizard_any_order")
+    test "any order makes the other forms navigable", %{conn: conn} do
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_any_order")
 
-      {:ok, view, _html} = live(conn, fill_path(journey, open_form(journey, name)))
+      {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
 
       # The form being filled is never a link to itself — only the others are.
-      assert has_element?(view, "button[phx-value-path='#{name.id}'][disabled]")
-      refute has_element?(view, "button[phx-value-path='#{address.id}'][disabled]")
-
-      view |> element("button[phx-value-path='#{address.id}']") |> render_click()
-
-      # Jumping ahead is what created the form's instance — create-on-open
-      assert {path, _flash} = assert_redirect(view)
-      assert path == fill_path(journey, instance_at(journey, [address.id]))
+      refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      assert has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
 
     test "a lone form is no sequence, so nothing is drawn", %{conn: conn} do
-      %{journey: journey, form: only} = flow_of_one("wizard_in_order")
+      %{instance: instance, form: only} = flow_of_one("wizard_in_order")
 
-      {:ok, _view, html} = live(conn, fill_path(journey, open_form(journey, only)))
+      {:ok, view, _html} = live(conn, edit_path(instance, [only.id]))
 
-      refute html =~ "open_form"
+      refute has_element?(view, "#instance-forms-show-flow-progress")
     end
   end
 
-  describe "several flows in one journey" do
+  describe "several flows in one instance" do
     test "each subflow's own type answers for its own forms", %{conn: conn} do
       {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows"})
 
@@ -92,49 +156,60 @@ defmodule Demo.FormFlowTypesTest do
       %{flow: details, forms: [detail_first, detail_second]} =
         owned_flow_of_two(root, "Details", "wizard_any_order")
 
-      start = build_node(root, ["Start"], "Start")
+      first_node = build_node(root, ["Start"], "Start")
       documents_node = subflow_node(root, documents, "Documents")
       details_node = subflow_node(root, details, "Details")
 
-      edge(root, start, documents_node)
+      edge(root, first_node, documents_node)
       edge(root, documents_node, details_node)
 
-      journey = journey(root)
+      instance = start_flow(root)
 
-      {:ok, view, html} = live(conn, "/users/journeys/#{journey.id}")
+      {:ok, view, html} = live(conn, flow_path(instance))
 
       # Forms are labeled by the subflow they were reached through
       assert html =~ "Documents / First"
       assert html =~ "Details / Second"
 
       # The in-order subflow gates its second form; the any-order one doesn't
-      assert has_element?(view, "button[phx-value-path='#{documents_node.id},#{doc_first.id}']")
-      refute has_element?(view, "button[phx-value-path='#{documents_node.id},#{doc_second.id}']")
-      assert has_element?(view, "button[phx-value-path='#{details_node.id},#{detail_first.id}']")
-      assert has_element?(view, "button[phx-value-path='#{details_node.id},#{detail_second.id}']")
+      assert offered?(view, instance, [documents_node.id, doc_first.id])
+      refute offered?(view, instance, [documents_node.id, doc_second.id])
+      assert offered?(view, instance, [details_node.id, detail_first.id])
+      assert offered?(view, instance, [details_node.id, detail_second.id])
     end
   end
 
   describe "the demo's own type" do
     test "the users config resolves \"demo_checklist\" to the demo's module", %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two("demo_checklist")
+      %{instance: instance, forms: [name, address]} = flow_of_two("demo_checklist")
 
-      {:ok, view, _html} = live(conn, "/users/journeys/#{journey.id}")
+      {:ok, view, _html} = live(conn, flow_path(instance))
 
       # openable?/2: nothing is gated on the flow's order
-      assert has_element?(view, "button[phx-value-path='#{name.id}']")
-      assert has_element?(view, "button[phx-value-path='#{address.id}']")
+      assert offered?(view, instance, [name.id])
+      assert offered?(view, instance, [address.id])
     end
 
     test "its show_progress?/1 draws the list even for a single form", %{conn: conn} do
-      %{journey: journey, form: only} = flow_of_one("demo_checklist")
+      %{instance: instance, form: only} = flow_of_one("demo_checklist")
 
-      {:ok, view, html} = live(conn, fill_path(journey, open_form(journey, only)))
+      {:ok, view, _html} = live(conn, edit_path(instance, [only.id]))
 
       # Where a wizard would draw nothing, the checklist draws its one entry
-      assert html =~ "open_form"
-      assert has_element?(view, "button[phx-value-path='#{only.id}'][disabled]")
+      assert has_element?(view, "#instance-forms-show-flow-progress")
     end
+  end
+
+  # ── URLs ────────────────────────────────────────────────────────────────
+
+  defp flow_path(instance), do: "/users/flows/#{instance.id}"
+
+  defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"
+
+  defp edit_path(instance, path), do: "#{form_path(instance, path)}/edit"
+
+  defp offered?(view, instance, path) do
+    has_element?(view, "a[href='#{edit_path(instance, path)}']")
   end
 
   # ── fixtures ────────────────────────────────────────────────────────────
@@ -143,27 +218,43 @@ defmodule Demo.FormFlowTypesTest do
   defp flow_of_two(type) do
     {:ok, flow} = Flows.create(%{name: "Application", properties: %{"form_flow_type" => type}})
 
-    start = build_node(flow, ["Start"], "Start")
+    first_node = build_node(flow, ["Start"], "Start")
     name = build_form_node(flow, "Name")
     address = build_form_node(flow, "Address")
-    stop = build_node(flow, ["End"], "End")
+    last_node = build_node(flow, ["End"], "End")
 
-    edge(flow, start, name)
+    edge(flow, first_node, name)
     edge(flow, name, address)
-    edge(flow, address, stop)
+    edge(flow, address, last_node)
 
-    %{flow: flow, journey: journey(flow), forms: [name, address]}
+    %{flow: flow, instance: start_flow(flow), forms: [name, address]}
   end
 
   defp flow_of_one(type) do
     {:ok, flow} = Flows.create(%{name: "Single", properties: %{"form_flow_type" => type}})
 
-    start = build_node(flow, ["Start"], "Start")
+    first_node = build_node(flow, ["Start"], "Start")
     only = build_form_node(flow, "Only")
 
-    edge(flow, start, only)
+    edge(flow, first_node, only)
 
-    %{flow: flow, journey: journey(flow), form: only}
+    %{flow: flow, instance: start_flow(flow), form: only}
+  end
+
+  # One subflow node wrapping a two-form child flow, so its positions are two
+  # segments deep
+  defp nested_flow do
+    {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows"})
+
+    %{flow: documents, forms: forms} =
+      owned_flow_of_two(root, "Documents", "wizard_in_order")
+
+    first_node = build_node(root, ["Start"], "Start")
+    documents_node = subflow_node(root, documents, "Documents")
+
+    edge(root, first_node, documents_node)
+
+    %{instance: start_flow(root), subflow_node: documents_node, forms: forms}
   end
 
   # A private child flow of `root`: Start → First → Second → End
@@ -176,39 +267,32 @@ defmodule Demo.FormFlowTypesTest do
         properties: %{"form_flow_type" => type}
       })
 
-    start = build_node(flow, ["Start"], "Start")
+    first_node = build_node(flow, ["Start"], "Start")
     first = build_form_node(flow, "First")
     second = build_form_node(flow, "Second")
-    stop = build_node(flow, ["End"], "End")
+    last_node = build_node(flow, ["End"], "End")
 
-    edge(flow, start, first)
+    edge(flow, first_node, first)
     edge(flow, first, second)
-    edge(flow, second, stop)
+    edge(flow, second, last_node)
 
     %{flow: flow, forms: [first, second]}
   end
 
-  defp journey(flow) do
-    {:ok, journey} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
-
-    journey
-  end
-
-  # Opens a root-level form the way clicking Open does — creating its
-  # instance, which is what the fill page is addressed by
-  defp open_form(journey, node) do
-    {:ok, instance} = Instances.Forms.update_status(journey, [node.id], :in_progress)
+  defp start_flow(flow) do
+    {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
 
     instance
   end
 
-  defp instance_at(journey, path) do
-    Enum.find(Instances.Flows.form_instances(journey), &(&1.path == path))
+  defp complete(instance, path) do
+    {:ok, _opened} = Instances.Forms.update_status(instance, path, :in_progress)
+    {:ok, completed} = Instances.Forms.update_status(instance, path, :completed, data: %{})
+
+    completed
   end
 
-  defp fill_path(journey, instance) do
-    "/users/journeys/#{journey.id}/instances/#{instance.id}"
-  end
+  defp instance_at(instance, path), do: Instances.Forms.get_at(instance, path)
 
   defp build_node(flow, labels, label, attrs \\ %{}) do
     attrs =
