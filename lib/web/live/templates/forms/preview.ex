@@ -68,7 +68,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   defp parse(socket, definition) do
     socket
     |> assign(missing?: false)
-    |> assign(instance: DynamicForm.Parser.JSON.parse!(definition), parse_error: nil)
+    |> assign(instance: DynamicForm.Parser.FromData.parse!(definition), parse_error: nil)
   rescue
     error -> assign(socket, instance: nil, parse_error: Exception.message(error))
   end

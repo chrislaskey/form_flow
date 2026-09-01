@@ -135,12 +135,19 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      )}
   end
 
-  # The configured (or default) form_flow_type choices — see FormFlow.Config
+  # The enabled flow types as dropdown options — see FormFlow.Config
   defp form_flow_type_options(assigns, flow, root, subflow_node) do
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
 
-    (assigns.config || FormFlow.Config).form_flow_type_options(context, assigns.config_data)
+    config = FormFlow.Config.config_module(assigns.config)
+    config_data = assigns.config_data
+
+    context
+    |> config.enabled_flow_types(config_data)
+    |> type_select_options()
   end
+
+  defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
 
   # The raw param, not the applied changeset data: picking the prompt again
   # ("") must clear the pending type, and Ecto's cast treats "" as a missing
@@ -509,7 +516,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             *saved* values; pending ones live in this component's assigns.
             The type dropdown only exists on "forms" flows — how the forms
             are presented belongs to the flow of forms itself — with choices
-            from the `FormFlow.Config` behaviour (form_flow_type_options). --%>
+            from the `FormFlow.Config` behaviour (enabled_flow_types). --%>
       <div class="mb-3 max-w-md">
         <DynamicForm.form
           id={"#{@id}-flow-form"}

@@ -4,11 +4,10 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   a "forms" flow's forms and their state — the sequence a filler is working
   through, above the form they are filling.
 
-  The component is type-agnostic: it draws what it is given. Whether to show
-  it at all (`FormFlow.Flows.Types.show_progress?/1` — a single-form flow
-  isn't a sequence) and which forms can be jumped to (`clickable`, from
-  `FormFlow.Flows.Types.openable?/2`) are the caller's questions to ask its
-  `FormFlow.Flows.Types` module.
+  The component draws what it is given. Whether to show it at all (a
+  single-form flow isn't a sequence) and which forms can be jumped to
+  (`clickable`, from `FormFlow.Data.Instances.Flows.Progress.actionable?/1`)
+  are the caller's decisions — see `FormFlow.Web.Instances.Forms.Position`.
 
   A jumpable form is a link to that position's fill page — which is the page
   that opens it, so jumping needs no event of its own — and every other one

@@ -21,14 +21,15 @@ defmodule FormFlow.Data.Instances.Flows.Progress do
       join rule is expressed in.
     * `forms/2` — the journey's *form* positions only, as an ordered list of
       `FormFlow.Data.Instances.FormProgress` structs carrying the label,
-      live instance, and owning flow alongside the status. This is what a
-      flow's `FormFlow.Flows.Types` module reasons about and what the
+      live instance, and owning flow alongside the status. This is what the
       user-facing pages render.
 
   Order, for `forms/2`, is the order a filler works them: breadth-first from
   Start, descending into subflows the moment one is reached — the same scan
   `next_path_position/2` performs. `forms_in_flow/2` narrows the list to one
-  "forms" flow's own, which is the unit a `form_flow_type` governs.
+  "forms" flow's own — the sequence a filler works through, front to back:
+  `actionable?/1` is where the flow allows work, and the pages open only
+  there.
 
   Form instances with `superseded_at` set are skipped everywhere — they are
   attestation records left behind by strand reconciliation, not live
@@ -107,8 +108,8 @@ defmodule FormFlow.Data.Instances.Flows.Progress do
   end
 
   @doc """
-  The forms sharing a position's "forms" flow, in order — everything one
-  `form_flow_type` governs.
+  The forms sharing a position's "forms" flow, in order — the sequence the
+  filler works through.
 
   Positions are compared by their parent path rather than by flow id: a
   reusable subflow used twice in one journey is two traversals, tracked
@@ -124,6 +125,14 @@ defmodule FormFlow.Data.Instances.Flows.Progress do
   @doc "The form at a position, or nil when the tree no longer has it."
   @spec find_form([FormProgress.t()], path()) :: FormProgress.t() | nil
   def find_form(forms, path), do: Enum.find(forms, &(&1.path == path))
+
+  @doc """
+  Whether the flow allows work on a form: its predecessors are done, or it is
+  already started. Anything else is gated — including, after a submit, the
+  form just completed. The same test `next_path_position/2` scans for.
+  """
+  @spec actionable?(FormProgress.t()) :: boolean()
+  def actionable?(%FormProgress{status: status}), do: status in [:available, :in_progress]
 
   @doc """
   A form's label prefixed with the subflows drilled through to reach it —

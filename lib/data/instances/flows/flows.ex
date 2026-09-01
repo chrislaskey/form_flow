@@ -97,7 +97,7 @@ defmodule FormFlow.Data.Instances.Flows do
   `FormFlow.Data.Instances.Flows.Progress`.
   """
   def progress(%Instances.Flow{} = instance) do
-    Flows.Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), form_instances(instance))
+    Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), form_instances(instance))
   end
 
   @doc """
@@ -106,7 +106,7 @@ defmodule FormFlow.Data.Instances.Flows do
   template edit; hosts should ask the question they mean.
   """
   def complete?(%Instances.Flow{} = instance) do
-    Flows.Progress.complete?(
+    Progress.complete?(
       Templates.Flows.resolve_tree(instance.flow_id),
       form_instances(instance)
     )
@@ -118,7 +118,7 @@ defmodule FormFlow.Data.Instances.Flows do
   nil when nothing is actionable. This is the after-submit redirect.
   """
   def next_path_position(%Instances.Flow{} = instance) do
-    Flows.Progress.next_path_position(
+    Progress.next_path_position(
       Templates.Flows.resolve_tree(instance.flow_id),
       form_instances(instance)
     )
@@ -135,7 +135,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
   def list_stranded(%Instances.Flow{} = instance, _opts) do
     instances = form_instances(instance)
-    statuses = Flows.Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), instances)
+    statuses = Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), instances)
 
     stranded_paths =
       for {path, :stranded} <- statuses, into: MapSet.new() do

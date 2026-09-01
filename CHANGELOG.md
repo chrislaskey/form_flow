@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### `FormFlow.Config` describes types as structs
+
+The config behaviour now answers *which types exist* rather than answering
+per-value questions. Its two callbacks each return a list of structs, and
+every struct carries the module that implements the type — so offering a
+type and implementing it is one declaration, not two callbacks on two pages.
+
+- **Breaking: `FormFlow.Config`'s callbacks are `enabled_flow_types/2` and
+  `enabled_form_types/2`**, returning `FormFlow.Config.Flows.Type` and
+  `FormFlow.Config.Forms.Type` structs (`id`, `module`, `name`,
+  `description`, `properties`). `form_flow_type_options/2` and
+  `form_flow_type_module/3` are gone. The defaults live in
+  `FormFlow.Web.Components.Config.Default`; a custom module reaches them
+  through `FormFlow.Config.enabled_flow_types/3` (and `/3` for forms), which
+  also fall back to the defaults when the host set no `config`.
+- The template pages' "Form flow type" dropdowns — the flow edit page and a
+  "subflows" canvas's form nodes — are populated from `enabled_flow_types/2`
+  via `FormFlow.Config.Flows.Type.select_options/1`, which pairs each type's
+  `name` and `id`. Two ship: `"wizard_any_order"` and `"wizard_in_order"`,
+  as before.
+- **Breaking: `FormFlow.Flows.Types` and its `WizardInOrder` /
+  `WizardAnyOrder` modules are removed.** A flow type is a module `use`ing
+  `FormFlow.Config.Flows.Type` (`FormFlow.Web.Components.Flows.Types.*`);
+  its one callback so far, `form_progress_component/1`, is declared but not
+  yet consulted. The user-facing pages no longer resolve a type at all: a
+  form opens where the flow allows work — predecessors done, or already
+  started (`FormFlow.Data.Instances.Flows.Progress.actionable?/1`, new) —
+  a flow's progress is drawn whenever it has more than one form, and
+  submitting moves to the next actionable form of the flow, then of the
+  journey. That is the former in-order wizard, now the behavior of every
+  "forms" flow regardless of its stored type; per-type behavior returns in a
+  later iteration.
+- **Breaking: `FormFlow.Config.Context` is `FormFlow.Context`**, and
+  `FormFlow.Data.Instances.FlowProgress` is
+  `FormFlow.Data.Instances.Flows.Progress`.
+- The demo app's `DemoWeb.FormFlowLive.Admin.Config` adds its
+  `"demo_checklist"` type as a struct; the users page passes no config, since
+  nothing on that side reads one yet.
+
 ### Node menus on the canvas
 
 Every node in the flow editor now carries a ⋮ menu — the home for managing a

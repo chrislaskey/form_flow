@@ -19,8 +19,8 @@ defmodule FormFlow.Web.Instances do
   pages link to).
 
   Which forms a filler may navigate to, and where submitting takes them, is
-  the `FormFlow.Flows.Types` module a flow's `form_flow_type` resolves to —
-  the pages ask, they don't decide.
+  `FormFlow.Data.Instances.Flows.Progress`'s answer (`actionable?/1`,
+  `next_path_position/2`) — the pages ask, they don't decide.
 
   The namespaces mirror the data side (`FormFlow.Data.Instances.Flows` /
   `.Forms`) and, page for page, the template side — same modules, same URL

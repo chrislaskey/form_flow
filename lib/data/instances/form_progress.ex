@@ -4,9 +4,9 @@ defmodule FormFlow.Data.Instances.FormProgress do
   where the form is, what it is called, how far along it is, and which
   "forms" flow it belongs to.
 
-  Built by `FormFlow.Data.Instances.Flows.Progress.forms/2` and the shape every
-  `FormFlow.Flows.Types` module reasons about. Nothing here is persisted: it
-  is the live template joined with the journey's derived progress.
+  Built by `FormFlow.Data.Instances.Flows.Progress.forms/2` and the shape the
+  user-facing pages render. Nothing here is persisted: it is the live
+  template joined with the journey's derived progress.
 
   ## Fields
 
@@ -22,8 +22,7 @@ defmodule FormFlow.Data.Instances.FormProgress do
     * `:instance` - the position's live (not superseded)
       `FormFlow.Data.Instances.Form`, or `nil` until it is first opened
     * `:flow` - the "forms" flow this form lives in, whose
-      `properties["form_flow_type"]` decides how the flow's forms are
-      presented (see `FormFlow.Flows.Types`)
+      `properties["form_flow_type"]` names its `FormFlow.Config.Flows.Type`
   """
 
   defstruct [:path, :label, :ancestors, :status, :instance, :flow]

@@ -55,10 +55,9 @@ defmodule FormFlow.Data.Templates.Flow do
     field(:label, :string, default: "forms")
 
     # Open domain data in the Neo4j property-graph style, like a node's
-    # properties. Carries "form_flow_type" for "forms" flows — how the flow's
-    # forms are presented to a user filling them out, and which of them that
-    # user may open (see `FormFlow.Flows.Types`); absent means the
-    # `FormFlow.Config` default decides.
+    # properties. Carries "form_flow_type" for "forms" flows — the id of the
+    # `FormFlow.Config.Flows.Type` deciding how the flow's forms are presented
+    # to a user filling them out; absent means the default applies.
     field(:properties, :map, default: %{})
 
     has_many(:nodes, Node)

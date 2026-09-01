@@ -66,13 +66,20 @@ defmodule FormFlow.Web.Templates.Flows.Show do
      )}
   end
 
-  # The configured (or default) form_flow_type choices — see FormFlow.Config.
+  # The enabled flow types as dropdown options — see FormFlow.Config.
   # Read-only pages still need them, to render a stored value as its label.
   defp form_flow_type_options(assigns, flow, root, subflow_node) do
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
 
-    (assigns.config || FormFlow.Config).form_flow_type_options(context, assigns.config_data)
+    config = FormFlow.Config.config_module(assigns.config)
+    config_data = assigns.config_data
+
+    context
+    |> config.enabled_flow_types(config_data)
+    |> type_select_options()
   end
+
+  defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
 
   @impl true
   def handle_event("form_flow:editor_mounted", _params, socket) do

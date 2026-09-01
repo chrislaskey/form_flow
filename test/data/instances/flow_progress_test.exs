@@ -73,19 +73,19 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "an untouched journey: first form available, the rest pending" do
       {tree, start, form1, form2, stop} = linear_flow()
 
-      statuses = Flows.Progress.derive(tree, [])
+      statuses = Progress.derive(tree, [])
 
       assert statuses[[start.id]] == :completed
       assert statuses[[form1.id]] == :available
       assert statuses[[form2.id]] == :pending
       assert statuses[[stop.id]] == :pending
-      refute Flows.Progress.complete?(tree, [])
+      refute Progress.complete?(tree, [])
     end
 
     test "an instance in progress marks its position and gates the next" do
       {tree, _start, form1, form2, _stop} = linear_flow()
 
-      statuses = Flows.Progress.derive(tree, [form_instance([form1.id], "in_progress")])
+      statuses = Progress.derive(tree, [form_instance([form1.id], "in_progress")])
 
       assert statuses[[form1.id]] == :in_progress
       assert statuses[[form2.id]] == :pending
@@ -94,7 +94,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "completion unlocks the successor and, at End, the journey" do
       {tree, _start, form1, form2, stop} = linear_flow()
 
-      statuses = Flows.Progress.derive(tree, [form_instance([form1.id], "completed")])
+      statuses = Progress.derive(tree, [form_instance([form1.id], "completed")])
       assert statuses[[form1.id]] == :completed
       assert statuses[[form2.id]] == :available
 
@@ -103,8 +103,8 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
         form_instance([form2.id], "completed")
       ]
 
-      assert Flows.Progress.derive(tree, instances)[[stop.id]] == :completed
-      assert Flows.Progress.complete?(tree, instances)
+      assert Progress.derive(tree, instances)[[stop.id]] == :completed
+      assert Progress.complete?(tree, instances)
     end
   end
 
@@ -119,12 +119,12 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       tree = tree([start, form1, form2, stop], edges)
 
       one_done = [form_instance([form1.id], "completed")]
-      assert Flows.Progress.derive(tree, one_done)[[stop.id]] == :pending
-      refute Flows.Progress.complete?(tree, one_done)
+      assert Progress.derive(tree, one_done)[[stop.id]] == :pending
+      refute Progress.complete?(tree, one_done)
 
       both_done = [form_instance([form2.id], "completed") | one_done]
-      assert Flows.Progress.derive(tree, both_done)[[stop.id]] == :completed
-      assert Flows.Progress.complete?(tree, both_done)
+      assert Progress.derive(tree, both_done)[[stop.id]] == :completed
+      assert Progress.complete?(tree, both_done)
     end
   end
 
@@ -155,7 +155,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "interior positions are addressed by the embedding chain" do
       {outer, subflow, inner_form, _stop} = nested_flow()
 
-      statuses = Flows.Progress.derive(outer, [])
+      statuses = Progress.derive(outer, [])
       assert statuses[[subflow.id]] == :available
       assert statuses[[subflow.id, inner_form.id]] == :available
     end
@@ -164,13 +164,13 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       {outer, subflow, inner_form, stop} = nested_flow()
 
       in_progress = [form_instance([subflow.id, inner_form.id], "in_progress")]
-      assert Flows.Progress.derive(outer, in_progress)[[subflow.id]] == :in_progress
+      assert Progress.derive(outer, in_progress)[[subflow.id]] == :in_progress
 
       completed = [form_instance([subflow.id, inner_form.id], "completed")]
-      statuses = Flows.Progress.derive(outer, completed)
+      statuses = Progress.derive(outer, completed)
       assert statuses[[subflow.id]] == :completed
       assert statuses[[stop.id]] == :completed
-      assert Flows.Progress.complete?(outer, completed)
+      assert Progress.complete?(outer, completed)
     end
   end
 
@@ -178,29 +178,29 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "walks the flow in order: first available, then the one after" do
       {tree, _start, form1, form2, _stop} = linear_flow()
 
-      assert Flows.Progress.next_path_position(tree, []) == [form1.id]
+      assert Progress.next_path_position(tree, []) == [form1.id]
 
       done_one = [form_instance([form1.id], "completed")]
-      assert Flows.Progress.next_path_position(tree, done_one) == [form2.id]
+      assert Progress.next_path_position(tree, done_one) == [form2.id]
 
       all_done = [form_instance([form2.id], "completed") | done_one]
-      assert Flows.Progress.next_path_position(tree, all_done) == nil
+      assert Progress.next_path_position(tree, all_done) == nil
     end
 
     test "an in-progress form is the next stop — resume before advancing" do
       {tree, _start, form1, _form2, _stop} = linear_flow()
 
       instances = [form_instance([form1.id], "in_progress")]
-      assert Flows.Progress.next_path_position(tree, instances) == [form1.id]
+      assert Progress.next_path_position(tree, instances) == [form1.id]
     end
 
     test "descends into an available subflow" do
       {outer, subflow, inner_form, _stop} = nested_flow()
 
-      assert Flows.Progress.next_path_position(outer, []) == [subflow.id, inner_form.id]
+      assert Progress.next_path_position(outer, []) == [subflow.id, inner_form.id]
 
       done = [form_instance([subflow.id, inner_form.id], "completed")]
-      assert Flows.Progress.next_path_position(outer, done) == nil
+      assert Progress.next_path_position(outer, done) == nil
     end
   end
 
@@ -210,7 +210,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       dead_path = [Ecto.UUID.generate()]
 
       statuses =
-        Flows.Progress.derive(tree, [
+        Progress.derive(tree, [
           form_instance([form1.id], "completed"),
           form_instance(dead_path, "in_progress")
         ])
@@ -225,7 +225,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       stamp = DateTime.utc_now()
 
       statuses =
-        Flows.Progress.derive(tree, [
+        Progress.derive(tree, [
           # a superseded completed instance must not complete its position
           form_instance([form1.id], "completed", superseded_at: stamp),
           # a superseded stranded instance must not resurface as stranded
@@ -242,7 +242,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       {tree, flow, name, address} = named_flow()
       instances = [form_instance([name.id], "completed")]
 
-      assert [first, second] = Flows.Progress.forms(tree, instances)
+      assert [first, second] = Progress.forms(tree, instances)
 
       assert first.path == [name.id]
       assert first.label == "Name"
@@ -260,7 +260,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "an untouched journey has no instances attached" do
       {tree, _flow, name, address} = named_flow()
 
-      assert [first, second] = Flows.Progress.forms(tree, [])
+      assert [first, second] = Progress.forms(tree, [])
 
       assert {first.path, first.status, first.instance} == {[name.id], :available, nil}
       assert {second.path, second.status} == {[address.id], :pending}
@@ -270,7 +270,7 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       {tree, _flow, name, _address} = named_flow()
       superseded = form_instance([name.id], "completed", superseded_at: DateTime.utc_now())
 
-      assert [first, _second] = Flows.Progress.forms(tree, [superseded])
+      assert [first, _second] = Progress.forms(tree, [superseded])
       assert is_nil(first.instance)
       assert first.status == :available
     end
@@ -280,16 +280,16 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
       dead_path = [Ecto.UUID.generate()]
       stranded = form_instance(dead_path, "in_progress")
 
-      forms = Flows.Progress.forms(tree, [stranded])
+      forms = Progress.forms(tree, [stranded])
 
       assert length(forms) == 2
       refute Enum.any?(forms, &(&1.path == dead_path))
       # ...though derive/2 still surfaces it, which is what strand sweeps read
-      assert Flows.Progress.derive(tree, [stranded])[dead_path] == :stranded
+      assert Progress.derive(tree, [stranded])[dead_path] == :stranded
     end
 
     test "a nil tree (a deleted flow) has no forms" do
-      assert Flows.Progress.forms(nil, []) == []
+      assert Progress.forms(nil, []) == []
     end
 
     test "forms inside subflows carry the nodes drilled through and their own flow" do
@@ -308,13 +308,13 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
           root
         )
 
-      assert [first, second] = Flows.Progress.forms(tree, [])
+      assert [first, second] = Progress.forms(tree, [])
 
       assert first.path == [documents.id, name.id]
       assert first.ancestors == [documents]
       assert first.flow == subflow
-      assert Flows.Progress.qualified_label(first) == "Documents / Name"
-      assert Flows.Progress.qualified_label(second) == "Documents / Address"
+      assert Progress.qualified_label(first) == "Documents / Name"
+      assert Progress.qualified_label(second) == "Documents / Address"
     end
   end
 
@@ -336,15 +336,15 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
           root
         )
 
-      forms = Flows.Progress.forms(tree, [])
+      forms = Progress.forms(tree, [])
       assert length(forms) == 4
 
-      in_flow = Flows.Progress.forms_in_flow(forms, [a.id, name_a.id])
+      in_flow = Progress.forms_in_flow(forms, [a.id, name_a.id])
       assert Enum.map(in_flow, & &1.label) == ["Name", "Address"]
       assert Enum.all?(in_flow, &(hd(&1.path) == a.id))
 
-      assert Flows.Progress.find_form(forms, [b.id, name_b.id]).flow == flow_b
-      assert is_nil(Flows.Progress.find_form(forms, ["nope"]))
+      assert Progress.find_form(forms, [b.id, name_b.id]).flow == flow_b
+      assert is_nil(Progress.find_form(forms, ["nope"]))
     end
   end
 
@@ -352,8 +352,8 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
     test "unqualified for a form in the root flow" do
       {tree, _flow, _name, _address} = named_flow()
 
-      assert [first | _rest] = Flows.Progress.forms(tree, [])
-      assert Flows.Progress.qualified_label(first) == "Name"
+      assert [first | _rest] = Progress.forms(tree, [])
+      assert Progress.qualified_label(first) == "Name"
     end
 
     test "falls back to the node's label when the canvas has no name" do
@@ -362,7 +362,17 @@ defmodule FormFlow.Data.Instances.Flows.ProgressTest do
 
       tree = tree([start, unnamed], [edge(start, unnamed)])
 
-      assert [%{label: "Form"}] = Flows.Progress.forms(tree, [])
+      assert [%{label: "Form"}] = Progress.forms(tree, [])
+    end
+  end
+
+  describe "actionable?/1" do
+    test "is where the flow allows work: an available or started form" do
+      assert Progress.actionable?(%Instances.FormProgress{status: :available})
+      assert Progress.actionable?(%Instances.FormProgress{status: :in_progress})
+      refute Progress.actionable?(%Instances.FormProgress{status: :pending})
+      refute Progress.actionable?(%Instances.FormProgress{status: :completed})
+      refute Progress.actionable?(%Instances.FormProgress{status: :stranded})
     end
   end
 end

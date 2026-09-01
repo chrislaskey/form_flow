@@ -5,12 +5,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   In progress / Done / Pending — plus any stranded answers (filled at a
   position the flow no longer has).
 
-  Which forms offer to open is not this page's decision: each form belongs to
-  a "forms" flow, and that flow's `FormFlow.Flows.Types` module answers
-  `openable?/2` for it. An in-order wizard offers only where the flow allows
-  work; an any-order one offers every form of its own that isn't done, which
-  is how a filler jumps ahead. One instance can hold several "forms" flows
-  with different types, so the question is asked per form.
+  A form offers to open where the flow allows work — its predecessors done,
+  or itself already started
+  (`FormFlow.Data.Instances.Flows.Progress.actionable?/1`).
 
   Every action here is an ordinary link, because a form's URL addresses its
   *position* and so exists before its instance row does — opening happens on
@@ -21,11 +18,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   use Phoenix.LiveComponent
 
-  alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Flows.Progress
   alias FormFlow.Data.Templates
-  alias FormFlow.Flows.Types
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Paths
 
@@ -35,8 +30,6 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -61,38 +54,19 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-        forms = Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
+        forms = Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
         assign(socket,
           flow_instance: flow_instance,
-          rows: rows(forms, tree, socket.assigns),
+          rows: rows(forms),
           stranded: Instances.Flows.list_stranded(flow_instance),
           flow_name: (tree && tree.flow.name) || "Untitled flow"
         )
     end
   end
 
-  # Every form with the one question its own flow's type answers here.
-  defp rows(forms, tree, assigns) do
-    for form <- forms do
-      in_flow = Flows.Progress.forms_in_flow(forms, form.path)
-      type = type_module(assigns, tree, form)
-
-      %{form: form, openable?: type.openable?(form, in_flow)}
-    end
-  end
-
-  # The form's flow type: its "forms" flow's stored form_flow_type, resolved
-  # through the host's FormFlow.Config (or the library's defaults).
-  defp type_module(assigns, tree, form) do
-    context = %Context{
-      user_id: assigns.user_id,
-      flow: tree.flow,
-      subflow: form.flow,
-      subflow_node: List.last(form.ancestors)
-    }
-
-    Types.for_flow(form.flow, context, assigns.config, assigns.config_data)
+  defp rows(forms) do
+    for form <- forms, do: %{form: form, openable?: Progress.actionable?(form)}
   end
 
   @impl true
@@ -123,12 +97,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         <li :for={row <- @rows} class="flex items-center gap-3">
           <% {text, classes} = Components.Flows.Progress.badge(row.form.status) %>
           <span class={"rounded-full border px-2 py-0.5 text-xs #{classes}"}>{text}</span>
-          <span>{Flows.Progress.qualified_label(row.form)}</span>
+          <span>{Progress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
-            <%!-- Open is the offer to start work here — an any-order wizard
-                  makes it on forms an in-order one keeps closed. A form
-                  already started continues instead; both land on the same
-                  page, which is the one that opens the position. --%>
+            <%!-- Open is the offer to start work here. A form already
+                  started continues instead; both land on the same page,
+                  which is the one that opens the position. --%>
             <.link
               :if={row.openable? && is_nil(row.form.instance)}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}

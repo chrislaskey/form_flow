@@ -11,23 +11,23 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   What is only true here: **this is the page that opens a position.** An
   absent instance is created on mount (create-on-open, which is the moment the
-  form version is pinned), gated by the `FormFlow.Flows.Types` `openable?/2`
-  the flow instance's page asks before offering the link. Opening is
-  idempotent afterwards, so this URL is an ordinary link from everywhere and
-  survives a refresh or a Back — and a position the flow's type gates can't be
-  opened by typing its URL.
+  form version is pinned), gated by the same
+  `FormFlow.Data.Instances.Flows.Progress.actionable?/1` the flow instance's
+  page asks before offering the link. Opening is idempotent afterwards, so
+  this URL is an ordinary link from everywhere and survives a refresh or a
+  Back — and a position the flow gates can't be opened by typing its URL.
 
   An already-submitted position renders no form at all: its answers live at
   Show, which is also where Reopen is, so there is exactly one place that
   renders answers read-only and exactly one that reopens them.
 
   Submitting writes the answers and marks the instance completed
-  (`FormFlow.Data.Instances.Forms.update_status/4`), then asks the flow's type
-  where to go: the next form of this flow, or — when it has none left — the
-  next actionable position anywhere in the flow instance, which is what
-  carries a filler out of a finished subflow and into the next. It navigates
-  to that position's own URL here, which does the opening; with nothing
-  actionable left, back to the flow instance's page.
+  (`FormFlow.Data.Instances.Forms.update_status/4`), then moves on: to the
+  next actionable form of this flow, or — when it has none left — the next
+  actionable position anywhere in the flow instance, which is what carries a
+  filler out of a finished subflow and into the next. It navigates to that
+  position's own URL here, which does the opening; with nothing actionable
+  left, back to the flow instance's page.
 
   DynamicForm's default success message targets the parent LiveView's
   `handle_info/2` — the host's process, not ours — so `on_success` routes the
@@ -67,8 +67,6 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -100,15 +98,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     end
   end
 
-  # The flow's type answers first — statuses derived fresh, so the form just
+  # This flow answers first — statuses derived fresh, so the form just
   # submitted counts as done — and the flow instance answers when that flow
   # has nothing left, carrying the filler on to whatever follows it.
   defp next_path(flow_instance, assigns) do
     tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-    forms = Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
-    path = assigns.form_instance.path
+    forms = Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
+    in_flow = Progress.forms_in_flow(forms, assigns.form_instance.path)
 
-    case assigns.type.next_form(Flows.Progress.forms_in_flow(forms, path), path) do
+    case Enum.find(in_flow, &Progress.actionable?/1) do
       %FormProgress{path: next} -> next
       nil -> Instances.Flows.next_path_position(flow_instance)
     end
@@ -129,8 +127,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # Nothing to fill in: either the position could not be opened, or the flow's
-  # type does not allow work here.
+  # Nothing to fill in: either the position could not be opened, or the flow
+  # does not allow work here.
   def render(%{form_instance: nil} = assigns) do
     ~H"""
     <div>
