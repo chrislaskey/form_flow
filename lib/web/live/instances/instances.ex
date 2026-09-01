@@ -14,7 +14,7 @@ defmodule FormFlow.Web.Instances do
     * `FormFlow.Web.Instances.Forms.Show` — one form of an instance, rendered
       with `DynamicForm`, read-only or fillable
 
-  plus `FormFlow.Web.Instances.Components.FlowProgress` (a flow's forms and
+  plus `FormFlow.Web.Instances.Components.Flows.Progress` (a flow's forms and
   their state, drawn) and `FormFlow.Web.Instances.Paths` (every URL these
   pages link to).
 

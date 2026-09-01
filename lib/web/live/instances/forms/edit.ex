@@ -38,7 +38,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   use Phoenix.LiveComponent
 
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.Flows.Progress
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Components
@@ -105,10 +105,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # has nothing left, carrying the filler on to whatever follows it.
   defp next_path(flow_instance, assigns) do
     tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+    forms = Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
     path = assigns.form_instance.path
 
-    case assigns.type.next_form(FlowProgress.forms_in_flow(forms, path), path) do
+    case assigns.type.next_form(Flows.Progress.forms_in_flow(forms, path), path) do
       %FormProgress{path: next} -> next
       nil -> Instances.Flows.next_path_position(flow_instance)
     end
@@ -196,7 +196,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         label={@form_label}
       />
 
-      <Components.FlowProgress.flow_progress
+      <Components.Flows.Progress.flow_progress
         :if={@show_progress?}
         id={"#{@id}-flow-progress"}
         base={@base}

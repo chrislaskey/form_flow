@@ -123,7 +123,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         label={@form_label}
       />
 
-      <Components.FlowProgress.flow_progress
+      <Components.Flows.Progress.flow_progress
         :if={@show_progress?}
         id={"#{@id}-flow-progress"}
         base={@base}

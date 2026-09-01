@@ -13,7 +13,7 @@ defmodule FormFlow.Data.Instances.Flow do
   pin at the form-version level, which is where attestation lives).
 
   Traversal state is deliberately not stored — no per-node rows, no
-  progress columns. It is derived by `FormFlow.Data.Instances.FlowProgress`
+  progress columns. It is derived by `FormFlow.Data.Instances.Flows.Progress`
   from the live tree and the journey's form instances, so a template edit
   can never desync it. `status` and `completed_at` are stamps, not caches:
   facts at a moment, written by `FormFlow.Data.Instances.Flows.complete/2` —

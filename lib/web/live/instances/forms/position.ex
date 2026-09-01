@@ -24,7 +24,7 @@ defmodule FormFlow.Web.Instances.Forms.Position do
     * `:openable?` - whether the flow's type allows work here
     * `:open_error` - why `open: true` could not open the position, or nil
     * `:show_progress?` / `:clickable` - what
-      `FormFlow.Web.Instances.Components.FlowProgress` needs
+      `FormFlow.Web.Instances.Components.Flows.Progress` needs
     * `:flow_name` / `:form_label` - what the breadcrumb needs
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
@@ -35,27 +35,27 @@ defmodule FormFlow.Web.Instances.Forms.Position do
 
   import Phoenix.Component, only: [assign: 2]
 
-  alias FormFlow.Config.Context
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.Flows.Progress
   alias FormFlow.Data.Templates
   alias FormFlow.Flows.Types
 
   def resolve(socket, opts \\ []) do
     %{flow_instance: flow_instance, path: path} = socket.assigns
     tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
-    form = FlowProgress.find_form(forms, path)
+    forms = Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
+    form = Flows.Progress.find_form(forms, path)
     type = type_module(socket.assigns, tree, form)
 
     openable? =
-      not is_nil(form) and type.openable?(form, FlowProgress.forms_in_flow(forms, path))
+      not is_nil(form) and type.openable?(form, Flows.Progress.forms_in_flow(forms, path))
 
     {form_instance, open_error, forms} =
       resolve_instance(socket, tree, forms, openable?, Keyword.get(opts, :open, false))
 
-    form = FlowProgress.find_form(forms, path)
-    in_flow = FlowProgress.forms_in_flow(forms, path)
+    form = Flows.Progress.find_form(forms, path)
+    in_flow = Flows.Progress.forms_in_flow(forms, path)
 
     socket
     |> assign(
@@ -68,7 +68,7 @@ defmodule FormFlow.Web.Instances.Forms.Position do
       show_progress?: type.show_progress?(in_flow),
       clickable: clickable(in_flow, path, type),
       flow_name: (tree && tree.flow.name) || "Untitled flow",
-      form_label: (form && FlowProgress.qualified_label(form)) || "Form"
+      form_label: (form && Flows.Progress.qualified_label(form)) || "Form"
     )
     |> parse(form_instance)
   end
@@ -87,7 +87,7 @@ defmodule FormFlow.Web.Instances.Forms.Position do
       nil when open? and openable? ->
         case open(flow_instance, path, socket.assigns.user_id) do
           {:ok, opened} ->
-            {opened, nil, FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))}
+            {opened, nil, Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))}
 
           {:error, message} ->
             {nil, message, forms}

@@ -1,4 +1,4 @@
-defmodule FormFlow.Data.Instances.FlowProgress do
+defmodule FormFlow.Data.Instances.Flows.Progress do
   @moduledoc """
   Derives the traversal state of a whole root flow instance — a journey (see
   `FormFlow.Data.Instances` for the term) — as a pure function of the live

@@ -1,6 +1,6 @@
-defmodule FormFlow.Web.Instances.Components.FlowProgress do
+defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   @moduledoc """
-  `FormFlow.Web.Instances.Components.FlowProgress` function component renders
+  `FormFlow.Web.Instances.Components.Flows.Progress` function component renders
   a "forms" flow's forms and their state — the sequence a filler is working
   through, above the form they are filling.
 

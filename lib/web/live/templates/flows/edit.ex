@@ -84,7 +84,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Config.Context
+  alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor

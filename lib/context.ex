@@ -1,4 +1,4 @@
-defmodule FormFlow.Config.Context do
+defmodule FormFlow.Context do
   @moduledoc """
   The value passed to every `FormFlow.Config` callback, alongside its own
   `config_data` argument.

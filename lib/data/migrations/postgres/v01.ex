@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     in flight — and `:restrict`ed: journeys can never be orphaned by
   #     template deletion. `user_id` is the creating user, stamped and
   #     immutable. Traversal state is never stored; it is derived
-  #     (FormFlow.Data.Instances.FlowProgress).
+  #     (FormFlow.Data.Instances.Flows.Progress).
   #   * `instance_forms.instance_flow_id` + `path` — the visit identity of an
   #     in-journey form instance: the chain of node ids from the root flow
   #     through each embedding subflow node to the form node itself.

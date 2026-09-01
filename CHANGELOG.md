@@ -53,7 +53,7 @@ up.
   canvas edits.
 - `FormFlow.Web.Router` now forwards its `config` and `config_data` attrs to
   the flow Show and Edit pages, which call the configured module (falling
-  back to `FormFlow.Config`'s defaults) with a `FormFlow.Config.Context`.
+  back to `FormFlow.Config`'s defaults) with a `FormFlow.Context`.
 - In a "subflows" flow's canvas, form subflow nodes render the same choices
   on the node itself: a dropdown in edit mode, plain text in show mode. The
   embedded flow's `properties` stay the single source of truth — the node's
@@ -92,11 +92,11 @@ stored: a journey holds as many of them as it has "forms" flows, each with
 its own type, and every question is asked of the flow the form belongs to.
 
 - **Breaking: `FormFlow.Data.Instances.Progress` is now
-  `FormFlow.Data.Instances.FlowProgress`** — it derives one flow instance's
+  `FormFlow.Data.Instances.Flows.Progress`** — it derives one flow instance's
   progress, and the name now says so. `derive/2`, `complete?/2`, and
   `next_path_position/2` are unchanged; nothing about how progress is
   *derived* changed.
-- `FlowProgress.forms/2` is the new second view of that derivation: the
+- `Flows.Progress.forms/2` is the new second view of that derivation: the
   journey's form positions as an ordered list of
   `FormFlow.Data.Instances.FormProgress` structs — one per form, carrying its
   label, the subflow nodes drilled through to reach it, its live form
@@ -104,7 +104,7 @@ its own type, and every question is asked of the flow the form belongs to.
   Order is the order a filler works them. `forms_in_flow/2` narrows the list
   to one flow's own, which is what every `FormFlow.Flows.Types` callback
   takes; `find_form/2` and `qualified_label/1` round it out.
-- **New: `FormFlow.Web.Instances.Components.FlowProgress`** draws a flow's
+- **New: `FormFlow.Web.Instances.Components.Flows.Progress`** draws a flow's
   forms above the one being filled, each with its state, the current one
   marked `aria-current="step"`. A single-form flow draws nothing —
   `show_progress?/1` — and a form that can't be navigated to renders as the
@@ -182,7 +182,7 @@ follows from:
 - **New: `FormFlow.Data.Instances.Forms.get_at/2`** — the live (not
   superseded) instance at a position, which is how a position-addressed page
   finds its row.
-- `FormFlow.Web.Instances.Components.FlowProgress` takes `base` and
+- `FormFlow.Web.Instances.Components.Flows.Progress` takes `base` and
   `flow_instance_id` instead of `target`, since it renders links now.
 - The pages' `journey_id` assign is `flow_instance_id`, and the UI says
   "Flows" where it said "Journeys".
@@ -197,7 +197,7 @@ row plus every `FormFlow.Data.Instances.Form` filled at a position inside it
 all, since "flow instance" alone reads as one step's worth of work.
 
 - Every moduledoc that reaches for the word now grounds it on first mention
-  rather than assuming it (`FlowProgress`, `FormProgress`, both `Flows` and
+  rather than assuming it (`Flows.Progress`, `FormProgress`, both `Flows` and
   `Forms` contexts, the `Flow` and `Form` schemas, `Flow.Event`, and the
   template-side delete guard) — always concrete first, shorthand second: "a
   whole root flow instance — a journey", never the other way round, so the

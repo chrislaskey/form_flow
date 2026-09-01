@@ -1,7 +1,7 @@
 defmodule FormFlow.Flows.TypesTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Config.Context
+  alias FormFlow.Context
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Flows.Types

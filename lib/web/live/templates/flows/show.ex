@@ -31,7 +31,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Config.Context
+  alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow

@@ -21,9 +21,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   use Phoenix.LiveComponent
 
-  alias FormFlow.Config.Context
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.Flows.Progress
   alias FormFlow.Data.Templates
   alias FormFlow.Flows.Types
   alias FormFlow.Web.Instances.Components
@@ -61,7 +61,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+        forms = Flows.Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
         assign(socket,
           flow_instance: flow_instance,
@@ -75,7 +75,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   # Every form with the one question its own flow's type answers here.
   defp rows(forms, tree, assigns) do
     for form <- forms do
-      in_flow = FlowProgress.forms_in_flow(forms, form.path)
+      in_flow = Flows.Progress.forms_in_flow(forms, form.path)
       type = type_module(assigns, tree, form)
 
       %{form: form, openable?: type.openable?(form, in_flow)}
@@ -121,9 +121,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       <ul class="space-y-1.5 text-sm">
         <li :for={row <- @rows} class="flex items-center gap-3">
-          <% {text, classes} = Components.FlowProgress.badge(row.form.status) %>
+          <% {text, classes} = Components.Flows.Progress.badge(row.form.status) %>
           <span class={"rounded-full border px-2 py-0.5 text-xs #{classes}"}>{text}</span>
-          <span>{FlowProgress.qualified_label(row.form)}</span>
+          <span>{Flows.Progress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
             <%!-- Open is the offer to start work here — an any-order wizard
                   makes it on forms an in-order one keeps closed. A form

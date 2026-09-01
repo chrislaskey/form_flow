@@ -15,7 +15,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Flow.Event
-  alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.Flows.Progress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
 
@@ -94,10 +94,10 @@ defmodule FormFlow.Data.Instances.Flows do
   @doc """
   Derived traversal state for a journey — `%{path => status}` from the live
   tree and the journey's form instances. Never persisted; see
-  `FormFlow.Data.Instances.FlowProgress`.
+  `FormFlow.Data.Instances.Flows.Progress`.
   """
   def progress(%Instances.Flow{} = instance) do
-    FlowProgress.derive(Templates.Flows.resolve_tree(instance.flow_id), form_instances(instance))
+    Flows.Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), form_instances(instance))
   end
 
   @doc """
@@ -106,7 +106,7 @@ defmodule FormFlow.Data.Instances.Flows do
   template edit; hosts should ask the question they mean.
   """
   def complete?(%Instances.Flow{} = instance) do
-    FlowProgress.complete?(
+    Flows.Progress.complete?(
       Templates.Flows.resolve_tree(instance.flow_id),
       form_instances(instance)
     )
@@ -118,7 +118,7 @@ defmodule FormFlow.Data.Instances.Flows do
   nil when nothing is actionable. This is the after-submit redirect.
   """
   def next_path_position(%Instances.Flow{} = instance) do
-    FlowProgress.next_path_position(
+    Flows.Progress.next_path_position(
       Templates.Flows.resolve_tree(instance.flow_id),
       form_instances(instance)
     )
@@ -135,7 +135,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
   def list_stranded(%Instances.Flow{} = instance, _opts) do
     instances = form_instances(instance)
-    statuses = FlowProgress.derive(Templates.Flows.resolve_tree(instance.flow_id), instances)
+    statuses = Flows.Progress.derive(Templates.Flows.resolve_tree(instance.flow_id), instances)
 
     stranded_paths =
       for {path, :stranded} <- statuses, into: MapSet.new() do
