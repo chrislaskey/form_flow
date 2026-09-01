@@ -5,12 +5,15 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   In progress / Done / Pending — plus any stranded answers (filled at a
   position the flow no longer has).
 
-  A form offers to open where the flow allows work — its predecessors done,
-  or itself already started
-  (`FormFlow.Data.Instances.Flows.Progress.actionable?/1`).
+  Which forms offer to start is not this page's decision: each form belongs
+  to a "forms" flow, and that flow's `FormFlow.Config.Flows.Type` answers
+  `editable?/2` for it. An in-order wizard offers only where the flow allows
+  work; an any-order one offers every form of its own that isn't done, which
+  is how a user jumps ahead. One instance can hold several "forms" flows
+  with different types, so the question is asked per form.
 
   Every action here is an ordinary link, because a form's URL addresses its
-  *position* and so exists before its instance row does — opening happens on
+  *position* and so exists before its instance row does — starting happens on
   the form page itself (see `FormFlow.Web.Instances.Forms.Show`). Reopen is
   the exception, since it changes state: it is a button, and it lives beside
   the answers it reopens.
@@ -18,10 +21,12 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Instances.Flows.Progress
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
   @impl true
@@ -30,6 +35,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -54,19 +61,34 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-        forms = Progress.forms(tree, Instances.Flows.form_instances(flow_instance))
+        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
         assign(socket,
           flow_instance: flow_instance,
-          rows: rows(forms),
+          rows: rows(forms, tree, flow_instance, socket.assigns),
           stranded: Instances.Flows.list_stranded(flow_instance),
           flow_name: (tree && tree.flow.name) || "Untitled flow"
         )
     end
   end
 
-  defp rows(forms) do
-    for form <- forms, do: %{form: form, openable?: Progress.actionable?(form)}
+  # Every form with the one question its own flow's type answers here.
+  defp rows(forms, tree, flow_instance, assigns) do
+    for form <- forms do
+      context = %Context{
+        user_id: assigns.user_id,
+        flow: tree.flow,
+        subflow: form.flow,
+        subflow_node: List.last(form.ancestors),
+        flow_instance: flow_instance,
+        form_progress: form,
+        flow_progress: FlowProgress.forms_in_flow(forms, form.path)
+      }
+
+      type = Shared.flow_type(context, assigns)
+
+      %{form: form, editable?: type.module.editable?(context, assigns.config_data)}
+    end
   end
 
   @impl true
@@ -97,17 +119,18 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         <li :for={row <- @rows} class="flex items-center gap-3">
           <% {text, classes} = Components.Flows.Progress.badge(row.form.status) %>
           <span class={"rounded-full border px-2 py-0.5 text-xs #{classes}"}>{text}</span>
-          <span>{Progress.qualified_label(row.form)}</span>
+          <span>{FlowProgress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
-            <%!-- Open is the offer to start work here. A form already
-                  started continues instead; both land on the same page,
-                  which is the one that opens the position. --%>
+            <%!-- Start is the offer to begin work here — an any-order wizard
+                  makes it on forms an in-order one keeps closed. A form
+                  already started continues instead; both land on the same
+                  page, which is the one that starts the form. --%>
             <.link
-              :if={row.openable? && is_nil(row.form.instance)}
+              :if={row.editable? && is_nil(row.form.instance)}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >
-              Open
+              Start
             </.link>
             <.link
               :if={row.form.status == :in_progress && row.form.instance}

@@ -1,30 +1,73 @@
 defmodule FormFlow.Config.Flows.Type do
   @moduledoc """
-  Flow type definition
+  Flow type definition: one way a "forms" flow presents its forms to the
+  user filling them out.
+
+  `FormFlow.Config.enabled_flow_types/2` returns a list of these; the struct
+  is what the config describes, and its `:module` — `use`ing this behaviour —
+  is what the type does. `:id` is the value stored in the flow's
+  `properties["form_flow_type"]`.
+
+  Every callback takes the `FormFlow.Context` of one form in one flow
+  instance — `:form_progress` is the form, `:flow_progress` its flow's forms
+  in order — plus `config_data`. The defaults, in
+  `FormFlow.Web.Components.Flows.Types.Default`, are the in-order wizard:
+  a form can be edited where the flow allows it, and finishing a form moves
+  to the nearest place work can happen next. A type overrides only what it
+  changes.
   """
+
+  alias FormFlow.Context
+  alias FormFlow.Data.Instances.FormProgress
 
   defstruct [:id, :module, :name, :description, :properties]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           module: module(),
           name: String.t(),
           description: String.t() | nil,
           properties: keyword() | map() | nil
         }
 
-  @doc "Form progress component, return `nil` to not show"
-  @callback form_progress_component(map()) :: any()
+  @doc """
+  Whether the user may edit the form at `:form_progress` — start it when it
+  has no instance yet, or keep working on one already started.
+  """
+  @callback editable?(Context.t(), map()) :: boolean()
+
+  @doc """
+  Where the user goes after completing the form at `:form_progress`: the
+  next form of this flow, or `nil` when the flow has nothing left for them —
+  the flow instance then carries them on to whatever follows it.
+  """
+  @callback on_complete(Context.t(), map()) :: FormProgress.t() | nil
+
+  @doc """
+  The flow's progress, drawn above the form being edited — return `nil` to
+  draw nothing. `assigns` are those of
+  `FormFlow.Web.Instances.Components.Flows.Progress.flow_progress/1`, plus
+  `:context` and `:config_data`.
+  """
+  @callback progress_component(map()) :: Phoenix.LiveView.Rendered.t() | nil
 
   defmacro __using__(_opts) do
     quote do
       @behaviour FormFlow.Config.Flows.Type
 
-      def form_progress_component(assigns) do
-        FormFlow.Web.Components.Flows.Types.Default.form_progress_component(assigns)
+      def editable?(context, config_data) do
+        FormFlow.Web.Components.Flows.Types.Default.editable?(context, config_data)
       end
 
-      defoverridable form_progress_component: 1
+      def on_complete(context, config_data) do
+        FormFlow.Web.Components.Flows.Types.Default.on_complete(context, config_data)
+      end
+
+      def progress_component(assigns) do
+        FormFlow.Web.Components.Flows.Types.Default.progress_component(assigns)
+      end
+
+      defoverridable editable?: 2, on_complete: 2, progress_component: 1
     end
   end
 end

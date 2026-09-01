@@ -46,7 +46,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
             params={@params}
             path={@path}
             base="/admin"
-            config={DemoWeb.FormFlowLive.Admin.Config}
+            config={DemoWeb.FormFlowLive.Config}
             config_data={%{hello: "world"}}
           />
         </div>

@@ -134,7 +134,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             navigate={Paths.flow_path(@base, flow_instance.id)}
             class="text-cyan-600 hover:underline"
           >
-            Open →
+            {if flow_instance.status == "completed", do: "View →", else: "Continue →"}
           </.link>
         </:column>
         <:pagination per_page={10} />

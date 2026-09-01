@@ -11,7 +11,7 @@ defmodule FormFlow.Data.Instances.Forms do
 
     * `update_status(journey, path, :in_progress)` — "the user is working
       here." On an empty position this *creates* the instance — created on
-      first open, not when the journey starts, because creation is what
+      first start, not when the journey starts, because creation is what
       pins the version: the row permanently records which published
       definition the user saw, so creating rows any earlier would pin
       versions for forms the user may never reach and miss improvements
@@ -21,14 +21,14 @@ defmodule FormFlow.Data.Instances.Forms do
     * `update_status(journey, path, :completed, data: answers)` — submit:
       the answers land in `data`, `status`/`completed_at` are stamped, and
       a `status_changed` event is written. Completion is what unlocks
-      successor positions in `FormFlow.Data.Instances.Flows.Progress`.
+      successor positions in `FormFlow.Data.Instances.FlowProgress`.
       Completing a completed instance is a no-op — reopen first.
 
   Deletion stays its own named operation: `delete_instance/2` is the host's
   retention decision, made visibly. Events never cascade-delete with their
   instance, so it is the only deletion path.
 
-  Two browser tabs opening the same untouched position race their inserts;
+  Two browser tabs starting the same untouched position race their inserts;
   the `(instance_flow_id, path)` unique index lets exactly one win.
   Deliberately unhandled for now — the loser surfaces the changeset error
   and the user retries; catch-and-fetch can be added if it becomes a real

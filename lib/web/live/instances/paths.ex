@@ -27,7 +27,7 @@ defmodule FormFlow.Web.Instances.Paths do
     "#{flow_path(base, flow_instance_id)}/forms/#{Enum.join(path, "/")}"
   end
 
-  @doc "The fillable form at a position — the page that opens it."
+  @doc "The editable form at a position — the page that starts it."
   def form_edit_path(base, flow_instance_id, path) do
     "#{form_path(base, flow_instance_id, path)}/edit"
   end

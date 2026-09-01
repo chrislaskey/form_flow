@@ -4,7 +4,7 @@ defmodule FormFlow.Data.Instances.FormProgress do
   where the form is, what it is called, how far along it is, and which
   "forms" flow it belongs to.
 
-  Built by `FormFlow.Data.Instances.Flows.Progress.forms/2` and the shape the
+  Built by `FormFlow.Data.Instances.FlowProgress.forms/2` and the shape the
   user-facing pages render. Nothing here is persisted: it is the live
   template joined with the journey's derived progress.
 
@@ -16,11 +16,11 @@ defmodule FormFlow.Data.Instances.FormProgress do
     * `:ancestors` - the subflow nodes drilled through to reach it,
       outermost first; `[]` for a form in the root flow. `List.last/1` is
       the node whose embedded flow this form belongs to, and their labels
-      are what `FormFlow.Data.Instances.Flows.Progress.qualified_label/1`
+      are what `FormFlow.Data.Instances.FlowProgress.qualified_label/1`
       prefixes
-    * `:status` - the derived `FormFlow.Data.Instances.Flows.Progress` status
+    * `:status` - the derived `FormFlow.Data.Instances.FlowProgress` status
     * `:instance` - the position's live (not superseded)
-      `FormFlow.Data.Instances.Form`, or `nil` until it is first opened
+      `FormFlow.Data.Instances.Form`, or `nil` until it is first started
     * `:flow` - the "forms" flow this form lives in, whose
       `properties["form_flow_type"]` names its `FormFlow.Config.Flows.Type`
   """
@@ -31,7 +31,7 @@ defmodule FormFlow.Data.Instances.FormProgress do
           path: [binary()],
           label: String.t(),
           ancestors: [FormFlow.Data.Templates.Flow.Node.t()],
-          status: FormFlow.Data.Instances.Flows.Progress.status(),
+          status: FormFlow.Data.Instances.FlowProgress.status(),
           instance: FormFlow.Data.Instances.Form.t() | nil,
           flow: FormFlow.Data.Templates.Flow.t()
         }

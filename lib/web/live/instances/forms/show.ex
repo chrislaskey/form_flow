@@ -8,8 +8,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   It is the counterpart of `FormFlow.Web.Instances.Forms.Edit`, which is where
   work happens: `/flows/:id/forms/*path` is this page,
   `/flows/:id/forms/*path/edit` is that one. Both are addressed by position
-  and resolve it the same way (`FormFlow.Web.Instances.Forms.Position`); the
-  difference is that this page never opens anything. With nothing filled in
+  and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
+  difference is that this page never starts anything. With nothing filled in
   yet it says so and offers the link across to Edit, which does.
 
   The one write here is Reopen, and it lives here on purpose: reopening
@@ -22,7 +22,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   alias FormFlow.Data.Instances
   alias FormFlow.Web.Instances.Components
-  alias FormFlow.Web.Instances.Forms.Position
+  alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
   @impl true
@@ -31,6 +31,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -60,7 +62,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       flow_instance ->
         socket
         |> assign(:flow_instance, flow_instance)
-        |> Position.resolve()
+        |> Shared.assigns()
     end
   end
 
@@ -85,7 +87,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
       <Components.FormPage.notice message={unstarted_message(assigns)}>
         <.link
-          :if={@openable?}
+          :if={@editable?}
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
           class="text-cyan-600 hover:underline"
         >
@@ -121,15 +123,16 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         label={@form_label}
       />
 
-      <Components.Flows.Progress.flow_progress
-        :if={@show_progress?}
-        id={"#{@id}-flow-progress"}
-        base={@base}
-        flow_instance_id={@flow_instance.id}
-        forms={@forms}
-        current_path={@path}
-        clickable={@clickable}
-      />
+      {@type.module.progress_component(%{
+        id: "#{@id}-flow-progress",
+        base: @base,
+        flow_instance_id: @flow_instance.id,
+        forms: @forms,
+        current_path: @path,
+        clickable: @clickable,
+        context: @context,
+        config_data: @config_data
+      })}
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
 
@@ -175,7 +178,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   end
 
   defp unstarted_message(%{form: nil}), do: "This form is not part of this flow."
-  defp unstarted_message(%{openable?: true}), do: "You haven't started this form yet."
+  defp unstarted_message(%{editable?: true}), do: "You haven't started this form yet."
 
   defp unstarted_message(_assigns),
     do: "This form isn't available yet — it comes later in the flow."

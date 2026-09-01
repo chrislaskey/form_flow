@@ -32,6 +32,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Context
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -56,27 +57,34 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     flow = resolve_flow(socket.assigns, subflow_node)
     data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
+    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
 
     {:ok,
      assign(socket,
        flow: flow,
        data: data,
        root: root,
-       form_flow_type_options: form_flow_type_options(socket.assigns, flow, root, subflow_node)
+       flow_type_options: flow && flow_type_options(socket.assigns, context),
+       embedded_flow_type_options:
+         flow && flow_type_options(socket.assigns, embedded_flow_context(flow, root))
      )}
   end
 
-  # The enabled flow types as dropdown options — see FormFlow.Config.
+  # What the config offers for a flow in this context — see FormFlow.Config.
   # Read-only pages still need them, to render a stored value as its label.
-  defp form_flow_type_options(assigns, flow, root, subflow_node) do
-    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
-
+  defp flow_type_options(assigns, context) do
     config = FormFlow.Config.config_module(assigns.config)
-    config_data = assigns.config_data
 
     context
-    |> config.enabled_flow_types(config_data)
+    |> config.enabled_flow_types(assigns.config_data)
     |> type_select_options()
+  end
+
+  # The canvas asks once for every form subflow node it draws, saved or not,
+  # so the context is the flow such a node embeds: a "forms" flow owned by
+  # this one, which is what saving a new node creates.
+  defp embedded_flow_context(flow, root) do
+    %Context{flow: root || flow, subflow: %Flow{label: "forms", owner_flow_id: flow.id}}
   end
 
   defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
@@ -218,17 +226,17 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         target={@myself}
         editable={false}
         flow_label={@flow.label}
-        form_flow_type_options={@form_flow_type_options}
+        form_flow_type_options={@embedded_flow_type_options}
       />
     </div>
     """
   end
 
   # The stored form_flow_type rendered as its human label — nil when unset
-  # (the configured default applies) or on "subflows" flows
+  # (the configured default applies)
   defp type_label(assigns) do
     with type when is_binary(type) <- assigns.flow.properties["form_flow_type"] do
-      case List.keyfind(assigns.form_flow_type_options, type, 1) do
+      case List.keyfind(assigns.flow_type_options, type, 1) do
         {label, _value} -> label
         nil -> type
       end

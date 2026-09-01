@@ -48,10 +48,10 @@ defmodule FormFlow.Web.Components.Editor do
   attr(:form_flow_type_options, :list,
     default: [],
     doc:
-      "form_flow_type choices as {label, value} tuples — the configured " <>
-        "`enabled_flow_types` as `FormFlow.Config.Flows.Type.select_options/1` " <>
-        "gives them; form-subflow nodes render them as a dropdown when " <>
-        "editable and as the value's label when not"
+      "form_flow_type choices as {label, value} tuples for the flows the " <>
+        "canvas's form subflow nodes embed (the configured `enabled_flow_types`, " <>
+        "as name and id); those nodes render them as a dropdown when editable " <>
+        "and as the value's label when not"
   )
 
   def editor(assigns) do

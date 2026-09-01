@@ -27,6 +27,18 @@ defmodule FormFlow.Context do
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
       in scope, or `nil`
 
+  On the user-facing side — someone working through a flow instance — three
+  more fields carry the live state a `FormFlow.Config.Flows.Type` reasons
+  about; template-side callbacks see them as `nil`:
+
+    * `:flow_instance` - the `FormFlow.Data.Instances.Flow` being worked
+    * `:form_progress` - the `FormFlow.Data.Instances.FormProgress` of the
+      form in question: its position, derived status, and live instance
+    * `:flow_progress` - the progress of the "forms" flow that form belongs
+      to (`:subflow`): every form of it, in the order they are worked, as
+      `FormProgress` structs — what `FormFlow.Data.Instances.FlowProgress.forms_in_flow/2`
+      returns
+
   `:config_data` is deliberately not a field here — it is passed to callbacks
   as its own argument, since it is caller-supplied and unrelated to what
   FormFlow itself knows about the current request.
@@ -38,7 +50,10 @@ defmodule FormFlow.Context do
     :subflow,
     :subflow_node,
     :form,
-    :form_version
+    :form_version,
+    :flow_instance,
+    :form_progress,
+    :flow_progress
   ]
 
   @type t :: %__MODULE__{
@@ -47,6 +62,9 @@ defmodule FormFlow.Context do
           subflow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,
           form: FormFlow.Data.Templates.Form.t() | nil,
-          form_version: FormFlow.Data.Templates.Form.Version.t() | nil
+          form_version: FormFlow.Data.Templates.Form.Version.t() | nil,
+          flow_instance: FormFlow.Data.Instances.Flow.t() | nil,
+          form_progress: FormFlow.Data.Instances.FormProgress.t() | nil,
+          flow_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil
         }
 end

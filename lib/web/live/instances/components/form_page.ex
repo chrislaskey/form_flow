@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Instances.Components.FormPage do
   render.
 
   The wording of that panel belongs to the page, not here: Show says a form
-  hasn't been started, Edit says it can't be opened or is already submitted.
+  hasn't been started, Edit says it can't be started or is already submitted.
   Only the chrome is shared.
   """
 

@@ -312,7 +312,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   The flow aggregate with subflow references resolved, recursively — the
-  tree `FormFlow.Data.Instances.Flows.Progress` derives against. Returns
+  tree `FormFlow.Data.Instances.FlowProgress` derives against. Returns
   `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`, or
   `nil` for an unknown id.
 

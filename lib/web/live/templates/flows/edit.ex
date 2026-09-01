@@ -85,6 +85,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Context
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor
@@ -122,6 +123,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     flow = resolve_flow(socket.assigns, subflow_node)
     data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
+    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
 
     {:ok,
      assign(socket,
@@ -131,20 +133,27 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        root: root,
        pending_name: flow && flow.name,
        pending_type: flow && flow.properties["form_flow_type"],
-       form_flow_type_options: form_flow_type_options(socket.assigns, flow, root, subflow_node)
+       flow_type_options: flow && flow_type_options(socket.assigns, context),
+       embedded_flow_type_options:
+         flow && flow_type_options(socket.assigns, embedded_flow_context(flow, root))
      )}
   end
 
-  # The enabled flow types as dropdown options — see FormFlow.Config
-  defp form_flow_type_options(assigns, flow, root, subflow_node) do
-    context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
-
+  # What the config offers for a flow in this context — see FormFlow.Config.
+  # Empty means the flow has no type of its own, and no dropdown.
+  defp flow_type_options(assigns, context) do
     config = FormFlow.Config.config_module(assigns.config)
-    config_data = assigns.config_data
 
     context
-    |> config.enabled_flow_types(config_data)
+    |> config.enabled_flow_types(assigns.config_data)
     |> type_select_options()
+  end
+
+  # The canvas asks once for every form subflow node it draws, saved or not,
+  # so the context is the flow such a node embeds: a "forms" flow owned by
+  # this one, which is what saving a new node creates.
+  defp embedded_flow_context(flow, root) do
+    %Context{flow: root || flow, subflow: %Flow{label: "forms", owner_flow_id: flow.id}}
   end
 
   defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
@@ -514,9 +523,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             writes both — on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
             *saved* values; pending ones live in this component's assigns.
-            The type dropdown only exists on "forms" flows — how the forms
-            are presented belongs to the flow of forms itself — with choices
-            from the `FormFlow.Config` behaviour (enabled_flow_types). --%>
+            The type dropdown exists only when the `FormFlow.Config`
+            behaviour (enabled_flow_types) offers this flow any types — how
+            the forms are presented belongs to the flow of forms itself, so
+            by default that is "forms" flows only. --%>
       <div class="mb-3 max-w-md">
         <DynamicForm.form
           id={"#{@id}-flow-form"}
@@ -526,11 +536,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         >
           <:field type="text" name="name" label="Name" />
           <:field
-            :if={@flow.label == "forms"}
+            :if={@flow_type_options != []}
             type="dropdown"
             name="form_flow_type"
             label="Form flow type"
-            options={@form_flow_type_options}
+            options={@flow_type_options}
           />
         </DynamicForm.form>
       </div>
@@ -540,7 +550,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         data={@data}
         target={@myself}
         flow_label={@flow.label}
-        form_flow_type_options={@form_flow_type_options}
+        form_flow_type_options={@embedded_flow_type_options}
       />
 
       <div

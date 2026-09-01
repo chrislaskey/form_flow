@@ -135,7 +135,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
 
     # The dropdown carries the FormFlow.Config defaults plus the option the
-    # demo's Admin.Config adds — proof the router's config attr reaches the
+    # demo's Config adds — proof the router's config attr reaches the
     # page
     assert html =~ "Form flow type"
     assert html =~ "Wizard (any order)"

@@ -17,29 +17,52 @@ type and implementing it is one declaration, not two callbacks on two pages.
   `FormFlow.Web.Components.Config.Default`; a custom module reaches them
   through `FormFlow.Config.enabled_flow_types/3` (and `/3` for forms), which
   also fall back to the defaults when the host set no `config`.
-- The template pages' "Form flow type" dropdowns — the flow edit page and a
-  "subflows" canvas's form nodes — are populated from `enabled_flow_types/2`
-  via `FormFlow.Config.Flows.Type.select_options/1`, which pairs each type's
-  `name` and `id`. Two ship: `"wizard_any_order"` and `"wizard_in_order"`,
-  as before.
-- **Breaking: `FormFlow.Flows.Types` and its `WizardInOrder` /
-  `WizardAnyOrder` modules are removed.** A flow type is a module `use`ing
-  `FormFlow.Config.Flows.Type` (`FormFlow.Web.Components.Flows.Types.*`);
-  its one callback so far, `form_progress_component/1`, is declared but not
-  yet consulted. The user-facing pages no longer resolve a type at all: a
-  form opens where the flow allows work — predecessors done, or already
-  started (`FormFlow.Data.Instances.Flows.Progress.actionable?/1`, new) —
-  a flow's progress is drawn whenever it has more than one form, and
-  submitting moves to the next actionable form of the flow, then of the
-  journey. That is the former in-order wizard, now the behavior of every
-  "forms" flow regardless of its stored type; per-type behavior returns in a
-  later iteration.
-- **Breaking: `FormFlow.Config.Context` is `FormFlow.Context`**, and
-  `FormFlow.Data.Instances.FlowProgress` is
-  `FormFlow.Data.Instances.Flows.Progress`.
-- The demo app's `DemoWeb.FormFlowLive.Admin.Config` adds its
-  `"demo_checklist"` type as a struct; the users page passes no config, since
-  nothing on that side reads one yet.
+- The template pages' "Form flow type" dropdowns are populated from
+  `enabled_flow_types/2`, each type's `name` and `id` as the option. The
+  config reads its `FormFlow.Context` to decide what to offer: the flow edit
+  page asks with the flow itself as `:subflow`, and the default config
+  answers the two wizards (`"wizard_any_order"`, `"wizard_in_order"`) for a
+  "forms" flow and nothing for a "subflows" flow — so whether a flow gets a
+  dropdown at all is the config's call, not the page's. A "subflows" canvas's
+  form subflow nodes ask separately, with the "forms" flow such a node
+  embeds as `:subflow`, so they still get the types on a flow that has none
+  of its own.
+- **Breaking: `FormFlow.Flows.Types` is `FormFlow.Config.Flows.Type`**, and
+  the `WizardInOrder` / `WizardAnyOrder` modules live under
+  `FormFlow.Web.Components.Flows.Types`. A flow type `use`s the behaviour
+  and overrides only what it changes; the defaults
+  (`FormFlow.Web.Components.Flows.Types.Default`) are the in-order wizard.
+  Its three callbacks each take a `FormFlow.Context` and `config_data`:
+  `editable?/2` (may the user edit the form at `:form_progress` — start it,
+  or keep working on it), `on_complete/2` (the next form after finishing it,
+  or `nil` to hand back to the flow instance), and `progress_component/1`
+  (the progress drawn above the form — `nil` draws nothing, which is what the
+  old `show_progress?/1` decided). `openable?/2` is `editable?/2` and
+  `next_form/2` is `on_complete/2`.
+- `FormFlow.Context` gained the user-facing side: `:flow_instance`, the
+  `:form_progress` in question, and `:flow_progress` — its flow's forms in
+  order. Template-side callbacks see them as `nil`.
+- The instance pages resolve a flow's stored `form_flow_type` among what the
+  config enables for the context
+  (`FormFlow.Web.Instances.Forms.Shared.flow_type/2`), so a host's config
+  answers on the user-facing side too. Unset or unrecognized resolves to the
+  first enabled type — the default config now lists the in-order wizard
+  first, so it stays the baseline — and a context with no enabled types to
+  the library's defaults. `FormFlow.Config` itself is only the behaviour and
+  `config_module/1`.
+- The user-facing side says "start" where it said "open": the flow instance
+  page's button is **Start**, and `FormFlow.Web.Instances.Forms.Shared`
+  takes `start: true` and assigns `:start_error`. Starting a form creates its
+  instance, which is what pins the form version; editing is everything after.
+  Reopen, which returns a completed form to in progress, keeps its name.
+- **New: `FormFlow.Data.Instances.FlowProgress.actionable?/1`** — whether
+  the flow allows work on a form (predecessors done, or already started),
+  the primitive the in-order defaults are built on.
+- **Breaking: `FormFlow.Config.Context` is `FormFlow.Context`.**
+- The demo app's `DemoWeb.FormFlowLive.Config` — one module for both the
+  admin and users pages, since a type is chosen on one side and acted on in
+  the other — adds its `"demo_checklist"` type as a struct pointing at
+  `DemoWeb.FormFlowLive.Checklist`, which overrides all three callbacks.
 
 ### Node menus on the canvas
 
@@ -104,9 +127,9 @@ up.
   (`FormFlow.Web.Components.Editor` passes the options in via
   `formFlowTypeOptions`).
 
-### Flow types: which forms a filler may open, and where they land next
+### Flow types: which forms a user may open, and where they land next
 
-`form_flow_type` now decides what a filler actually sees. A "forms" flow's
+`form_flow_type` now decides what a user actually sees. A "forms" flow's
 stored type resolves — through `FormFlow.Config`'s `form_flow_type_module/3`
 — to a module implementing the new `FormFlow.Flows.Types` behaviour, and the
 user-facing pages ask it rather than deciding for themselves:
@@ -115,7 +138,7 @@ user-facing pages ask it rather than deciding for themselves:
   forms are completed front to back, as before. Their progress is now
   *shown*, which is the new part, but not navigable: no jumping ahead.
 - `FormFlow.Flows.Types.WizardAnyOrder` (`"wizard_any_order"`) — every form
-  that isn't done is navigable, so a filler can jump ahead. Submitting one
+  that isn't done is navigable, so a user can jump ahead. Submitting one
   moves them to the next form still open, wrapping back to the beginning (a
   skipped form is still waiting there); when nothing in the flow is open any
   more, the journey takes over.
@@ -131,16 +154,16 @@ stored: a journey holds as many of them as it has "forms" flows, each with
 its own type, and every question is asked of the flow the form belongs to.
 
 - **Breaking: `FormFlow.Data.Instances.Progress` is now
-  `FormFlow.Data.Instances.Flows.Progress`** — it derives one flow instance's
+  `FormFlow.Data.Instances.FlowProgress`** — it derives one flow instance's
   progress, and the name now says so. `derive/2`, `complete?/2`, and
   `next_path_position/2` are unchanged; nothing about how progress is
   *derived* changed.
-- `Flows.Progress.forms/2` is the new second view of that derivation: the
+- `FlowProgress.forms/2` is the new second view of that derivation: the
   journey's form positions as an ordered list of
   `FormFlow.Data.Instances.FormProgress` structs — one per form, carrying its
   label, the subflow nodes drilled through to reach it, its live form
   instance, and the "forms" flow it belongs to, alongside the derived status.
-  Order is the order a filler works them. `forms_in_flow/2` narrows the list
+  Order is the order a user works them. `forms_in_flow/2` narrows the list
   to one flow's own, which is what every `FormFlow.Flows.Types` callback
   takes; `find_form/2` and `qualified_label/1` round it out.
 - **New: `FormFlow.Web.Instances.Components.Flows.Progress`** draws a flow's
@@ -156,7 +179,7 @@ its own type, and every question is asked of the flow the form belongs to.
 - Submitting a form asks the type where to go next (`next_form/2`, against
   freshly derived statuses) and falls back to the journey's next actionable
   position when that flow has nothing left — which is what still carries a
-  filler out of a finished subflow and into the next one. Nothing actionable
+  user out of a finished subflow and into the next one. Nothing actionable
   anywhere: the journey page, as before.
 - `FormFlow.Web.Router` now forwards `config` and `config_data` to the
   journey and form-instance pages too, so a host's config module answers on
@@ -236,7 +259,7 @@ row plus every `FormFlow.Data.Instances.Form` filled at a position inside it
 all, since "flow instance" alone reads as one step's worth of work.
 
 - Every moduledoc that reaches for the word now grounds it on first mention
-  rather than assuming it (`Flows.Progress`, `FormProgress`, both `Flows` and
+  rather than assuming it (`FlowProgress`, `FormProgress`, both `Flows` and
   `Forms` contexts, the `Flow` and `Form` schemas, `Flow.Event`, and the
   template-side delete guard) — always concrete first, shorthand second: "a
   whole root flow instance — a journey", never the other way round, so the
@@ -269,7 +292,7 @@ branch, the mode-keyed DynamicForm id, and the `:if={@mode == :show}` guards.
 Two pieces are shared rather than duplicated, since two copies of a gate can
 drift apart:
 
-- **New: `FormFlow.Web.Instances.Forms.Position`** resolves what is at the
+- **New: `FormFlow.Web.Instances.Forms.Shared`** resolves what is at the
   position both pages address — which form the path names, its flow's
   `FormFlow.Flows.Types` module, whether the type allows work there, the live
   instance, and the parsed definition. `resolve/2` reads the page's assigns

@@ -10,9 +10,9 @@ defmodule FormFlow.Config do
   `FormFlow.Web.Router`'s `:config_data` attr).
 
   The defaults live in `FormFlow.Web.Components.Config.Default`. A custom
-  module `use`s this behaviour and overrides only what it changes; the pages
-  reach whichever module is configured through the `/3` functions here, which
-  fall back to the defaults when the host set none.
+  module `use`s this behaviour and overrides only what it changes. The pages
+  resolve the module to ask with `config_module/1` — the host's, or the
+  defaults when the host set none — and then call its callbacks directly.
   """
 
   alias FormFlow.Context

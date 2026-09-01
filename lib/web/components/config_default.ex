@@ -6,25 +6,30 @@ defmodule FormFlow.Web.Components.Config.Default do
 
   @behaviour FormFlow.Config
 
+  # A "forms" flow chooses how its forms are presented; a "subflows" flow
+  # has no type of its own — its form subflows each carry one. First is the
+  # fallback for a flow that never chose (FormFlow.Web.Instances.Forms.Shared.flow_type/2).
   @impl true
-  def enabled_flow_types(_context, _config_data) do
+  def enabled_flow_types(%{subflow: %{label: "forms"}}, _config_data) do
     [
-      %FormFlow.Config.Flows.Type{
-        id: "wizard_any_order",
-        module: FormFlow.Web.Components.Flows.Types.WizardAnyOrder,
-        name: "Wizard (any order)",
-        description: "Form wizard. Users can jump ahead and complete in any order.",
-        properties: []
-      },
       %FormFlow.Config.Flows.Type{
         id: "wizard_in_order",
         module: FormFlow.Web.Components.Flows.Types.WizardInOrder,
         name: "Wizard (in order)",
         description: "Form wizard. Users must complete in order.",
         properties: []
+      },
+      %FormFlow.Config.Flows.Type{
+        id: "wizard_any_order",
+        module: FormFlow.Web.Components.Flows.Types.WizardAnyOrder,
+        name: "Wizard (any order)",
+        description: "Form wizard. Users can jump ahead and complete in any order.",
+        properties: []
       }
     ]
   end
+
+  def enabled_flow_types(_context, _config_data), do: []
 
   @impl true
   def enabled_form_types(_context, _config_data) do
