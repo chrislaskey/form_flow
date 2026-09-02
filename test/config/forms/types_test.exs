@@ -45,4 +45,16 @@ defmodule FormFlow.Config.Forms.TypesTest do
                %{"name" => "Prefilled", "email" => "p@example.com"}
     end
   end
+
+  describe "property_values/1" do
+    test "reads what an admin entered for the form's type, under the type's own key" do
+      form = %FormFlow.Data.Templates.Form{
+        properties: %{"form_type" => "typed", "form_type_property_values" => %{"name" => "Ada"}}
+      }
+
+      assert Type.property_values(form) == %{"name" => "Ada"}
+      assert Type.property_values(%FormFlow.Data.Templates.Form{properties: %{}}) == %{}
+      assert Type.property_values(nil) == %{}
+    end
+  end
 end

@@ -27,6 +27,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
   alias FormFlow.Web.Templates.Forms.Preview
@@ -90,24 +91,41 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       versions: versions,
       version: version,
       counts: form && Forms.instance_counts(form.id),
-      form_type_label: form && form_type_label(assigns, form, version, node)
+      form_types: form_types(assigns, form, version, node)
     )
     |> assign_breadcrumb(node)
   end
 
-  # The stored form_type rendered as its human name — nil when unset (the
-  # default applies). Read-only pages still ask the config, to render a
-  # stored value as its label.
-  defp form_type_label(assigns, form, version, node) do
-    with type when is_binary(type) <- form.properties["form_type"] do
-      config = FormFlow.Config.config_module(assigns.config)
-      context = %Context{form: form, form_version: version, subflow_node: node}
+  # What the config offers for this form — see FormFlow.Config. Read-only
+  # pages still need them, to render a stored value as its name.
+  defp form_types(_assigns, nil, _version, _node), do: []
 
-      case Enum.find(config.enabled_form_types(context, assigns.config_data), &(&1.id == type)) do
+  defp form_types(assigns, form, version, node) do
+    config = FormFlow.Config.config_module(assigns.config)
+    context = %Context{form: form, form_version: version, subflow_node: node}
+
+    config.enabled_form_types(context, assigns.config_data)
+  end
+
+  # The stored form_type rendered as its human name — nil when unset (the
+  # default applies)
+  defp form_type_label(assigns) do
+    with type when is_binary(type) <- assigns.form.properties["form_type"] do
+      case Shared.type(assigns.form_types, type) do
         %{name: name} -> name
         nil -> type
       end
     end
+  end
+
+  # The stored type's property values, paired with the properties that
+  # declare them, for the header — only those with a value
+  defp type_property_values(assigns) do
+    values = FormFlow.Config.Forms.Type.property_values(assigns.form)
+
+    for property <- Shared.properties(assigns.form_types, assigns.form.properties["form_type"]),
+        value = values[property.id],
+        do: {property, value}
   end
 
   defp resolve_form(form_id, node) do
@@ -255,8 +273,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           <span :if={@version} class="ml-1 text-xs font-normal text-zinc-500">
             {version_badge(@version)}
           </span>
-          <span :if={@form_type_label} class="text-xs font-normal text-zinc-500">
-            · {@form_type_label}
+          <span :if={form_type_label(assigns)} class="text-xs font-normal text-zinc-500">
+            · {form_type_label(assigns)}
+          </span>
+          <span
+            :for={{property, value} <- type_property_values(assigns)}
+            class="text-xs font-normal text-zinc-500"
+          >
+            · {property.name}: {Shared.display_value(property, value)}
           </span>
         </div>
         <div :if={@version} class="flex items-center gap-2">

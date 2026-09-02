@@ -26,6 +26,10 @@ defmodule FormFlow.Context do
     * `:form` - the `FormFlow.Data.Templates.Form` lineage in scope, or `nil`
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
       in scope, or `nil`
+    * `:flow_type_property_values` - what an admin entered for `:subflow`'s
+      flow type's properties (`FormFlow.Config.Flows.Type.property_values/1`)
+    * `:form_type_property_values` - the same for `:form`'s form type
+      (`FormFlow.Config.Forms.Type.property_values/1`)
 
   On the user-facing side — someone working through a flow instance — three
   more fields carry the live state a `FormFlow.Config.Flows.Type` reasons
@@ -53,6 +57,8 @@ defmodule FormFlow.Context do
     :subflow_node,
     :form,
     :form_version,
+    :flow_type_property_values,
+    :form_type_property_values,
     :flow_instance,
     :form_instance,
     :form_progress,
@@ -66,6 +72,8 @@ defmodule FormFlow.Context do
           subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,
           form: FormFlow.Data.Templates.Form.t() | nil,
           form_version: FormFlow.Data.Templates.Form.Version.t() | nil,
+          flow_type_property_values: map() | nil,
+          form_type_property_values: map() | nil,
           flow_instance: FormFlow.Data.Instances.Flow.t() | nil,
           form_instance: FormFlow.Data.Instances.Form.t() | nil,
           form_progress: FormFlow.Data.Instances.FormProgress.t() | nil,

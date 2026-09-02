@@ -36,6 +36,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Shared
 
   @impl true
   def mount(socket) do
@@ -64,20 +65,19 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        flow: flow,
        data: data,
        root: root,
-       flow_type_options: flow && flow_type_options(socket.assigns, context),
+       flow_types: flow && flow_types(socket.assigns, context),
        embedded_flow_type_options:
-         flow && flow_type_options(socket.assigns, embedded_flow_context(flow, root))
+         flow &&
+           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root)))
      )}
   end
 
   # What the config offers for a flow in this context — see FormFlow.Config.
-  # Read-only pages still need them, to render a stored value as its label.
-  defp flow_type_options(assigns, context) do
+  # Read-only pages still need them, to render a stored value as its name.
+  defp flow_types(assigns, context) do
     config = FormFlow.Config.config_module(assigns.config)
 
-    context
-    |> config.enabled_flow_types(assigns.config_data)
-    |> type_select_options()
+    config.enabled_flow_types(context, assigns.config_data)
   end
 
   # The canvas asks once for every form subflow node it draws, saved or not,
@@ -182,6 +182,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <span :if={type_label(assigns)} class="text-xs font-normal text-zinc-500">
             · {type_label(assigns)}
           </span>
+          <span
+            :for={{property, value} <- type_property_values(assigns)}
+            class="text-xs font-normal text-zinc-500"
+          >
+            · {property.name}: {Shared.display_value(property, value)}
+          </span>
         </div>
         <div class="flex items-center gap-2">
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
@@ -232,15 +238,26 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     """
   end
 
-  # The stored form_flow_type rendered as its human label — nil when unset
+  # The stored form_flow_type rendered as its human name — nil when unset
   # (the configured default applies)
   defp type_label(assigns) do
     with type when is_binary(type) <- assigns.flow.properties["form_flow_type"] do
-      case List.keyfind(assigns.flow_type_options, type, 1) do
-        {label, _value} -> label
+      case Shared.type(assigns.flow_types, type) do
+        %{name: name} -> name
         nil -> type
       end
     end
+  end
+
+  # The stored type's property values, paired with the properties that
+  # declare them, for the header — only those with a value
+  defp type_property_values(assigns) do
+    values = FormFlow.Config.Flows.Type.property_values(assigns.flow)
+
+    for property <-
+          Shared.properties(assigns.flow_types, assigns.flow.properties["form_flow_type"]),
+        value = values[property.id],
+        do: {property, value}
   end
 
   defp resolve_flow(%{node_id: nil} = assigns, _node), do: Flows.get(assigns.flow_id)

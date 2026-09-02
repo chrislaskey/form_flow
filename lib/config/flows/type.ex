@@ -18,16 +18,30 @@ defmodule FormFlow.Config.Flows.Type do
 
   alias FormFlow.Context
   alias FormFlow.Data.Instances.FormProgress
+  alias FormFlow.Data.Templates.Flow
 
-  defstruct [:id, :module, :name, :description, :properties]
+  defstruct [:id, :module, :name, :description, properties: []]
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
           module: module(),
           name: String.t(),
           description: String.t() | nil,
-          properties: keyword() | map() | nil
+          properties: [FormFlow.Config.Property.t()]
         }
+
+  @doc """
+  What an admin entered for the flow's type's `:properties`, keyed by
+  property key — stored on the flow under
+  `properties["form_flow_type_property_values"]`. Empty when the type
+  declares none or nothing was entered.
+  """
+  @spec property_values(Flow.t() | nil) :: map()
+  def property_values(%Flow{properties: properties}) do
+    Map.get(properties || %{}, "form_flow_type_property_values", %{})
+  end
+
+  def property_values(nil), do: %{}
 
   @doc """
   Whether the user may edit the form at `:form_progress` — start it when it

@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### Type properties
+
+A flow or form type can now ask an admin for settings. `FormFlow.Config.Property`
+is one such setting's definition — `id`, `name`, `description`, `type`,
+`options`, `required`, `default_value` — and a `FormFlow.Config.Flows.Type`
+or `FormFlow.Config.Forms.Type` declares its list under `:properties`. The
+types are `DynamicForm`'s question types by the same names — `:text`,
+`:comment` (a textarea), `:dropdown`, `:radiogroup`, `:checkbox` (a group,
+list-valued), `:boolean` (a single checkbox) — plus `:number`, a text input
+that casts to a `Decimal`. The three choice types take `:options` as
+`[{label, value}]`.
+
+Two words, used strictly: a type's **properties** are these definitions; the
+**property values** are what an admin entered for them.
+
+- The flow and form edit pages render one field per property of the *pending*
+  type, right under the type dropdown; picking a different type swaps them.
+  Values save with the rest of the identity form and ride the same
+  unsaved-changes tracking; a required property blocks Save without a value.
+  Switching types drops the previous type's values. Show pages render each
+  value beside the type's name — a choice by its label, a list joined, a
+  boolean as Yes or No. The canvas's form subflow nodes still pick only the
+  type — a subflow's properties are set on its own page.
+- Values are stored on the template under the type's own key:
+  `properties["form_type_property_values"]` on a form and
+  `properties["form_flow_type_property_values"]` on a flow, a map keyed by
+  property key. **New: `FormFlow.Config.Forms.Type.property_values/1`** and
+  **`FormFlow.Config.Flows.Type.property_values/1`** read them back, and
+  `FormFlow.Context` carries the same maps as `:form_type_property_values`
+  and `:flow_type_property_values`, so a type's callbacks can read either.
+- The demo's `"demo_prefill"` form type declares two properties — the name it
+  prefills with, and a salutation dropdown — and reads them in
+  `initial_data/2`.
+
+## v0.10.0
+
 ### `FormFlow.Config` describes types as structs
 
 The config behaviour now answers *which types exist* rather than answering

@@ -253,7 +253,8 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
 
-      # initial_data/2: the name question renders prefilled on first start
+      # initial_data/2: the name question renders prefilled on first start,
+      # with the type's property value an admin entered
       assert html =~ "Demo User"
 
       # An answer the user has given wins over the prefill: submit one, then
@@ -398,9 +399,13 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # A published form with one text question, "name"; `form_type:` picks the
-  # demo's form type for it
+  # demo's form type for it, with "Demo User" as its name-to-prefill property
   defp published_form(name, opts \\ []) do
-    properties = if type = opts[:form_type], do: %{"form_type" => type}, else: %{}
+    properties =
+      case opts[:form_type] do
+        nil -> %{}
+        type -> %{"form_type" => type, "form_type_property_values" => %{"name" => "Demo User"}}
+      end
 
     {:ok, form} =
       Forms.create(%{

@@ -17,16 +17,30 @@ defmodule FormFlow.Config.Forms.Type do
   """
 
   alias FormFlow.Context
+  alias FormFlow.Data.Templates.Form
 
-  defstruct [:id, :module, :name, :description, :properties]
+  defstruct [:id, :module, :name, :description, properties: []]
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
           module: module(),
           name: String.t(),
           description: String.t() | nil,
-          properties: keyword() | map() | nil
+          properties: [FormFlow.Config.Property.t()]
         }
+
+  @doc """
+  What an admin entered for the form's type's `:properties`, keyed by
+  property key — stored on the form under
+  `properties["form_type_property_values"]`. Empty when the type declares
+  none or nothing was entered.
+  """
+  @spec property_values(Form.t() | nil) :: map()
+  def property_values(%Form{properties: properties}) do
+    Map.get(properties || %{}, "form_type_property_values", %{})
+  end
+
+  def property_values(nil), do: %{}
 
   @doc """
   The data the form renders with — keys are the definition's question names.

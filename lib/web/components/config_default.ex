@@ -16,15 +16,13 @@ defmodule FormFlow.Web.Components.Config.Default do
         id: "wizard_in_order",
         module: FormFlow.Web.Components.Flows.Types.WizardInOrder,
         name: "Wizard (in order)",
-        description: "Form wizard. Users must complete in order.",
-        properties: []
+        description: "Form wizard. Users must complete in order."
       },
       %FormFlow.Config.Flows.Type{
         id: "wizard_any_order",
         module: FormFlow.Web.Components.Flows.Types.WizardAnyOrder,
         name: "Wizard (any order)",
-        description: "Form wizard. Users can jump ahead and complete in any order.",
-        properties: []
+        description: "Form wizard. Users can jump ahead and complete in any order."
       }
     ]
   end

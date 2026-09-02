@@ -35,7 +35,7 @@ defmodule DemoWeb.FormFlowLive.Config do
         module: DemoWeb.FormFlowLive.Prefill,
         name: "Demo prefill",
         description: "Starts with the name filled in from the host application.",
-        properties: []
+        properties: DemoWeb.FormFlowLive.Prefill.properties()
       }
     ]
   end

@@ -136,9 +136,24 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     # The dropdown carries what the demo's Config enables — proof the
-    # router's config attr reaches the form pages
+    # router's config attr reaches the form pages. No type picked, so none
+    # of a type's property fields render yet
     assert html =~ "Form type"
     assert html =~ "Demo prefill"
+    refute html =~ "Name to prefill"
+
+    # Picking a type swaps in its properties' fields (FormFlow.Config.Property).
+    # The swap lands through send_update after the change event, so render
+    # the view again rather than reading the change's own response
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"name" => "Typed", "form_type" => "demo_prefill"}})
+
+    html = render(view)
+    assert html =~ "Name to prefill"
+    # A choice property renders as a select of its options
+    assert html =~ ~s(<select)
+    assert html =~ "Dr."
 
     view
     |> element("#forms-edit-form-form")
@@ -146,18 +161,29 @@ defmodule Demo.FormFlowFormsCrudTest do
       "dynamic_form" => %{
         "name" => "Typed",
         "form_type" => "demo_prefill",
+        "property_name" => "Ada",
+        "property_salutation" => "dr",
         "definition" => ~s({"elements": []})
       }
     })
 
     assert render(view) =~ "Saved."
-    assert Forms.get(form.id).properties == %{"form_type" => "demo_prefill"}
 
-    # Show mode renders the stored type as its name
+    # The type and its property values, under the type's own key
+    assert Forms.get(form.id).properties == %{
+             "form_type" => "demo_prefill",
+             "form_type_property_values" => %{"name" => "Ada", "salutation" => "dr"}
+           }
+
+    # Show mode renders the stored type as its name, with its property values
+    # — a choice by its label
     {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
     assert html =~ "Demo prefill"
+    assert html =~ "Name to prefill: Ada"
+    assert html =~ "Salutation: Dr."
 
-    # Picking "default" again removes the key rather than pinning a value
+    # Picking "default" again removes the key — and the property values with
+    # it — rather than pinning a value
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     view

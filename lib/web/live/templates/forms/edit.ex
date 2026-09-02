@@ -25,6 +25,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
@@ -62,21 +63,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   def update(%{event: "change", payload: payload}, socket) do
-    dirty? = values_from(payload.data) != socket.assigns.saved_values
+    pending_type = pending_type(payload, socket.assigns.pending_type)
+    properties = Shared.properties(socket.assigns.form_types, pending_type)
+    dirty? = values_from(payload.data, pending_type, properties) != socket.assigns.saved_values
 
     socket =
       socket
-      |> assign(dirty?: dirty?, notice: nil)
+      |> assign(dirty?: dirty?, notice: nil, pending_type: pending_type)
       |> assign(:latest_json, to_string(payload.data[:definition] || ""))
+      |> reset_form_data_on_switch(pending_type, payload)
 
     {:ok, maybe_refresh_preview(socket)}
   end
 
   def update(%{event: "save", payload: payload}, socket) do
+    type_id = presence(payload.data[:form_type])
+    properties = Shared.properties(socket.assigns.form_types, type_id)
+
     identity = %{
       name: payload.data[:name],
       description: payload.data[:description],
-      properties: properties(socket.assigns.form, payload.data[:form_type])
+      properties:
+        template_properties(
+          socket.assigns.form,
+          type_id,
+          Shared.payload_property_values(payload.data, properties)
+        )
     }
 
     with {:ok, form} <- Forms.update(socket.assigns.form, identity),
@@ -87,7 +99,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          form: form,
          version: version,
          versions: Forms.list_versions(form.id),
-         saved_values: values_from(payload.data),
+         saved_values: values_from(payload.data, type_id, properties),
          dirty?: false,
          error: nil,
          notice: "Saved."
@@ -142,7 +154,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       versions: versions,
       based_on: based_on_version(versions, version),
       counts: form && Forms.instance_counts(form.id),
-      form_type_options: form_type_options(assigns, form, version, node)
+      form_types: form_types(assigns, form, version, node),
+      pending_type: saved_type(form)
     )
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn ->
@@ -151,6 +164,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> then(fn socket ->
       socket
       |> assign(:saved_values, saved_values(form, socket.assigns.definition_json))
+      |> assign(:form_data, form_data(form, socket.assigns))
       |> assign(:dirty?, false)
       # What the preview currently shows, and the editor's latest content —
       # both start at the saved definition; change events move latest_json,
@@ -211,40 +225,111 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       name: to_string(form.name),
       description: to_string(form.description),
       form_type: to_string(form.properties["form_type"]),
+      property_values: FormFlow.Config.Forms.Type.property_values(form),
       definition: to_string(definition_json)
     }
   end
 
-  defp values_from(payload_data) do
+  defp values_from(payload_data, pending_type, properties) do
     %{
       name: to_string(payload_data[:name] || ""),
       description: to_string(payload_data[:description] || ""),
-      form_type: to_string(payload_data[:form_type] || ""),
+      form_type: to_string(pending_type),
+      property_values: Shared.payload_property_values(payload_data, properties),
       definition: to_string(payload_data[:definition] || "")
     }
   end
 
-  # The saved properties with the form's type applied — an unset type removes
-  # the key, so "no choice" stays "use the configured default" rather than
-  # pinning whatever the default happened to be at save time
-  defp properties(form, form_type) do
-    case form_type do
-      empty when empty in [nil, ""] -> Map.delete(form.properties, "form_type")
-      type -> Map.put(form.properties, "form_type", type)
+  # The raw param, not the applied changeset data: picking the prompt again
+  # ("") must clear the pending type, and Ecto's cast treats "" as a missing
+  # param rather than a change to nil — payload.data would keep the old value
+  defp pending_type(%{changeset: %{params: %{"form_type" => value}}}, _current) do
+    presence(value)
+  end
+
+  defp pending_type(_payload, current), do: current
+
+  defp presence(empty) when empty in [nil, ""], do: nil
+  defp presence(value), do: value
+
+  # The identity form's data: the saved values, with the saved type's property
+  # values under their field names. Switching the type dropdown re-renders
+  # the property fields, and DynamicForm rebuilds a form whose fields changed
+  # from its data — so at that moment the data becomes the pending values
+  # (reset_form_data_on_switch/3), and what the admin was typing survives.
+  # Otherwise it holds still, which is what keeps in-progress input alive.
+  defp saved_type(nil), do: nil
+  defp saved_type(form), do: form.properties["form_type"]
+
+  defp form_data(nil, _assigns), do: nil
+
+  defp form_data(form, assigns) do
+    type_id = form.properties["form_type"]
+    values = FormFlow.Config.Forms.Type.property_values(form)
+
+    %{
+      name: form.name,
+      description: form.description,
+      form_type: type_id,
+      definition: assigns.definition_json
+    }
+    |> Map.merge(Shared.field_data(Shared.properties(assigns.form_types, type_id), values))
+  end
+
+  defp reset_form_data_on_switch(socket, pending_type, payload) do
+    if pending_type == socket.assigns.form_data[:form_type] do
+      socket
+    else
+      %{form: form, form_types: types} = socket.assigns
+
+      values =
+        if pending_type == form.properties["form_type"],
+          do: FormFlow.Config.Forms.Type.property_values(form),
+          else: %{}
+
+      form_data =
+        payload.data
+        |> Map.take([:name, :description, :definition])
+        |> Map.put(:form_type, pending_type)
+        |> Map.merge(Shared.field_data(Shared.properties(types, pending_type), values))
+
+      assign(socket, :form_data, form_data)
     end
+  end
+
+  # The form's stored `properties` map with the type applied — an unset type
+  # removes the key and the property values with it, so "no choice" stays
+  # "use the configured default" rather than pinning whatever the default
+  # happened to be at save time. A type's property values are replaced whole,
+  # so switching types leaves nothing of the old one behind — and a type with
+  # nothing entered stores no values key at all.
+  defp template_properties(form, nil, _values) do
+    form.properties
+    |> Map.delete("form_type")
+    |> Map.delete("form_type_property_values")
+  end
+
+  defp template_properties(form, type_id, values) when values == %{} do
+    form.properties
+    |> Map.put("form_type", type_id)
+    |> Map.delete("form_type_property_values")
+  end
+
+  defp template_properties(form, type_id, values) do
+    form.properties
+    |> Map.put("form_type", type_id)
+    |> Map.put("form_type_property_values", values)
   end
 
   # What the config offers for this form — see FormFlow.Config. Empty means
   # no dropdown; the library enables no form types of its own.
-  defp form_type_options(_assigns, nil, _version, _node), do: []
+  defp form_types(_assigns, nil, _version, _node), do: []
 
-  defp form_type_options(assigns, form, version, node) do
+  defp form_types(assigns, form, version, node) do
     config = FormFlow.Config.config_module(assigns.config)
     context = %Context{form: form, form_version: version, subflow_node: node}
 
-    context
-    |> config.enabled_form_types(assigns.config_data)
-    |> Enum.map(&{&1.name, &1.id})
+    config.enabled_form_types(context, assigns.config_data)
   end
 
   @impl true
@@ -497,14 +582,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             it per keystroke — so it only applies while auto-update is on. --%>
           <DynamicForm.form
             id={"#{@id}-form"}
-            data={
-              %{
-                name: @form.name,
-                description: @form.description,
-                form_type: @form.properties["form_type"],
-                definition: @definition_json
-              }
-            }
+            data={@form_data}
             hide_submit
             on_change={&changed(&1, @id)}
             on_submit={&validate_json/1}
@@ -514,11 +592,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field type="text" name="name" label="Name" required />
         <:field type="comment" name="description" label="Description" />
         <:field
-          :if={@form_type_options != []}
+          :if={@form_types != []}
           type="dropdown"
           name="form_type"
           label="Form type"
-          options={@form_type_options}
+          options={Enum.map(@form_types, &{&1.name, &1.id})}
+        />
+        <%!-- The pending type's properties (FormFlow.Config.Property), one
+              field each; picking another type swaps them --%>
+        <:field
+          :for={property <- Shared.properties(@form_types, @pending_type)}
+          type={Shared.field_type(property)}
+          input_type={Shared.input_type(property)}
+          name={Shared.field_name(property)}
+          label={property.name}
+          description={property.description}
+          options={Shared.field_options(property)}
+          required={property.required}
+          default={property.default_value}
         />
         <:field type="html" name="draft_info">
           <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">

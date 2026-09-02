@@ -90,6 +90,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Shared
 
   @impl true
   def mount(socket) do
@@ -102,10 +103,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # they count as unsaved changes for the navigation guard.
   @impl true
   def update(%{event: "change", payload: payload}, socket) do
+    pending_type = pending_type(payload, socket.assigns.pending_type)
+    properties = Shared.properties(socket.assigns.flow_types, pending_type)
+
     {:ok,
      socket
      |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
-     |> assign(:pending_type, pending_type(payload, socket.assigns.pending_type))
+     |> assign(:pending_type, pending_type)
+     |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
+     |> reset_form_data_on_switch(pending_type)
      |> assign(:notice, nil)}
   end
 
@@ -124,6 +130,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
+    types = flow_types(socket.assigns, context)
 
     {:ok,
      assign(socket,
@@ -133,20 +140,62 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        root: root,
        pending_name: flow && flow.name,
        pending_type: flow && flow.properties["form_flow_type"],
-       flow_type_options: flow && flow_type_options(socket.assigns, context),
+       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
+       form_data: form_data(flow, types),
+       flow_types: types,
        embedded_flow_type_options:
-         flow && flow_type_options(socket.assigns, embedded_flow_context(flow, root))
+         flow &&
+           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root)))
      )}
+  end
+
+  # The identity form's data: the saved values, with the saved type's property
+  # values under their field names. Switching the type dropdown re-renders
+  # the property fields, and DynamicForm rebuilds a form whose fields changed
+  # from its data — so at that moment the data becomes the pending values
+  # (reset_form_data_on_switch/2), and the name the admin was typing survives.
+  # Otherwise it holds still, which is what keeps in-progress input alive.
+  defp form_data(nil, _types), do: nil
+
+  defp form_data(flow, types) do
+    type_id = flow.properties["form_flow_type"]
+    values = FormFlow.Config.Flows.Type.property_values(flow)
+
+    form_data(flow.name, type_id, Shared.properties(types, type_id), values)
+  end
+
+  defp form_data(name, type_id, properties, values) do
+    Map.merge(%{name: name, form_flow_type: type_id}, Shared.field_data(properties, values))
   end
 
   # What the config offers for a flow in this context — see FormFlow.Config.
   # Empty means the flow has no type of its own, and no dropdown.
-  defp flow_type_options(assigns, context) do
+  defp flow_types(_assigns, %Context{subflow: nil}), do: []
+
+  defp flow_types(assigns, context) do
     config = FormFlow.Config.config_module(assigns.config)
 
-    context
-    |> config.enabled_flow_types(assigns.config_data)
-    |> type_select_options()
+    config.enabled_flow_types(context, assigns.config_data)
+  end
+
+  defp reset_form_data_on_switch(socket, pending_type) do
+    if pending_type == socket.assigns.form_data[:form_flow_type] do
+      socket
+    else
+      %{flow: flow, flow_types: types, pending_name: name} = socket.assigns
+      saved_type = flow.properties["form_flow_type"]
+
+      values =
+        if pending_type == saved_type,
+          do: FormFlow.Config.Flows.Type.property_values(flow),
+          else: %{}
+
+      assign(
+        socket,
+        :form_data,
+        form_data(name, pending_type, Shared.properties(types, pending_type), values)
+      )
+    end
   end
 
   # The canvas asks once for every form subflow node it draws, saved or not,
@@ -267,7 +316,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp unsaved_changes?(assigns) do
     assigns.current != assigns.data or
       assigns.pending_name != assigns.flow.name or
-      assigns.pending_type != assigns.flow.properties["form_flow_type"]
+      assigns.pending_type != assigns.flow.properties["form_flow_type"] or
+      assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow)
   end
 
   defp navigate_to_node(socket, node_id) do
@@ -341,7 +391,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       socket.assigns.current
       |> ReactFlow.to_flow_attrs()
       |> Map.put(:name, socket.assigns.pending_name)
-      |> Map.put(:properties, pending_properties(socket.assigns))
+      |> Map.put(:properties, pending_template_properties(socket.assigns))
 
     case Flows.update(socket.assigns.flow, attrs) do
       {:ok, flow} ->
@@ -356,6 +406,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             current: data,
             pending_name: flow.name,
             pending_type: flow.properties["form_flow_type"],
+            pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
+            form_data: form_data(flow, socket.assigns.flow_types),
             error: nil
           )
           |> push_event("form_flow:set_flow", %{flow: data})
@@ -367,13 +419,28 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
-  # The saved properties with the form's pending values applied — an unset
-  # type removes the key, so "no choice" stays "use the configured default"
-  # rather than pinning whatever the default happened to be at save time
-  defp pending_properties(assigns) do
-    case assigns.pending_type do
-      nil -> Map.delete(assigns.flow.properties, "form_flow_type")
-      type -> Map.put(assigns.flow.properties, "form_flow_type", type)
+  # The flow's stored `properties` map with the form's pending values applied
+  # — an unset type removes the key and the property values with it, so "no
+  # choice" stays "use the configured default" rather than pinning whatever
+  # the default happened to be at save time. A type's property values are
+  # replaced whole, so switching types leaves nothing of the old one behind —
+  # and a type with nothing entered stores no values key at all.
+  defp pending_template_properties(assigns) do
+    case {assigns.pending_type, assigns.pending_property_values} do
+      {nil, _values} ->
+        assigns.flow.properties
+        |> Map.delete("form_flow_type")
+        |> Map.delete("form_flow_type_property_values")
+
+      {type, values} when values == %{} ->
+        assigns.flow.properties
+        |> Map.put("form_flow_type", type)
+        |> Map.delete("form_flow_type_property_values")
+
+      {type, values} ->
+        assigns.flow.properties
+        |> Map.put("form_flow_type", type)
+        |> Map.put("form_flow_type_property_values", values)
     end
   end
 
@@ -530,17 +597,30 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       <div class="mb-3 max-w-md">
         <DynamicForm.form
           id={"#{@id}-flow-form"}
-          data={%{name: @flow.name, form_flow_type: @flow.properties["form_flow_type"]}}
+          data={@form_data}
           hide_submit
           on_change={&changed(&1, @id)}
         >
           <:field type="text" name="name" label="Name" />
           <:field
-            :if={@flow_type_options != []}
+            :if={@flow_types != []}
             type="dropdown"
             name="form_flow_type"
             label="Form flow type"
-            options={@flow_type_options}
+            options={type_select_options(@flow_types)}
+          />
+          <%!-- The pending type's properties (FormFlow.Config.Property), one
+                field each; picking another type swaps them --%>
+          <:field
+            :for={property <- Shared.properties(@flow_types, @pending_type)}
+            type={Shared.field_type(property)}
+            input_type={Shared.input_type(property)}
+            name={Shared.field_name(property)}
+            label={property.name}
+            description={property.description}
+            options={Shared.field_options(property)}
+            required={property.required}
+            default={property.default_value}
           />
         </DynamicForm.form>
       </div>

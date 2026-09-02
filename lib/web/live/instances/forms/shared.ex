@@ -53,16 +53,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   # answered for by a "subflows" root.
   @default_type %FormFlow.Config.Flows.Type{
     module: FormFlow.Config.Flows.Type.Default,
-    name: "Default",
-    properties: []
+    name: "Default"
   }
 
   # What a form is governed by when its context enables no form types — the
   # library ships none, so this is every form until a host enables some.
   @default_form_type %FormFlow.Config.Forms.Type{
     module: FormFlow.Config.Forms.Type.Default,
-    name: "Default",
-    properties: []
+    name: "Default"
   }
 
   def assigns(socket, opts \\ []) do
@@ -78,10 +76,13 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
     version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
 
+    form = version && Templates.Forms.get(version.template_form_id)
+
     context = %Context{
       context(socket.assigns, tree, forms)
-      | form: version && Templates.Forms.get(version.template_form_id),
+      | form: form,
         form_version: version,
+        form_type_property_values: FormFlow.Config.Forms.Type.property_values(form),
         form_instance: form_instance
     }
 
@@ -116,11 +117,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   def context(%{flow_instance: flow_instance, path: path, user_id: user_id}, tree, forms) do
     form = FlowProgress.find_form(forms, path)
 
+    subflow = (form && form.flow) || (tree && tree.flow)
+
     %Context{
       user_id: user_id,
       flow: tree && tree.flow,
-      subflow: (form && form.flow) || (tree && tree.flow),
+      subflow: subflow,
       subflow_node: form && List.last(form.ancestors),
+      flow_type_property_values: FormFlow.Config.Flows.Type.property_values(subflow),
       flow_instance: flow_instance,
       form_progress: form,
       flow_progress: FlowProgress.forms_in_flow(forms, path)

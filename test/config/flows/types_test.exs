@@ -129,4 +129,19 @@ defmodule FormFlow.Config.Flows.TypesTest do
       assert Types.WizardAnyOrder.handle_complete(context(forms, "gone"), %{}).label == "two"
     end
   end
+
+  describe "FormFlow.Config.Flows.Type.property_values/1" do
+    test "reads what an admin entered for the flow's type, under the type's own key" do
+      flow = %FormFlow.Data.Templates.Flow{
+        properties: %{
+          "form_flow_type" => "typed",
+          "form_flow_type_property_values" => %{"limit" => "3"}
+        }
+      }
+
+      assert FormFlow.Config.Flows.Type.property_values(flow) == %{"limit" => "3"}
+      assert FormFlow.Config.Flows.Type.property_values(%FormFlow.Data.Templates.Flow{}) == %{}
+      assert FormFlow.Config.Flows.Type.property_values(nil) == %{}
+    end
+  end
 end
