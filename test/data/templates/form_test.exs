@@ -27,6 +27,14 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.owner_flow_id == owner_id
   end
 
+  test "casts properties — the form-level domain data, like form_type" do
+    changeset =
+      Form.changeset(%Form{}, %{name: "W-2 Details", properties: %{"form_type" => "prefill"}})
+
+    assert changeset.valid?
+    assert changeset.changes.properties == %{"form_type" => "prefill"}
+  end
+
   test "copied_from_form_id is not castable — only copy/2 stamps provenance" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", copied_from_form_id: Ecto.UUID.generate()})

@@ -23,6 +23,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Preview
@@ -72,7 +73,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   def update(%{event: "save", payload: payload}, socket) do
-    identity = %{name: payload.data[:name], description: payload.data[:description]}
+    identity = %{
+      name: payload.data[:name],
+      description: payload.data[:description],
+      properties: properties(socket.assigns.form, payload.data[:form_type])
+    }
 
     with {:ok, form} <- Forms.update(socket.assigns.form, identity),
          {:ok, version} <-
@@ -115,6 +120,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> assign_new(:version_id, fn -> nil end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
 
     {:ok, load(socket)}
   end
@@ -134,7 +141,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       version: version,
       versions: versions,
       based_on: based_on_version(versions, version),
-      counts: form && Forms.instance_counts(form.id)
+      counts: form && Forms.instance_counts(form.id),
+      form_type_options: form_type_options(assigns, form, version, node)
     )
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn ->
@@ -202,6 +210,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: to_string(form.name),
       description: to_string(form.description),
+      form_type: to_string(form.properties["form_type"]),
       definition: to_string(definition_json)
     }
   end
@@ -210,8 +219,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: to_string(payload_data[:name] || ""),
       description: to_string(payload_data[:description] || ""),
+      form_type: to_string(payload_data[:form_type] || ""),
       definition: to_string(payload_data[:definition] || "")
     }
+  end
+
+  # The saved properties with the form's type applied — an unset type removes
+  # the key, so "no choice" stays "use the configured default" rather than
+  # pinning whatever the default happened to be at save time
+  defp properties(form, form_type) do
+    case form_type do
+      empty when empty in [nil, ""] -> Map.delete(form.properties, "form_type")
+      type -> Map.put(form.properties, "form_type", type)
+    end
+  end
+
+  # What the config offers for this form — see FormFlow.Config. Empty means
+  # no dropdown; the library enables no form types of its own.
+  defp form_type_options(_assigns, nil, _version, _node), do: []
+
+  defp form_type_options(assigns, form, version, node) do
+    config = FormFlow.Config.config_module(assigns.config)
+    context = %Context{form: form, form_version: version, subflow_node: node}
+
+    context
+    |> config.enabled_form_types(assigns.config_data)
+    |> Enum.map(&{&1.name, &1.id})
   end
 
   @impl true
@@ -464,7 +497,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             it per keystroke — so it only applies while auto-update is on. --%>
           <DynamicForm.form
             id={"#{@id}-form"}
-            data={%{name: @form.name, description: @form.description, definition: @definition_json}}
+            data={
+              %{
+                name: @form.name,
+                description: @form.description,
+                form_type: @form.properties["form_type"],
+                definition: @definition_json
+              }
+            }
             hide_submit
             on_change={&changed(&1, @id)}
             on_submit={&validate_json/1}
@@ -473,6 +513,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           >
         <:field type="text" name="name" label="Name" required />
         <:field type="comment" name="description" label="Description" />
+        <:field
+          :if={@form_type_options != []}
+          type="dropdown"
+          name="form_type"
+          label="Form type"
+          options={@form_type_options}
+        />
         <:field type="html" name="draft_info">
           <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
             Editing <span class="font-medium">draft</span>,

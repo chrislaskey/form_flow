@@ -17,7 +17,7 @@ defmodule FormFlow.Web.Components.Flows.Types.WizardAnyOrder do
   def editable?(%Context{form_progress: form}, _config_data), do: unfinished?(form)
 
   @impl true
-  def on_complete(%Context{flow_progress: forms, form_progress: current}, _config_data) do
+  def handle_complete(%Context{flow_progress: forms, form_progress: current}, _config_data) do
     index = current && Enum.find_index(forms, &(&1.path == current.path))
     {before_current, after_current} = Enum.split(forms, (index || -1) + 1)
 

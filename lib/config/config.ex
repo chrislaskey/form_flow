@@ -9,10 +9,12 @@ defmodule FormFlow.Config do
   `config_data`, passed through unmodified from wherever `use`s this (see
   `FormFlow.Web.Router`'s `:config_data` attr).
 
-  The defaults live in `FormFlow.Web.Components.Config.Default`. A custom
-  module `use`s this behaviour and overrides only what it changes. The pages
-  resolve the module to ask with `config_module/1` — the host's, or the
-  defaults when the host set none — and then call its callbacks directly.
+  The defaults are `FormFlow.Config.Default`. A custom module `use`s this
+  behaviour and overrides only what it changes; an override that wants to
+  extend a default rather than replace it calls `FormFlow.Config.Default`'s
+  and adds to the result. The pages resolve the module to ask with
+  `config_module/1` — the host's, or the defaults when the host set none —
+  and then call its callbacks directly.
   """
 
   alias FormFlow.Context
@@ -28,11 +30,11 @@ defmodule FormFlow.Config do
       @behaviour FormFlow.Config
 
       def enabled_flow_types(context, config_data) do
-        FormFlow.Web.Components.Config.Default.enabled_flow_types(context, config_data)
+        FormFlow.Config.Default.enabled_flow_types(context, config_data)
       end
 
       def enabled_form_types(context, config_data) do
-        FormFlow.Web.Components.Config.Default.enabled_form_types(context, config_data)
+        FormFlow.Config.Default.enabled_form_types(context, config_data)
       end
 
       defoverridable enabled_flow_types: 2, enabled_form_types: 2
@@ -41,6 +43,6 @@ defmodule FormFlow.Config do
 
   @doc "Return the FormFlow.Config module, either the one passed in or the default"
   @spec config_module(module() | nil) :: module()
-  def config_module(nil), do: FormFlow.Web.Components.Config.Default
+  def config_module(nil), do: FormFlow.Config.Default
   def config_module(config), do: config
 end

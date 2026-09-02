@@ -22,8 +22,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:form_instance` - the live `FormFlow.Data.Instances.Form`, or nil
     * `:type` - the `FormFlow.Config.Flows.Type` governing this form's flow,
       which Edit asks again after a submit to find where to go next
-    * `:context` - the `FormFlow.Context` the type's callbacks take, for this
-      form
+    * `:form_type` - the `FormFlow.Config.Forms.Type` governing the form
+      itself
+    * `:initial_data` - what the form renders with, from the form type's
+      `initial_data/2`; nil until the form has an instance
+    * `:context` - the `FormFlow.Context` both types' callbacks take, for
+      this form
     * `:editable?` - whether the type allows editing here
     * `:start_error` - why `start: true` could not start the form, or nil
     * `:clickable` - the sibling forms the type lets the user jump to, for
@@ -43,12 +47,20 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
 
-  # What a form is governed by when its context enables no types at all — a
+  # What a flow is governed by when its context enables no types at all — a
   # "forms" flow always gets the wizards from the default config, so this is
   # reached only by a host config that returns [] or a stranded position
   # answered for by a "subflows" root.
   @default_type %FormFlow.Config.Flows.Type{
-    module: FormFlow.Web.Components.Flows.Types.Default,
+    module: FormFlow.Config.Flows.Type.Default,
+    name: "Default",
+    properties: []
+  }
+
+  # What a form is governed by when its context enables no form types — the
+  # library ships none, so this is every form until a host enables some.
+  @default_form_type %FormFlow.Config.Forms.Type{
+    module: FormFlow.Config.Forms.Type.Default,
     name: "Default",
     properties: []
   }
@@ -64,7 +76,16 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     {form_instance, start_error, forms} =
       resolve_instance(socket, tree, forms, editable?, Keyword.get(opts, :start, false))
 
-    context = context(socket.assigns, tree, forms)
+    version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
+
+    context = %Context{
+      context(socket.assigns, tree, forms)
+      | form: version && Templates.Forms.get(version.template_form_id),
+        form_version: version,
+        form_instance: form_instance
+    }
+
+    form_type = form_type(context, socket.assigns)
 
     socket
     |> assign(
@@ -72,6 +93,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       forms: context.flow_progress,
       form_instance: form_instance,
       type: type,
+      form_type: form_type,
+      initial_data:
+        form_instance && form_type.module.initial_data(context, socket.assigns.config_data),
       context: context,
       editable?: editable?,
       start_error: start_error,
@@ -80,7 +104,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       form_label:
         (context.form_progress && FlowProgress.qualified_label(context.form_progress)) || "Form"
     )
-    |> parse(form_instance)
+    |> parse(version)
   end
 
   @doc """
@@ -118,6 +142,20 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     id = flow && flow.properties["form_flow_type"]
 
     Enum.find(types, &(&1.id == id)) || List.first(types) || @default_type
+  end
+
+  @doc """
+  The `FormFlow.Config.Forms.Type` governing the form at the context's
+  `:form`: its stored `properties["form_type"]` looked up among what the
+  host's config enables for that context, with the same fallbacks as
+  `flow_type/2` — the first enabled type, then the library's defaults.
+  """
+  def form_type(%Context{form: form} = context, assigns) do
+    config = FormFlow.Config.config_module(assigns.config)
+    types = config.enabled_form_types(context, assigns.config_data)
+    id = form && form.properties["form_type"]
+
+    Enum.find(types, &(&1.id == id)) || List.first(types) || @default_form_type
   end
 
   # An instance already at the position is simply used — including a stranded
@@ -163,9 +201,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   # error, never a crash loop (the same posture as the preview).
   defp parse(socket, nil), do: assign(socket, parsed: nil, parse_error: nil)
 
-  defp parse(socket, form_instance) do
-    version = Templates.Forms.get_version(form_instance.template_form_version_id)
-
+  defp parse(socket, version) do
     assign(socket,
       parsed: DynamicForm.Parser.FromData.parse!(version.definition),
       parse_error: nil

@@ -31,8 +31,9 @@ defmodule FormFlow.Web.Components.Config.Default do
 
   def enabled_flow_types(_context, _config_data), do: []
 
+  # No form types ship with the library: a form with none enabled renders its
+  # stored answers (FormFlow.Web.Components.Forms.Types.Default), and the form
+  # edit page shows no dropdown. A host enables its own to change either.
   @impl true
-  def enabled_form_types(_context, _config_data) do
-    []
-  end
+  def enabled_form_types(_context, _config_data), do: []
 end

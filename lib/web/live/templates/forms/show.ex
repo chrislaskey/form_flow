@@ -25,6 +25,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
@@ -63,6 +64,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       |> assign_new(:version_id, fn -> nil end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
 
     {:ok, load(socket)}
   end
@@ -78,15 +81,33 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     form = resolve_form(assigns.form_id, node)
     versions = if form, do: Forms.list_versions(form.id), else: []
 
+    version = resolve_version(form, versions, assigns.version_id)
+
     socket
     |> assign(
       form: form,
       node: node,
       versions: versions,
-      version: resolve_version(form, versions, assigns.version_id),
-      counts: form && Forms.instance_counts(form.id)
+      version: version,
+      counts: form && Forms.instance_counts(form.id),
+      form_type_label: form && form_type_label(assigns, form, version, node)
     )
     |> assign_breadcrumb(node)
+  end
+
+  # The stored form_type rendered as its human name — nil when unset (the
+  # default applies). Read-only pages still ask the config, to render a
+  # stored value as its label.
+  defp form_type_label(assigns, form, version, node) do
+    with type when is_binary(type) <- form.properties["form_type"] do
+      config = FormFlow.Config.config_module(assigns.config)
+      context = %Context{form: form, form_version: version, subflow_node: node}
+
+      case Enum.find(config.enabled_form_types(context, assigns.config_data), &(&1.id == type)) do
+        %{name: name} -> name
+        nil -> type
+      end
+    end
   end
 
   defp resolve_form(form_id, node) do
@@ -233,6 +254,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           {@form.name}
           <span :if={@version} class="ml-1 text-xs font-normal text-zinc-500">
             {version_badge(@version)}
+          </span>
+          <span :if={@form_type_label} class="text-xs font-normal text-zinc-500">
+            · {@form_type_label}
           </span>
         </div>
         <div :if={@version} class="flex items-center gap-2">

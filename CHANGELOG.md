@@ -34,11 +34,11 @@ type and implementing it is one declaration, not two callbacks on two pages.
   (`FormFlow.Web.Components.Flows.Types.Default`) are the in-order wizard.
   Its three callbacks each take a `FormFlow.Context` and `config_data`:
   `editable?/2` (may the user edit the form at `:form_progress` — start it,
-  or keep working on it), `on_complete/2` (the next form after finishing it,
+  or keep working on it), `handle_complete/2` (the next form after finishing it,
   or `nil` to hand back to the flow instance), and `progress_component/1`
   (the progress drawn above the form — `nil` draws nothing, which is what the
   old `show_progress?/1` decided). `openable?/2` is `editable?/2` and
-  `next_form/2` is `on_complete/2`.
+  `next_form/2` is `handle_complete/2`.
 - `FormFlow.Context` gained the user-facing side: `:flow_instance`, the
   `:form_progress` in question, and `:flow_progress` — its flow's forms in
   order. Template-side callbacks see them as `nil`.
@@ -58,7 +58,37 @@ type and implementing it is one declaration, not two callbacks on two pages.
 - **New: `FormFlow.Data.Instances.FlowProgress.actionable?/1`** — whether
   the flow allows work on a form (predecessors done, or already started),
   the primitive the in-order defaults are built on.
+- **New: `FormFlow.Config.Default`, `FormFlow.Config.Flows.Type.Default`,
+  and `FormFlow.Config.Forms.Type.Default`** — the public face of each
+  behaviour's defaults, for a host's override to call when it extends a
+  default rather than replaces it. Each is a straight pass-through to the
+  implementation under `FormFlow.Web.Components`.
 - **Breaking: `FormFlow.Config.Context` is `FormFlow.Context`.**
+- **New: form types.** `FormFlow.Config.Forms.Type` is the form-side
+  counterpart of the flow type: `enabled_form_types/2` returns its structs,
+  a form stores the chosen one, and the type's module decides how the form
+  behaves for a user. Its first callback is `initial_data/2` — the data the
+  edit page renders the form with, keys being the definition's question
+  names. The default (`FormFlow.Web.Components.Forms.Types.Default`) returns
+  the user's stored answers; a host type that prefills from its own
+  database merges those over its values, the same way a custom config module
+  reaches `FormFlow.Config`'s defaults. It runs when the edit page mounts,
+  so it covers the first start and every later visit alike. The library
+  enables no form types itself: with none enabled every form gets the
+  default and the form edit page shows no dropdown, so the feature is
+  entirely opt-in.
+- **Breaking: `form_flow_template_forms` gained a `properties` column** (a
+  map, like flows'), rewritten into the initial schema pre-release style —
+  drop and recreate any existing database. The chosen type is stored under
+  `properties["form_type"]`; absent means the first enabled type, or the
+  default. The form edit page's identity form carries a "Form type" dropdown
+  populated from `enabled_form_types/2` when it returns anything, Show
+  renders the stored value as its name, and `FormFlow.Web.Router` now
+  forwards `config` and `config_data` to the form pages.
+- `FormFlow.Context` gained `:form_instance` — the user's answers so far at
+  the form in question, or `nil` until they start it.
+- **Breaking: the flow type's `on_complete/2` is `handle_complete/2`**,
+  following the `handle_*` convention for callbacks the library invokes.
 - The demo app's `DemoWeb.FormFlowLive.Config` — one module for both the
   admin and users pages, since a type is chosen on one side and acted on in
   the other — adds its `"demo_checklist"` type as a struct pointing at

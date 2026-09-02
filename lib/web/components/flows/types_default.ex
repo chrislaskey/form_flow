@@ -17,7 +17,7 @@ defmodule FormFlow.Web.Components.Flows.Types.Default do
   def editable?(%Context{form_progress: form}, _config_data), do: FlowProgress.actionable?(form)
 
   @impl true
-  def on_complete(%Context{flow_progress: forms}, _config_data) do
+  def handle_complete(%Context{flow_progress: forms}, _config_data) do
     Enum.find(forms, &FlowProgress.actionable?/1)
   end
 

@@ -119,6 +119,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:id, :uuid, primary_key: true)
       add(:name, :string, null: false)
       add(:description, :text)
+      add(:properties, :map, null: false, default: %{})
 
       add(
         :owner_flow_id,

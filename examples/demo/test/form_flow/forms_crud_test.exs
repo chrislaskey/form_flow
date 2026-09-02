@@ -129,6 +129,50 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get_version(draft.id).definition == %{"fields" => []}
   end
 
+  test "picking a form_type persists it into the form's properties", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Typed"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    # The dropdown carries what the demo's Config enables — proof the
+    # router's config attr reaches the form pages
+    assert html =~ "Form type"
+    assert html =~ "Demo prefill"
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Typed",
+        "form_type" => "demo_prefill",
+        "definition" => ~s({"elements": []})
+      }
+    })
+
+    assert render(view) =~ "Saved."
+    assert Forms.get(form.id).properties == %{"form_type" => "demo_prefill"}
+
+    # Show mode renders the stored type as its name
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
+    assert html =~ "Demo prefill"
+
+    # Picking "default" again removes the key rather than pinning a value
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Typed",
+        "form_type" => "",
+        "definition" => ~s({"elements": []})
+      }
+    })
+
+    assert Forms.get(form.id).properties == %{}
+  end
+
   test "the edit page identifies its draft inline, linking back for the rest",
        %{conn: conn} do
     {form, v1} = published_form()

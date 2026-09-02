@@ -32,6 +32,8 @@ defmodule FormFlow.Context do
   about; template-side callbacks see them as `nil`:
 
     * `:flow_instance` - the `FormFlow.Data.Instances.Flow` being worked
+    * `:form_instance` - the `FormFlow.Data.Instances.Form` at the form in
+      question, or `nil` until the user starts it
     * `:form_progress` - the `FormFlow.Data.Instances.FormProgress` of the
       form in question: its position, derived status, and live instance
     * `:flow_progress` - the progress of the "forms" flow that form belongs
@@ -52,6 +54,7 @@ defmodule FormFlow.Context do
     :form,
     :form_version,
     :flow_instance,
+    :form_instance,
     :form_progress,
     :flow_progress
   ]
@@ -64,6 +67,7 @@ defmodule FormFlow.Context do
           form: FormFlow.Data.Templates.Form.t() | nil,
           form_version: FormFlow.Data.Templates.Form.Version.t() | nil,
           flow_instance: FormFlow.Data.Instances.Flow.t() | nil,
+          form_instance: FormFlow.Data.Instances.Form.t() | nil,
           form_progress: FormFlow.Data.Instances.FormProgress.t() | nil,
           flow_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil
         }

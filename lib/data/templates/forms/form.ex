@@ -38,6 +38,12 @@ defmodule FormFlow.Data.Templates.Form do
     field(:name, :string)
     field(:description, :string)
 
+    # Open domain data in the Neo4j property-graph style, like a flow's.
+    # Carries "form_type" — the id of the `FormFlow.Config.Forms.Type`
+    # deciding how the form behaves for a user; absent means the default
+    # applies.
+    field(:properties, :map, default: %{})
+
     belongs_to(:owner_flow, Flow, foreign_key: :owner_flow_id)
     belongs_to(:copied_from, __MODULE__, foreign_key: :copied_from_form_id)
 
@@ -47,14 +53,14 @@ defmodule FormFlow.Data.Templates.Form do
   end
 
   @doc """
-  Builds a changeset for a form lineage — identity fields only.
+  Builds a changeset for a form lineage — identity fields and properties only.
 
   The definition lives on versions, never here. `copied_from_form_id` is not
   castable; provenance is stamped only by the copy operation.
   """
   def changeset(form, attrs \\ %{}) do
     form
-    |> cast(attrs, [:name, :description, :owner_flow_id])
+    |> cast(attrs, [:name, :description, :properties, :owner_flow_id])
     |> validate_required([:name])
     |> foreign_key_constraint(:owner_flow_id)
     |> unique_constraint(:name, name: :form_flow_template_forms_name_index)

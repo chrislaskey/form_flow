@@ -83,10 +83,10 @@ defmodule FormFlow.Data.Templates.Forms do
     end)
   end
 
-  @doc "Updates a lineage's identity fields (name, description)."
+  @doc "Updates a lineage's identity fields (name, description) and properties."
   def update(%Form{} = form, attrs) do
     form
-    |> Ecto.Changeset.cast(attrs, [:name, :description])
+    |> Ecto.Changeset.cast(attrs, [:name, :description, :properties])
     |> Ecto.Changeset.validate_required([:name])
     |> Repo.update()
   end

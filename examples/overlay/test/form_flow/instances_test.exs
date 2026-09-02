@@ -247,6 +247,28 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "the demo's own form type" do
+    test "starts the form with the host's data filled in, under the user's answers", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, form_type: "demo_prefill")
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
+
+      # initial_data/2: the name question renders prefilled on first start
+      assert html =~ "Demo User"
+
+      # An answer the user has given wins over the prefill: submit one, then
+      # reopen the form and it renders the answer, not the prefill
+      {:ok, _done} =
+        Instances.Forms.update_status(instance, [only.id], :completed, data: %{"name" => "Grace"})
+
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [only.id], :in_progress)
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
+      assert html =~ "Grace"
+      refute html =~ "Demo User"
+    end
+  end
+
   # ── URLs ────────────────────────────────────────────────────────────────
 
   defp flow_path(instance), do: "/users/flows/#{instance.id}"
@@ -277,11 +299,11 @@ defmodule Demo.FormFlowInstancesTest do
     %{flow: flow, instance: start_flow(flow), forms: [name, address]}
   end
 
-  defp flow_of_one(type \\ nil) do
+  defp flow_of_one(type \\ nil, opts \\ []) do
     {:ok, flow} = Flows.create(%{name: "Single", properties: properties(type)})
 
     first_node = build_node(flow, ["Start"], "Start")
-    only = build_form_node(flow, "Only")
+    only = build_form_node(flow, "Only", opts)
 
     edge(flow, first_node, only)
 
@@ -367,18 +389,29 @@ defmodule Demo.FormFlowInstancesTest do
       )
   end
 
-  defp build_form_node(flow, label) do
-    build_node(flow, ["Form"], label, %{form_id: published_form(label).id})
+  defp build_form_node(flow, label, opts \\ []) do
+    build_node(flow, ["Form"], label, %{form_id: published_form(label, opts).id})
   end
 
   defp subflow_node(flow, subflow, label) do
     build_node(flow, ["Subflow"], label, %{subflow_id: subflow.id})
   end
 
-  defp published_form(name) do
-    {:ok, form} = Forms.create(%{name: "#{name} #{System.unique_integer([:positive])}"})
+  # A published form with one text question, "name"; `form_type:` picks the
+  # demo's form type for it
+  defp published_form(name, opts \\ []) do
+    properties = if type = opts[:form_type], do: %{"form_type" => type}, else: %{}
+
+    {:ok, form} =
+      Forms.create(%{
+        name: "#{name} #{System.unique_integer([:positive])}",
+        properties: properties
+      })
+
     [draft] = form.versions
-    {:ok, draft} = Forms.update_draft(draft, %{definition: %{"fields" => []}})
+
+    definition = %{"elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]}
+    {:ok, draft} = Forms.update_draft(draft, %{definition: definition})
     {:ok, _published} = Forms.update_status(draft, :published)
 
     form

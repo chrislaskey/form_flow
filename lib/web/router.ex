@@ -213,6 +213,8 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% {:edit, form_id, version_id} -> %>
             <.live_component
@@ -221,6 +223,8 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% {:node_show, root_id, node_id, version_id} -> %>
             <.live_component
@@ -230,6 +234,8 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% {:node_edit, root_id, node_id, version_id} -> %>
             <.live_component
@@ -239,6 +245,8 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
+              config={@config}
+              config_data={@config_data}
             />
           <% nil -> %>
             <%!-- not a /forms path --%>

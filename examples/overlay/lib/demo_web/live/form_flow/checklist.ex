@@ -23,7 +23,7 @@ defmodule DemoWeb.FormFlowLive.Checklist do
   def editable?(%{form_progress: form}, _config_data), do: unfinished?(form)
 
   @impl true
-  def on_complete(%{flow_progress: forms}, _config_data), do: Enum.find(forms, &unfinished?/1)
+  def handle_complete(%{flow_progress: forms}, _config_data), do: Enum.find(forms, &unfinished?/1)
 
   @impl true
   def progress_component(assigns) do

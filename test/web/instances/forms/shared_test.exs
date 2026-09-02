@@ -13,14 +13,23 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
     use FormFlow.Config.Flows.Type
   end
 
+  defmodule Prefill do
+    use FormFlow.Config.Forms.Type
+  end
+
   # A host's config, offering its own type beside the defaults.
   defmodule Config do
     use FormFlow.Config
 
     @impl true
     def enabled_flow_types(context, config_data) do
-      FormFlow.Config.config_module(nil).enabled_flow_types(context, config_data) ++
+      FormFlow.Config.Default.enabled_flow_types(context, config_data) ++
         [%FormFlow.Config.Flows.Type{id: "demo_checklist", module: Checklist, name: "Checklist"}]
+    end
+
+    @impl true
+    def enabled_form_types(_context, _config_data) do
+      [%FormFlow.Config.Forms.Type{id: "demo_prefill", module: Prefill, name: "Prefill"}]
     end
   end
 
@@ -49,7 +58,7 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
     test "a context with no enabled types falls back to the library's defaults" do
       subflows = %Flow{id: Ecto.UUID.generate(), label: "subflows"}
 
-      assert %{id: nil, module: Types.Default} =
+      assert %{id: nil, module: FormFlow.Config.Flows.Type.Default} =
                Shared.flow_type(%Context{subflow: subflows}, @defaults)
     end
 
@@ -61,6 +70,34 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
 
       assert %{module: Types.WizardAnyOrder} =
                Shared.flow_type(%Context{subflow: flow("wizard_any_order")}, host)
+    end
+  end
+
+  describe "form_type/2" do
+    defp form(type) do
+      properties = if type, do: %{"form_type" => type}, else: %{}
+
+      %FormFlow.Data.Templates.Form{
+        id: Ecto.UUID.generate(),
+        name: "Name",
+        properties: properties
+      }
+    end
+
+    test "the library enables no form types, so every form gets the defaults" do
+      assert %{id: nil, module: FormFlow.Config.Forms.Type.Default} =
+               Shared.form_type(%Context{form: form("anything")}, @defaults)
+
+      assert %{module: FormFlow.Config.Forms.Type.Default} =
+               Shared.form_type(%Context{form: nil}, @defaults)
+    end
+
+    test "a host's config resolves its own type; unset or unknown falls back to its first" do
+      host = %{config: Config, config_data: %{}}
+
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form("demo_prefill")}, host)
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form(nil)}, host)
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form("nonsense")}, host)
     end
   end
 end

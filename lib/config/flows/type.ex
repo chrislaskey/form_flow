@@ -10,11 +10,10 @@ defmodule FormFlow.Config.Flows.Type do
 
   Every callback takes the `FormFlow.Context` of one form in one flow
   instance — `:form_progress` is the form, `:flow_progress` its flow's forms
-  in order — plus `config_data`. The defaults, in
-  `FormFlow.Web.Components.Flows.Types.Default`, are the in-order wizard:
-  a form can be edited where the flow allows it, and finishing a form moves
-  to the nearest place work can happen next. A type overrides only what it
-  changes.
+  in order — plus `config_data`. The defaults, `FormFlow.Config.Flows.Type.Default`,
+  are the in-order wizard: a form can be edited where the flow allows it, and
+  finishing a form moves to the nearest place work can happen next. A type
+  overrides only what it changes, and can call the defaults from an override.
   """
 
   alias FormFlow.Context
@@ -41,7 +40,7 @@ defmodule FormFlow.Config.Flows.Type do
   next form of this flow, or `nil` when the flow has nothing left for them —
   the flow instance then carries them on to whatever follows it.
   """
-  @callback on_complete(Context.t(), map()) :: FormProgress.t() | nil
+  @callback handle_complete(Context.t(), map()) :: FormProgress.t() | nil
 
   @doc """
   The flow's progress, drawn above the form being edited — return `nil` to
@@ -56,18 +55,18 @@ defmodule FormFlow.Config.Flows.Type do
       @behaviour FormFlow.Config.Flows.Type
 
       def editable?(context, config_data) do
-        FormFlow.Web.Components.Flows.Types.Default.editable?(context, config_data)
+        FormFlow.Config.Flows.Type.Default.editable?(context, config_data)
       end
 
-      def on_complete(context, config_data) do
-        FormFlow.Web.Components.Flows.Types.Default.on_complete(context, config_data)
+      def handle_complete(context, config_data) do
+        FormFlow.Config.Flows.Type.Default.handle_complete(context, config_data)
       end
 
       def progress_component(assigns) do
-        FormFlow.Web.Components.Flows.Types.Default.progress_component(assigns)
+        FormFlow.Config.Flows.Type.Default.progress_component(assigns)
       end
 
-      defoverridable editable?: 2, on_complete: 2, progress_component: 1
+      defoverridable editable?: 2, handle_complete: 2, progress_component: 1
     end
   end
 end

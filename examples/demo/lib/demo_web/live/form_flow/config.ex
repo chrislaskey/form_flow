@@ -2,14 +2,15 @@ defmodule DemoWeb.FormFlowLive.Config do
   @moduledoc """
   The demo's `FormFlow.Config`, passed to both the admin and users pages:
   demonstrates extending a callback while keeping the library's defaults —
-  the demo offers one custom flow type on top of the built-in wizards. The
-  defaults are reachable through `FormFlow.Config.config_module/1` exactly
-  for this, so an override doesn't have to restate the core options.
+  the demo offers one custom flow type on top of the built-in wizards.
+  `FormFlow.Config.Default` exists exactly for this, so an override doesn't
+  have to restate the core options.
 
   One module serves both pages because a type is chosen on the admin side
-  (the flow edit page's dropdown) and acted on in the users side (which forms
-  a user may edit) — the same list has to answer in both places. What the
-  checklist *does* is `DemoWeb.FormFlowLive.Checklist`.
+  (the flow and form edit pages' dropdowns) and acted on in the users side
+  (which forms a user may edit; what a form starts filled in with) — the same
+  list has to answer in both places. What the types *do* is
+  `DemoWeb.FormFlowLive.Checklist` and `DemoWeb.FormFlowLive.Prefill`.
   """
 
   use FormFlow.Config
@@ -18,12 +19,25 @@ defmodule DemoWeb.FormFlowLive.Config do
   # the defaults give no types (a "subflows" flow) gets none here either.
   @impl true
   def enabled_flow_types(context, config_data) do
-    defaults = FormFlow.Config.config_module(nil)
-
-    case defaults.enabled_flow_types(context, config_data) do
+    case FormFlow.Config.Default.enabled_flow_types(context, config_data) do
       [] -> []
       types -> types ++ [checklist()]
     end
+  end
+
+  # The library enables no form types of its own, so this list is the whole
+  # dropdown — and, with one entry, the type every form gets unless it picks.
+  @impl true
+  def enabled_form_types(_context, _config_data) do
+    [
+      %FormFlow.Config.Forms.Type{
+        id: "demo_prefill",
+        module: DemoWeb.FormFlowLive.Prefill,
+        name: "Demo prefill",
+        description: "Starts with the name filled in from the host application.",
+        properties: []
+      }
+    ]
   end
 
   defp checklist do

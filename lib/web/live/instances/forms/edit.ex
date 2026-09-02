@@ -1,8 +1,10 @@
 defmodule FormFlow.Web.Instances.Forms.Edit do
   @moduledoc """
   `FormFlow.Web.Instances.Forms.Edit` LiveComponent renders one position of a
-  flow instance as the real, fillable form — the pinned version's definition
-  through `DynamicForm`, prefilled with any answers already in `data`.
+  flow instance as the real, editable form — the pinned version's definition
+  through `DynamicForm`, with the data the form's `FormFlow.Config.Forms.Type`
+  supplies (`initial_data/2`: the stored answers by default, plus whatever a
+  host's type prefills).
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Show`, which renders
   the same answers read-only: `/flows/:id/forms/*path/edit` is this page,
@@ -23,7 +25,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   Submitting writes the answers and marks the instance completed
   (`FormFlow.Data.Instances.Forms.update_status/4`), then asks the flow's
-  type where to go (`on_complete/2`): the next form of this flow, or — when
+  type where to go (`handle_complete/2`): the next form of this flow, or — when
   it has none left — the next actionable position anywhere in the flow
   instance, which is what carries a user out of a finished subflow and into
   the next. It navigates to that position's own URL here, which does the
@@ -108,7 +110,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
     context = Shared.context(assigns, tree, forms)
 
-    case assigns.type.module.on_complete(context, assigns.config_data) do
+    case assigns.type.module.handle_complete(context, assigns.config_data) do
       %FormProgress{path: next} -> next
       nil -> Instances.Flows.next_path_position(flow_instance)
     end
@@ -213,7 +215,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         <DynamicForm.form
           id={"#{@id}-#{@form_instance.id}"}
           instance={@parsed}
-          data={@form_instance.data}
+          data={@initial_data}
           on_success={&submitted(&1, @id)}
         />
       </div>
