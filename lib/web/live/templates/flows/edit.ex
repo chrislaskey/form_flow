@@ -172,10 +172,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # Empty means the flow has no type of its own, and no dropdown.
   defp flow_types(_assigns, %Context{subflow: nil}), do: []
 
-  defp flow_types(assigns, context) do
+  defp flow_types(assigns, %Context{flow: root, subflow_node: node} = context) do
     config = FormFlow.Config.config_module(assigns.config)
 
-    config.enabled_flow_types(context, assigns.config_data)
+    context
+    |> config.enabled_flow_types(assigns.config_data)
+    |> Shared.fill_related_forms(root && root.id, node && node.id)
   end
 
   defp reset_form_data_on_switch(socket, pending_type) do
@@ -620,6 +622,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             description={property.description}
             options={Shared.field_options(property)}
             required={property.required}
+            read_only={Shared.read_only?(property)}
             default={property.default_value}
           />
         </DynamicForm.form>

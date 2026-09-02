@@ -104,7 +104,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     config = FormFlow.Config.config_module(assigns.config)
     context = %Context{form: form, form_version: version, subflow_node: node}
 
-    config.enabled_form_types(context, assigns.config_data)
+    context
+    |> config.enabled_form_types(assigns.config_data)
+    |> Shared.fill_related_forms(assigns.root_id, assigns.node_id)
   end
 
   # The stored form_type rendered as its human name — nil when unset (the

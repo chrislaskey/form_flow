@@ -17,6 +17,16 @@ that casts to a `Decimal`. The three choice types take `:options` as
 Two words, used strictly: a type's **properties** are these definitions; the
 **property values** are what an admin entered for them.
 
+One more type, `:related_form`, points at another form of the same flow — for
+a type whose behavior involves one, like a review form showing an earlier
+form's answers. It renders as a dropdown the library fills from the flow: the
+forms *earlier* than the one being edited, in the order a user works them,
+labeled as the user-facing pages label them. The stored value is the chosen
+form's path (node ids from the root, joined with `/`), which identifies one
+position even when a reusable form or subflow appears twice. A form has no
+earlier forms until it sits in a flow, so on a catalog form the field says so
+and offers nothing.
+
 - The flow and form edit pages render one field per property of the *pending*
   type, right under the type dropdown; picking a different type swaps them.
   Values save with the rest of the identity form and ride the same
@@ -32,9 +42,9 @@ Two words, used strictly: a type's **properties** are these definitions; the
   **`FormFlow.Config.Flows.Type.property_values/1`** read them back, and
   `FormFlow.Context` carries the same maps as `:form_type_property_values`
   and `:flow_type_property_values`, so a type's callbacks can read either.
-- The demo's `"demo_prefill"` form type declares two properties — the name it
-  prefills with, and a salutation dropdown — and reads them in
-  `initial_data/2`.
+- The demo's `"demo_prefill"` form type declares three properties — the name
+  it prefills with, a salutation dropdown, and a related form — and reads the
+  first two in `initial_data/2`.
 
 ## v0.10.0
 

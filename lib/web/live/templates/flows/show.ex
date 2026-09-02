@@ -74,10 +74,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   # What the config offers for a flow in this context — see FormFlow.Config.
   # Read-only pages still need them, to render a stored value as its name.
-  defp flow_types(assigns, context) do
+  defp flow_types(assigns, %Context{flow: root, subflow_node: node} = context) do
     config = FormFlow.Config.config_module(assigns.config)
 
-    config.enabled_flow_types(context, assigns.config_data)
+    context
+    |> config.enabled_flow_types(assigns.config_data)
+    |> Shared.fill_related_forms(root && root.id, node && node.id)
   end
 
   # The canvas asks once for every form subflow node it draws, saved or not,

@@ -154,6 +154,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     # A choice property renders as a select of its options
     assert html =~ ~s(<select)
     assert html =~ "Dr."
+    # A related-form property has nothing to offer on a catalog form
+    assert html =~ "Copy name from"
+    assert html =~ "No earlier forms to choose from"
 
     view
     |> element("#forms-edit-form-form")
@@ -197,6 +200,58 @@ defmodule Demo.FormFlowFormsCrudTest do
     })
 
     assert Forms.get(form.id).properties == %{}
+  end
+
+  test "a related-form property offers the forms earlier in the flow", %{conn: conn} do
+    # Start → Intake → Review: editing Review's form, Intake is the only
+    # earlier form; Review itself and nothing after it are offered
+    {:ok, root} = Flows.create(%{name: "Onboarding"})
+    start_node = build_node(root, ["Start"], "Start")
+    {intake_form, _v1} = published_form()
+    intake = build_node(root, ["Form"], "Intake", %{form_id: intake_form.id})
+    {review_form, _v1} = published_form()
+    review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
+    edge(root, start_node, intake)
+    edge(root, intake, review)
+    {:ok, draft} = Forms.create_draft(review_form.id)
+
+    {:ok, view, _html} =
+      live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/versions/#{draft.id}/edit")
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"name" => "Review", "form_type" => "demo_prefill"}})
+
+    html = render(view)
+    assert html =~ "Copy name from"
+    assert html =~ ~s(value="#{intake.id}")
+    assert html =~ "Intake"
+    refute html =~ ~s(value="#{review.id}")
+    refute html =~ "No earlier forms"
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Review",
+        "form_type" => "demo_prefill",
+        "property_name" => "Ada",
+        "property_source" => intake.id,
+        "definition" => ~s({"elements": []})
+      }
+    })
+
+    assert render(view) =~ "Saved."
+
+    # The stored value is the chosen form's path — here one node deep
+    assert Forms.get(review_form.id).properties["form_type_property_values"] == %{
+             "name" => "Ada",
+             "source" => intake.id
+           }
+
+    # Show renders it as the form's label
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
+    assert html =~ "Copy name from: Intake"
   end
 
   test "the edit page identifies its draft inline, linking back for the rest",
@@ -510,6 +565,31 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   # --- helpers --------------------------------------------------------------
+
+  defp build_node(flow, labels, label, attrs \\ %{}) do
+    attrs =
+      Map.merge(
+        %{flow_id: flow.id, labels: labels, properties: %{"data" => %{"label" => label}}},
+        attrs
+      )
+
+    {:ok, node} =
+      FormFlow.Data.Repo.insert(
+        FormFlow.Data.Templates.Flow.Node.changeset(%FormFlow.Data.Templates.Flow.Node{}, attrs)
+      )
+
+    node
+  end
+
+  defp edge(flow, source, target) do
+    {:ok, _relationship} =
+      FormFlow.Data.Repo.insert(
+        FormFlow.Data.Templates.Flow.Relationship.changeset(
+          %FormFlow.Data.Templates.Flow.Relationship{},
+          %{flow_id: flow.id, source_id: source.id, target_id: target.id, label: "CONNECTS_TO"}
+        )
+      )
+  end
 
   defp published_form do
     {:ok, form} = Forms.create(%{name: "Form #{System.unique_integer([:positive])}"})

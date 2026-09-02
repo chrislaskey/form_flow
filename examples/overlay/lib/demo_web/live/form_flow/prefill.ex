@@ -9,7 +9,9 @@ defmodule DemoWeb.FormFlowLive.Prefill do
   edit page under the type dropdown, and read back at render through the
   context as the type's property values. A real host would look the name up
   in its own database; the properties stand in for that. The salutation shows
-  a choice property alongside the text one.
+  a choice property alongside the text one, and the source a related-form
+  property — a dropdown of the forms earlier in the flow, which a future
+  iteration reads from at render.
 
   It shows the shape every prefill takes: load the host's data, then merge
   the user's stored answers *over* it, so a returning user never sees their
@@ -36,6 +38,12 @@ defmodule DemoWeb.FormFlowLive.Prefill do
         name: "Salutation",
         type: :dropdown,
         options: [{"Ms.", "ms"}, {"Mr.", "mr"}, {"Dr.", "dr"}]
+      },
+      %Property{
+        id: "source",
+        name: "Copy name from",
+        description: "An earlier form of the flow whose name this one could reuse.",
+        type: :related_form
       }
     ]
   end

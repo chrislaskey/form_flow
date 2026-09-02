@@ -329,7 +329,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     config = FormFlow.Config.config_module(assigns.config)
     context = %Context{form: form, form_version: version, subflow_node: node}
 
-    config.enabled_form_types(context, assigns.config_data)
+    context
+    |> config.enabled_form_types(assigns.config_data)
+    |> Shared.fill_related_forms(assigns.root_id, assigns.node_id)
   end
 
   @impl true
@@ -609,6 +611,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           description={property.description}
           options={Shared.field_options(property)}
           required={property.required}
+          read_only={Shared.read_only?(property)}
           default={property.default_value}
         />
         <:field type="html" name="draft_info">

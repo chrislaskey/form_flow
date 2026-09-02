@@ -2,6 +2,7 @@ defmodule FormFlow.Web.Templates.SharedTest do
   use ExUnit.Case, async: true
 
   alias FormFlow.Config.Property
+  alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Web.Templates.Shared
 
   @name %Property{id: "name", name: "Name", required: true}
@@ -48,6 +49,13 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.field_type(@days) == "checkbox"
     assert Shared.field_type(@urgent) == "boolean"
 
+    source = %Property{id: "source", name: "Source", type: :related_form}
+    assert Shared.field_type(%Property{source | options: [{"Intake", "intake"}]}) == "dropdown"
+    # With no earlier forms to offer it renders read-only text with its note
+    assert Shared.field_type(%Property{source | options: []}) == "text"
+    assert Shared.read_only?(%Property{source | options: []})
+    refute Shared.read_only?(@size)
+
     assert Shared.field_type(@count) == "text"
     assert Shared.input_type(@count) == "number"
     assert is_nil(Shared.input_type(@name))
@@ -79,6 +87,46 @@ defmodule FormFlow.Web.Templates.SharedTest do
              %{"name" => "Ada", "urgent" => false}
 
     assert Shared.payload_property_values(payload, []) == %{}
+  end
+
+  test "earlier_forms/2 cuts a flow's forms at the node being edited, in flow order" do
+    documents = %FormFlow.Data.Templates.Flow.Node{
+      id: "documents",
+      labels: ["Subflow"],
+      properties: %{"data" => %{"label" => "Documents"}}
+    }
+
+    forms = [
+      %FormProgress{path: ["intake"], label: "Intake", ancestors: []},
+      %FormProgress{path: ["documents", "id"], label: "ID", ancestors: [documents]},
+      %FormProgress{
+        path: ["documents", "proof"],
+        label: "Proof of address",
+        ancestors: [documents]
+      },
+      %FormProgress{path: ["review"], label: "Review", ancestors: []}
+    ]
+
+    # A form node: everything before it, labeled as the user-facing pages do
+    assert Shared.earlier_forms(forms, "review") ==
+             [
+               {"Intake", "intake"},
+               {"Documents / ID", "documents/id"},
+               {"Documents / Proof of address", "documents/proof"}
+             ]
+
+    # A form inside a subflow: the cut is that form, not the subflow
+    assert Shared.earlier_forms(forms, "proof") == [
+             {"Intake", "intake"},
+             {"Documents / ID", "documents/id"}
+           ]
+
+    # A subflow node: nothing inside it or after it
+    assert Shared.earlier_forms(forms, "documents") == [{"Intake", "intake"}]
+
+    # The first form, or a node the tree doesn't have yet, gets what precedes it
+    assert Shared.earlier_forms(forms, "intake") == []
+    assert length(Shared.earlier_forms(forms, "unsaved")) == 4
   end
 
   test "display_value/2 shows a choice by its label, a list joined, a boolean as Yes or No" do
