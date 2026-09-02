@@ -15,13 +15,88 @@ defmodule Demo.FormFlowInstancesTest do
 
   use DemoWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
+
+  # ── a host's form types, for the completion callbacks ───────────────────
+
+  # Broadcasts what each completion callback received, so a test can see the
+  # context the library handed it, and records what it saw of the form
+  defmodule Recording do
+    use FormFlow.Config.Forms.Type
+
+    @impl true
+    def snapshot_data(context, _config_data) do
+      Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:snapshot_data, context})
+      %{"seen" => %{"status" => context.form_instance.status}}
+    end
+
+    @impl true
+    def handle_complete(context, _config_data) do
+      Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:handle_complete, context})
+    end
+  end
+
+  defmodule RefusingRecord do
+    use FormFlow.Config.Forms.Type
+
+    @impl true
+    def snapshot_data(_context, _config_data), do: raise("nothing to record")
+  end
+
+  defmodule FailingReaction do
+    use FormFlow.Config.Forms.Type
+
+    @impl true
+    def handle_complete(_context, _config_data), do: raise("the host's job queue is down")
+  end
+
+  # The demo's config with the three types above enabled beside the library's
+  defmodule TestConfig do
+    use FormFlow.Config
+
+    @impl true
+    def enabled_form_types(context, config_data) do
+      FormFlow.Config.Default.enabled_form_types(context, config_data) ++
+        [
+          %FormFlow.Config.Forms.Type{id: "recording", module: Recording, name: "Recording"},
+          %FormFlow.Config.Forms.Type{id: "refusing", module: RefusingRecord, name: "Refusing"},
+          %FormFlow.Config.Forms.Type{id: "failing", module: FailingReaction, name: "Failing"}
+        ]
+    end
+  end
+
+  # The users page as `DemoWeb.FormFlowLive.Users` renders it, with the test
+  # config in place of the demo's — mounted without a route (live_isolated/3)
+  defmodule TestPage do
+    use Phoenix.LiveView
+
+    @impl true
+    def mount(_params, %{"path" => path}, socket) do
+      {:ok, Phoenix.Component.assign(socket, :path, path)}
+    end
+
+    @impl true
+    def render(assigns) do
+      ~H"""
+      <FormFlow.Web.router
+        user_id="demo-user"
+        path={@path}
+        base="/users"
+        config={TestConfig}
+        config_data={%{}}
+      />
+      """
+    end
+  end
 
   describe "a flow instance's page" do
     test "in order offers the first form only", %{conn: conn} do
@@ -317,6 +392,358 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "submitting runs the form type's completion callbacks" do
+    setup do
+      :ok = Phoenix.PubSub.subscribe(Demo.PubSub, "form_flow_test")
+    end
+
+    test "snapshot_data/2 lands on the event; handle_complete/2 sees the form done",
+         %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, form_type: "recording")
+      {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
+      form_instance = instance_at(instance, [only.id])
+
+      submit(view, form_instance, %{"name" => "Ada"})
+
+      # The snapshot saw the form as the page did: still in progress
+      assert_receive {:snapshot_data, %Context{form_instance: %{status: "in_progress"}}}
+
+      # The reaction saw the completed row and the flow instance's fresh progress
+      assert_receive {:handle_complete, %Context{} = fresh}
+      assert fresh.form_instance.id == form_instance.id
+      assert fresh.form_instance.status == "completed"
+
+      assert %{status: :completed} =
+               FlowProgress.find_form(fresh.flow_instance_progress, [only.id])
+
+      # The template side is as at mount
+      assert fresh.form.id ==
+               Forms.get_version(form_instance.template_form_version_id).template_form_id
+
+      assert {_path, _flash} = assert_redirect(view)
+
+      assert %{snapshot_data: %{"seen" => %{"status" => "in_progress"}}} =
+               Instances.Forms.latest_event(form_instance, "status_changed")
+    end
+
+    test "a snapshot that raises refuses the submit, and nothing is completed", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, form_type: "refusing")
+      {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
+      form_instance = instance_at(instance, [only.id])
+
+      submit(view, form_instance, %{"name" => "Ada"})
+
+      assert render(view) =~ "Could not save the form"
+      assert %{status: "in_progress", data: %{}} = instance_at(instance, [only.id])
+      assert Instances.Forms.list_events(form_instance, event: "status_changed") == []
+    end
+
+    test "a reaction that raises is logged; the completion stands and the user moves on",
+         %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, form_type: "failing")
+      {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
+      form_instance = instance_at(instance, [only.id])
+
+      log =
+        capture_log(fn ->
+          submit(view, form_instance, %{"name" => "Ada"})
+          assert {_path, _flash} = assert_redirect(view)
+        end)
+
+      assert log =~ "FailingReaction.handle_complete/2 raised"
+      assert log =~ "the host's job queue is down"
+      assert %{status: "completed"} = instance_at(instance, [only.id])
+    end
+  end
+
+  describe "a review records what it reviewed" do
+    test "the completion event holds the source's identity and answers", %{conn: conn} do
+      %{instance: instance, intake: intake} = fixture = review_flow()
+      source = complete(instance, [intake.id], %{"name" => "Ada"})
+
+      review_instance = reviewed(conn, fixture)
+
+      assert %{snapshot_data: %{"reviewed" => reviewed}} =
+               Instances.Forms.latest_event(review_instance, "status_changed")
+
+      assert reviewed == %{
+               "path" => intake.id,
+               "instance_id" => source.id,
+               "version_id" => source.template_form_version_id,
+               "completed_at" => DateTime.to_iso8601(source.completed_at),
+               "data" => %{"name" => "Ada"}
+             }
+    end
+
+    test "a source not started, or not resolving, records that nothing was reviewed",
+         %{conn: conn} do
+      %{intake: intake} = fixture = review_flow()
+
+      review_instance = reviewed(conn, fixture)
+
+      assert %{snapshot_data: %{"reviewed" => %{"path" => path, "instance_id" => nil}}} =
+               Instances.Forms.latest_event(review_instance, "status_changed")
+
+      assert path == intake.id
+
+      {:ok, flow} = Flows.create(%{name: "Application"})
+      first_node = build_node(flow, ["Start"], "Start")
+
+      review_form =
+        published_form("Review", form_type: "review", property_values: %{"source" => "gone"})
+
+      review = build_node(flow, ["Form"], "Review", %{form_id: review_form.id})
+      edge(flow, first_node, review)
+      instance = start_flow(flow)
+
+      review_instance = reviewed(conn, %{instance: instance, review: review})
+
+      assert %{snapshot_data: %{"reviewed" => %{"path" => "gone", "instance_id" => nil}}} =
+               Instances.Forms.latest_event(review_instance, "status_changed")
+    end
+  end
+
+  describe "a review notices when the reviewed form changes" do
+    test "right after the review it is current, on both pages", %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      complete(instance, [intake.id], %{"name" => "Ada"})
+      reviewed(conn, fixture)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "Unchanged since."
+
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [review.id], :in_progress)
+      {:ok, _view, html} = live(conn, edit_path(instance, [review.id]))
+      assert html =~ "Unchanged since."
+    end
+
+    test "the source submitted again: the notice and the diff, on Show and on a reopened Edit",
+         %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      complete(instance, [intake.id], %{"name" => "Ada"})
+      reviewed(conn, fixture)
+      complete(instance, [intake.id], %{"name" => "Grace"})
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "Intake was submitted again on"
+      assert html =~ ~r/<td[^>]*>\s*Name\s*<\/td>\s*<td[^>]*>Ada<\/td>\s*<td[^>]*>Grace<\/td>/
+      refute html =~ "structure also changed"
+
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [review.id], :in_progress)
+      {:ok, view, html} = live(conn, edit_path(instance, [review.id]))
+      assert html =~ "Intake was submitted again on"
+      assert html =~ ~r/Name\s*<\/td>\s*<td[^>]*>Ada<\/td>\s*<td[^>]*>Grace/
+      # Still editable: resubmitting is how the review becomes current again
+      assert has_element?(view, "button[type='submit']")
+    end
+
+    test "the source reopened but not resubmitted", %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      complete(instance, [intake.id], %{"name" => "Ada"})
+      reviewed(conn, fixture)
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [intake.id], :in_progress)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "Intake is being edited — reopened on"
+      refute html =~ "submitted again"
+    end
+
+    test "a publish that reopens the source is a migration, not a user's reopen", %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      source = complete(instance, [intake.id], %{"name" => "Ada"})
+      reviewed(conn, fixture)
+
+      published = Forms.get_version(source.template_form_version_id)
+      {:ok, draft} = Forms.create_draft(published.template_form_id, based_on: published.id)
+
+      {:ok, draft} =
+        Forms.update_draft(draft, %{
+          definition: %{
+            "elements" => [%{"type" => "text", "name" => "name", "title" => "Full name"}]
+          }
+        })
+
+      {:ok, _published} = Forms.update_status(draft, :published, completed: :reopen_carry)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "Intake&#39;s form changed after this review"
+      assert html =~ "The form&#39;s structure also changed"
+      # Carried answers are the answers reviewed
+      assert html =~ "The answers are the same as reviewed."
+      refute html =~ "is being edited"
+    end
+
+    test "resubmitting the review clears the notice", %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      complete(instance, [intake.id], %{"name" => "Ada"})
+      reviewed(conn, fixture)
+      complete(instance, [intake.id], %{"name" => "Grace"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [review.id], :in_progress)
+
+      reviewed(conn, fixture, %{"name" => "Still right"})
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "Unchanged since."
+      refute html =~ "submitted again"
+    end
+
+    test "deleting the source erases the record; the pages say so", %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      source = complete(instance, [intake.id], %{"name" => "Ada"})
+      review_instance = reviewed(conn, fixture)
+
+      assert {:ok, _deleted} = Instances.Forms.delete_instance(source)
+
+      assert %{snapshot_data: %{"reviewed" => %{"data" => %{}, "redacted_at" => _at}}} =
+               Instances.Forms.latest_event(review_instance, "status_changed")
+
+      {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
+      assert html =~ "The record of what was reviewed has been erased."
+      refute html =~ "Ada"
+    end
+  end
+
+  describe "an instance's event trail" do
+    test "list_events/2 reads it oldest first, and filters by kind" do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+      complete(instance, [name.id], %{"name" => "Ada"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [name.id], :in_progress)
+      form_instance = instance_at(instance, [name.id])
+
+      events = Instances.Forms.list_events(form_instance)
+
+      assert Enum.map(events, & &1.event) == ["created", "status_changed", "reopened"]
+
+      assert [%{event: "status_changed"}] =
+               Instances.Forms.list_events(form_instance, event: "status_changed")
+
+      assert Instances.Forms.list_events(form_instance, event: "migrated") == []
+    end
+
+    test "latest_event/2 is the newest of a kind, or nil" do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+      complete(instance, [name.id], %{"name" => "Ada"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [name.id], :in_progress)
+      complete(instance, [name.id], %{"name" => "Grace"})
+      form_instance = instance_at(instance, [name.id])
+
+      [first, second] = Instances.Forms.list_events(form_instance, event: "status_changed")
+      latest = Instances.Forms.latest_event(form_instance, "status_changed")
+
+      assert latest.id == second.id
+      assert DateTime.compare(latest.inserted_at, first.inserted_at) == :gt
+      assert is_nil(Instances.Forms.latest_event(form_instance, "migrated"))
+    end
+  end
+
+  describe "deleting a reviewed form redacts the copies of its answers" do
+    # Start → Intake → Review A → Review B, any order; both reviews recorded
+    # a copy of Intake's answers on their completion event. A second journey
+    # of the same flow did the same with its own Intake.
+    defp reviewed_journeys do
+      {:ok, flow} =
+        Flows.create(%{name: "Application", properties: properties("wizard_any_order")})
+
+      first_node = build_node(flow, ["Start"], "Start")
+      intake = build_form_node(flow, "Intake")
+      review_a = build_form_node(flow, "Review A")
+      review_b = build_form_node(flow, "Review B")
+
+      edge(flow, first_node, intake)
+      edge(flow, intake, review_a)
+      edge(flow, review_a, review_b)
+
+      review = fn instance ->
+        source = complete(instance, [intake.id], %{"name" => "Ada"})
+
+        snapshot = %{
+          "reviewed" => %{
+            "path" => intake.id,
+            "instance_id" => source.id,
+            "version_id" => source.template_form_version_id,
+            "completed_at" => DateTime.to_iso8601(source.completed_at),
+            "data" => %{"name" => "Ada"}
+          }
+        }
+
+        review_a =
+          complete(instance, [review_a.id], %{"name" => "Looks right"}, snapshot_data: snapshot)
+
+        review_b =
+          complete(instance, [review_b.id], %{"name" => "Agreed"}, snapshot_data: snapshot)
+
+        %{source: source, reviews: [review_a, supersede(review_b)]}
+      end
+
+      journey = start_flow(flow)
+      other = start_flow(flow)
+
+      %{
+        journey: Map.put(review.(journey), :instance, journey),
+        other: Map.put(review.(other), :instance, other)
+      }
+    end
+
+    test "redact_snapshots/1 blanks every copy in the journey — superseded included — and nothing else" do
+      %{journey: journey, other: other} = reviewed_journeys()
+      before = Enum.map(journey.reviews, &Instances.Forms.latest_event(&1, "status_changed"))
+
+      assert {:ok, 2} = Instances.Forms.redact_snapshots(journey.source)
+
+      for {review, was} <- Enum.zip(journey.reviews, before) do
+        event = Instances.Forms.latest_event(review, "status_changed")
+
+        assert %{"reviewed" => reviewed} = event.snapshot_data
+        assert reviewed["data"] == %{}
+        assert {:ok, _at, 0} = DateTime.from_iso8601(reviewed["redacted_at"])
+        # Identity kept: what was reviewed stays on record, only the answers go
+        assert reviewed["instance_id"] == journey.source.id
+        assert reviewed["version_id"] == journey.source.template_form_version_id
+        # The row is otherwise the row it was
+        assert Map.drop(event, [:snapshot_data, :__meta__]) ==
+                 Map.drop(was, [:snapshot_data, :__meta__])
+      end
+
+      # The other journey's copies are of its own Intake, and stay
+      for review <- other.reviews do
+        assert %{"reviewed" => %{"data" => %{"name" => "Ada"}} = reviewed} =
+                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+
+        refute Map.has_key?(reviewed, "redacted_at")
+      end
+
+      # A standalone instance has no journey, so there is nothing to scan
+      assert {:ok, 0} = Instances.Forms.redact_snapshots(standalone_instance(journey.source))
+    end
+
+    test "delete_instance/2 redacts before it deletes" do
+      %{journey: journey} = reviewed_journeys()
+
+      assert {:ok, _deleted} = Instances.Forms.delete_instance(journey.source)
+
+      refute Instances.Forms.get(journey.source.id)
+
+      for review <- journey.reviews do
+        assert %{"reviewed" => %{"data" => %{}, "redacted_at" => _at}} =
+                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+      end
+    end
+
+    test "deleting the whole journey takes the copies with it, and touches no other journey" do
+      %{journey: journey, other: other} = reviewed_journeys()
+
+      assert {:ok, _deleted} = Instances.Flows.delete_instance(journey.instance)
+
+      refute Instances.Flows.get(journey.instance.id)
+      assert Instances.Flows.form_instances(journey.instance) == []
+
+      for review <- other.reviews do
+        assert %{"reviewed" => %{"data" => %{"name" => "Ada"}}} =
+                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+      end
+    end
+  end
+
   # ── URLs ────────────────────────────────────────────────────────────────
 
   defp flow_path(instance), do: "/users/flows/#{instance.id}"
@@ -327,6 +754,21 @@ defmodule Demo.FormFlowInstancesTest do
 
   defp offered?(view, instance, path) do
     has_element?(view, "a[href='#{edit_path(instance, path)}']")
+  end
+
+  # The edit page for a position, through the test config's page
+  defp isolated_edit(conn, instance, path) do
+    live_isolated(conn, TestPage,
+      session: %{"path" => ["flows", instance.id, "forms"] ++ path ++ ["edit"]}
+    )
+  end
+
+  # Submits the form's answers the way the user does; the completion runs
+  # after the submit event, so read the page again for its result
+  defp submit(view, form_instance, answers) do
+    view
+    |> form("#instance-forms-edit-#{form_instance.id}-form", %{"dynamic_form" => answers})
+    |> render_submit()
   end
 
   # ── fixtures ────────────────────────────────────────────────────────────
@@ -404,11 +846,72 @@ defmodule Demo.FormFlowInstancesTest do
     instance
   end
 
-  defp complete(instance, path, data \\ %{}) do
+  # Starts and submits the form at `path`; `opts` reach the completion
+  # (`snapshot_data:` writes a payload on its `status_changed` event)
+  defp complete(instance, path, data \\ %{}, opts \\ []) do
     {:ok, _opened} = Instances.Forms.update_status(instance, path, :in_progress)
-    {:ok, completed} = Instances.Forms.update_status(instance, path, :completed, data: data)
+
+    {:ok, completed} =
+      Instances.Forms.update_status(instance, path, :completed, [data: data] ++ opts)
 
     completed
+  end
+
+  # What strand reconciliation will do to a replaced instance: stamp it
+  # superseded, keeping its trail
+  defp supersede(form_instance) do
+    {:ok, superseded} =
+      FormFlowRepo.update(Ecto.Changeset.change(form_instance, superseded_at: DateTime.utc_now()))
+
+    superseded
+  end
+
+  # Start → Intake → Review → End, any order; Review's form is a "review" of
+  # Intake
+  defp review_flow do
+    {:ok, flow} = Flows.create(%{name: "Application", properties: properties("wizard_any_order")})
+
+    first_node = build_node(flow, ["Start"], "Start")
+    intake = build_form_node(flow, "Intake")
+
+    review_form =
+      published_form("Review", form_type: "review", property_values: %{"source" => intake.id})
+
+    review = build_node(flow, ["Form"], "Review", %{form_id: review_form.id})
+    last_node = build_node(flow, ["End"], "End")
+
+    edge(flow, first_node, intake)
+    edge(flow, intake, review)
+    edge(flow, review, last_node)
+
+    %{flow: flow, instance: start_flow(flow), intake: intake, review: review}
+  end
+
+  # The review submitted through its page, the way the reviewer does it — so
+  # its type records what it reviewed
+  defp reviewed(
+         conn,
+         %{instance: instance, review: review},
+         answers \\ %{"name" => "Looks right"}
+       ) do
+    {:ok, view, _html} = live(conn, edit_path(instance, [review.id]))
+    review_instance = instance_at(instance, [review.id])
+    submit(view, review_instance, answers)
+    assert {_path, _flash} = assert_redirect(view)
+
+    review_instance
+  end
+
+  # A form instance filled on its own, outside any journey
+  defp standalone_instance(form_instance) do
+    {:ok, standalone} =
+      FormFlowRepo.insert(
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: form_instance.template_form_version_id
+        })
+      )
+
+    standalone
   end
 
   defp instance_at(instance, path), do: Instances.Forms.get_at(instance, path)
@@ -448,14 +951,18 @@ defmodule Demo.FormFlowInstancesTest do
   # A published form with one text question, "name"; `form_type:` picks a
   # form type for it and `property_values:` its property values — for the
   # demo's prefill type, "Demo User" as the name to prefill unless given
-  defp published_form(name, opts \\ []) do
+  defp published_form(name, opts) do
     properties =
       case opts[:form_type] do
         nil ->
           %{}
 
-        type ->
+        "demo_prefill" ->
           values = Keyword.get(opts, :property_values, %{"name" => "Demo User"})
+          %{"form_type" => "demo_prefill", "form_type_property_values" => values}
+
+        type ->
+          values = Keyword.get(opts, :property_values, %{})
           %{"form_type" => type, "form_type_property_values" => values}
       end
 

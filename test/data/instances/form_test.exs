@@ -107,7 +107,7 @@ defmodule FormFlow.Data.Instances.FormTest do
           event: "migrated",
           from_version_id: @version_id,
           to_version_id: Ecto.UUID.generate(),
-          data_snapshot: %{"old" => "answer"},
+          snapshot_data: %{"old" => "answer"},
           user_id: "admin-7"
         })
 

@@ -52,7 +52,12 @@ defmodule FormFlow.Config.Flows.Type do
   @doc """
   Where the user goes after completing the form at `:form_progress`: the
   next form of this flow, or `nil` when the flow has nothing left for them —
-  the flow instance then carries them on to whatever follows it.
+  the flow instance then carries them on to whatever follows it. The context
+  is derived fresh after the write, so the form just submitted counts as done.
+
+  `FormFlow.Config.Forms.Type` has a `handle_complete/2` too, given the same
+  context; that one is a hook for the form's type to react at and answers
+  nothing.
   """
   @callback handle_complete(Context.t(), map()) :: FormProgress.t() | nil
 

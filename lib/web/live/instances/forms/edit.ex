@@ -23,13 +23,22 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   Show, which is also where Reopen is, so there is exactly one place that
   renders answers read-only and exactly one that reopens them.
 
-  Submitting writes the answers and marks the instance completed
-  (`FormFlow.Data.Instances.Forms.update_status/4`), then asks the flow's
-  type where to go (`handle_complete/2`): the next form of this flow, or — when
-  it has none left — the next actionable position anywhere in the flow
-  instance, which is what carries a user out of a finished subflow and into
-  the next. It navigates to that position's own URL here, which does the
-  starting; with nothing actionable left, back to the flow instance's page.
+  Submitting asks the form's type what to record (`snapshot_data/2`),
+  writes the answers and marks the instance completed with that record on
+  its event (`FormFlow.Data.Instances.Forms.update_status/4`), then derives
+  the flow instance's progress once more — the form just submitted now
+  counts as done — into the one context both types' `handle_complete/2`
+  receive. The form's type reacts to the completion; the flow's type says
+  where to go: the next form of this flow, or — when it has none left — the
+  next actionable position anywhere in the flow instance, which is what
+  carries a user out of a finished subflow and into the next. It navigates to
+  that position's own URL here, which does the starting; with nothing
+  actionable left, back to the flow instance's page.
+
+  Both callbacks are host code and neither crashes the page: a snapshot that
+  raises refuses the submit with the page's error, the way a malformed
+  definition is an inline error rather than a crash loop, and a reaction that
+  raises is logged after a completion that stands.
 
   DynamicForm's default success message targets the parent LiveView's
   `handle_info/2` — the host's process, not ours — so `on_success` routes the
@@ -39,6 +48,9 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   use Phoenix.LiveComponent
 
+  require Logger
+
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.FormProgress
@@ -49,17 +61,27 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   @impl true
   def update(%{event: "submitted", payload: payload}, socket) do
-    %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
+    %{
+      flow_instance: flow_instance,
+      form_instance: form_instance,
+      context: context,
+      form_type: form_type,
+      config_data: config_data
+    } = socket.assigns
 
-    case Instances.Forms.update_status(flow_instance, form_instance.path, :completed,
-           data: payload.data,
-           user_id: socket.assigns.user_id
-         ) do
-      {:ok, _completed} ->
-        to = next_destination(flow_instance, socket.assigns)
-        {:ok, start_async(socket, :navigate, fn -> to end)}
-
-      {:error, _changeset} ->
+    with {:ok, snapshot} <- snapshot(form_type, context, config_data),
+         {:ok, completed} <-
+           Instances.Forms.update_status(flow_instance, form_instance.path, :completed,
+             data: payload.data,
+             user_id: socket.assigns.user_id,
+             snapshot_data: snapshot
+           ) do
+      fresh = fresh_context(socket.assigns, completed)
+      notify(form_type, fresh, config_data)
+      to = next_destination(fresh, socket.assigns)
+      {:ok, start_async(socket, :navigate, fn -> to end)}
+    else
+      {:error, _reason} ->
         {:ok, assign(socket, :error, "Could not save the form. Please try again.")}
     end
   end
@@ -93,26 +115,64 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     end
   end
 
+  # The form type's record of what it saw, taken before the write so a form
+  # is never completed without it. Host code: an exception becomes the page's
+  # error, never a crashed LiveView that loses what the user typed.
+  defp snapshot(form_type, context, config_data) do
+    case form_type.module.snapshot_data(context, config_data) do
+      snapshot when is_map(snapshot) -> {:ok, snapshot}
+      other -> {:error, {:not_a_map, other}}
+    end
+  rescue
+    error -> {:error, error}
+  end
+
+  # The context after the write, derived once for both types' handle_complete/2:
+  # the progress is fresh, so the form just submitted counts as done, and
+  # `:form_instance` is the completed row. The template side is as at mount.
+  defp fresh_context(%{flow_instance: flow_instance, context: context} = assigns, completed) do
+    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+
+    %Context{
+      Shared.context(assigns, tree, forms)
+      | form: context.form,
+        form_version: context.form_version,
+        form_type_property_values: context.form_type_property_values,
+        form_instance: completed
+    }
+  end
+
+  # The form type reacts after the fact. The completion is already written,
+  # so an exception here is logged and the user carries on.
+  defp notify(form_type, context, config_data) do
+    form_type.module.handle_complete(context, config_data)
+    :ok
+  rescue
+    error ->
+      Logger.error(
+        "#{inspect(form_type.module)}.handle_complete/2 raised after a completion: " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      :ok
+  end
+
   # After submit: where the user goes, as a URL. Nothing is started here —
   # the page that addresses a position is the one that starts it.
-  defp next_destination(flow_instance, assigns) do
-    case next_path(flow_instance, assigns) do
+  defp next_destination(%Context{flow_instance: flow_instance} = context, assigns) do
+    case next_path(context, assigns) do
       path when is_list(path) -> Paths.form_edit_path(assigns.base, flow_instance.id, path)
       nil -> Paths.flow_path(assigns.base, flow_instance.id)
     end
   end
 
-  # The flow's type answers first — statuses derived fresh, so the form just
-  # submitted counts as done — and the flow instance answers when that flow
-  # has nothing left, carrying the user on to whatever follows it.
-  defp next_path(flow_instance, assigns) do
-    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
-    context = Shared.context(assigns, tree, forms)
-
+  # The flow's type answers first, and the flow instance answers when that
+  # flow has nothing left, carrying the user on to whatever follows it.
+  defp next_path(context, assigns) do
     case assigns.type.module.handle_complete(context, assigns.config_data) do
       %FormProgress{path: next} -> next
-      nil -> Instances.Flows.next_path_position(flow_instance)
+      nil -> Instances.Flows.next_path_position(context.flow_instance)
     end
   end
 

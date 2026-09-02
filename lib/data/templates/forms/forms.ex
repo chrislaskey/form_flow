@@ -462,7 +462,7 @@ defmodule FormFlow.Data.Templates.Forms do
     )
   end
 
-  defp migrate!(instance, published, policy, event, changes, data_snapshot) do
+  defp migrate!(instance, published, policy, event, changes, snapshot_data) do
     changes = Map.put(changes, :template_form_version_id, published.id)
 
     case Repo.update(Ecto.Changeset.change(instance, changes)) do
@@ -475,7 +475,7 @@ defmodule FormFlow.Data.Templates.Forms do
       event: event,
       from_version_id: instance.template_form_version_id,
       to_version_id: published.id,
-      data_snapshot: data_snapshot,
+      snapshot_data: snapshot_data,
       user_id: policy.user_id
     }
 
@@ -488,7 +488,7 @@ defmodule FormFlow.Data.Templates.Forms do
   # Renames re-key first, then prune drops keys absent from the new
   # definition — the only correct order: a renamed field's old key is by
   # definition not in the new definition. Returns {data, dropped} where
-  # dropped is what prune removed (the event's data_snapshot).
+  # dropped is what prune removed (the event's snapshot_data).
   defp transform_data(data, published, policy) do
     data =
       Enum.reduce(policy.renames, data, fn {old, new}, acc ->

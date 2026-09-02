@@ -9,12 +9,15 @@ defmodule FormFlow.Config.Forms.Type do
 
   Every callback takes the `FormFlow.Context` of one form in one flow
   instance — `:form` and `:form_version` are the template, `:form_instance`
-  the user's answers so far — plus `config_data`. The defaults,
-  `FormFlow.Config.Forms.Type.Default`, render the stored answers and nothing
-  more. A type overrides only what it changes, and can call the defaults from
-  its override, so prefilling a form is a `Map.merge/2` over what the default
-  returns, and a type that draws more around the form still renders the form
-  itself through the default `edit_component/1`.
+  the user's answers so far — plus `config_data`, or the assigns of the page
+  drawing the form. The defaults, `FormFlow.Config.Forms.Type.Default`,
+  render the stored answers and nothing more, on the edit page and the Show
+  page alike, record nothing when the form is submitted, and react to
+  nothing. A type overrides only what it changes, and
+  can call the defaults from its override, so prefilling a form is a
+  `Map.merge/2` over what the default returns, and a type that draws more
+  around the form still renders the form itself through the default
+  `edit_component/1`.
 
   Two ship with the library, both enabled by default
   (`FormFlow.Config.Default.enabled_form_types/2`): `"default"`, the form as
@@ -69,6 +72,39 @@ defmodule FormFlow.Config.Forms.Type do
   """
   @callback edit_component(map()) :: Phoenix.LiveView.Rendered.t()
 
+  @doc """
+  The Show page's answers, drawn read-only. `assigns` are `edit_component/1`'s
+  minus `:on_success`, with `:data` the stored answers; the default renders
+  the form in a disabled fieldset with no submit. A type that draws more
+  around the answers renders them by calling the default.
+  """
+  @callback show_component(map()) :: Phoenix.LiveView.Rendered.t()
+
+  @doc """
+  What to record on the form's completion event, in its `snapshot_data`,
+  when the user submits — free-form, `%{}` for nothing. A type that needs to
+  remember what it saw at submit time records it here; the Review type
+  records the form it reviewed. The context is the edit page's: `:form_instance`
+  is the row being completed, `:flow_instance_progress` the flow instance as
+  the user saw it. Runs before the completion is written: an error here
+  refuses the submit rather than completing a form without its record.
+  """
+  @callback snapshot_data(Context.t(), map()) :: map()
+
+  @doc """
+  Called after the user submits the form and the instance is completed — the
+  context is derived fresh, so the form counts as done and `:form_instance`
+  is the completed row. The moment a host reacts at: notify someone, write
+  answers out to its own tables, enqueue a job. The return value is ignored;
+  an error is logged and never undoes the completion. The default does
+  nothing.
+
+  `FormFlow.Config.Flows.Type` has a `handle_complete/2` too, and the two
+  receive the same context; the flow type's answers where the user goes
+  next, this one is a hook and answers nothing.
+  """
+  @callback handle_complete(Context.t(), map()) :: any()
+
   defmacro __using__(_opts) do
     quote do
       @behaviour FormFlow.Config.Forms.Type
@@ -81,7 +117,23 @@ defmodule FormFlow.Config.Forms.Type do
         FormFlow.Config.Forms.Type.Default.edit_component(assigns)
       end
 
-      defoverridable initial_data: 2, edit_component: 1
+      def show_component(assigns) do
+        FormFlow.Config.Forms.Type.Default.show_component(assigns)
+      end
+
+      def snapshot_data(context, config_data) do
+        FormFlow.Config.Forms.Type.Default.snapshot_data(context, config_data)
+      end
+
+      def handle_complete(context, config_data) do
+        FormFlow.Config.Forms.Type.Default.handle_complete(context, config_data)
+      end
+
+      defoverridable initial_data: 2,
+                     edit_component: 1,
+                     show_component: 1,
+                     snapshot_data: 2,
+                     handle_complete: 2
     end
   end
 

@@ -18,4 +18,7 @@ defmodule FormFlow.Config.Forms.Type.Default do
 
   defdelegate initial_data(context, config_data), to: Types.Default
   defdelegate edit_component(assigns), to: Types.Default
+  defdelegate show_component(assigns), to: Types.Default
+  defdelegate snapshot_data(context, config_data), to: Types.Default
+  defdelegate handle_complete(context, config_data), to: Types.Default
 end

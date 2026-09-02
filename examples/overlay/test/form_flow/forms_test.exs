@@ -238,14 +238,14 @@ defmodule Demo.FormFlowFormsTest do
       reset = reload(in_progress)
       assert reset.template_form_version_id == v2.id
       assert reset.data == %{}
-      assert [%{event: "migrated", data_snapshot: %{"name" => "Ada"}}] = events_for(in_progress)
+      assert [%{event: "migrated", snapshot_data: %{"name" => "Ada"}}] = events_for(in_progress)
 
       reopened = reload(completed)
       assert reopened.template_form_version_id == v2.id
       assert reopened.status == "in_progress"
       assert reopened.completed_at == nil
       assert reopened.data == %{}
-      assert [%{event: "reopened", data_snapshot: %{"name" => "Grace"}}] = events_for(completed)
+      assert [%{event: "reopened", snapshot_data: %{"name" => "Grace"}}] = events_for(completed)
     end
 
     test "renames re-key carried data before prune drops the rest" do
@@ -272,7 +272,7 @@ defmodule Demo.FormFlowFormsTest do
       assert migrated.data == %{"new_name" => "Ada", "kept" => "yes"}
 
       # The pruned key survives in the event snapshot — nothing is lost silently
-      assert [%{data_snapshot: %{"orphan" => "gone"}}] = events_for(instance)
+      assert [%{snapshot_data: %{"orphan" => "gone"}}] = events_for(instance)
     end
 
     test "prune without declared fields prunes nothing — never everything" do

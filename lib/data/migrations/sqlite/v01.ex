@@ -159,7 +159,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
         references(:form_flow_template_form_versions, type: :uuid, on_delete: :restrict)
       )
 
-      add(:data_snapshot, :map, null: false)
+      add(:snapshot_data, :map, null: false)
       add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)

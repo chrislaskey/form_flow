@@ -7,13 +7,25 @@ defmodule FormFlow.Data.Instances.Form.Event do
   the responsible user (`user_id`, an opaque host-app identity — any
   principal, including "system:pin-migration"-style identities — threaded
   from day one, because retrofitting identity into a state machine was the
-  reference system's unfinished TODO). When a migration discards or replaces data
-  (reset, prune), the prior answers survive here in `data_snapshot` — which
-  is why events never cascade-delete with their instance: removing an
-  instance goes through `FormFlow.Data.Instances.Forms.delete_instance/2`,
-  which deletes events deliberately.
+  reference system's unfinished TODO). `reopened` has two writers: a user
+  reopening a completed form, and the `:reopen_carry` / `:reopen_reset`
+  publish policies (`FormFlow.Data.Templates.Forms.update_status/3`), which
+  also move the pin and so set `from_version_id` and `to_version_id`; a
+  user's reopen leaves both nil.
 
-  Rows are never updated.
+  `snapshot_data` is a free-form payload. When a migration discards or
+  replaces data (reset, prune), the prior answers survive here — which is
+  why events never cascade-delete with their instance: removing an instance
+  goes through `FormFlow.Data.Instances.Forms.delete_instance/2`, which
+  deletes events deliberately. It also holds what a form type chose to
+  record on the form's completion (`FormFlow.Config.Forms.Type`'s
+  `snapshot_data/2`); for a review form that is a copy of *another*
+  instance's answers, under `"reviewed"`.
+
+  Rows are never updated, with one exception: when the instance a review
+  copied is deleted out of a surviving journey, the copy is blanked in place
+  (`FormFlow.Data.Instances.Forms.redact_snapshots/1`), touching
+  `snapshot_data` and nothing else on the row.
   """
 
   use Ecto.Schema
@@ -36,7 +48,7 @@ defmodule FormFlow.Data.Instances.Form.Event do
     belongs_to(:from_version, Version, foreign_key: :from_version_id)
     belongs_to(:to_version, Version, foreign_key: :to_version_id)
 
-    field(:data_snapshot, :map, default: %{})
+    field(:snapshot_data, :map, default: %{})
     field(:user_id, :string)
 
     timestamps(type: :utc_datetime_usec)
@@ -52,7 +64,7 @@ defmodule FormFlow.Data.Instances.Form.Event do
       :event,
       :from_version_id,
       :to_version_id,
-      :data_snapshot,
+      :snapshot_data,
       :user_id
     ])
     |> validate_required([:instance_form_id, :event])

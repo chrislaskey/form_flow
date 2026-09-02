@@ -26,7 +26,8 @@ defmodule FormFlow.Data.Instances.Forms do
 
   Deletion stays its own named operation: `delete_instance/2` is the host's
   retention decision, made visibly. Events never cascade-delete with their
-  instance, so it is the only deletion path.
+  instance, so it is the only deletion path. The trail itself is read through
+  `list_events/2` and `latest_event/2`.
 
   Two browser tabs starting the same untouched position race their inserts;
   the `(instance_flow_id, path)` unique index lets exactly one win.
@@ -57,6 +58,30 @@ defmodule FormFlow.Data.Instances.Forms do
   end
 
   @doc """
+  An instance's event trail, oldest first — `inserted_at` then `id`, so
+  events written in one transaction keep a stable order. `event:` filters by
+  kind (`"created"`, `"migrated"`, `"reopened"`, `"status_changed"`).
+  """
+  @spec list_events(Instances.Form.t(), keyword()) :: [Event.t()]
+  def list_events(%Instances.Form{id: id}, opts \\ []) do
+    from(e in Event,
+      where: e.instance_form_id == ^id,
+      order_by: [asc: e.inserted_at, asc: e.id]
+    )
+    |> filter_event(opts[:event])
+    |> Repo.all()
+  end
+
+  defp filter_event(query, nil), do: query
+  defp filter_event(query, event), do: from(e in query, where: e.event == ^event)
+
+  @doc "The newest event of a kind, or nil."
+  @spec latest_event(Instances.Form.t(), String.t()) :: Event.t() | nil
+  def latest_event(%Instances.Form{} = instance, event) do
+    instance |> list_events(event: event) |> List.last()
+  end
+
+  @doc """
   Moves the form instance at a journey position to `status` — the one entry
   point for opening, submitting, and reopening (see the moduledoc).
 
@@ -65,7 +90,7 @@ defmodule FormFlow.Data.Instances.Forms do
     * `:data` — the answers, written on `:completed` (left untouched when
       absent, so a bare re-stamp never wipes answers)
     * `:user_id` — the acting user, recorded on the event
-    * `:data_snapshot` — free-form event payload
+    * `:snapshot_data` — free-form event payload
 
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
   position with no instance), `{:error, :unknown_position}` (no such node —
@@ -120,18 +145,86 @@ defmodule FormFlow.Data.Instances.Forms do
     do: complete(instance, opts)
 
   @doc """
-  Deletes an instance and its event trail, deliberately and in order:
-  events first (the `restrict` FK forbids any other order), then the
-  instance. This is the only deletion path — there is no cascade.
+  Deletes an instance and its event trail, deliberately and in order: the
+  copies other instances' events hold of its answers are blanked first
+  (`redact_snapshots/1`, so a failed redaction aborts the deletion rather
+  than leaving copies behind), then its events (the `restrict` FK forbids
+  any other order), then the instance. This is the only deletion path —
+  there is no cascade.
+
+  `redact: false` skips the redaction — for a caller deleting the whole
+  journey, whose copies go with it (`FormFlow.Data.Instances.Flows.delete_instance/2`).
   """
-  def delete_instance(%Instances.Form{} = instance, _opts \\ []) do
+  def delete_instance(%Instances.Form{} = instance, opts \\ []) do
     Repo.transaction(fn ->
+      if Keyword.get(opts, :redact, true), do: redact_snapshots(instance)
+
       Repo.delete_all(from(e in Event, where: e.instance_form_id == ^instance.id))
 
       case Repo.delete(instance) do
         {:ok, deleted} -> deleted
         {:error, changeset} -> Repo.rollback(changeset)
       end
+    end)
+  end
+
+  @doc """
+  Blanks the answers in every review snapshot that references `instance` —
+  the copies review submissions made of it, found by
+  `"reviewed"."instance_id"` in the `snapshot_data` of the `status_changed`
+  events of the journey's other instances, superseded ones included (a
+  superseded review's trail is kept, not deleted, so its copy has to be
+  blanked too). Each copy's `"data"` becomes `%{}` and `"redacted_at"` is
+  stamped beside it; nothing else on the row changes. Returns how many
+  copies were blanked.
+
+  This is the only sanctioned update of an event row
+  (`FormFlow.Data.Instances.Form.Event`). It is for deleting one instance
+  out of a surviving journey — `delete_instance/2` runs it first — and is
+  public for a host's own erasure flow. Deleting the whole journey takes
+  the copies with it, so `FormFlow.Data.Instances.Flows.delete_instance/2`
+  skips it. A standalone instance has no journey and no copies.
+  """
+  @spec redact_snapshots(Instances.Form.t()) :: {:ok, non_neg_integer()}
+  def redact_snapshots(%Instances.Form{instance_flow_id: nil}), do: {:ok, 0}
+
+  def redact_snapshots(%Instances.Form{} = instance) do
+    redacted_at = DateTime.to_iso8601(DateTime.utc_now())
+
+    # The two supported adapters query JSON differently, so the match on the
+    # snapshot happens here rather than in the query: a journey's events are
+    # few, and this needs no index
+    events =
+      Repo.all(
+        from(e in Event,
+          join: f in Instances.Form,
+          on: f.id == e.instance_form_id,
+          where: f.instance_flow_id == ^instance.instance_flow_id and f.id != ^instance.id,
+          where: e.event == "status_changed"
+        )
+      )
+
+    Repo.transaction(fn ->
+      events
+      |> Enum.filter(&(get_in(&1.snapshot_data, ["reviewed", "instance_id"]) == instance.id))
+      |> Enum.reduce(0, fn event, count ->
+        reviewed =
+          Map.merge(event.snapshot_data["reviewed"], %{
+            "data" => %{},
+            "redacted_at" => redacted_at
+          })
+
+        snapshot = Map.put(event.snapshot_data, "reviewed", reviewed)
+
+        # Written as a plain column update so nothing else on the row moves,
+        # `updated_at` included
+        {1, _} =
+          Repo.update_all(from(e in Event, where: e.id == ^event.id),
+            set: [snapshot_data: snapshot]
+          )
+
+        count + 1
+      end)
     end)
   end
 
@@ -209,7 +302,7 @@ defmodule FormFlow.Data.Instances.Forms do
       instance_form_id: instance.id,
       event: event,
       user_id: Keyword.get(opts, :user_id),
-      data_snapshot: Keyword.get(opts, :data_snapshot, %{})
+      snapshot_data: Keyword.get(opts, :snapshot_data, %{})
     }
 
     Repo.insert(Event.changeset(%Event{}, attrs))

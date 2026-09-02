@@ -311,7 +311,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
         )
       )
 
-      add(:data_snapshot, :map, null: false, default: %{})
+      add(:snapshot_data, :map, null: false, default: %{})
       add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)

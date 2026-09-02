@@ -158,6 +158,10 @@ defmodule FormFlow.Data.Instances.Flows do
   through `FormFlow.Data.Instances.Forms.delete_instance/2` (its events
   first — the `restrict` FKs forbid any other order), then the journey row.
   This is the only deletion path — there is no cascade.
+
+  The copies a review's events hold of another instance's answers are not
+  redacted along the way (`redact: false`): every copy a journey's instances
+  made lives in that journey, so its deletion takes them all with it.
   """
   def delete_instance(%Instances.Flow{} = instance, opts \\ []) do
     Repo.transaction(fn ->
@@ -165,7 +169,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
       instance
       |> form_instances()
-      |> Enum.each(&delete_form_instance!(&1, opts))
+      |> Enum.each(&delete_form_instance!(&1, Keyword.put(opts, :redact, false)))
 
       case Repo.delete(instance) do
         {:ok, deleted} -> deleted

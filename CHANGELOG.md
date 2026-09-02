@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+### Reviews notice when the reviewed form changes
+
+A review now records what it reviewed, and says so when that form has moved
+on since. Submitting a review of Intake writes the form it reviewed into the
+`snapshot_data` of the review's own `status_changed` event, under
+`"reviewed"`: the related-form property value as stored (`"path"`), the
+source instance's id and pinned version id, its `completed_at`, and a copy of
+its answers as rendered (`"data"`). Structure by reference, answers by copy:
+the version is immutable, but the source can be resubmitted, reconciled, or
+deleted, and a review that carries its own record is stronger evidence than
+one reconstructed by joining other tables. A source that did not resolve, or
+had not been started, records `"instance_id" => nil` — that nothing was
+reviewed is itself on record.
+
+At render, on Show and on a reopened Edit alike, the review type reads that
+record and the source instance's event trail and calls the review stale when
+the source has any event newer than the review's completion. The headline is
+the latest thing that happened — "Intake was submitted again on {date}, after
+this review", "Intake is being edited — reopened on {date}, not yet
+resubmitted", "Intake's form changed after this review (a new version was
+published)", "The Intake reviewed here was replaced", "The Intake reviewed
+here has been deleted" — with a diff of the recorded answers against the
+source's current ones where one makes sense (Name: Ada → Grace), titled from
+the pinned definitions, and a caveat when the form's structure also changed
+since the review. A current review says "Reviewed {date}. Unchanged since."
+Staleness is information, never action: nothing is reopened, blocked, or
+sent. The review stays editable on Edit in every state; resubmitting it
+writes a fresh record, which is how it becomes current again.
+`FormFlow.Web.Components.Forms.Types.Review.staleness/4` and `diff/4` are
+pure and public.
+
+- **`FormFlow.Config.Forms.Type` goes from two callbacks to five.** New:
+  `snapshot_data/2` — what to record on the form's completion event,
+  `%{}` for nothing; runs before the completion is written, so an error
+  refuses the submit rather than completing a form without its record.
+  `handle_complete/2` — called after the completion with a context derived
+  fresh (`:form_instance` the completed row), the moment a host reacts at;
+  its return is ignored and an error is logged and never undoes the
+  completion. It shares its name with the flow type's `handle_complete/2`,
+  which receives the same fresh context and answers where the user goes
+  next. `show_component/1` — the Show page's answers, drawn read-only; the
+  default is the disabled fieldset Show rendered itself before, and Show now
+  renders through the form type, which it never consulted until now. All
+  three have defaults in `FormFlow.Config.Forms.Type.Default`.
+- The edit page's submit path derives the fresh context once and hands it to
+  both `handle_complete/2`s. Both new callbacks are rescued at the call site:
+  a raising `snapshot_data/2` shows the page's error and completes
+  nothing; a raising `handle_complete/2` is logged (`Logger`, a first use in
+  the library) after a completion that stands.
+- **New: `FormFlow.Data.Instances.Forms.list_events/2`** — an instance's
+  event trail, oldest first, `event:` filtering by kind — and
+  **`latest_event/2`**, the newest of a kind or nil.
+- **New: `FormFlow.Data.Instances.Forms.redact_snapshots/1`** blanks the
+  answers in every review snapshot that references an instance and stamps
+  `"redacted_at"` — the one sanctioned update of an event row, stated as the
+  exception in `FormFlow.Data.Instances.Form.Event`'s docs. `delete_instance/2`
+  runs it inside its transaction before deleting, so a failed redaction
+  aborts the deletion; `redact: false` skips it, which is what
+  `FormFlow.Data.Instances.Flows.delete_instance/2` passes, since a journey's
+  deletion takes every copy with it. A redacted review says "Reviewed
+  {date}. The record of what was reviewed has been erased."
+- `reopened` events have two writers, now documented: a user's reopen, and
+  the `:reopen_carry` / `:reopen_reset` publish policies, the latter with
+  both version ids set. The staleness rules read `to_version_id` to tell
+  them apart.
+- A host that cannot hold duplicated personal data overrides
+  `snapshot_data/2` in its own review type to store identifiers only;
+  there is no configuration option for it.
+
 ### The review form type
 
 **New: `FormFlow.Web.Components.Forms.Types.Review`**, a form type for

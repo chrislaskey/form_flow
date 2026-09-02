@@ -44,7 +44,7 @@ defmodule Demo.FormFlowMigrationTest do
              Repo.query(
                """
                INSERT INTO form_flow_instance_form_events
-                 (id, instance_form_id, event, to_version_id, data_snapshot,
+                 (id, instance_form_id, event, to_version_id, snapshot_data,
                   inserted_at, updated_at)
                VALUES (?, ?, 'created', ?, '{}', ?, ?)
                """,

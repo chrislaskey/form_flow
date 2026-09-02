@@ -3,7 +3,10 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   `FormFlow.Web.Instances.Forms.Show` LiveComponent renders the answers at one
   position of a flow instance, read-only — the pinned version's definition
   through `DynamicForm`, filled in with what is in `data`, every control
-  disabled and no submit.
+  disabled and no submit. The answers are the form's `FormFlow.Config.Forms.Type`'s
+  to draw (`show_component/1`), as they are on Edit: the default is the
+  disabled form alone, and a type that draws more around them here — a review
+  showing what it reviewed — does so on this page too.
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Edit`, which is where
   work happens: `/flows/:id/forms/*path` is this page,
@@ -161,18 +164,13 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         </.link>
       </p>
 
-      <%!-- Read-only is the whole job of this page: the disabled fieldset
-            switches off every control inside (a native HTML behavior) and the
-            submit button is hidden. DynamicForm's render_only is NOT this —
-            it is a parent-owns-the-form mode requiring a Phoenix.HTML.Form. --%>
-      <fieldset disabled class="max-w-md">
-        <DynamicForm.form
-          id={"#{@id}-#{@form_instance.id}-#{@form_instance.status}"}
-          instance={@parsed}
-          data={@form_instance.data}
-          hide_submit
-        />
-      </fieldset>
+      {@form_type.module.show_component(%{
+        id: "#{@id}-#{@form_instance.id}-#{@form_instance.status}",
+        instance: @parsed,
+        data: @form_instance.data,
+        context: @context,
+        config_data: @config_data
+      })}
     </div>
     """
   end

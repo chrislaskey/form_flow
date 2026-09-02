@@ -1,6 +1,8 @@
 defmodule FormFlow.Config.Forms.TypesTest do
   use ExUnit.Case, async: true
 
+  import Phoenix.LiveViewTest, only: [render_component: 2]
+
   alias FormFlow.Config.Forms.Type
   alias FormFlow.Context
   alias FormFlow.Data.Instances
@@ -33,6 +35,44 @@ defmodule FormFlow.Config.Forms.TypesTest do
 
     test "renders nothing for a form with no instance yet" do
       assert Type.Default.initial_data(context(nil), %{}) == %{}
+    end
+  end
+
+  describe "Type.Default.show_component/1" do
+    test "renders the answers read-only: a disabled fieldset, no submit" do
+      parsed =
+        DynamicForm.Parser.FromData.parse!(%{
+          "elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]
+        })
+
+      html =
+        render_component(&Type.Default.show_component/1,
+          id: "answers",
+          instance: parsed,
+          data: %{"name" => "Grace"},
+          context: %Context{},
+          config_data: %{}
+        )
+
+      assert html =~ ~r/<fieldset[^>]*disabled/
+      assert html =~ "Grace"
+      refute html =~ ~r/type="submit"/
+    end
+  end
+
+  describe "Type.Default.snapshot_data/2 and handle_complete/2" do
+    test "record nothing and do nothing" do
+      context = context(%{"name" => "Grace"})
+
+      assert Type.Default.snapshot_data(context, %{}) == %{}
+      assert Type.Default.handle_complete(context, %{}) == :ok
+    end
+
+    test "are what a type inherits when it doesn't override them" do
+      context = context(%{"name" => "Grace"})
+
+      assert Prefill.snapshot_data(context, %{}) == %{}
+      assert Prefill.handle_complete(context, %{}) == :ok
     end
   end
 
