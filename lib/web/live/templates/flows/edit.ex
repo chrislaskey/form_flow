@@ -145,7 +145,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        flow_types: types,
        embedded_flow_type_options:
          flow &&
-           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root)))
+           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
+       embedded_form_type_options: flow && embedded_form_type_options(socket.assigns, flow, root)
      )}
   end
 
@@ -212,6 +213,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
+
+  # The canvas's form nodes each collect a form; their type dropdowns share one
+  # options list, asked of the config with this flow as the context.
+  defp embedded_form_type_options(assigns, flow, root) do
+    config = FormFlow.Config.config_module(assigns.config)
+    context = %Context{flow: root || flow, subflow: flow}
+
+    type_select_options(config.enabled_form_types(context, assigns.config_data))
+  end
 
   # The raw param, not the applied changeset data: picking the prompt again
   # ("") must clear the pending type, and Ecto's cast treats "" as a missing
@@ -638,6 +648,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         target={@myself}
         flow_label={@flow.label}
         form_flow_type_options={@embedded_flow_type_options}
+        form_type_options={@embedded_form_type_options}
       />
 
       <div

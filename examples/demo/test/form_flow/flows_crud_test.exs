@@ -179,6 +179,50 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute html =~ "Form flow type"
   end
 
+  test "a form node's form_type writes through to the collected form", %{conn: conn} do
+    id = create_flow(conn, "Application", "forms")
+    save_form_node(conn, id)
+    [node] = Flows.get(id).nodes
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [form_node_attrs(node, %{"form_type" => "review"})],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    # One stored copy — the form lineage's properties; the node keeps none
+    [saved_node] = Flows.get(id).nodes
+    assert Forms.get(node.form_id).properties == %{"form_type" => "review"}
+    refute Map.has_key?(saved_node.properties["data"], "form_type")
+
+    # Loading projects the stored type back into the node's data, so the
+    # canvas dropdown (and show mode's label) reflect it
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    assert view |> element("#flows-show-editor") |> render() =~ "review"
+
+    # The canvas offers the configured form types, the library's and the
+    # demo's — and a node reported without a type clears it, which is what an
+    # unset type is resolved from anyway
+    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    assert html =~ "Demo prefill"
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [form_node_attrs(node, %{})],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+    assert Forms.get(node.form_id).properties == %{}
+  end
+
   test "a subflow node's form_flow_type writes through to the embedded flow", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
@@ -801,6 +845,37 @@ defmodule Demo.FormFlowFlowsCrudTest do
   # A saved subflow node the way the editor reports it: the stored properties
   # (subflow_id reference included) round-trip through the canvas, with `data`
   # merged over the defaults — e.g. a picked form_flow_type
+  # Adds one form step to a forms flow and saves, creating its form
+  defp save_form_node(conn, flow_id) do
+    {:ok, view, _html} = live(conn, "/admin/flows/#{flow_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        %{
+          "id" => "1",
+          "type" => "step",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Intake", "kind" => "form"}
+        }
+      ],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+  end
+
+  defp form_node_attrs(node, data) do
+    %{
+      "id" => node.id,
+      "type" => "step",
+      "form_id" => node.form_id,
+      "position" => %{"x" => 0, "y" => 0},
+      "data" => Map.merge(%{"label" => "Intake", "kind" => "form"}, data)
+    }
+  end
+
   defp subflow_node_attrs(node, data) do
     %{
       "id" => node.id,

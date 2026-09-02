@@ -83,7 +83,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
 
-  Three exceptions to the pure pass-through, all display projections
+  Four exceptions to the pure pass-through, all display projections
   `to_data/1` merges into a node's `data`:
 
     * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
@@ -96,6 +96,9 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       the canvas dropdown edits it, and `FormFlow.Data.Templates.Flows`
       pops it out of the node's properties at save and writes it through to
       the embedded flow — the single stored copy.
+    * `form_type` — the same for form nodes: the *collected form's*
+      `properties["form_type"]` (requires `:form` preloaded), edited by the
+      canvas dropdown and written through to the form lineage at save.
     * `label` — on nodes backed by a real entity, the entity's current `name`:
       the embedded flow's (`:subflow` preloaded) or the collected form's
       (`:form` preloaded). The canvas's inline rename edits it, and saves
@@ -182,6 +185,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     |> Map.put("id", node.id)
     |> put_labels(node.labels)
     |> put_form_flow_type(node)
+    |> put_form_type(node)
     |> put_entity_name(node)
   end
 
@@ -225,6 +229,18 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
           %{"form_flow_type" => type},
           &Map.put(&1, "form_flow_type", type)
         )
+
+      _other ->
+        properties
+    end
+  end
+
+  # The collected form's type, projected into data for the canvas dropdown —
+  # the form-node twin of put_form_flow_type/2
+  defp put_form_type(properties, node) do
+    case node.form do
+      %{properties: %{"form_type" => type}} ->
+        Map.update(properties, "data", %{"form_type" => type}, &Map.put(&1, "form_type", type))
 
       _other ->
         properties

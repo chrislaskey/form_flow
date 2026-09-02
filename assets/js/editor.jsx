@@ -36,6 +36,7 @@ const EditorContext = createContext({
   onNodeDataChange: null,
   editable: true,
   formFlowTypeOptions: [],
+  formTypeOptions: [],
   focusId: null,
   clearFocus: null,
 });
@@ -197,8 +198,17 @@ function useNodeMenuItems(id, deletable) {
 // delivers nodesConnectable to custom nodes, and Handle defaults to true
 // when it is omitted — which would leave handles live on read-only canvases.
 function StepNode({ id, data, selected, isConnectable, deletable }) {
-  const { onOpenForm, editable } = useContext(EditorContext);
+  const { onOpenForm, onNodeDataChange, editable, formTypeOptions } = useContext(EditorContext);
   const menuItems = useNodeMenuItems(id, deletable);
+
+  // The form_type dropdown, on form steps: how the collected form behaves
+  // for the user filling it out. Stored in node.data like a subflow's
+  // form_flow_type, and written through to the form at save the same way.
+  // The options are exactly the configured types; an unset type shows the
+  // first, which is what the server resolves it to. A type's properties are
+  // set on the form's own page, not here.
+  const typeLabel =
+    formTypeOptions.find((option) => option.value === data.form_type)?.label ?? data.form_type;
 
   return (
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
@@ -210,6 +220,22 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
         {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
       </div>
       <div className="ff-node__meta">{(data.labels ?? []).join(", ")}</div>
+      {data.kind === "form" &&
+        (editable ? (
+          <select
+            className="ff-node__type nodrag nopan"
+            value={data.form_type ?? formTypeOptions[0]?.value ?? ""}
+            onChange={(event) => onNodeDataChange?.(id, { form_type: event.target.value })}
+          >
+            {formTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          data.form_type && <div className="ff-node__type-label">{typeLabel}</div>
+        ))}
       {data.kind === "form" && (
         <button
           type="button"
@@ -237,7 +263,8 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
   // The form_flow_type dropdown, on form subflows only: how the embedded
   // flow's steps are presented to the user filling it out. Stored in
   // node.data, so it rides the ordinary properties round-trip to the server.
-  // Unset means the server-side FormFlow.Config default decides.
+  // The options are exactly the configured types; an unset type shows the
+  // first, which is what the server resolves it to.
   const isFormSubflow = data.subflow_label !== "subflows";
   const typeLabel =
     formFlowTypeOptions.find((option) => option.value === data.form_flow_type)?.label ??
@@ -259,12 +286,9 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
           // nodrag/nopan: interacting with the select must not move the canvas
           <select
             className="ff-node__type nodrag nopan"
-            value={data.form_flow_type ?? ""}
-            onChange={(event) =>
-              onNodeDataChange?.(id, { form_flow_type: event.target.value || undefined })
-            }
+            value={data.form_flow_type ?? formFlowTypeOptions[0]?.value ?? ""}
+            onChange={(event) => onNodeDataChange?.(id, { form_flow_type: event.target.value })}
           >
-            <option value="">Type: default</option>
             {formFlowTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -354,6 +378,7 @@ function FlowEditor({
   editable = true,
   flowLabel = "forms",
   formFlowTypeOptions = [],
+  formTypeOptions = [],
   onOpenSubflow,
   onOpenForm,
 }) {
@@ -473,10 +498,9 @@ function FlowEditor({
     [editable, flowLabel, report, screenToFlowPosition],
   );
 
-  // In-node controls (the form_flow_type dropdown) editing node.data. Merges
-  // the patch and reports immediately — a picked value is worth persisting,
-  // like a drag-end. A key set to undefined disappears in JSON serialization,
-  // which is how "back to default" removes the property instead of storing "".
+  // In-node controls (the type dropdowns) editing node.data. Merges the patch
+  // and reports immediately — a picked value is worth persisting, like a
+  // drag-end.
   const onNodeDataChange = useCallback(
     (id, patch) =>
       setState((current) => {
@@ -524,6 +548,7 @@ function FlowEditor({
         onNodeDataChange,
         editable,
         formFlowTypeOptions,
+        formTypeOptions,
         focusId,
         clearFocus,
       }}
@@ -612,7 +637,8 @@ export function injectStyles(doc = document) {
  * `formFlowTypeOptions` ([{label, value}]) are the form_flow_type choices a
  * form subflow node offers: a dropdown when editable, the stored value's
  * label when not. The chosen value lives in the node's data and rides the
- * ordinary onChange round-trip.
+ * ordinary onChange round-trip. `formTypeOptions` are the same for a form
+ * step's form_type.
  *
  * Returns a handle with `setFlow/1` so the server can push a new flow in, and
  * `unmount/0` for teardown.
@@ -629,6 +655,7 @@ export function mount(el, opts = {}) {
           editable={opts.editable !== false}
           flowLabel={opts.flowLabel}
           formFlowTypeOptions={opts.formFlowTypeOptions}
+          formTypeOptions={opts.formTypeOptions}
           onOpenSubflow={opts.onOpenSubflow}
           onOpenForm={opts.onOpenForm}
         />

@@ -237,6 +237,26 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert data["label"] == "Collect address"
     end
 
+    test "projects the collected form's form_type into a form node's data" do
+      node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "step", "data" => %{"label" => "Review", "kind" => "form"}},
+        form: %FormFlow.Data.Templates.Form{properties: %{"form_type" => "review"}}
+      }
+
+      untyped = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "step", "data" => %{"label" => "Intake", "kind" => "form"}},
+        form: %FormFlow.Data.Templates.Form{properties: %{}}
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [node, untyped], relationships: []}
+
+      assert [%{"data" => typed}, %{"data" => plain}] = ReactFlow.to_data(flow).nodes
+      assert typed["form_type"] == "review"
+      refute Map.has_key?(plain, "form_type")
+    end
+
     test "projects the backing entity's name into a node's data.label" do
       subflow_node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),

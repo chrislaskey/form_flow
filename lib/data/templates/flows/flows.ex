@@ -46,14 +46,19 @@ defmodule FormFlow.Data.Templates.Flows do
   `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
   values back into the node's `data` for display. Writing through to a
   *reusable* child (or a shared catalog form) changes it for every consumer,
-  like any other edit to a shared entity. Two write-throughs exist:
+  like any other edit to a shared entity. Three write-throughs exist:
 
     * `data.form_flow_type` on a subflow node — the embedded flow's
       presentation type, stored only in that flow's
       `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`).
       Popped from the node's properties at save; an absent key clears the
       child's property, so picking "default" un-pins rather than freezing a
-      value.
+      value. A type that changes takes the old type's property values with
+      it — they belonged to that type — while the canvas itself never edits
+      property values; those are set on the flow's own page.
+    * `data.form_type` on a form node — the collected form's type, stored only
+      in the form lineage's `properties["form_type"]`
+      (see `FormFlow.Data.Templates.Form`), with the same rules.
     * `data.label` on a subflow or form node — renaming the node renames the
       embedded flow or the collected form, the same value the entity's own
       pages edit. Unlike `form_flow_type` the label *stays* on the node too:
@@ -501,15 +506,21 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # What a canvas save edits *through* a node rather than on it (see "Canvas
-  # write-throughs" above), collected per node id. form_flow_type is popped
-  # from the node's properties so exactly one copy exists — nil intents
-  # included, because the editor removes the key when "default" is picked, and
-  # that must clear the child's property. The label is only read: it stays on
-  # the node as well, for entity-less nodes and save-time child naming.
+  # write-throughs" above), collected per node id. The types are popped from
+  # the node's properties so exactly one copy exists — nil intents included,
+  # because the editor removes the key when "default" is picked, and that must
+  # clear the entity's property. The label is only read: it stays on the node
+  # as well, for entity-less nodes and save-time child naming.
   defp pop_canvas_intents(nodes_attrs) do
     Enum.map_reduce(nodes_attrs, %{}, fn attrs, intents ->
-      {type, properties} = pop_form_flow_type(node_properties(attrs))
-      intent = %{form_flow_type: type, label: get_in(properties, ["data", "label"])}
+      {flow_type, properties} = pop_data_key(node_properties(attrs), "form_flow_type")
+      {form_type, properties} = pop_data_key(properties, "form_type")
+
+      intent = %{
+        form_flow_type: flow_type,
+        form_type: form_type,
+        label: get_in(properties, ["data", "label"])
+      }
 
       intents =
         case attrs[:id] || attrs["id"] do
@@ -521,13 +532,13 @@ defmodule FormFlow.Data.Templates.Flows do
     end)
   end
 
-  defp pop_form_flow_type(%{"data" => %{} = data} = properties) do
-    {type, data} = Map.pop(data, "form_flow_type")
+  defp pop_data_key(%{"data" => %{} = data} = properties, key) do
+    {value, data} = Map.pop(data, key)
 
-    {type, Map.put(properties, "data", data)}
+    {value, Map.put(properties, "data", data)}
   end
 
-  defp pop_form_flow_type(properties), do: {nil, properties}
+  defp pop_data_key(properties, _key), do: {nil, properties}
 
   defp put_node_properties(%{properties: _properties} = attrs, properties) do
     %{attrs | properties: properties}
@@ -567,13 +578,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp apply_canvas_intent(%{subflow_id: subflow_id}, intent)
        when not is_nil(subflow_id) do
     child = Repo.get(Flow, subflow_id)
-
-    properties =
-      case intent.form_flow_type do
-        nil -> Map.delete(child.properties, "form_flow_type")
-        type -> Map.put(child.properties, "form_flow_type", type)
-      end
-
+    properties = put_type(child.properties, "form_flow_type", intent.form_flow_type)
     changes = rename_change(child.name, intent.label)
 
     changes =
@@ -590,16 +595,33 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp apply_canvas_intent(%{form_id: form_id}, intent) when not is_nil(form_id) do
     form = Repo.get(Templates.Form, form_id)
+    properties = put_type(form.properties, "form_type", intent.form_type)
+    changes = rename_change(form.name, intent.label)
 
-    case rename_change(form.name, intent.label) do
-      changes when changes == %{} ->
-        :unchanged
+    changes =
+      if properties == form.properties,
+        do: changes,
+        else: Map.put(changes, :properties, properties)
 
-      changes ->
-        # The schema changeset, for its unique_constraint mapping: renaming a
-        # shared catalog form into a taken name must be a refused save, not a
-        # raised ConstraintError
-        Repo.update(Templates.Form.changeset(form, changes))
+    if changes == %{} do
+      :unchanged
+    else
+      # The schema changeset, for its unique_constraint mapping: renaming a
+      # shared catalog form into a taken name must be a refused save, not a
+      # raised ConstraintError
+      Repo.update(Templates.Form.changeset(form, changes))
+    end
+  end
+
+  # The entity's properties with the canvas's type applied under `key`. A type
+  # that changes — to another or to none — drops the property values entered
+  # for the old one (under `key <> "_property_values"`), which belonged to it;
+  # the same type again keeps them.
+  defp put_type(properties, key, type) do
+    cond do
+      properties[key] == type -> properties
+      is_nil(type) -> properties |> Map.delete(key) |> Map.delete(key <> "_property_values")
+      true -> properties |> Map.put(key, type) |> Map.delete(key <> "_property_values")
     end
   end
 

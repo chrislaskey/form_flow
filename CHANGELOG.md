@@ -32,6 +32,22 @@ configuration problem to surface, not one to paper over.
   flow instance, and `FormFlow.Context` gained `:flow_instance_progress` —
   every form of the whole flow instance, in order — which is where it looks.
 
+### Form types on the canvas
+
+A form node on the canvas now carries its form's type the way a form subflow
+node carries its flow's: a dropdown in edit mode, the type's name in show
+mode, populated from `enabled_form_types/2` with the flow as the context. The
+form lineage's `properties["form_type"]` stays the single stored copy —
+`FormFlow.Web.Helpers.ReactFlow.to_data/1` projects it into the node's
+`data.form_type` on load, and `FormFlow.Data.Templates.Flows.update/2` pops
+it out and writes it through on save — and the canvas edits only the type: a
+type's properties are set on the form's own page. `FormFlow.Web.Components.Editor`
+takes `form_type_options`; the editor bundle was rebuilt.
+
+- Writing a *changed* type through from the canvas, for flows and forms
+  alike, drops the property values entered for the old type, since they
+  belonged to it; the same type again keeps them.
+
 ### Type properties
 
 A flow or form type can now ask an admin for settings. `FormFlow.Config.Property`

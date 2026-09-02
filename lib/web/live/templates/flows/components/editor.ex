@@ -54,12 +54,20 @@ defmodule FormFlow.Web.Components.Editor do
         "and as the value's label when not"
   )
 
+  attr(:form_type_options, :list,
+    default: [],
+    doc:
+      "form_type choices as {label, value} tuples for the forms the canvas's " <>
+        "form nodes collect (the configured `enabled_form_types`, as name and " <>
+        "id); those nodes render them as a dropdown when editable and as the " <>
+        "value's label when not"
+  )
+
   def editor(assigns) do
     assigns =
-      assign(
-        assigns,
-        :form_flow_type_options_json,
-        for({label, value} <- assigns.form_flow_type_options, do: %{label: label, value: value})
+      assign(assigns,
+        form_flow_type_options_json: options_json(assigns.form_flow_type_options),
+        form_type_options_json: options_json(assigns.form_type_options)
       )
 
     ~H"""
@@ -74,6 +82,7 @@ defmodule FormFlow.Web.Components.Editor do
       data-editable={to_string(@editable)}
       data-flow-label={@flow_label}
       data-form-flow-type-options={Phoenix.json_library().encode!(@form_flow_type_options_json)}
+      data-form-type-options={Phoenix.json_library().encode!(@form_type_options_json)}
       data-flow={ReactFlow.to_json(@data)}
       style="height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
@@ -94,6 +103,7 @@ defmodule FormFlow.Web.Components.Editor do
               editable: this.el.dataset.editable !== "false",
               flowLabel: this.el.dataset.flowLabel,
               formFlowTypeOptions: JSON.parse(this.el.dataset.formFlowTypeOptions),
+              formTypeOptions: JSON.parse(this.el.dataset.formTypeOptions),
               onChange: (flow) => this.pushEventTo(this.el, "form_flow:flow_changed", flow),
               onOpenSubflow: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId}),
@@ -120,4 +130,7 @@ defmodule FormFlow.Web.Components.Editor do
     </script>
     """
   end
+
+  defp options_json(options),
+    do: for({label, value} <- options, do: %{label: label, value: value})
 end
