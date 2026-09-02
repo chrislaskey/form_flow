@@ -44,6 +44,9 @@ defmodule FormFlow.Context do
       to (`:subflow`): every form of it, in the order they are worked, as
       `FormProgress` structs — what `FormFlow.Data.Instances.FlowProgress.forms_in_flow/2`
       returns
+    * `:flow_instance_progress` - the same for the whole flow instance: every
+      form of every flow in it, in order (`FormFlow.Data.Instances.FlowProgress.forms/2`)
+      — where a form finds one it relates to (`FormFlow.Config.Forms.Type.related_form/2`)
 
   `:config_data` is deliberately not a field here — it is passed to callbacks
   as its own argument, since it is caller-supplied and unrelated to what
@@ -62,7 +65,8 @@ defmodule FormFlow.Context do
     :flow_instance,
     :form_instance,
     :form_progress,
-    :flow_progress
+    :flow_progress,
+    :flow_instance_progress
   ]
 
   @type t :: %__MODULE__{
@@ -77,6 +81,7 @@ defmodule FormFlow.Context do
           flow_instance: FormFlow.Data.Instances.Flow.t() | nil,
           form_instance: FormFlow.Data.Instances.Form.t() | nil,
           form_progress: FormFlow.Data.Instances.FormProgress.t() | nil,
-          flow_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil
+          flow_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil,
+          flow_instance_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil
         }
 end

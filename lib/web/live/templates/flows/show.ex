@@ -79,7 +79,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
     context
     |> config.enabled_flow_types(assigns.config_data)
-    |> Shared.fill_related_forms(root && root.id, node && node.id)
+    |> Shared.fill_related_forms(
+      root && root.id,
+      node && node.id,
+      FormFlow.Config.Flows.Type.property_values(context.subflow)
+    )
   end
 
   # The canvas asks once for every form subflow node it draws, saved or not,

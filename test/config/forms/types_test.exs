@@ -57,4 +57,40 @@ defmodule FormFlow.Config.Forms.TypesTest do
       assert Type.property_values(nil) == %{}
     end
   end
+
+  describe "related_form/2" do
+    setup do
+      intake = %Instances.FormProgress{path: ["intake"], label: "Intake", status: :completed}
+
+      proof = %Instances.FormProgress{
+        path: ["documents", "proof"],
+        label: "Proof",
+        status: :pending
+      }
+
+      %{forms: [intake, proof], intake: intake, proof: proof}
+    end
+
+    test "resolves a related-form property value to that form in the flow instance", ctx do
+      context = %Context{
+        form_type_property_values: %{"source" => "documents/proof"},
+        flow_instance_progress: ctx.forms
+      }
+
+      assert Type.related_form(context, "source") == ctx.proof
+    end
+
+    test "is nil when the property is unset or the flow no longer has the position", ctx do
+      unset = %Context{form_type_property_values: %{}, flow_instance_progress: ctx.forms}
+
+      gone = %Context{
+        form_type_property_values: %{"source" => "gone"},
+        flow_instance_progress: ctx.forms
+      }
+
+      assert is_nil(Type.related_form(unset, "source"))
+      assert is_nil(Type.related_form(gone, "source"))
+      assert is_nil(Type.related_form(%Context{}, "source"))
+    end
+  end
 end

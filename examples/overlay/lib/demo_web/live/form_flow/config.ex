@@ -25,19 +25,20 @@ defmodule DemoWeb.FormFlowLive.Config do
     end
   end
 
-  # The library enables no form types of its own, so this list is the whole
-  # dropdown — and, with one entry, the type every form gets unless it picks.
+  # The prefill type joins the library's Default and Review.
   @impl true
-  def enabled_form_types(_context, _config_data) do
-    [
-      %FormFlow.Config.Forms.Type{
-        id: "demo_prefill",
-        module: DemoWeb.FormFlowLive.Prefill,
-        name: "Demo prefill",
-        description: "Starts with the name filled in from the host application.",
-        properties: DemoWeb.FormFlowLive.Prefill.properties()
-      }
-    ]
+  def enabled_form_types(context, config_data) do
+    FormFlow.Config.Default.enabled_form_types(context, config_data) ++ [prefill()]
+  end
+
+  defp prefill do
+    %FormFlow.Config.Forms.Type{
+      id: "demo_prefill",
+      module: DemoWeb.FormFlowLive.Prefill,
+      name: "Demo prefill",
+      description: "Starts with the name filled in from the host application.",
+      properties: DemoWeb.FormFlowLive.Prefill.properties()
+    }
   end
 
   defp checklist do

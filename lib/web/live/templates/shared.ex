@@ -38,36 +38,47 @@ defmodule FormFlow.Web.Templates.Shared do
   the one embedding what is being edited — in the order a user works them,
   as `{qualified label, path}`. A related form is a choice whose choices the
   flow supplies, so filling them here lets the rest of the page treat it as
-  any other choice type. No node in scope (a catalog form, a root flow) means
-  no earlier forms, and the property's description says so.
+  any other choice type.
+
+  The property's description gains a note when there is something to say: no
+  node in scope (a catalog form, a root flow) means no earlier forms to offer;
+  and a saved value (`property_values`, the template's) that none of the
+  options match — the flow was rearranged, or the value was edited by hand —
+  is a choice the admin has to make again, since the field can't show it.
   """
-  def fill_related_forms(types, root_id, node_id) do
+  def fill_related_forms(types, root_id, node_id, property_values \\ %{}) do
     if Enum.any?(types, fn type -> Enum.any?(type.properties, &(&1.type == :related_form)) end) do
       options = related_forms(root_id, node_id)
 
       for type <- types do
-        %{type | properties: Enum.map(type.properties, &fill_related_form(&1, options))}
+        %{
+          type
+          | properties:
+              Enum.map(type.properties, &fill_related_form(&1, options, property_values))
+        }
       end
     else
       types
     end
   end
 
-  defp fill_related_form(%Property{type: :related_form} = property, []) do
-    note = "No earlier forms to choose from — open this form from its flow."
+  @no_earlier_forms "No earlier forms to choose from — open this form from its flow."
+  @stale_choice "The saved choice is no longer in this flow — choose again."
 
-    %{
-      property
-      | options: [],
-        description: Enum.join(Enum.reject([property.description, note], &is_nil/1), " ")
-    }
+  defp fill_related_form(%Property{type: :related_form} = property, options, property_values) do
+    notes = [
+      property.description,
+      if(options == [], do: @no_earlier_forms),
+      if(stale?(options, property_values[property.id]), do: @stale_choice)
+    ]
+
+    %{property | options: options, description: Enum.join(Enum.reject(notes, &is_nil/1), " ")}
   end
 
-  defp fill_related_form(%Property{type: :related_form} = property, options) do
-    %{property | options: options}
-  end
+  defp fill_related_form(property, _options, _property_values), do: property
 
-  defp fill_related_form(property, _options), do: property
+  defp stale?(_options, blank) when blank in [nil, ""], do: false
+  defp stale?(options, value), do: not List.keymember?(options, value, 1)
 
   defp related_forms(nil, _node_id), do: []
   defp related_forms(_root_id, nil), do: []
@@ -161,6 +172,15 @@ defmodule FormFlow.Web.Templates.Shared do
 
   def display_value(%Property{type: :boolean}, value),
     do: if(value in [true, "true"], do: "Yes", else: "No")
+
+  # A related form's value is a path; one the flow no longer has is the one
+  # error there is, however it came about
+  def display_value(%Property{type: :related_form, options: options}, value) do
+    case List.keyfind(options || [], value, 1) do
+      {label, _path} -> label
+      nil -> "Missing — no longer in this flow"
+    end
+  end
 
   def display_value(%Property{} = property, value) do
     if Property.choice?(property) do

@@ -331,7 +331,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     context
     |> config.enabled_form_types(assigns.config_data)
-    |> Shared.fill_related_forms(assigns.root_id, assigns.node_id)
+    |> Shared.fill_related_forms(
+      assigns.root_id,
+      assigns.node_id,
+      FormFlow.Config.Forms.Type.property_values(form)
+    )
   end
 
   @impl true

@@ -17,4 +17,5 @@ defmodule FormFlow.Config.Forms.Type.Default do
   alias FormFlow.Web.Components.Forms.Types
 
   defdelegate initial_data(context, config_data), to: Types.Default
+  defdelegate edit_component(assigns), to: Types.Default
 end

@@ -13,10 +13,18 @@ defmodule FormFlow.Config.Forms.Type do
   `FormFlow.Config.Forms.Type.Default`, render the stored answers and nothing
   more. A type overrides only what it changes, and can call the defaults from
   its override, so prefilling a form is a `Map.merge/2` over what the default
-  returns.
+  returns, and a type that draws more around the form still renders the form
+  itself through the default `edit_component/1`.
+
+  Two ship with the library, both enabled by default
+  (`FormFlow.Config.Default.enabled_form_types/2`): `"default"`, the form as
+  designed, and `"review"` (`FormFlow.Web.Components.Forms.Types.Review`),
+  which shows an earlier form's answers beside it.
   """
 
   alias FormFlow.Context
+  alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates.Form
 
   defstruct [:id, :module, :name, :description, properties: []]
@@ -52,6 +60,15 @@ defmodule FormFlow.Config.Forms.Type do
   """
   @callback initial_data(Context.t(), map()) :: map()
 
+  @doc """
+  The edit page's form, drawn. `assigns` are `DynamicForm.form/1`'s — `:id`,
+  `:instance` (the parsed definition), `:data` (from `initial_data/2`),
+  `:on_success` — plus `:context` and `:config_data`. The default renders the
+  form and nothing else; a type that draws more around it renders the form
+  itself by calling the default with the same assigns.
+  """
+  @callback edit_component(map()) :: Phoenix.LiveView.Rendered.t()
+
   defmacro __using__(_opts) do
     quote do
       @behaviour FormFlow.Config.Forms.Type
@@ -60,7 +77,24 @@ defmodule FormFlow.Config.Forms.Type do
         FormFlow.Config.Forms.Type.Default.initial_data(context, config_data)
       end
 
-      defoverridable initial_data: 2
+      def edit_component(assigns) do
+        FormFlow.Config.Forms.Type.Default.edit_component(assigns)
+      end
+
+      defoverridable initial_data: 2, edit_component: 1
+    end
+  end
+
+  @doc """
+  The form a `:related_form` property of the form's type points at, as it
+  stands in this flow instance — the `FormProgress` whose path the property
+  value names — or `nil` when the property is unset or the flow no longer has
+  that position.
+  """
+  @spec related_form(Context.t(), String.t()) :: FormProgress.t() | nil
+  def related_form(%Context{} = context, property_id) do
+    with path when is_binary(path) <- (context.form_type_property_values || %{})[property_id] do
+      FlowProgress.find_form(context.flow_instance_progress || [], String.split(path, "/"))
     end
   end
 end

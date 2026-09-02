@@ -270,6 +270,53 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "the library's review form type" do
+    test "shows the related form's answers read-only beside the editable form", %{conn: conn} do
+      # Start → Intake → Review; Review's form is a "review" of Intake
+      {:ok, flow} = Flows.create(%{name: "Application"})
+      first_node = build_node(flow, ["Start"], "Start")
+      intake = build_form_node(flow, "Intake")
+
+      review_form =
+        published_form("Review", form_type: "review", property_values: %{"source" => intake.id})
+
+      review = build_node(flow, ["Form"], "Review", %{form_id: review_form.id})
+      edge(flow, first_node, intake)
+      edge(flow, intake, review)
+      instance = start_flow(flow)
+
+      # Until Intake is answered there is nothing to review — and Review isn't
+      # editable yet anyway, so the page says so
+      complete(instance, [intake.id], %{"name" => "Ada"})
+
+      {:ok, view, html} = live(conn, edit_path(instance, [review.id]))
+
+      assert html =~ "Reviewing: Intake"
+      # Intake's answer, inside a disabled fieldset, with no submit of its own
+      assert html =~ "Ada"
+      assert has_element?(view, "fieldset[disabled]")
+      # The review form itself is the editable one
+      assert has_element?(view, "button[type='submit']")
+    end
+
+    test "a source that doesn't resolve is one error, however it came about", %{conn: conn} do
+      for values <- [%{}, %{"source" => ""}, %{"source" => "gone"}] do
+        {:ok, flow} = Flows.create(%{name: "Application"})
+        first_node = build_node(flow, ["Start"], "Start")
+        review_form = published_form("Review", form_type: "review", property_values: values)
+        review = build_node(flow, ["Form"], "Review", %{form_id: review_form.id})
+        edge(flow, first_node, review)
+        instance = start_flow(flow)
+
+        {:ok, view, html} = live(conn, edit_path(instance, [review.id]))
+
+        assert html =~ "The form to review is missing"
+        # The review form itself is still editable
+        assert has_element?(view, "button[type='submit']")
+      end
+    end
+  end
+
   # ── URLs ────────────────────────────────────────────────────────────────
 
   defp flow_path(instance), do: "/users/flows/#{instance.id}"
@@ -357,9 +404,9 @@ defmodule Demo.FormFlowInstancesTest do
     instance
   end
 
-  defp complete(instance, path) do
+  defp complete(instance, path, data \\ %{}) do
     {:ok, _opened} = Instances.Forms.update_status(instance, path, :in_progress)
-    {:ok, completed} = Instances.Forms.update_status(instance, path, :completed, data: %{})
+    {:ok, completed} = Instances.Forms.update_status(instance, path, :completed, data: data)
 
     completed
   end
@@ -398,13 +445,18 @@ defmodule Demo.FormFlowInstancesTest do
     build_node(flow, ["Subflow"], label, %{subflow_id: subflow.id})
   end
 
-  # A published form with one text question, "name"; `form_type:` picks the
-  # demo's form type for it, with "Demo User" as its name-to-prefill property
+  # A published form with one text question, "name"; `form_type:` picks a
+  # form type for it and `property_values:` its property values — for the
+  # demo's prefill type, "Demo User" as the name to prefill unless given
   defp published_form(name, opts \\ []) do
     properties =
       case opts[:form_type] do
-        nil -> %{}
-        type -> %{"form_type" => type, "form_type_property_values" => %{"name" => "Demo User"}}
+        nil ->
+          %{}
+
+        type ->
+          values = Keyword.get(opts, :property_values, %{"name" => "Demo User"})
+          %{"form_type" => type, "form_type_property_values" => values}
       end
 
     {:ok, form} =

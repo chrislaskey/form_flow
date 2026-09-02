@@ -177,7 +177,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
     context
     |> config.enabled_flow_types(assigns.config_data)
-    |> Shared.fill_related_forms(root && root.id, node && node.id)
+    |> Shared.fill_related_forms(
+      root && root.id,
+      node && node.id,
+      FormFlow.Config.Flows.Type.property_values(context.subflow)
+    )
   end
 
   defp reset_form_data_on_switch(socket, pending_type) do

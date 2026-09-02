@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### The review form type
+
+**New: `FormFlow.Web.Components.Forms.Types.Review`**, a form type for
+checking an earlier form's answers: the edit page shows that form read-only on
+the left — the way the Show page renders submitted answers — and the review
+form itself, editable, on the right. Which form is its one property,
+`"source"`, a `:related_form` picked on the form edit page; at render it
+resolves to that form as it stands in the flow instance. A source that doesn't
+resolve — unset, blank, or a path the flow no longer has, however that came
+about — is one error with one fix, an administrator choosing again: the review
+page says the form to review is missing, the form edit page notes that the
+saved choice is no longer in the flow, and Show renders it as missing. A
+source the user hasn't reached yet is not an error and says that instead.
+Paths are never guessed at: rearranging a flow under a review form is a
+configuration problem to surface, not one to paper over.
+
+- `FormFlow.Config.Default.enabled_form_types/2` now enables two types,
+  `"default"` (the form as designed, first — so the fallback for a form that
+  never chose) and `"review"`, so every form edit page has a "Form type"
+  dropdown. A host config extends the list the same way it extends the flow
+  types.
+- **New: `edit_component/1` on `FormFlow.Config.Forms.Type`** — the edit
+  page's form, drawn. Its assigns are `DynamicForm.form/1`'s plus `:context`
+  and `:config_data`; the default renders the form alone, and a type that
+  draws more around it renders the form itself by calling the default.
+- **New: `FormFlow.Config.Forms.Type.related_form/2`** resolves a
+  `:related_form` property value to the `FormProgress` at that path in the
+  flow instance, and `FormFlow.Context` gained `:flow_instance_progress` —
+  every form of the whole flow instance, in order — which is where it looks.
+
 ### Type properties
 
 A flow or form type can now ask an admin for settings. `FormFlow.Config.Property`

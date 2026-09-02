@@ -211,14 +211,17 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
 
-      <div class="max-w-md">
-        <DynamicForm.form
-          id={"#{@id}-#{@form_instance.id}"}
-          instance={@parsed}
-          data={@initial_data}
-          on_success={&submitted(&1, @id)}
-        />
-      </div>
+      <%!-- The form itself is the form type's to draw (edit_component/1) —
+            the default is the DynamicForm form alone; a review draws an
+            earlier form's answers beside it --%>
+      {@form_type.module.edit_component(%{
+        id: "#{@id}-#{@form_instance.id}",
+        instance: @parsed,
+        data: @initial_data,
+        on_success: &submitted(&1, @id),
+        context: @context,
+        config_data: @config_data
+      })}
     </div>
     """
   end

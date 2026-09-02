@@ -84,11 +84,14 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
       }
     end
 
-    test "the library enables no form types, so every form gets the defaults" do
-      assert %{id: nil, module: FormFlow.Config.Forms.Type.Default} =
+    test "the library's own types: review by its id, the default for everything else" do
+      assert %{id: "review", module: FormFlow.Web.Components.Forms.Types.Review} =
+               Shared.form_type(%Context{form: form("review")}, @defaults)
+
+      assert %{id: "default", module: FormFlow.Config.Forms.Type.Default} =
                Shared.form_type(%Context{form: form("anything")}, @defaults)
 
-      assert %{module: FormFlow.Config.Forms.Type.Default} =
+      assert %{id: "default", module: FormFlow.Config.Forms.Type.Default} =
                Shared.form_type(%Context{form: nil}, @defaults)
     end
 

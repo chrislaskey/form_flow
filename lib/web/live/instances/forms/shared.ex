@@ -127,7 +127,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       flow_type_property_values: FormFlow.Config.Flows.Type.property_values(subflow),
       flow_instance: flow_instance,
       form_progress: form,
-      flow_progress: FlowProgress.forms_in_flow(forms, path)
+      flow_progress: FlowProgress.forms_in_flow(forms, path),
+      flow_instance_progress: forms
     }
   end
 

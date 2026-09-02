@@ -136,6 +136,16 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.display_value(@urgent, true) == "Yes"
     assert Shared.display_value(@urgent, false) == "No"
     assert Shared.display_value(@count, Decimal.new("3")) == "3"
+
+    source = %Property{
+      id: "source",
+      name: "Source",
+      type: :related_form,
+      options: [{"Intake", "intake"}]
+    }
+
+    assert Shared.display_value(source, "intake") == "Intake"
+    assert Shared.display_value(source, "gone") == "Missing — no longer in this flow"
     assert Shared.display_value(@name, "Ada") == "Ada"
   end
 end

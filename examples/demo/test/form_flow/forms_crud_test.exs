@@ -254,6 +254,34 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Copy name from: Intake"
   end
 
+  test "a related-form value the flow no longer has is flagged, not hidden", %{conn: conn} do
+    {:ok, root} = Flows.create(%{name: "Onboarding"})
+    start_node = build_node(root, ["Start"], "Start")
+    {review_form, _v1} = published_form()
+    review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
+    edge(root, start_node, review)
+
+    # A value pointing at a node that isn't in the flow — rearranged, or
+    # edited by hand; the cause doesn't matter
+    {:ok, _form} =
+      Forms.update(review_form, %{
+        properties: %{
+          "form_type" => "review",
+          "form_type_property_values" => %{"source" => "gone"}
+        }
+      })
+
+    {:ok, draft} = Forms.create_draft(review_form.id)
+
+    {:ok, _view, html} =
+      live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/versions/#{draft.id}/edit")
+
+    assert html =~ "The saved choice is no longer in this flow"
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
+    assert html =~ "Form to review: Missing — no longer in this flow"
+  end
+
   test "the edit page identifies its draft inline, linking back for the rest",
        %{conn: conn} do
     {form, v1} = published_form()
