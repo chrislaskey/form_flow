@@ -48,4 +48,8 @@ defmodule FormFlow.Web.Components.Config.Default do
       }
     ]
   end
+
+  # Every page renders for every user until a host says otherwise
+  @impl true
+  def handle_mount(_context, _config_data), do: {:ok, %{}}
 end

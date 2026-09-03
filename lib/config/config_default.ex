@@ -18,4 +18,5 @@ defmodule FormFlow.Config.Default do
 
   defdelegate enabled_flow_types(context, config_data), to: Config.Default
   defdelegate enabled_form_types(context, config_data), to: Config.Default
+  defdelegate handle_mount(context, config_data), to: Config.Default
 end

@@ -13,8 +13,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   rather than in either of them, where two copies of one gate could drift
   apart.
 
-  `assigns/2` reads the page's `flow_instance`, `path`, and host
-  config from the socket and assigns the lot back onto it:
+  `assigns/1` reads the page's `flow_instance`, `path`, and host config from
+  the socket and assigns the lot back onto it, writing nothing:
 
     * `:form` - the `FormFlow.Data.Instances.FormProgress` at this path, or
       nil when the flow no longer has the position
@@ -29,18 +29,24 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:context` - the `FormFlow.Context` both types' callbacks take, for
       this form
     * `:editable?` - whether the type allows editing here
-    * `:start_error` - why `start: true` could not start the form, or nil
+    * `:start_error` - why `start/1` could not start the form, or nil
+    * `:mount_error` / `:navigate_to` - the host config's answer from
+      `handle_mount/2` when it refused or redirected, or nil
     * `:clickable` - the sibling forms the type lets the user jump to, for
       `FormFlow.Web.Instances.Components.Flows.Progress`
     * `:flow_name` / `:form_label` - what the breadcrumb needs
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
-  `start: true` is Edit's mode and the one write in here: a form with no
-  instance yet is started when the type allows it — the instance is created,
-  which is the moment the form version is pinned. Show never passes it.
+  Then each page asks the host's config whether it may render,
+  `handle_mount/2`, and Edit — only Edit, and only when the config said yes —
+  makes the one write in here, `start/1`: a form with no instance yet is
+  started when the flow's type allows it, which creates the instance and is
+  the moment the form version is pinned. The order is the point: a refused
+  visitor starts nothing.
   """
 
-  import Phoenix.Component, only: [assign: 2]
+  import Phoenix.Component, only: [assign: 2, assign: 3]
+  import Phoenix.LiveView, only: [start_async: 3]
 
   alias FormFlow.Context
   alias FormFlow.Data.Instances
@@ -63,16 +69,17 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     name: "Default"
   }
 
-  def assigns(socket, opts \\ []) do
-    %{flow_instance: flow_instance} = socket.assigns
+  def assigns(socket) do
+    %{flow_instance: flow_instance, path: path} = socket.assigns
     tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
     context = context(socket.assigns, tree, forms)
     type = flow_type(context, socket.assigns)
     editable? = not is_nil(context.form_progress) and editable?(type, context, socket.assigns)
 
-    {form_instance, start_error, forms} =
-      resolve_instance(socket, tree, forms, editable?, Keyword.get(opts, :start, false))
+    # An instance already at the position is simply used — including a
+    # stranded one, whose position the tree no longer has
+    form_instance = Instances.Forms.get_at(flow_instance, path)
 
     version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
 
@@ -99,7 +106,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
         form_instance && form_type.module.initial_data(context, socket.assigns.config_data),
       context: context,
       editable?: editable?,
-      start_error: start_error,
+      start_error: nil,
+      mount_error: nil,
+      navigate_to: nil,
       clickable: clickable(type, context, socket.assigns),
       flow_name: (tree && tree.flow.name) || "Untitled flow",
       form_label:
@@ -163,33 +172,59 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     Enum.find(types, &(&1.id == id)) || List.first(types) || @default_form_type
   end
 
-  # An instance already at the position is simply used — including a stranded
-  # one, whose position the tree no longer has. Otherwise Edit starts it, and
-  # the progress is derived again afterwards: the first derivation ran before
-  # the start, so it still called this form available rather than in progress.
-  defp resolve_instance(socket, tree, forms, editable?, start?) do
-    %{flow_instance: flow_instance, path: path} = socket.assigns
+  @doc """
+  Asks the host's config (`FormFlow.Config.handle_mount/2`) whether the page
+  may render, with the page's `:context`, and applies the answer:
+  `{:ok, assigns}` runs `on_ok` (Edit's `start/1`) and then merges the
+  assigns; `{:error, message}` assigns `:mount_error`, which the page renders
+  alone; `{:redirect, to}` assigns `:navigate_to` and navigates, the page
+  rendering nothing meanwhile. The flow instance's page uses this too. Host
+  code, deliberately not rescued: an exception here fails closed rather than
+  falling through to the page.
+  """
+  def handle_mount(socket, on_ok \\ & &1) do
+    %{context: context, config: config, config_data: config_data} = socket.assigns
+    module = FormFlow.Config.config_module(config)
 
-    case Instances.Forms.get_at(flow_instance, path) do
-      %Instances.Form{} = form_instance ->
-        {form_instance, nil, forms}
+    case module.handle_mount(context, config_data) do
+      {:ok, extra} when is_map(extra) ->
+        socket |> on_ok.() |> assign(extra)
 
-      nil when start? and editable? ->
-        case start(flow_instance, path, socket.assigns.user_id) do
-          {:ok, started} ->
-            {started, nil,
-             FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))}
+      {:error, message} when is_binary(message) ->
+        assign(socket, :mount_error, message)
 
-          {:error, message} ->
-            {nil, message, forms}
-        end
+      {:redirect, to} when is_binary(to) ->
+        socket
+        |> assign(:navigate_to, to)
+        |> start_async(:navigate, fn -> to end)
 
-      nil ->
-        {nil, nil, forms}
+      other ->
+        raise ArgumentError,
+              "#{inspect(module)}.handle_mount/2 returned #{inspect(other)}; " <>
+                "expected {:ok, assigns}, {:error, message}, or {:redirect, to}"
     end
   end
 
-  defp start(flow_instance, path, user_id) do
+  @doc """
+  Edit's mode: a position with no instance yet is started when the flow's
+  type allows editing there — the instance is created, which pins the form
+  version — and the page's assigns are derived again, since the first
+  derivation ran before the start and still called this form available rather
+  than in progress. A position with an instance, or one the type keeps
+  closed, is left as it is; a start that fails leaves `:start_error`.
+  """
+  def start(%{assigns: %{form_instance: nil, editable?: true}} = socket) do
+    %{flow_instance: flow_instance, path: path, user_id: user_id} = socket.assigns
+
+    case start_instance(flow_instance, path, user_id) do
+      {:ok, _started} -> assigns(socket)
+      {:error, message} -> assign(socket, :start_error, message)
+    end
+  end
+
+  def start(socket), do: socket
+
+  defp start_instance(flow_instance, path, user_id) do
     case Instances.Forms.update_status(flow_instance, path, :in_progress, user_id: user_id) do
       {:ok, form_instance} ->
         {:ok, form_instance}

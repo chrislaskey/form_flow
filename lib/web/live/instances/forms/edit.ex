@@ -14,10 +14,11 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   What is only true here: **this is the page that starts a form.** A
   position with no instance yet gets one created on mount — which is the
   moment the form version is pinned — gated by the flow type's `editable?/2`
-  the flow instance's page asks before offering the link. Starting is
-  idempotent afterwards, so this URL is an ordinary link from everywhere and
-  survives a refresh or a Back — and a form the type gates can't be started
-  by typing its URL.
+  the flow instance's page asks before offering the link, and by the host
+  config's `handle_mount/2`, asked first: a refused or redirected visitor
+  starts nothing. Starting is idempotent afterwards, so this URL is an
+  ordinary link from everywhere and survives a refresh or a Back — and a form
+  either gate can't be started by typing its URL.
 
   An already-submitted position renders no form at all: its answers live at
   Show, which is also where Reopen is, so there is exactly one place that
@@ -109,9 +110,9 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         assign(socket, :flow_instance, nil)
 
       flow_instance ->
-        socket
-        |> assign(:flow_instance, flow_instance)
-        |> Shared.assigns(start: true)
+        socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
+
+        Shared.handle_mount(socket, &Shared.start/1)
     end
   end
 
@@ -188,6 +189,36 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{flow_instance: nil} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    """
+  end
+
+  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+    ~H"""
+    <div></div>
+    """
+  end
+
+  # The host's config refused the page; its message is all there is to draw
+  def render(%{mount_error: message} = assigns) when is_binary(message) do
+    ~H"""
+    <div>
+      <Components.FormPage.breadcrumb
+        base={@base}
+        flow_instance={@flow_instance}
+        flow_name={@flow_name}
+        label={@form_label}
+      />
+
+      <Components.FormPage.notice message={@mount_error}>
+        <.link
+          navigate={Paths.flow_path(@base, @flow_instance.id)}
+          class="text-cyan-600 hover:underline"
+        >
+          Back to the flow
+        </.link>
+      </Components.FormPage.notice>
+    </div>
     """
   end
 

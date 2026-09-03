@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.12.0
+
+### The config gates its pages: `handle_mount/2`
+
+**New: `handle_mount/2` on `FormFlow.Config`.** Every user-facing page — the
+flow instance's page and the two form pages, edit and Show — asks the host's
+config whether it may render, once it has resolved what it addresses and
+before anything is drawn. The context is the page's: on the flow instance's
+page the root flow and every form of the instance, no form in scope; on a
+form page the form's, with `:form_instance` the live instance or nil for a
+form not yet started. The answer is one of `{:ok, assigns}` (render, with the
+assigns merged into the page's), `{:error, message}` (render the message
+alone, with a way back), or `{:redirect, to}` (navigate, rendering nothing
+meanwhile). It is where a host authorizes by flow instance or by position, and
+it lives on the config rather than the types because a config is per use of
+the router while a type is global: the same review type can sit in flows with
+different auth rules.
+
+- **On the edit page it runs before the form is started**, so a refused or
+  redirected visitor creates no instance and pins no version.
+  `FormFlow.Web.Instances.Forms.Shared.assigns/1` now resolves a position
+  without writing, and `start/1` is the separate second step Edit takes only
+  when the config allowed the page. The `start:` option is gone.
+- The callback is host code and is deliberately not rescued: an exception
+  fails closed. A malformed answer raises naming the module.
+- It runs whenever the page's assigns come in — on mount and on every later
+  render of the parent LiveView — and the types' callbacks have already run
+  with the original `config_data` by then, so assigns it merges are the
+  page's, not theirs.
+
 ## v0.11.0
 
 ### Reviews notice when the reviewed form changes

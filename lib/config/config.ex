@@ -15,6 +15,11 @@ defmodule FormFlow.Config do
   and adds to the result. The pages resolve the module to ask with
   `config_module/1` — the host's, or the defaults when the host set none —
   and then call its callbacks directly.
+
+  A host passes one config module per use of `FormFlow.Web.router/1`, so a
+  config is where per-use behavior lives — which types a section offers, and
+  who may see its pages (`handle_mount/2`) — while a type describes how a
+  form or flow behaves wherever it is used.
   """
 
   alias FormFlow.Context
@@ -24,6 +29,31 @@ defmodule FormFlow.Config do
 
   @doc "The form types a form may be given, in display order."
   @callback enabled_form_types(Context.t(), map()) :: [FormFlow.Config.Forms.Type.t()]
+
+  @doc """
+  Whether a user-facing page may render for this user, asked once the page
+  has resolved what it addresses and before anything is drawn. The pages that
+  ask are the flow instance's page and the two form pages, edit and Show; on
+  the edit page it is asked before the form is started, so a refused visitor
+  starts nothing. The context is the page's: on the flow instance's page
+  `:flow` and `:subflow` are the root flow and `:flow_instance_progress` its
+  forms, with no form in scope; on a form page it is the form's, with
+  `:form_instance` the live instance or nil for a form not yet started.
+  Return one of:
+
+    * `{:ok, assigns}` — render, with `assigns` merged into the page's; `%{}`
+      for nothing. The types' callbacks have already run with the original
+      `config_data` by then.
+    * `{:error, message}` — render the message alone, with a way back.
+    * `{:redirect, to}` — navigate to `to`, rendering nothing meanwhile.
+
+  Where a host authorizes: who may see this flow instance, or this form in it.
+  Not rescued — an exception fails closed rather than falling through to the
+  page. Runs whenever the page's assigns come in: on mount, and on every later
+  render of the parent LiveView. The default allows everything.
+  """
+  @callback handle_mount(Context.t(), map()) ::
+              {:ok, map()} | {:error, String.t()} | {:redirect, String.t()}
 
   defmacro __using__(_opts) do
     quote do
@@ -37,7 +67,11 @@ defmodule FormFlow.Config do
         FormFlow.Config.Default.enabled_form_types(context, config_data)
       end
 
-      defoverridable enabled_flow_types: 2, enabled_form_types: 2
+      def handle_mount(context, config_data) do
+        FormFlow.Config.Default.handle_mount(context, config_data)
+      end
+
+      defoverridable enabled_flow_types: 2, enabled_form_types: 2, handle_mount: 2
     end
   end
 

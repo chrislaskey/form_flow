@@ -59,9 +59,23 @@ defmodule Demo.FormFlowInstancesTest do
     def handle_complete(_context, _config_data), do: raise("the host's job queue is down")
   end
 
-  # The demo's config with the three types above enabled beside the library's
+  # The demo's config with the three types above enabled beside the library's,
+  # gating its pages by the flow's name so one config exercises every answer
+  # handle_mount/2 can give
   defmodule TestConfig do
     use FormFlow.Config
+
+    @impl true
+    def handle_mount(%Context{flow: %{name: "Refused"}}, _config_data),
+      do: {:error, "You may not see this flow."}
+
+    def handle_mount(%Context{flow: %{name: "Elsewhere"}}, _config_data),
+      do: {:redirect, "/users"}
+
+    def handle_mount(%Context{flow: %{name: "Decorated"}}, _config_data),
+      do: {:ok, %{flow_name: "Renamed by the host"}}
+
+    def handle_mount(_context, _config_data), do: {:ok, %{}}
 
     @impl true
     def enabled_form_types(context, config_data) do
@@ -389,6 +403,68 @@ defmodule Demo.FormFlowInstancesTest do
         # The review form itself is still editable
         assert has_element?(view, "button[type='submit']")
       end
+    end
+  end
+
+  describe "the config gates its pages with handle_mount/2" do
+    test "a refusal on edit renders the message alone and starts nothing", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
+
+      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+
+      assert html =~ "You may not see this flow."
+      assert has_element?(view, "a[href='#{flow_path(instance)}']")
+      refute has_element?(view, "form")
+      refute instance_at(instance, [only.id])
+    end
+
+    test "a refusal on show renders the message alone", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
+      complete(instance, [only.id], %{"name" => "Ada"})
+
+      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id])
+
+      assert html =~ "You may not see this flow."
+      refute html =~ "Ada"
+      refute has_element?(view, "fieldset")
+      refute has_element?(view, "button", "Reopen")
+    end
+
+    test "a refusal on the flow instance's page renders the message alone", %{conn: conn} do
+      %{instance: instance} = flow_of_one(nil, name: "Refused")
+
+      {:ok, view, html} = isolated(conn, ["flows", instance.id])
+
+      assert html =~ "You may not see this flow."
+      refute has_element?(view, "li")
+      assert has_element?(view, "a[href='/users/flows']")
+    end
+
+    test "a redirect renders nothing, navigates, and starts nothing", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, name: "Elsewhere")
+
+      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+
+      # The first render, before the navigation lands, draws nothing of the page
+      refute html =~ "Name"
+      refute html =~ "<form"
+      assert {"/users", _flash} = assert_redirect(view)
+      refute instance_at(instance, [only.id])
+
+      {:ok, view, _html} = isolated(conn, ["flows", instance.id])
+      assert {"/users", _flash} = assert_redirect(view)
+    end
+
+    test "an allowance merges its assigns into the page, after the start", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, name: "Decorated")
+
+      {:ok, _view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+
+      assert html =~ "Renamed by the host"
+      assert %{status: "in_progress"} = instance_at(instance, [only.id])
+
+      {:ok, _view, html} = isolated(conn, ["flows", instance.id])
+      assert html =~ "Renamed by the host"
     end
   end
 
@@ -756,11 +832,11 @@ defmodule Demo.FormFlowInstancesTest do
     has_element?(view, "a[href='#{edit_path(instance, path)}']")
   end
 
-  # The edit page for a position, through the test config's page
+  # A user-facing page, through the test config's page
+  defp isolated(conn, segments), do: live_isolated(conn, TestPage, session: %{"path" => segments})
+
   defp isolated_edit(conn, instance, path) do
-    live_isolated(conn, TestPage,
-      session: %{"path" => ["flows", instance.id, "forms"] ++ path ++ ["edit"]}
-    )
+    isolated(conn, ["flows", instance.id, "forms"] ++ path ++ ["edit"])
   end
 
   # Submits the form's answers the way the user does; the completion runs
@@ -789,8 +865,10 @@ defmodule Demo.FormFlowInstancesTest do
     %{flow: flow, instance: start_flow(flow), forms: [name, address]}
   end
 
+  # `name:` names the flow; the rest of `opts` shapes its one form
   defp flow_of_one(type \\ nil, opts \\ []) do
-    {:ok, flow} = Flows.create(%{name: "Single", properties: properties(type)})
+    {name, opts} = Keyword.pop(opts, :name, "Single")
+    {:ok, flow} = Flows.create(%{name: name, properties: properties(type)})
 
     first_node = build_node(flow, ["Start"], "Start")
     only = build_form_node(flow, "Only", opts)

@@ -13,7 +13,9 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   `/flows/:id/forms/*path/edit` is that one. Both are addressed by position
   and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
   difference is that this page never starts anything. With nothing filled in
-  yet it says so and offers the link across to Edit, which does.
+  yet it says so and offers the link across to Edit, which does. Like Edit, it
+  asks the host's config whether it may render at all (`handle_mount/2`) and
+  draws only the config's message, or nothing while redirecting, when not.
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
@@ -63,16 +65,51 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         assign(socket, :flow_instance, nil)
 
       flow_instance ->
-        socket
-        |> assign(:flow_instance, flow_instance)
-        |> Shared.assigns()
+        socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
+
+        Shared.handle_mount(socket)
     end
+  end
+
+  @impl true
+  def handle_async(:navigate, {:ok, to}, socket) do
+    {:noreply, push_navigate(socket, to: to)}
   end
 
   @impl true
   def render(%{flow_instance: nil} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    """
+  end
+
+  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+    ~H"""
+    <div></div>
+    """
+  end
+
+  # The host's config refused the page; its message is all there is to draw
+  def render(%{mount_error: message} = assigns) when is_binary(message) do
+    ~H"""
+    <div>
+      <Components.FormPage.breadcrumb
+        base={@base}
+        flow_instance={@flow_instance}
+        flow_name={@flow_name}
+        label={@form_label}
+      />
+
+      <Components.FormPage.notice message={@mount_error}>
+        <.link
+          navigate={Paths.flow_path(@base, @flow_instance.id)}
+          class="text-cyan-600 hover:underline"
+        >
+          Back to the flow
+        </.link>
+      </Components.FormPage.notice>
+    </div>
     """
   end
 

@@ -12,6 +12,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   is how a user jumps ahead. One instance can hold several "forms" flows
   with different types, so the question is asked per form.
 
+  Whether the page renders at all is the host config's to say
+  (`FormFlow.Config.handle_mount/2`, with the flow instance's context):
+  refused, only its message is drawn; redirected, nothing is until the
+  navigation lands.
+
   Every action here is an ordinary link, because a form's URL addresses its
   *position* and so exists before its instance row does — starting happens on
   the form page itself (see `FormFlow.Web.Instances.Forms.Show`). Reopen is
@@ -54,6 +59,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     end
   end
 
+  @impl true
+  def handle_async(:navigate, {:ok, to}, socket) do
+    {:noreply, push_navigate(socket, to: to)}
+  end
+
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
     case Instances.Flows.get(flow_instance_id) do
       nil ->
@@ -62,13 +72,31 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
         forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+        flow = tree && tree.flow
 
-        assign(socket,
+        # The page's own context — the flow instance as a whole, no form in
+        # scope — for the host's config to answer handle_mount/2 with
+        context = %Context{
+          user_id: socket.assigns.user_id,
+          flow: flow,
+          subflow: flow,
+          flow_type_property_values: FormFlow.Config.Flows.Type.property_values(flow),
           flow_instance: flow_instance,
-          rows: rows(forms, tree, flow_instance, socket.assigns),
-          stranded: Instances.Flows.list_stranded(flow_instance),
-          flow_name: (tree && tree.flow.name) || "Untitled flow"
-        )
+          flow_instance_progress: forms
+        }
+
+        socket =
+          assign(socket,
+            flow_instance: flow_instance,
+            context: context,
+            rows: rows(forms, tree, flow_instance, socket.assigns),
+            stranded: Instances.Flows.list_stranded(flow_instance),
+            flow_name: (flow && flow.name) || "Untitled flow",
+            mount_error: nil,
+            navigate_to: nil
+          )
+
+        Shared.handle_mount(socket)
     end
   end
 
@@ -95,6 +123,32 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{flow_instance: nil} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    """
+  end
+
+  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+    ~H"""
+    <div></div>
+    """
+  end
+
+  # The host's config refused the page; its message is all there is to draw
+  def render(%{mount_error: message} = assigns) when is_binary(message) do
+    ~H"""
+    <div>
+      <div class="mb-2 text-sm font-semibold">
+        <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
+        <span class="text-zinc-400">/</span>
+        {@flow_name}
+      </div>
+
+      <Components.FormPage.notice message={@mount_error}>
+        <.link navigate={Paths.flows_path(@base)} class="text-cyan-600 hover:underline">
+          Back to flows
+        </.link>
+      </Components.FormPage.notice>
+    </div>
     """
   end
 
