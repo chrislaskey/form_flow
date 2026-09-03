@@ -308,10 +308,11 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     # The header button submits the DynamicForm below through its form= id;
-    # the form itself renders no built-in submit. Publish sits to its right.
-    assert has_element?(view, ~s(button[form="forms-edit-form-form"]), "Save")
-    refute view |> element("#forms-edit-form-form") |> render() =~ ">Save draft<"
-    assert render(view) =~ ~r/Save\s*<\/button>.*Publish/s
+    # the form itself renders no built-in submit. Publish sits to its right,
+    # which is why the button says what it saves.
+    assert has_element?(view, ~s(button[form="forms-edit-form-form"]), "Save draft")
+    refute has_element?(view, ~s(#forms-edit-form-form button[type="submit"]))
+    assert render(view) =~ ~r/Save draft\s*<\/button>.*Publish/s
 
     # Quiet while clean, primary once the form differs from what's persisted —
     # matching the flows editor's Save

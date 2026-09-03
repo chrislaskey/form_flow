@@ -538,8 +538,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             <span class="font-semibold text-zinc-900">Edit</span>
           </.link>
           <%!-- The remote submit: an HTML form= reference into the
-                DynamicForm below, so Save lives in the header like every
-                other page's primary action. Styled like the flows editor's
+                DynamicForm below, so Save draft lives in the header like
+                every other page's primary action, and says "draft" because
+                Publish sits right beside it. Styled like the flows editor's
                 Save — quiet until changes exist, primary once they do. --%>
           <button
             type="submit"
@@ -552,7 +553,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               )
             ]}
           >
-            Save
+            Save draft
           </button>
           <button
             type="button"

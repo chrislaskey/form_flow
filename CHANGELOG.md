@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.11.0
 
 ### Reviews notice when the reviewed form changes
 
@@ -160,6 +160,11 @@ and offers nothing.
 - The demo's `"demo_prefill"` form type declares three properties — the name
   it prefills with, a salutation dropdown, and a related form — and reads the
   first two in `initial_data/2`.
+
+### Form edit page: "Save draft"
+
+The form edit page's header button says "Save draft" rather than "Save": it
+sits beside Publish, and what it saves is the draft.
 
 ## v0.10.0
 
