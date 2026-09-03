@@ -65,10 +65,7 @@ defmodule FormFlow.Data.Templates.Slug do
         words |> Enum.join() |> String.slice(0, @segment_length)
 
       words ->
-        words
-        |> Enum.map(&initial/1)
-        |> Enum.join()
-        |> String.slice(0, @segment_length)
+        words |> Enum.map_join(&initial/1) |> String.slice(0, @segment_length)
     end
   end
 
@@ -113,14 +110,15 @@ defmodule FormFlow.Data.Templates.Slug do
   def available(schema, candidate, tenant_id) do
     taken = taken(schema, candidate, tenant_id)
 
-    if MapSet.member?(taken, candidate) do
-      Enum.find_value(Stream.iterate(2, &(&1 + 1)), fn n ->
-        suffixed = "#{candidate}-#{n}"
-        if MapSet.member?(taken, suffixed), do: nil, else: suffixed
-      end)
-    else
-      candidate
-    end
+    if MapSet.member?(taken, candidate),
+      do: first_free_suffix(candidate, taken),
+      else: candidate
+  end
+
+  defp first_free_suffix(candidate, taken) do
+    Stream.iterate(2, &(&1 + 1))
+    |> Stream.map(&"#{candidate}-#{&1}")
+    |> Enum.find(&(not MapSet.member?(taken, &1)))
   end
 
   # Every slug starting with the candidate — a superset of what could

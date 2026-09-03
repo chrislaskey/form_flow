@@ -503,6 +503,24 @@ defmodule Demo.FormFlowFlowsTest do
       assert Enum.map(Flows.list_reusable(), & &1.id) == [second.id, first.id]
     end
 
+    test "duplicate copies the identity: name, label, and properties" do
+      {:ok, root} =
+        Flows.create(%{
+          name: "Onboarding",
+          label: "subflows",
+          properties: %{"form_flow_type" => "wizard_any_order"}
+        })
+
+      {:ok, copy} = Flows.duplicate(root)
+
+      assert copy.name == "Onboarding"
+      assert copy.label == "subflows"
+      assert copy.properties["form_flow_type"] == "wizard_any_order"
+      assert copy.slug == "onboarding-2"
+      assert copy.properties["slug"] == "onboarding-2"
+      assert copy.made_reusable_at == nil
+    end
+
     test "duplicate deep-copies owned children and keeps reusable references" do
       {:ok, root} = Flows.create()
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})

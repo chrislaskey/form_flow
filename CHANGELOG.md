@@ -76,6 +76,9 @@ never follows a rename; it changes only when an admin changes it.
   prefix from the old root slug to the new one — `dla2026_userinform` under
   a copy slugged `dla2027` becomes `dla2027_userinform`. `Forms.copy/2` takes
   `slug:` the same way.
+- **Fixed: `Flows.duplicate/2` copies the identity.** The copy carries the
+  source's name, label, and properties; until now it came back nameless,
+  labelled "forms" whatever the source was, and without its type.
 - **A Slug field on every template page.** The new-flow and new-form pages
   take one and generate it when left blank; the flow edit header and the
   form edit page let an admin change or clear it, and a slug that is taken

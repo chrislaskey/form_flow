@@ -128,28 +128,43 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
-    data = flow && ReactFlow.to_data(flow)
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
     types = flow_types(socket.assigns, context)
 
     {:ok,
-     assign(socket,
-       flow: flow,
-       data: data,
-       current: data,
-       root: root,
-       pending_name: flow && flow.name,
-       pending_slug: flow && flow.slug,
-       pending_type: flow && flow.properties["form_flow_type"],
-       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
-       form_data: form_data(flow, types),
-       flow_types: types,
-       embedded_flow_type_options:
-         flow &&
-           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
-       embedded_form_type_options: flow && embedded_form_type_options(socket.assigns, flow, root)
-     )}
+     socket
+     |> assign(flow: flow, root: root, flow_types: types, form_data: form_data(flow, types))
+     |> assign(pending(flow))
+     |> assign(page(socket.assigns, flow, root))}
+  end
+
+  # The form values the last save wrote, which the identity form edits
+  # against — nil across the board for a flow that does not exist
+  defp pending(flow) do
+    %{
+      pending_name: flow && flow.name,
+      pending_slug: flow && flow.slug,
+      pending_type: flow && flow.properties["form_flow_type"],
+      pending_property_values: FormFlow.Config.Flows.Type.property_values(flow)
+    }
+  end
+
+  # The canvas and the dropdown options it offers its nodes
+  defp page(_assigns, nil, _root) do
+    %{data: nil, current: nil, embedded_flow_type_options: nil, embedded_form_type_options: nil}
+  end
+
+  defp page(assigns, flow, root) do
+    data = ReactFlow.to_data(flow)
+
+    %{
+      data: data,
+      current: data,
+      embedded_flow_type_options:
+        type_select_options(flow_types(assigns, embedded_flow_context(flow, root))),
+      embedded_form_type_options: embedded_form_type_options(assigns, flow, root)
+    }
   end
 
   # The identity form's data: the saved values, with the saved type's property

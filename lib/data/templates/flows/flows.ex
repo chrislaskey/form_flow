@@ -483,8 +483,9 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Deep-copies a flow: a new flow with new UUIDs throughout, its contents
-  copied, relationships re-pointed at the copied nodes.
+  Deep-copies a flow: a new flow with new UUIDs throughout — its name, label,
+  and properties as they are, its contents copied, relationships re-pointed
+  at the copied nodes.
 
   Subflow references follow the copy boundary: flows the source *owns* are
   deep-copied along with it; *reusable* flows stay shared references. The
@@ -921,7 +922,14 @@ defmodule FormFlow.Data.Templates.Flows do
 
     {:ok, _flow} =
       %Flow{id: copy_id}
-      |> Flow.changeset(%{owner_flow_id: owner_id, tenant_id: source.tenant_id, slug: slug})
+      |> Flow.changeset(%{
+        name: source.name,
+        label: source.label,
+        properties: source.properties,
+        tenant_id: source.tenant_id,
+        slug: slug,
+        owner_flow_id: owner_id
+      })
       |> Repo.insert()
 
     node_ids = Map.new(source.nodes, fn node -> {node.id, Ecto.UUID.generate()} end)
