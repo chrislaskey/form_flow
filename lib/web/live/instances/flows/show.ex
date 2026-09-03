@@ -13,7 +13,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   with different types, so the question is asked per form.
 
   Whether the page renders at all is the host config's to say
-  (`FormFlow.Config.handle_mount/2`, with the flow instance's context):
+  (`FormFlow.Config.handle_instance_mount/2`, with the flow instance's context):
   refused, only its message is drawn; redirected, nothing is until the
   navigation lands.
 
@@ -77,7 +77,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         flow = tree && tree.flow
 
         # The page's own context — the flow instance as a whole, no form in
-        # scope — for the host's config to answer handle_mount/2 with
+        # scope — for the host's config to answer handle_instance_mount/2 with
         context = %Context{
           user_id: socket.assigns.user_id,
           tenant_id: socket.assigns.tenant_id,
@@ -99,7 +99,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
             navigate_to: nil
           )
 
-        Shared.handle_mount(socket)
+        Shared.handle_instance_mount(socket)
     end
   end
 

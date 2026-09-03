@@ -60,7 +60,13 @@ never lists across tenants by accident, and the host never has to think
 about tenants in its query (`FormFlow.Data.Instances.Flows.narrow_tenant/2`
 is the public helper that does it).
 
-- **`handle_mount/2` now gates the listing as well.** Every user-facing page
+- **Breaking: `handle_mount/2` is now `handle_instance_mount/2`.** The
+  config module serves both sides of the router, so callbacks only one side
+  reads say which in their name: `enabled_flow_types/2` and
+  `enabled_form_types/2` stay as they are because the template and instance
+  pages both read them, while this one — like `flow_instances_query/2` — is
+  instance-only.
+- **`handle_instance_mount/2` now gates the listing as well.** Every user-facing page
   asks before it draws. On the listing the context carries only `:user_id`
   and `:tenant_id` — there is no flow in scope — and a refusal renders the
   message alone, a redirect navigates.

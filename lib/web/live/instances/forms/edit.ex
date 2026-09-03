@@ -15,7 +15,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   position with no instance yet gets one created on mount — which is the
   moment the form version is pinned — gated by the flow type's `editable?/2`
   the flow instance's page asks before offering the link, and by the host
-  config's `handle_mount/2`, asked first: a refused or redirected visitor
+  config's `handle_instance_mount/2`, asked first: a refused or redirected visitor
   starts nothing. Starting is idempotent afterwards, so this URL is an
   ordinary link from everywhere and survives a refresh or a Back — and a form
   either gate can't be started by typing its URL.
@@ -113,7 +113,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       flow_instance ->
         socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
 
-        Shared.handle_mount(socket, &Shared.start/1)
+        Shared.handle_instance_mount(socket, &Shared.start/1)
     end
   end
 

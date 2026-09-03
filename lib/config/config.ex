@@ -18,7 +18,7 @@ defmodule FormFlow.Config do
 
   A host passes one config module per use of `FormFlow.Web.router/1`, so a
   config is where per-use behavior lives — which types a section offers, who
-  may see its pages (`handle_mount/2`), and whose flow instances its listing
+  may see its pages (`handle_instance_mount/2`), and whose flow instances its listing
   shows (`flow_instances_query/2`) — while a type describes how a form or
   flow behaves wherever it is used.
   """
@@ -46,7 +46,7 @@ defmodule FormFlow.Config do
   returns, so a multitenant host never lists across tenants by accident.
   The context carries `:user_id` and `:tenant_id` and nothing else — the
   listing spans every flow, so there is no flow in scope. A listing
-  convenience, not access control: gate the page with `handle_mount/2`.
+  convenience, not access control: gate the page with `handle_instance_mount/2`.
   """
   @callback flow_instances_query(Context.t(), map()) :: Ecto.Query.t()
 
@@ -73,7 +73,7 @@ defmodule FormFlow.Config do
   page. Runs whenever the page's assigns come in: on mount, and on every later
   render of the parent LiveView. The default allows everything.
   """
-  @callback handle_mount(Context.t(), map()) ::
+  @callback handle_instance_mount(Context.t(), map()) ::
               {:ok, map()} | {:error, String.t()} | {:redirect, String.t()}
 
   defmacro __using__(_opts) do
@@ -88,8 +88,8 @@ defmodule FormFlow.Config do
         FormFlow.Config.Default.enabled_form_types(context, config_data)
       end
 
-      def handle_mount(context, config_data) do
-        FormFlow.Config.Default.handle_mount(context, config_data)
+      def handle_instance_mount(context, config_data) do
+        FormFlow.Config.Default.handle_instance_mount(context, config_data)
       end
 
       def flow_instances_query(context, config_data) do
@@ -98,7 +98,7 @@ defmodule FormFlow.Config do
 
       defoverridable enabled_flow_types: 2,
                      enabled_form_types: 2,
-                     handle_mount: 2,
+                     handle_instance_mount: 2,
                      flow_instances_query: 2
     end
   end

@@ -32,7 +32,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   `FormFlow.Config.flow_instances_query/2` — a reviewer's desk lists
   everyone's — and the router's `tenant_id` is applied on top of whatever it
   answers. This is a listing convenience, not access control: the page asks
-  `FormFlow.Config.handle_mount/2` before it draws, like every other
+  `FormFlow.Config.handle_instance_mount/2` before it draws, like every other
   user-facing page, and auth stays the host's job (see `FormFlow.Web.Router`).
 
   Starting a new flow stays a plain list rather than a second table: Slab
@@ -69,7 +69,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:ok,
      socket
      |> assign(context: context, mount_error: nil, navigate_to: nil)
-     |> Shared.handle_mount(&load/1)}
+     |> Shared.handle_instance_mount(&load/1)}
   end
 
   # The listing itself, built only once the config allowed the page: the

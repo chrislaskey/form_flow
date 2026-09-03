@@ -61,27 +61,28 @@ defmodule Demo.FormFlowInstancesTest do
 
   # The demo's config with the three types above enabled beside the library's,
   # gating its pages by the flow's name so one config exercises every answer
-  # handle_mount/2 can give
+  # handle_instance_mount/2 can give
   defmodule TestConfig do
     use FormFlow.Config
 
     @impl true
-    def handle_mount(%Context{flow: %{name: "Refused"}}, _config_data),
+    def handle_instance_mount(%Context{flow: %{name: "Refused"}}, _config_data),
       do: {:error, "You may not see this flow."}
 
-    def handle_mount(%Context{flow: %{name: "Elsewhere"}}, _config_data),
+    def handle_instance_mount(%Context{flow: %{name: "Elsewhere"}}, _config_data),
       do: {:redirect, "/users"}
 
-    def handle_mount(%Context{flow: %{name: "Decorated"}}, _config_data),
+    def handle_instance_mount(%Context{flow: %{name: "Decorated"}}, _config_data),
       do: {:ok, %{flow_name: "Renamed by the host"}}
 
     # The listing has no flow in scope; the session's config_data drives it
-    def handle_mount(%Context{flow: nil}, %{"listing" => "refused"}),
+    def handle_instance_mount(%Context{flow: nil}, %{"listing" => "refused"}),
       do: {:error, "No listing for you."}
 
-    def handle_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}), do: {:redirect, "/users"}
+    def handle_instance_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}),
+      do: {:redirect, "/users"}
 
-    def handle_mount(_context, _config_data), do: {:ok, %{}}
+    def handle_instance_mount(_context, _config_data), do: {:ok, %{}}
 
     @impl true
     def flow_instances_query(_context, %{"listing" => "everyone"}),
@@ -492,7 +493,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
-  describe "the config gates its pages with handle_mount/2" do
+  describe "the config gates its pages with handle_instance_mount/2" do
     test "a refusal on edit renders the message alone and starts nothing", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
 

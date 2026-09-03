@@ -51,7 +51,7 @@ defmodule FormFlow.Web.Components.Config.Default do
 
   # Every page renders for every user until a host says otherwise
   @impl true
-  def handle_mount(_context, _config_data), do: {:ok, %{}}
+  def handle_instance_mount(_context, _config_data), do: {:ok, %{}}
 
   # The listing shows the user's own flow instances until a host says otherwise
   @impl true

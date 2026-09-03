@@ -31,14 +31,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:editable?` - whether the type allows editing here
     * `:start_error` - why `start/1` could not start the form, or nil
     * `:mount_error` / `:navigate_to` - the host config's answer from
-      `handle_mount/2` when it refused or redirected, or nil
+      `handle_instance_mount/2` when it refused or redirected, or nil
     * `:clickable` - the sibling forms the type lets the user jump to, for
       `FormFlow.Web.Instances.Components.Flows.Progress`
     * `:flow_name` / `:form_label` - what the breadcrumb needs
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
   Then each page asks the host's config whether it may render,
-  `handle_mount/2`, and Edit — only Edit, and only when the config said yes —
+  `handle_instance_mount/2`, and Edit — only Edit, and only when the config said yes —
   makes the one write in here, `start/1`: a form with no instance yet is
   started when the flow's type allows it, which creates the instance and is
   the moment the form version is pinned. The order is the point: a refused
@@ -174,7 +174,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   end
 
   @doc """
-  Asks the host's config (`FormFlow.Config.handle_mount/2`) whether the page
+  Asks the host's config (`FormFlow.Config.handle_instance_mount/2`) whether the page
   may render, with the page's `:context`, and applies the answer:
   `{:ok, assigns}` runs `on_ok` (Edit's `start/1`) and then merges the
   assigns; `{:error, message}` assigns `:mount_error`, which the page renders
@@ -183,11 +183,11 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   this too. Host code, deliberately not rescued: an exception here fails
   closed rather than falling through to the page.
   """
-  def handle_mount(socket, on_ok \\ & &1) do
+  def handle_instance_mount(socket, on_ok \\ & &1) do
     %{context: context, config: config, config_data: config_data} = socket.assigns
     module = FormFlow.Config.config_module(config)
 
-    case module.handle_mount(context, config_data) do
+    case module.handle_instance_mount(context, config_data) do
       {:ok, extra} when is_map(extra) ->
         socket |> on_ok.() |> assign(extra)
 
@@ -201,7 +201,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
       other ->
         raise ArgumentError,
-              "#{inspect(module)}.handle_mount/2 returned #{inspect(other)}; " <>
+              "#{inspect(module)}.handle_instance_mount/2 returned #{inspect(other)}; " <>
                 "expected {:ok, assigns}, {:error, message}, or {:redirect, to}"
     end
   end

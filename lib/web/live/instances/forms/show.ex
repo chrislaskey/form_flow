@@ -14,7 +14,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
   difference is that this page never starts anything. With nothing filled in
   yet it says so and offers the link across to Edit, which does. Like Edit, it
-  asks the host's config whether it may render at all (`handle_mount/2`) and
+  asks the host's config whether it may render at all (`handle_instance_mount/2`) and
   draws only the config's message, or nothing while redirecting, when not.
 
   The one write here is Reopen, and it lives here on purpose: reopening
@@ -69,7 +69,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       flow_instance ->
         socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
 
-        Shared.handle_mount(socket)
+        Shared.handle_instance_mount(socket)
     end
   end
 
