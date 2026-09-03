@@ -44,6 +44,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
@@ -58,6 +59,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:perspectives, fn -> [] end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:uri, fn -> nil end)
@@ -65,7 +67,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:error, fn -> nil end)
 
     # The listing's context: the user and tenant, no flow in scope
-    context = %Context{user_id: socket.assigns.user_id, tenant_id: socket.assigns.tenant_id}
+    context = %Context{
+      user_id: socket.assigns.user_id,
+      tenant_id: socket.assigns.tenant_id,
+      perspectives: Perspective.normalize(socket.assigns.perspectives)
+    }
 
     {:ok,
      socket

@@ -15,6 +15,13 @@ defmodule FormFlow.Context do
       `user_id` attr — or `nil`
     * `:tenant_id` - the acting user's host tenant — the router's optional
       `tenant_id` attr — or `nil`, the value for a host with no tenants
+    * `:perspectives` - the kinds of user the viewer is here as — the
+      router's optional `perspectives` attr, as a list of
+      `FormFlow.Config.Flows.Perspective` ids — or `[]`, a viewer with no
+      perspective, who sees everything
+    * `:flow_perspectives` - the `FormFlow.Config.Flows.Perspective` structs
+      the `:subflow` is for, resolved from its stored ids through the
+      config's `enabled_perspectives/2`; `[]` for a flow that is for everyone
     * `:flow` - the root `FormFlow.Data.Templates.Flow` — the top-level
       ancestor, however deep the current view has drilled in
     * `:subflow` - the `FormFlow.Data.Templates.Flow` whose content is
@@ -69,12 +76,16 @@ defmodule FormFlow.Context do
     :form_instance,
     :form_progress,
     :flow_progress,
-    :flow_instance_progress
+    :flow_instance_progress,
+    perspectives: [],
+    flow_perspectives: []
   ]
 
   @type t :: %__MODULE__{
           user_id: String.t() | nil,
           tenant_id: String.t() | nil,
+          perspectives: [String.t()],
+          flow_perspectives: [FormFlow.Config.Flows.Perspective.t()],
           flow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,

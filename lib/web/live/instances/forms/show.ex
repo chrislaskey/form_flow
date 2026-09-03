@@ -37,8 +37,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:perspectives, fn -> [] end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:uri, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -104,6 +107,30 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       />
 
       <Components.FormPage.notice message={@mount_error}>
+        <.link
+          navigate={Paths.flow_path(@base, @flow_instance.id)}
+          class="text-cyan-600 hover:underline"
+        >
+          Back to the flow
+        </.link>
+      </Components.FormPage.notice>
+    </div>
+    """
+  end
+
+  # The flow's type says this form is not for the viewer — another
+  # perspective's work. Nothing of it is shown, started or not.
+  def render(%{visible?: false, form: %{path: _path}} = assigns) do
+    ~H"""
+    <div>
+      <Components.FormPage.breadcrumb
+        base={@base}
+        flow_instance={@flow_instance}
+        flow_name={@flow_name}
+        label={@form_label}
+      />
+
+      <Components.FormPage.notice message="This form is not part of your work here.">
         <.link
           navigate={Paths.flow_path(@base, @flow_instance.id)}
           class="text-cyan-600 hover:underline"

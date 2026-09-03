@@ -1,9 +1,24 @@
 defmodule FormFlow.Web.Templates.SharedTest do
   use ExUnit.Case, async: true
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Config.Property
+  alias FormFlow.Context
   alias FormFlow.Data.Instances.FormProgress
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Web.Templates.Shared
+
+  defmodule PerspectiveConfig do
+    use FormFlow.Config
+
+    @impl true
+    def enabled_perspectives(_context, _config_data) do
+      [
+        %Perspective{id: "applicant", name: "Applicant"},
+        %Perspective{id: "reviewer", name: "Reviewer"}
+      ]
+    end
+  end
 
   @name %Property{id: "name", name: "Name", required: true}
   @greeting %Property{id: "greeting", name: "Greeting", type: :comment, default_value: "Hello"}
@@ -147,5 +162,42 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.display_value(source, "intake") == "Intake"
     assert Shared.display_value(source, "gone") == "Missing — no longer in this flow"
     assert Shared.display_value(@name, "Ada") == "Ada"
+  end
+
+  describe "perspectives" do
+    test "offered for a forms flow when the config has some; never otherwise" do
+      forms = %Context{subflow: %Flow{label: "forms"}}
+      complex = %Context{subflow: %Flow{label: "subflows"}}
+      offering = %{config: PerspectiveConfig, config_data: %{}}
+      default = %{config: nil, config_data: %{}}
+
+      assert [%Perspective{id: "applicant"}, %Perspective{id: "reviewer"}] =
+               Shared.perspectives(forms, offering)
+
+      assert Shared.perspectives(complex, offering) == []
+      assert Shared.perspectives(forms, default) == []
+      assert Shared.perspectives(%Context{subflow: nil}, offering) == []
+    end
+
+    test "the field's options and help text, with a note for a stale stored id" do
+      perspectives =
+        Shared.perspectives(%Context{subflow: %Flow{label: "forms"}}, %{
+          config: PerspectiveConfig,
+          config_data: %{}
+        })
+
+      assert Shared.perspective_options(perspectives) == [
+               {"Applicant", "applicant"},
+               {"Reviewer", "reviewer"}
+             ]
+
+      current = %Flow{label: "forms", properties: %{"perspectives" => ["reviewer"]}}
+      refute Shared.perspectives_description(current, perspectives) =~ "no longer offered"
+
+      stale = %Flow{label: "forms", properties: %{"perspectives" => ["reviewer", "approver"]}}
+
+      assert Shared.perspectives_description(stale, perspectives) =~
+               "approver is no longer offered"
+    end
   end
 end

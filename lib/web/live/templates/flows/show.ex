@@ -66,6 +66,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        data: data,
        root: root,
        flow_types: flow && flow_types(socket.assigns, context),
+       perspectives: Shared.perspectives(context, socket.assigns),
        embedded_flow_type_options:
          flow &&
            type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
@@ -204,6 +205,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             · {property.name}: {Shared.display_value(property, value)}
           </span>
+          <span :if={perspective_names(assigns) != []} class="text-xs font-normal text-zinc-500">
+            · For: {Enum.join(perspective_names(assigns), ", ")}
+          </span>
         </div>
         <div class="flex items-center gap-2">
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
@@ -264,6 +268,14 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         nil -> type
       end
     end
+  end
+
+  # The perspectives the flow is for, by name — the stored ids resolved
+  # through what the config offers; an id it no longer offers is not shown
+  defp perspective_names(assigns) do
+    assigns.flow
+    |> FormFlow.Config.Flows.Perspective.for_flow(assigns.perspectives)
+    |> Enum.map(& &1.name)
   end
 
   # The stored type's property values, paired with the properties that

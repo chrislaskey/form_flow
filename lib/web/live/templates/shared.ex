@@ -14,6 +14,7 @@ defmodule FormFlow.Web.Templates.Shared do
   own fields (`name`, `description`, the type itself).
   """
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Config.Property
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
@@ -190,6 +191,41 @@ defmodule FormFlow.Web.Templates.Shared do
       end
     else
       to_string(value)
+    end
+  end
+
+  @doc """
+  The perspectives the host's config offers for the flow at the context's
+  `:subflow` — a multi-select on the identity form of a "forms" flow, and
+  nothing at all for any other flow or when the config offers none
+  (`FormFlow.Config.enabled_perspectives/2`).
+  """
+  def perspectives(%FormFlow.Context{subflow: %{label: "forms"}} = context, assigns) do
+    config = FormFlow.Config.config_module(assigns.config)
+
+    config.enabled_perspectives(context, assigns.config_data)
+  end
+
+  def perspectives(_context, _assigns), do: []
+
+  @doc "The perspectives as the checkbox field's `{label, id}` options."
+  def perspective_options(perspectives), do: Enum.map(perspectives, &{&1.name, &1.id})
+
+  @perspectives_help "Which kinds of user this flow's forms are for. None means everyone."
+
+  @doc """
+  The perspectives field's help text — with a note when the flow stores an id
+  the config no longer offers: the field cannot show it, and the next save
+  drops it, so the admin should know.
+  """
+  def perspectives_description(flow, perspectives) do
+    case Perspective.stale_ids(flow, perspectives) do
+      [] ->
+        @perspectives_help
+
+      stale ->
+        @perspectives_help <>
+          " The saved choice #{Enum.join(stale, ", ")} is no longer offered — it is dropped on save."
     end
   end
 

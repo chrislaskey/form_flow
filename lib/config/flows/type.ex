@@ -14,6 +14,14 @@ defmodule FormFlow.Config.Flows.Type do
   are the in-order wizard: a form can be edited where the flow allows it, and
   finishing a form moves to the nearest place work can happen next. A type
   overrides only what it changes, and can call the defaults from an override.
+
+  Two callbacks answer two different questions about the viewer. `visible?/2`
+  is whether the flow's forms are *for* this viewer at all — the default
+  reads the flow's perspectives (`FormFlow.Config.Flows.Perspective`), so a
+  reviewer never sees the applicant's forms, and the pages hide, skip, and
+  refuse a position that is not. `editable?/2` is whether the flow allows
+  work at this position *now* — the order rule. The pages ask `visible?/2`
+  first, so a type's `editable?/2` never has to repeat the perspective test.
   """
 
   alias FormFlow.Context
@@ -44,8 +52,20 @@ defmodule FormFlow.Config.Flows.Type do
   def property_values(nil), do: %{}
 
   @doc """
+  Whether the forms of the flow at `:subflow` are for this viewer — shown on
+  the flow instance's page, counted toward where they go next, and openable
+  at all. The default is `FormFlow.Config.Flows.Perspective.visible?/1`: the
+  flow's stored perspectives against the viewer's `:perspectives`, with a
+  flow naming none for everyone and a viewer with none seeing everything.
+  Asked with `:form_progress` set, like `editable?/2`, so a type can answer
+  per form; the pages then treat a form that is not visible as not editable.
+  """
+  @callback visible?(Context.t(), map()) :: boolean()
+
+  @doc """
   Whether the user may edit the form at `:form_progress` — start it when it
-  has no instance yet, or keep working on one already started.
+  has no instance yet, or keep working on one already started. The order
+  rule only: the pages ask `visible?/2` first.
   """
   @callback editable?(Context.t(), map()) :: boolean()
 
@@ -73,6 +93,10 @@ defmodule FormFlow.Config.Flows.Type do
     quote do
       @behaviour FormFlow.Config.Flows.Type
 
+      def visible?(context, config_data) do
+        FormFlow.Config.Flows.Type.Default.visible?(context, config_data)
+      end
+
       def editable?(context, config_data) do
         FormFlow.Config.Flows.Type.Default.editable?(context, config_data)
       end
@@ -85,7 +109,7 @@ defmodule FormFlow.Config.Flows.Type do
         FormFlow.Config.Flows.Type.Default.progress_component(assigns)
       end
 
-      defoverridable editable?: 2, handle_complete: 2, progress_component: 1
+      defoverridable visible?: 2, editable?: 2, handle_complete: 2, progress_component: 1
     end
   end
 end

@@ -169,6 +169,41 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(id).slug == "mine"
   end
 
+  test "a subflow's identity form offers the config's perspectives; Save stores them",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert html =~ "Perspectives"
+    assert html =~ "Reviewer"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"perspectives" => ["reviewer"]}})
+
+    # Nothing persists until Save — a pending choice is an unsaved change
+    refute Map.has_key?(Flows.get(node.subflow_id).properties, "perspectives")
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(node.subflow_id).properties["perspectives"] == ["reviewer"]
+
+    # Show mode names them
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert html =~ "For: Reviewer"
+  end
+
+  test "a complex flow has no perspectives of its own — its subflows do", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    refute html =~ "Perspectives"
+  end
+
   test "renaming from the edit header persists", %{conn: conn} do
     id = create_flow(conn)
 

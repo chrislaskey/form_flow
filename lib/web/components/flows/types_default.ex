@@ -2,16 +2,21 @@ defmodule FormFlow.Web.Components.Flows.Types.Default do
   @moduledoc """
   `FormFlow.Config.Flows.Type`'s defaults — what every flow type inherits for
   the callbacks it doesn't override. Together they are the in-order wizard:
-  a form can be edited where the flow allows work (its predecessors done, or
-  itself already started), completing one moves to the nearest such form,
-  and the flow's progress is drawn whenever there is a sequence to draw.
+  a flow's forms are for the viewer when its perspectives say so, a form can
+  be edited where the flow allows work (its predecessors done, or itself
+  already started), completing one moves to the nearest such form, and the
+  flow's progress is drawn whenever there is a sequence to draw.
   """
 
   use FormFlow.Config.Flows.Type
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Web.Instances.Components
+
+  @impl true
+  def visible?(%Context{} = context, _config_data), do: Perspective.visible?(context)
 
   @impl true
   def editable?(%Context{form_progress: form}, _config_data), do: FlowProgress.actionable?(form)

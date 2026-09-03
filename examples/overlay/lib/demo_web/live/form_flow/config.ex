@@ -31,6 +31,27 @@ defmodule DemoWeb.FormFlowLive.Config do
     FormFlow.Config.Default.enabled_form_types(context, config_data) ++ [prefill()]
   end
 
+  # The kinds of user a "forms" flow can be for. The admin picks per subflow;
+  # the users page then shows a viewer only the subflows for the
+  # perspectives its `perspectives` attr names. The metadata is the host's
+  # own — here, which desk a reviewer's work lands on.
+  @impl true
+  def enabled_perspectives(_context, _config_data) do
+    [
+      %FormFlow.Config.Flows.Perspective{
+        id: "applicant",
+        name: "Applicant",
+        description: "The person the flow is about, filling in their own forms."
+      },
+      %FormFlow.Config.Flows.Perspective{
+        id: "reviewer",
+        name: "Reviewer",
+        description: "Staff checking an applicant's answers.",
+        metadata: %{desk: :regional}
+      }
+    ]
+  end
+
   defp prefill do
     %FormFlow.Config.Forms.Type{
       id: "demo_prefill",

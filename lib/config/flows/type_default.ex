@@ -12,6 +12,7 @@ defmodule FormFlow.Config.Flows.Type.Default do
 
   alias FormFlow.Web.Components.Flows.Types
 
+  defdelegate visible?(context, config_data), to: Types.Default
   defdelegate editable?(context, config_data), to: Types.Default
   defdelegate handle_complete(context, config_data), to: Types.Default
   defdelegate progress_component(assigns), to: Types.Default

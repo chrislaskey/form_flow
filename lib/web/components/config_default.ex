@@ -49,6 +49,11 @@ defmodule FormFlow.Web.Components.Config.Default do
     ]
   end
 
+  # No perspectives until a host declares some: no field on the identity
+  # form, nothing stored, every flow for everyone
+  @impl true
+  def enabled_perspectives(_context, _config_data), do: []
+
   # Every page renders for every user until a host says otherwise
   @impl true
   def handle_instance_mount(_context, _config_data), do: {:ok, %{}}

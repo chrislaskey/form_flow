@@ -93,8 +93,11 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:perspectives, fn -> [] end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:uri, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -170,11 +173,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   end
 
   # The flow's type answers first, and the flow instance answers when that
-  # flow has nothing left, carrying the user on to whatever follows it.
+  # flow has nothing left, carrying the user on to whatever follows it — the
+  # nearest form that is theirs to work, skipping other perspectives' flows.
   defp next_path(context, assigns) do
     case assigns.type.module.handle_complete(context, assigns.config_data) do
-      %FormProgress{path: next} -> next
-      nil -> Instances.Flows.next_path_position(context.flow_instance)
+      %FormProgress{path: next} ->
+        next
+
+      nil ->
+        with(%FormProgress{path: next} <- Shared.next_visible_form(context, assigns), do: next)
     end
   end
 
@@ -212,6 +219,30 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       />
 
       <Components.FormPage.notice message={@mount_error}>
+        <.link
+          navigate={Paths.flow_path(@base, @flow_instance.id)}
+          class="text-cyan-600 hover:underline"
+        >
+          Back to the flow
+        </.link>
+      </Components.FormPage.notice>
+    </div>
+    """
+  end
+
+  # The flow's type says this form is not for the viewer — another
+  # perspective's work. Nothing of it is shown, started or not.
+  def render(%{visible?: false, form: %{path: _path}} = assigns) do
+    ~H"""
+    <div>
+      <Components.FormPage.breadcrumb
+        base={@base}
+        flow_instance={@flow_instance}
+        flow_name={@flow_name}
+        label={@form_label}
+      />
+
+      <Components.FormPage.notice message="This form is not part of your work here.">
         <.link
           navigate={Paths.flow_path(@base, @flow_instance.id)}
           class="text-cyan-600 hover:underline"

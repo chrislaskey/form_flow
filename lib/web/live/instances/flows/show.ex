@@ -5,12 +5,15 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   In progress / Done / Pending — plus any stranded answers (filled at a
   position the flow no longer has).
 
-  Which forms offer to start is not this page's decision: each form belongs
-  to a "forms" flow, and that flow's `FormFlow.Config.Flows.Type` answers
-  `editable?/2` for it. An in-order wizard offers only where the flow allows
-  work; an any-order one offers every form of its own that isn't done, which
-  is how a user jumps ahead. One instance can hold several "forms" flows
-  with different types, so the question is asked per form.
+  Which forms appear, and which offer to start, is not this page's decision:
+  each form belongs to a "forms" flow, and that flow's `FormFlow.Config.Flows.Type`
+  answers `visible?/2` and `editable?/2` for it. A flow for another
+  perspective is not listed at all; an in-order wizard offers only where the
+  flow allows work; an any-order one offers every form of its own that isn't
+  done, which is how a user jumps ahead. One instance can hold several
+  "forms" flows with different types, so the questions are asked per form.
+  When every form the viewer can see is done but the instance is not, the
+  page says so: their part is finished, the rest is someone else's.
 
   Whether the page renders at all is the host config's to say
   (`FormFlow.Config.handle_instance_mount/2`, with the flow instance's context):
@@ -26,6 +29,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -41,8 +45,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:perspectives, fn -> [] end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:uri, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
     {:ok, load(socket)}
@@ -81,6 +88,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         context = %Context{
           user_id: socket.assigns.user_id,
           tenant_id: socket.assigns.tenant_id,
+          perspectives: Perspective.normalize(socket.assigns.perspectives),
           flow: flow,
           subflow: flow,
           flow_type_property_values: FormFlow.Config.Flows.Type.property_values(flow),
@@ -88,11 +96,14 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           flow_instance_progress: forms
         }
 
+        rows = rows(forms, tree, flow_instance, socket.assigns)
+
         socket =
           assign(socket,
             flow_instance: flow_instance,
             context: context,
-            rows: rows(forms, tree, flow_instance, socket.assigns),
+            rows: rows,
+            part_done?: part_done?(rows, flow_instance),
             stranded: Instances.Flows.list_stranded(flow_instance),
             flow_name: (flow && flow.name) || "Untitled flow",
             mount_error: nil,
@@ -103,24 +114,41 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     end
   end
 
-  # Every form with the one question its own flow's type answers here.
+  # Every form the viewer's perspectives are for, with the one question its
+  # own flow's type answers here — forms of a flow that is not for the viewer
+  # are not rows at all.
   defp rows(forms, tree, flow_instance, assigns) do
-    for form <- forms do
-      context = %Context{
-        user_id: assigns.user_id,
-        tenant_id: assigns.tenant_id,
-        flow: tree.flow,
-        subflow: form.flow,
-        subflow_node: List.last(form.ancestors),
-        flow_instance: flow_instance,
-        form_progress: form,
-        flow_progress: FlowProgress.forms_in_flow(forms, form.path)
-      }
-
-      type = Shared.flow_type(context, assigns)
-
+    for form <- forms,
+        context = form_context(form, forms, tree, flow_instance, assigns),
+        type = Shared.flow_type(context, assigns),
+        Shared.visible?(type, context, assigns) do
       %{form: form, editable?: type.module.editable?(context, assigns.config_data)}
     end
+  end
+
+  defp form_context(form, forms, tree, flow_instance, assigns) do
+    context = %Context{
+      user_id: assigns.user_id,
+      tenant_id: assigns.tenant_id,
+      perspectives: Perspective.normalize(assigns.perspectives),
+      flow: tree.flow,
+      subflow: form.flow,
+      subflow_node: List.last(form.ancestors),
+      flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
+      flow_instance: flow_instance,
+      form_progress: form,
+      flow_progress: FlowProgress.forms_in_flow(forms, form.path),
+      flow_instance_progress: forms
+    }
+
+    %Context{context | flow_perspectives: Shared.flow_perspectives(context, assigns)}
+  end
+
+  # The viewer's part is done when every form they can see is completed and
+  # the instance as a whole is not — what remains is someone else's
+  defp part_done?(rows, flow_instance) do
+    rows != [] and flow_instance.status != "completed" and
+      Enum.all?(rows, &(&1.form.status == :completed))
   end
 
   @impl true
@@ -172,6 +200,17 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       </div>
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+
+      <p :if={@rows == []} class="mb-4 text-sm text-zinc-500">
+        Nothing in this flow is for you to fill out.
+      </p>
+
+      <div
+        :if={@part_done?}
+        class="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+      >
+        Your part is done. The rest of this flow is being worked on by others.
+      </div>
 
       <ul class="space-y-1.5 text-sm">
         <li :for={row <- @rows} class="flex items-center gap-3">

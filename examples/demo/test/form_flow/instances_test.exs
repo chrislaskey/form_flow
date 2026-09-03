@@ -107,6 +107,14 @@ defmodule Demo.FormFlowInstancesTest do
           %FormFlow.Config.Forms.Type{id: "failing", module: FailingReaction, name: "Failing"}
         ]
     end
+
+    @impl true
+    def enabled_perspectives(_context, _config_data) do
+      [
+        %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
+        %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer"}
+      ]
+    end
   end
 
   # The users page as `DemoWeb.FormFlowLive.Users` renders it, with the test
@@ -122,6 +130,7 @@ defmodule Demo.FormFlowInstancesTest do
          uri: "http://localhost/users/#{Enum.join(path, "/")}",
          params: %{},
          tenant_id: Map.get(session, "tenant_id"),
+         perspectives: Map.get(session, "perspectives", []),
          config_data: Map.get(session, "config_data", %{})
        )}
     end
@@ -132,6 +141,7 @@ defmodule Demo.FormFlowInstancesTest do
       <FormFlow.Web.router
         user_id="demo-user"
         tenant_id={@tenant_id}
+        perspectives={@perspectives}
         uri={@uri}
         params={@params}
         path={@path}
@@ -264,6 +274,128 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert %{path: path} = instance_at(instance, [node.id, first.id])
       assert path == [node.id, first.id]
+    end
+  end
+
+  describe "perspectives" do
+    # Licensing: Start → Application (for applicants: Intake) → Review (for
+    # reviewers: Review) → End
+    defp licensing do
+      {:ok, root} = Flows.create(%{name: "Licensing", label: "subflows"})
+
+      application = owned_forms_flow(root, "Application", ["applicant"], "Intake")
+      review = owned_forms_flow(root, "Review", ["reviewer"], "Review")
+
+      first_node = build_node(root, ["Start"], "Start")
+      application_node = subflow_node(root, application.flow, "Application")
+      review_node = subflow_node(root, review.flow, "Review")
+      last_node = build_node(root, ["End"], "End")
+
+      edge(root, first_node, application_node)
+      edge(root, application_node, review_node)
+      edge(root, review_node, last_node)
+
+      %{
+        instance: start_flow(root),
+        intake: [application_node.id, application.form.id],
+        review: [review_node.id, review.form.id]
+      }
+    end
+
+    defp owned_forms_flow(root, name, perspectives, form_label) do
+      {:ok, flow} =
+        Flows.create(%{
+          name: name,
+          label: "forms",
+          owner_flow_id: root.id,
+          properties: %{"perspectives" => perspectives}
+        })
+
+      first_node = build_node(flow, ["Start"], "Start")
+      form = build_form_node(flow, form_label)
+      last_node = build_node(flow, ["End"], "End")
+
+      edge(flow, first_node, form)
+      edge(flow, form, last_node)
+
+      %{flow: flow, form: form}
+    end
+
+    test "the flow's page lists only the forms for the viewer's perspective", %{conn: conn} do
+      %{instance: instance} = licensing()
+
+      {:ok, _view, applicant} = as(conn, "applicant", ["flows", instance.id])
+      assert applicant =~ "Application / Intake"
+      refute applicant =~ "Review / Review"
+
+      {:ok, _view, reviewer} = as(conn, "reviewer", ["flows", instance.id])
+      assert reviewer =~ "Review / Review"
+      refute reviewer =~ "Application / Intake"
+
+      # A viewer with no perspective, and a viewer of both, sees everything
+      {:ok, _view, everyone} = isolated(conn, ["flows", instance.id])
+      assert everyone =~ "Application / Intake"
+      assert everyone =~ "Review / Review"
+
+      {:ok, _view, both} = as(conn, ["applicant", "reviewer"], ["flows", instance.id])
+      assert both =~ "Application / Intake"
+      assert both =~ "Review / Review"
+    end
+
+    test "a position for another perspective is refused, started or not", %{conn: conn} do
+      %{instance: instance, intake: intake} = licensing()
+
+      {:ok, _view, html} =
+        as(conn, "reviewer", ["flows", instance.id, "forms"] ++ intake ++ ["edit"])
+
+      assert html =~ "This form is not part of your work here."
+      refute instance_at(instance, intake)
+
+      complete(instance, intake, %{"name" => "Ada"})
+
+      {:ok, _view, html} = as(conn, "reviewer", ["flows", instance.id, "forms"] ++ intake)
+      assert html =~ "This form is not part of your work here."
+      refute html =~ "Ada"
+
+      # The applicant, whose form it is, sees the answers
+      {:ok, _view, html} = as(conn, "applicant", ["flows", instance.id, "forms"] ++ intake)
+      assert html =~ "Ada"
+    end
+
+    test "finishing your last form lands on the flow, which says your part is done",
+         %{conn: conn} do
+      %{instance: instance, intake: intake} = licensing()
+
+      {:ok, view, _html} =
+        as(conn, "applicant", ["flows", instance.id, "forms"] ++ intake ++ ["edit"])
+
+      submit(view, instance_at(instance, intake), %{"name" => "Ada"})
+
+      # Review is the next actionable position in the flow, but not the
+      # applicant's — so the flow's page, not Review's edit page
+      assert {path, _flash} = assert_redirect(view)
+      assert path == flow_path(instance)
+
+      {:ok, _view, html} = as(conn, "applicant", ["flows", instance.id])
+      assert html =~ "Your part is done"
+      assert html =~ "Done"
+
+      # The reviewer's page has work waiting and no such notice
+      {:ok, _view, html} = as(conn, "reviewer", ["flows", instance.id])
+      refute html =~ "Your part is done"
+      assert html =~ "Available"
+    end
+
+    test "a viewer with no perspective moves on to the next form, whoever it is for",
+         %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = licensing()
+
+      {:ok, view, _html} = isolated_edit(conn, instance, intake)
+
+      submit(view, instance_at(instance, intake), %{"name" => "Ada"})
+
+      assert {path, _flash} = assert_redirect(view)
+      assert path == edit_path(instance, review)
     end
   end
 
@@ -993,11 +1125,19 @@ defmodule Demo.FormFlowInstancesTest do
   # A user-facing page, through the test config's page
   defp start_button(flow), do: "button[phx-value-flow-id='#{flow.id}']"
 
-  defp isolated(conn, segments, config_data \\ %{}, tenant_id \\ nil) do
+  defp isolated(conn, segments, config_data \\ %{}, tenant_id \\ nil, perspectives \\ []) do
     live_isolated(conn, TestPage,
-      session: %{"path" => segments, "config_data" => config_data, "tenant_id" => tenant_id}
+      session: %{
+        "path" => segments,
+        "config_data" => config_data,
+        "tenant_id" => tenant_id,
+        "perspectives" => perspectives
+      }
     )
   end
+
+  # The same pages, seen as one kind of user
+  defp as(conn, perspective, segments), do: isolated(conn, segments, %{}, nil, perspective)
 
   defp isolated_edit(conn, instance, path) do
     isolated(conn, ["flows", instance.id, "forms"] ++ path ++ ["edit"])

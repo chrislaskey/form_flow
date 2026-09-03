@@ -120,6 +120,55 @@ never follows a rename; it changes only when an admin changes it.
   treat NULLs as distinct, which would let a host with no tenants reuse a
   slug. Drop and recreate any database migrated before this version.
 
+### Perspectives: which kinds of user a flow is for
+
+**New: `enabled_perspectives/2` on `FormFlow.Config`**, returning
+`FormFlow.Config.Flows.Perspective` structs — the kinds of user a host
+distinguishes, each with an `id`, a `name`, a `description`, and whatever
+the host wants to carry in `metadata`. When a config offers some, the
+identity form of every "forms" flow — the drill-in page of a subflow, or a
+simple flow's own — gains a Perspectives multi-select, and the admin says
+which kinds of user that flow's forms are for: "this subflow is for
+applicants, this one for reviewers". The picked ids are stored on the flow
+under `properties["perspectives"]`; none means everyone. Perspective is set
+on a flow of forms and nowhere else — the forms inside read their flow's,
+and a flow whose forms belong to different perspectives is split into
+subflows. There are no per-form or per-node overrides, by design. The
+default offers nothing, which shows no field and stores nothing.
+
+The property *states* which perspectives a flow is for; what that means is
+the flow type's to implement:
+
+- **New: `visible?/2` on `FormFlow.Config.Flows.Type`** — whether the flow's
+  forms are for this viewer at all. The default reads the stored
+  perspectives against the viewer's: a flow naming none is for everyone, a
+  viewer with none sees everything, otherwise they must share one. The
+  pages ask it before `editable?/2`, which stays the order rule alone, so a
+  type never repeats the perspective test. A type that wants "visible to
+  everyone, worked by some" overrides `visible?/2` and keeps the default
+  `editable?/2`.
+- **The viewer's perspectives arrive through a `perspectives` attr** on
+  `FormFlow.Web.router/1` and every instance LiveComponent — a string or a
+  list of ids, `[]` by default — and reach every callback as
+  `FormFlow.Context.perspectives`. `FormFlow.Context.flow_perspectives`
+  carries the structs the `:subflow` is for, resolved through the config,
+  so a type sees the host's metadata, not just the id.
+- **The instance pages consume it.** The flow instance's page lists only
+  the forms for the viewer; a position for another perspective is refused
+  by name, started or not, on both form pages; after a submit the viewer
+  moves to the nearest form that is theirs, skipping other perspectives'
+  flows; and when every form they can see is done but the instance is not,
+  the page says their part is done. `Flows.complete?/1` is unchanged —
+  completion is about the instance, visibility about the viewer.
+- **Perspective is routing and hiding, not authorization.** The gate is
+  still `handle_instance_mount/2`.
+- The template Show page names a flow's perspectives beside its type. A
+  stored id the config no longer offers is flagged on the edit page and
+  dropped on the next save, as a stale related-form choice is.
+- Every instance LiveComponent now also receives `uri` and `params` from
+  the router, whether or not it reads them today, so a host rendering the
+  components directly passes one set of attrs that never needs rewiring.
+
 ## v0.12.0
 
 ### The config gates its pages: `handle_mount/2`

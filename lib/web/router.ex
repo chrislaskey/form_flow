@@ -48,6 +48,11 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id/forms/*path`        | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
   | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
 
+  Every instance component receives `user_id`, `tenant_id`, `perspectives`,
+  `config`, `config_data`, `uri`, and `params`, whether or not it reads them
+  today — a host calling the components directly should pass the same, so a
+  later feature that needs one never means rewiring.
+
   The two sides use the same nouns on purpose: the mount root already says
   which world you are in, so `/admin/flows/:id` is a flow *template* and
   `/users/flows/:id` is a flow *instance* — the names
@@ -99,6 +104,16 @@ defmodule FormFlow.Web.Router do
         "here, and on form instances started inside them; the index pages " <>
         "list only that tenant's. Only multitenant hosts set it; the default " <>
         "leaves the column nil. Never interpreted by the library"
+  )
+
+  attr(:perspectives, :any,
+    default: [],
+    doc:
+      "the kinds of user the current user is here as — one or more " <>
+        "`FormFlow.Config.Flows.Perspective` ids, a string or a list. The " <>
+        "instance pages show, offer, and open only the flows for those " <>
+        "perspectives; the default, none, sees everything. Ignored by the " <>
+        "template pages"
   )
 
   attr(:config, :atom,
@@ -294,6 +309,7 @@ defmodule FormFlow.Web.Router do
               base={@base}
               user_id={@user_id}
               tenant_id={@tenant_id}
+              perspectives={@perspectives}
               config={@config}
               config_data={@config_data}
               uri={@uri}
@@ -307,8 +323,11 @@ defmodule FormFlow.Web.Router do
               base={@base}
               user_id={@user_id}
               tenant_id={@tenant_id}
+              perspectives={@perspectives}
               config={@config}
               config_data={@config_data}
+              uri={@uri}
+              params={@params}
             />
           <% {:form, id, form_path} -> %>
             <.live_component
@@ -319,8 +338,11 @@ defmodule FormFlow.Web.Router do
               base={@base}
               user_id={@user_id}
               tenant_id={@tenant_id}
+              perspectives={@perspectives}
               config={@config}
               config_data={@config_data}
+              uri={@uri}
+              params={@params}
             />
           <% {:form_edit, id, form_path} -> %>
             <.live_component
@@ -331,8 +353,11 @@ defmodule FormFlow.Web.Router do
               base={@base}
               user_id={@user_id}
               tenant_id={@tenant_id}
+              perspectives={@perspectives}
               config={@config}
               config_data={@config_data}
+              uri={@uri}
+              params={@params}
             />
           <% nil -> %>
             <%!-- not an instances path --%>

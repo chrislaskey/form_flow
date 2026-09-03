@@ -84,6 +84,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
@@ -110,6 +111,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      socket
      |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
      |> assign(:pending_slug, Map.get(payload.data, :slug, socket.assigns.pending_slug))
+     |> assign(:pending_perspectives, pending_perspectives(payload, socket.assigns))
      |> assign(:pending_type, pending_type)
      |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
      |> reset_form_data_on_switch(pending_type)
@@ -131,10 +133,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
     types = flow_types(socket.assigns, context)
+    perspectives = Shared.perspectives(context, socket.assigns)
 
     {:ok,
      socket
-     |> assign(flow: flow, root: root, flow_types: types, form_data: form_data(flow, types))
+     |> assign(flow: flow, root: root, flow_types: types, perspectives: perspectives)
+     |> assign(form_data: form_data(flow, types))
      |> assign(pending(flow))
      |> assign(page(socket.assigns, flow, root))}
   end
@@ -145,10 +149,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     %{
       pending_name: flow && flow.name,
       pending_slug: flow && flow.slug,
+      pending_perspectives: Perspective.ids(flow),
       pending_type: flow && flow.properties["form_flow_type"],
       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow)
     }
   end
+
+  # The perspectives the admin has checked. With no field on the page (the
+  # config offers none for this flow) the stored ids stay as they are.
+  defp pending_perspectives(_payload, %{perspectives: []} = assigns),
+    do: assigns.pending_perspectives
+
+  defp pending_perspectives(payload, _assigns), do: List.wrap(payload.data[:perspectives] || [])
 
   # The canvas and the dropdown options it offers its nodes
   defp page(_assigns, nil, _root) do
@@ -179,12 +191,19 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     type_id = flow.properties["form_flow_type"]
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
-    form_data(flow.name, flow.slug, type_id, Shared.properties(types, type_id), values)
+    form_data(
+      flow.name,
+      flow.slug,
+      Perspective.ids(flow),
+      type_id,
+      Shared.properties(types, type_id),
+      values
+    )
   end
 
-  defp form_data(name, slug, type_id, properties, values) do
+  defp form_data(name, slug, perspectives, type_id, properties, values) do
     Map.merge(
-      %{name: name, slug: slug, form_flow_type: type_id},
+      %{name: name, slug: slug, perspectives: perspectives, form_flow_type: type_id},
       Shared.field_data(properties, values)
     )
   end
@@ -209,7 +228,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     if pending_type == socket.assigns.form_data[:form_flow_type] do
       socket
     else
-      %{flow: flow, flow_types: types, pending_name: name, pending_slug: slug} = socket.assigns
+      %{
+        flow: flow,
+        flow_types: types,
+        pending_name: name,
+        pending_slug: slug,
+        pending_perspectives: perspectives
+      } = socket.assigns
+
       saved_type = flow.properties["form_flow_type"]
 
       values =
@@ -220,7 +246,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       assign(
         socket,
         :form_data,
-        form_data(name, slug, pending_type, Shared.properties(types, pending_type), values)
+        form_data(
+          name,
+          slug,
+          perspectives,
+          pending_type,
+          Shared.properties(types, pending_type),
+          values
+        )
       )
     end
   end
@@ -353,6 +386,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     assigns.current != assigns.data or
       assigns.pending_name != assigns.flow.name or
       assigns.pending_slug != assigns.flow.slug or
+      assigns.pending_perspectives != Perspective.ids(assigns.flow) or
       assigns.pending_type != assigns.flow.properties["form_flow_type"] or
       assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow)
   end
@@ -429,7 +463,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> ReactFlow.to_flow_attrs()
       |> Map.put(:name, socket.assigns.pending_name)
       |> Map.put(:slug, socket.assigns.pending_slug)
-      |> Map.put(:properties, pending_template_properties(socket.assigns))
+      |> Map.put(
+        :properties,
+        socket.assigns
+        |> pending_template_properties()
+        |> Perspective.put_ids(socket.assigns.pending_perspectives)
+      )
 
     case Flows.update(socket.assigns.flow, attrs) do
       {:ok, flow} ->
@@ -444,6 +483,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             current: data,
             pending_name: flow.name,
             pending_slug: flow.slug,
+            pending_perspectives: Perspective.ids(flow),
             pending_type: flow.properties["form_flow_type"],
             pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
             form_data: form_data(flow, socket.assigns.flow_types),
@@ -651,6 +691,16 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             name="slug"
             label="Slug"
             description="A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+          />
+          <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective)
+                — only when the config offers perspectives for it --%>
+          <:field
+            :if={@perspectives != []}
+            type="checkbox"
+            name="perspectives"
+            label="Perspectives"
+            description={Shared.perspectives_description(@flow, @perspectives)}
+            options={Shared.perspective_options(@perspectives)}
           />
           <:field
             :if={@flow_types != []}

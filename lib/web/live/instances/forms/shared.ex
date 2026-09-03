@@ -28,7 +28,10 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       `initial_data/2`; nil until the form has an instance
     * `:context` - the `FormFlow.Context` both types' callbacks take, for
       this form
-    * `:editable?` - whether the type allows editing here
+    * `:visible?` - whether the type says this form's flow is for the viewer
+      at all (`visible?/2`, the perspectives test by default)
+    * `:editable?` - whether the type allows editing here — never when the
+      form is not visible
     * `:start_error` - why `start/1` could not start the form, or nil
     * `:mount_error` / `:navigate_to` - the host config's answer from
       `handle_instance_mount/2` when it refused or redirected, or nil
@@ -48,6 +51,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   import Phoenix.Component, only: [assign: 2, assign: 3]
   import Phoenix.LiveView, only: [start_async: 3]
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -75,7 +79,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
     context = context(socket.assigns, tree, forms)
     type = flow_type(context, socket.assigns)
-    editable? = not is_nil(context.form_progress) and editable?(type, context, socket.assigns)
+    {visible?, editable?} = access(type, context, socket.assigns)
 
     # An instance already at the position is simply used — including a
     # stranded one, whose position the tree no longer has
@@ -105,6 +109,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       initial_data:
         form_instance && form_type.module.initial_data(context, socket.assigns.config_data),
       context: context,
+      visible?: visible?,
       editable?: editable?,
       start_error: nil,
       mount_error: nil,
@@ -128,9 +133,10 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
     subflow = (form && form.flow) || (tree && tree.flow)
 
-    %Context{
+    context = %Context{
       user_id: assigns.user_id,
       tenant_id: assigns.tenant_id,
+      perspectives: Perspective.normalize(assigns.perspectives),
       flow: tree && tree.flow,
       subflow: subflow,
       subflow_node: form && List.last(form.ancestors),
@@ -139,6 +145,53 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       form_progress: form,
       flow_progress: FlowProgress.forms_in_flow(forms, path),
       flow_instance_progress: forms
+    }
+
+    %Context{context | flow_perspectives: flow_perspectives(context, assigns)}
+  end
+
+  @doc """
+  The `FormFlow.Config.Flows.Perspective` structs the context's `:subflow` is
+  for — its stored ids resolved through what the host's config enables for
+  that context. `[]` for a flow that names none, or names only ids the
+  config no longer has.
+  """
+  def flow_perspectives(%Context{subflow: flow} = context, assigns) do
+    config = FormFlow.Config.config_module(assigns.config)
+
+    Perspective.for_flow(flow, config.enabled_perspectives(context, assigns.config_data))
+  end
+
+  @doc """
+  Whether the flow type says the form at the context's `:form_progress` is
+  for this viewer — `visible?/2`, the perspectives test by default. The
+  pages hide, skip, and refuse a form that is not.
+  """
+  def visible?(type, context, assigns), do: type.module.visible?(context, assigns.config_data)
+
+  @doc """
+  The first form of the whole flow instance the viewer can work next, in
+  flow order: actionable, and visible to them. `nil` when nothing is — the
+  viewer's part is done, or blocked on someone else's.
+  """
+  def next_visible_form(%Context{flow_instance_progress: forms} = context, assigns) do
+    Enum.find(forms, fn form ->
+      form_context = form_context(context, form)
+
+      FlowProgress.actionable?(form) and
+        visible?(flow_type(form_context, assigns), form_context, assigns)
+    end)
+  end
+
+  # The context re-aimed at another form of the same flow instance
+  defp form_context(%Context{flow_instance_progress: forms} = context, form) do
+    %Context{
+      context
+      | subflow: form.flow,
+        subflow_node: List.last(form.ancestors),
+        flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
+        form_progress: form,
+        flow_progress: FlowProgress.forms_in_flow(forms, form.path)
     }
   end
 
@@ -252,6 +305,17 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     )
   rescue
     error -> assign(socket, parsed: nil, parse_error: Exception.message(error))
+  end
+
+  # Whether the form is for this viewer, and whether they may edit it now — a
+  # position the tree no longer has is neither, and one that is not visible
+  # is never editable
+  defp access(_type, %Context{form_progress: nil}, _assigns), do: {false, false}
+
+  defp access(type, context, assigns) do
+    visible? = visible?(type, context, assigns)
+
+    {visible?, visible? and editable?(type, context, assigns)}
   end
 
   defp editable?(type, context, assigns), do: type.module.editable?(context, assigns.config_data)

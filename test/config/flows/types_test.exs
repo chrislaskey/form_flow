@@ -46,6 +46,50 @@ defmodule FormFlow.Config.Flows.TypesTest do
     end
   end
 
+  # A host's type that shows every flow to every viewer, whatever the flow's
+  # perspectives say — the property states, the type decides
+  defmodule Open do
+    use FormFlow.Config.Flows.Type
+
+    @impl true
+    def visible?(_context, _config_data), do: true
+  end
+
+  describe "visible?/2" do
+    defp reviewer_flow do
+      %FormFlow.Data.Templates.Flow{label: "forms", properties: %{"perspectives" => ["reviewer"]}}
+    end
+
+    test "the default reads the flow's perspectives against the viewer's" do
+      context = %Context{subflow: reviewer_flow(), perspectives: ["reviewer"]}
+      assert Types.WizardInOrder.visible?(context, %{})
+      assert Types.WizardAnyOrder.visible?(context, %{})
+
+      other = %Context{subflow: reviewer_flow(), perspectives: ["applicant"]}
+      refute Types.WizardInOrder.visible?(other, %{})
+      refute Checklist.visible?(other, %{})
+    end
+
+    test "a flow for everyone, or a viewer with no perspective, is visible" do
+      everyone = %FormFlow.Data.Templates.Flow{label: "forms", properties: %{}}
+      assert Types.WizardInOrder.visible?(%Context{subflow: everyone, perspectives: ["x"]}, %{})
+
+      assert Types.WizardInOrder.visible?(
+               %Context{subflow: reviewer_flow(), perspectives: []},
+               %{}
+             )
+    end
+
+    test "a type overrides it like any other callback, and editable? is unaffected" do
+      other = %Context{subflow: reviewer_flow(), perspectives: ["applicant"]}
+      assert Open.visible?(other, %{})
+
+      forms = [form("next", :available)]
+      assert Open.editable?(context(forms, "next"), %{})
+      assert Types.WizardInOrder.editable?(context(forms, "next"), %{})
+    end
+  end
+
   describe "Types.Default / WizardInOrder" do
     test "editable? is where the flow allows work: an available or started form" do
       forms = [

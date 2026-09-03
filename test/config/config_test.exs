@@ -24,6 +24,19 @@ defmodule FormFlow.ConfigTest do
     def handle_instance_mount(_context, _config_data), do: :whatever
   end
 
+  # A host that distinguishes two kinds of user
+  defmodule WithPerspectives do
+    use FormFlow.Config
+
+    @impl true
+    def enabled_perspectives(_context, _config_data) do
+      [
+        %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
+        %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer", metadata: %{desk: 1}}
+      ]
+    end
+  end
+
   defp socket(config, user_id \\ "stranger", config_data \\ %{}) do
     %Phoenix.LiveView.Socket{
       assigns: %{
@@ -52,6 +65,28 @@ defmodule FormFlow.ConfigTest do
   describe "enabled_instance_flows/2" do
     test "a custom config inherits the default like every other callback" do
       assert function_exported?(Gated, :enabled_instance_flows, 2)
+    end
+  end
+
+  describe "enabled_perspectives/2" do
+    test "the default offers none, and a custom config inherits that" do
+      assert FormFlow.Config.Default.enabled_perspectives(%Context{}, %{}) == []
+      assert Gated.enabled_perspectives(%Context{}, %{}) == []
+    end
+
+    test "Shared.flow_perspectives/2 resolves a flow's stored ids to the config's structs" do
+      flow = %FormFlow.Data.Templates.Flow{
+        label: "forms",
+        properties: %{"perspectives" => ["reviewer", "gone"]}
+      }
+
+      assigns = %{config: WithPerspectives, config_data: %{}}
+
+      assert [%FormFlow.Config.Flows.Perspective{id: "reviewer", metadata: %{desk: 1}}] =
+               Shared.flow_perspectives(%Context{subflow: flow}, assigns)
+
+      assert Shared.flow_perspectives(%Context{subflow: flow}, %{config: nil, config_data: %{}}) ==
+               []
     end
   end
 

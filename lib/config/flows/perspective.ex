@@ -1,0 +1,101 @@
+defmodule FormFlow.Config.Flows.Perspective do
+  @moduledoc """
+  Perspective definition: one kind of user a "forms" flow is for — the
+  applicant, the regional reviewer, the final approver.
+
+  `FormFlow.Config.enabled_perspectives/2` returns a list of these; the
+  struct is what the config describes — `:id`, `:name`, `:description`, and
+  whatever else the host wants to carry along in `:metadata` — and the admin
+  building a template picks from them, on the identity form of each "forms"
+  flow, which perspectives that flow is for. The picked ids are stored on the
+  flow under `properties["perspectives"]`; `for_flow/2` resolves them back to
+  the structs at run time, so a type's callbacks see everything the host
+  declared, not just the id.
+
+  A perspective is set on a flow of forms, and only there: the forms inside
+  read their flow's, and a "subflows" root has none of its own. When one
+  flow's forms belong to different perspectives, the flow is split into
+  subflows — one place to look, no overrides.
+
+  The property *states* which perspectives a flow is for; what that means is
+  the flow type's to implement, in `FormFlow.Config.Flows.Type`'s
+  `visible?/2` and `editable?/2`. The library's defaults read it as
+  `visible?/1` here: a flow is for everyone when it names no perspective, a
+  viewer with no perspective sees everything, and otherwise the flow shows
+  for a viewer sharing at least one of its perspectives. Perspective is
+  routing and hiding, not authorization — `FormFlow.Config.handle_instance_mount/2`
+  is the gate.
+
+  The viewer's perspectives arrive through the `perspectives` attr of
+  `FormFlow.Web.router/1` and the instance LiveComponents — a string or a
+  list of strings — and land on `FormFlow.Context` as `:perspectives`.
+  """
+
+  alias FormFlow.Context
+  alias FormFlow.Data.Templates.Flow
+
+  @key "perspectives"
+
+  defstruct [:id, :name, :description, metadata: %{}]
+
+  @type t :: %__MODULE__{
+          id: String.t(),
+          name: String.t(),
+          description: String.t() | nil,
+          metadata: map()
+        }
+
+  @doc "The key the picked ids are stored under in a flow's `properties`."
+  def key, do: @key
+
+  @doc "The perspective ids a flow is for — stored on it by the admin; `[]` for everyone."
+  @spec ids(Flow.t() | nil) :: [String.t()]
+  def ids(%Flow{properties: properties}), do: List.wrap(Map.get(properties || %{}, @key, []))
+  def ids(nil), do: []
+
+  @doc """
+  The enabled perspectives a flow is for, as structs, in the enabled order.
+  A stored id no enabled perspective has is dropped here — `stale_ids/2`
+  is where the editor learns about it.
+  """
+  @spec for_flow(Flow.t() | nil, [t()]) :: [t()]
+  def for_flow(flow, enabled) do
+    stored = ids(flow)
+    Enum.filter(enabled, &(&1.id in stored))
+  end
+
+  @doc "The stored ids no enabled perspective has — a vocabulary the host changed under the template."
+  @spec stale_ids(Flow.t() | nil, [t()]) :: [String.t()]
+  def stale_ids(flow, enabled) do
+    known = MapSet.new(enabled, & &1.id)
+    Enum.reject(ids(flow), &MapSet.member?(known, &1))
+  end
+
+  @doc "`properties` with `ids` stored — or the key removed, when there are none."
+  @spec put_ids(map(), [String.t()]) :: map()
+  def put_ids(properties, []), do: Map.delete(properties, @key)
+  def put_ids(properties, ids), do: Map.put(properties, @key, ids)
+
+  @doc """
+  The viewer's perspectives as the pages hold them: the attr accepts a
+  string or a list of strings; `nil` is no perspective.
+  """
+  @spec normalize(nil | String.t() | [String.t()]) :: [String.t()]
+  def normalize(nil), do: []
+  def normalize(list) when is_list(list), do: Enum.map(list, &to_string/1)
+  def normalize(one), do: [to_string(one)]
+
+  @doc """
+  Whether the context's `:subflow` is for one of the viewer's `:perspectives`
+  — the library's default reading of the property (see the moduledoc). A
+  flow naming no perspective is for everyone; a viewer with none sees
+  everything.
+  """
+  @spec visible?(Context.t()) :: boolean()
+  def visible?(%Context{subflow: flow, perspectives: viewer}) do
+    flow_ids = ids(flow)
+    viewer = normalize(viewer)
+
+    flow_ids == [] or viewer == [] or Enum.any?(flow_ids, &(&1 in viewer))
+  end
+end
