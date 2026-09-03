@@ -30,8 +30,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   is narrowed to instances that user created, and starting one stamps them as
   its creator. The host's config decides otherwise through
   `FormFlow.Config.flow_instances_query/2` — a reviewer's desk lists
-  everyone's — and the router's `tenant_id` is applied on top of whatever it
-  answers. This is a listing convenience, not access control: the page asks
+  everyone's — and which flows the page offers to start through
+  `FormFlow.Config.enabled_instance_flows/2`, refusing to start any other.
+  The router's `tenant_id` is applied on top of both answers. This is a
+  listing convenience, not access control: the page asks
   `FormFlow.Config.handle_instance_mount/2` before it draws, like every other
   user-facing page, and auth stays the host's job (see `FormFlow.Web.Router`).
 
@@ -45,7 +47,6 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
-  alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -73,17 +74,20 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   end
 
   # The listing itself, built only once the config allowed the page: the
-  # host's query narrowed to the router's tenant, and the flows to start
+  # host's query and the host's flows to start, each narrowed to the
+  # router's tenant
   defp load(socket) do
     %{context: context, config: config, config_data: config_data} = socket.assigns
+    module = FormFlow.Config.config_module(config)
 
     query =
-      FormFlow.Config.config_module(config).flow_instances_query(context, config_data)
+      module.flow_instances_query(context, config_data)
       |> Instances.Flows.narrow_tenant(socket.assigns.tenant_id)
 
     flows =
-      Repo.all(Templates.Flows.roots_query(tenant_id: socket.assigns.tenant_id))
-      |> Enum.reject(& &1.made_reusable_at)
+      module.enabled_instance_flows(context, config_data)
+      |> Enum.reject(&is_nil/1)
+      |> in_tenant(socket.assigns.tenant_id)
 
     socket
     |> assign(:query, query)
@@ -97,8 +101,20 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:noreply, push_navigate(socket, to: to)}
   end
 
+  defp in_tenant(flows, nil), do: flows
+  defp in_tenant(flows, tenant_id), do: Enum.filter(flows, &(&1.tenant_id == tenant_id))
+
+  # Only a flow the page offered can be started from it
   @impl true
   def handle_event("start", %{"flow-id" => flow_id}, socket) do
+    if Enum.any?(socket.assigns.flows, &(&1.id == flow_id)) do
+      start(socket, flow_id)
+    else
+      {:noreply, assign(socket, :error, "That flow is not available here.")}
+    end
+  end
+
+  defp start(socket, flow_id) do
     attrs = %{
       flow_id: flow_id,
       user_id: socket.assigns.user_id,

@@ -49,6 +49,12 @@ defmodule FormFlow.ConfigTest do
     end
   end
 
+  describe "enabled_instance_flows/2" do
+    test "a custom config inherits the default like every other callback" do
+      assert function_exported?(Gated, :enabled_instance_flows, 2)
+    end
+  end
+
   describe "handle_instance_mount/2" do
     test "the default allows every page, adding nothing" do
       assert FormFlow.Config.Default.handle_instance_mount(%Context{}, %{}) == {:ok, %{}}

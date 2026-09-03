@@ -92,6 +92,13 @@ defmodule Demo.FormFlowInstancesTest do
       do: FormFlow.Config.Default.flow_instances_query(context, config_data)
 
     @impl true
+    def enabled_instance_flows(_context, %{"offer" => slug}),
+      do: [Flows.get_by_slug(slug)]
+
+    def enabled_instance_flows(context, config_data),
+      do: FormFlow.Config.Default.enabled_instance_flows(context, config_data)
+
+    @impl true
     def enabled_form_types(context, config_data) do
       FormFlow.Config.Default.enabled_form_types(context, config_data) ++
         [
@@ -490,6 +497,56 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ acme.id
       refute html =~ mine.id
       refute html =~ theirs.id
+    end
+  end
+
+  describe "the config picks the flows to start with enabled_instance_flows/2" do
+    test "by default every root of the tenant is offered", %{conn: conn} do
+      {:ok, dog} = Flows.create(%{name: "Dog License"})
+      {:ok, cat} = Flows.create(%{name: "Cat License"})
+      {:ok, reusable} = Flows.create(%{name: "Shared"})
+      {:ok, _} = Flows.make_reusable(reusable)
+      {:ok, acme} = Flows.create(%{name: "Elsewhere", tenant_id: "acme"})
+
+      {:ok, view, _html} = isolated(conn, ["flows"])
+
+      assert has_element?(view, start_button(dog))
+      assert has_element?(view, start_button(cat))
+      refute has_element?(view, start_button(reusable))
+      assert has_element?(view, start_button(acme))
+
+      {:ok, view, _html} = isolated(conn, ["flows"], %{}, "acme")
+      assert has_element?(view, start_button(acme))
+      refute has_element?(view, start_button(dog))
+    end
+
+    test "a host offers what it names; the page refuses to start anything else", %{conn: conn} do
+      {:ok, dog} = Flows.create(%{name: "Dog License"})
+      {:ok, cat} = Flows.create(%{name: "Cat License"})
+
+      {:ok, view, _html} = isolated(conn, ["flows"], %{"offer" => "dog-license"})
+
+      assert has_element?(view, start_button(dog))
+      refute has_element?(view, start_button(cat))
+
+      # A crafted event for the flow that was not offered starts nothing — the
+      # offered button's target, with the other flow's id in its place
+      view |> element(start_button(dog)) |> render_click(%{"flow-id" => cat.id})
+      assert render(view) =~ "That flow is not available here."
+      assert Instances.Flows.list() == []
+
+      # A slug that resolves to nothing offers nothing, and does not fail
+      {:ok, view, html} = isolated(conn, ["flows"], %{"offer" => "nope"})
+      refute has_element?(view, start_button(dog))
+      assert html =~ "Nothing started yet"
+    end
+
+    test "a flow of another tenant is never offered, whatever the host says", %{conn: conn} do
+      {:ok, acme} = Flows.create(%{name: "Dog License", tenant_id: "acme"})
+
+      {:ok, view, _html} = isolated(conn, ["flows"], %{"offer" => "dog-license"}, "globex")
+
+      refute has_element?(view, start_button(acme))
     end
   end
 
@@ -934,6 +991,8 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # A user-facing page, through the test config's page
+  defp start_button(flow), do: "button[phx-value-flow-id='#{flow.id}']"
+
   defp isolated(conn, segments, config_data \\ %{}, tenant_id \\ nil) do
     live_isolated(conn, TestPage,
       session: %{"path" => segments, "config_data" => config_data, "tenant_id" => tenant_id}

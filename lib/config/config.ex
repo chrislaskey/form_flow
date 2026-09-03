@@ -18,9 +18,14 @@ defmodule FormFlow.Config do
 
   A host passes one config module per use of `FormFlow.Web.router/1`, so a
   config is where per-use behavior lives — which types a section offers, who
-  may see its pages (`handle_instance_mount/2`), and whose flow instances its listing
-  shows (`flow_instances_query/2`) — while a type describes how a form or
+  may see its pages (`handle_instance_mount/2`), whose flow instances its
+  listing shows (`flow_instances_query/2`), and which flows it offers to
+  start (`enabled_instance_flows/2`) — while a type describes how a form or
   flow behaves wherever it is used.
+
+  A callback only one side of the router reads says which in its name —
+  `handle_instance_mount/2`, `enabled_instance_flows/2` — while the type
+  lists, which both sides read, stay unqualified.
   """
 
   alias FormFlow.Context
@@ -49,6 +54,27 @@ defmodule FormFlow.Config do
   convenience, not access control: gate the page with `handle_instance_mount/2`.
   """
   @callback flow_instances_query(Context.t(), map()) :: Ecto.Query.t()
+
+  @doc """
+  The flow templates the listing page offers to start, in display order —
+  the twin of `flow_instances_query/2` for templates. The default is every
+  root flow in the tenant that has not been made reusable. An entry point
+  for one flow names it by slug; a reviewer's desk offers nothing:
+
+      def enabled_instance_flows(context, _config_data) do
+        [FormFlow.Data.Templates.Flows.get_by_slug("dog-license", tenant_id: context.tenant_id)]
+      end
+
+      def enabled_instance_flows(_context, _config_data), do: []
+
+  `nil` entries are dropped, so a slug that resolves to nothing offers
+  nothing rather than failing. The router's `tenant_id` is applied on top:
+  a flow of another tenant is never offered, whatever the host answers. The
+  page also refuses to start a flow it did not offer. The context carries
+  `:user_id` and `:tenant_id` and nothing else. Ignored by the template
+  pages, which list every root in the tenant.
+  """
+  @callback enabled_instance_flows(Context.t(), map()) :: [FormFlow.Data.Templates.Flow.t() | nil]
 
   @doc """
   Whether a user-facing page may render for this user, asked once the page
@@ -96,10 +122,15 @@ defmodule FormFlow.Config do
         FormFlow.Config.Default.flow_instances_query(context, config_data)
       end
 
+      def enabled_instance_flows(context, config_data) do
+        FormFlow.Config.Default.enabled_instance_flows(context, config_data)
+      end
+
       defoverridable enabled_flow_types: 2,
                      enabled_form_types: 2,
                      handle_instance_mount: 2,
-                     flow_instances_query: 2
+                     flow_instances_query: 2,
+                     enabled_instance_flows: 2
     end
   end
 

@@ -66,6 +66,12 @@ is the public helper that does it).
   `enabled_form_types/2` stay as they are because the template and instance
   pages both read them, while this one — like `flow_instances_query/2` — is
   instance-only.
+- **New: `enabled_instance_flows/2` on `FormFlow.Config`.** The flows the
+  listing offers to start — by default every root of the tenant not made
+  reusable, exactly as before. An entry point for one flow names it by slug;
+  a reviewer's desk returns `[]` and the picker disappears. `nil` entries are
+  dropped, the router's `tenant_id` is applied on top, and the page refuses
+  to start a flow it did not offer. Ignored by the template pages.
 - **`handle_instance_mount/2` now gates the listing as well.** Every user-facing page
   asks before it draws. On the listing the context carries only `:user_id`
   and `:tenant_id` — there is no flow in scope — and a refusal renders the

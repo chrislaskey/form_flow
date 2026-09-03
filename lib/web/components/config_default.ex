@@ -58,4 +58,11 @@ defmodule FormFlow.Web.Components.Config.Default do
   def flow_instances_query(context, _config_data) do
     FormFlow.Data.Instances.Flows.list_query(user_id: context.user_id)
   end
+
+  # The listing offers every root flow of the tenant until a host says otherwise
+  @impl true
+  def enabled_instance_flows(context, _config_data) do
+    FormFlow.Data.Templates.Flows.list(tenant_id: context.tenant_id)
+    |> Enum.reject(& &1.made_reusable_at)
+  end
 end
