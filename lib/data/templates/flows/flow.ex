@@ -31,6 +31,17 @@ defmodule FormFlow.Data.Templates.Flow do
   An owned flow is never in the catalog: the changeset rejects setting an
   owner on a flow that has `made_reusable_at`.
 
+  ## Tenancy
+
+  `tenant_id` is the host tenant the flow belongs to — an opaque host
+  identity, `nil` for a host with no tenants — stamped at creation and
+  immutable afterwards. Owned children, save-time or copied, take their
+  root's. Like a node's `flow_id` it is written to both locations: the
+  dedicated column, so the database can index and narrow by it, and a
+  `"tenant_id"` key inside `properties`, the copy that carries over to
+  Neo4j. The changeset keeps the copy in sync — the column is authoritative,
+  and a stale `"tenant_id"` arriving in `properties` is overwritten.
+
   This row maps wholesale to a `:Flow` node when the Neo4j dual-write lands —
   ownership becomes an `OWNED_BY` relationship. See the Neo4j guide
   (`guides/neo4j.md`).
@@ -53,6 +64,8 @@ defmodule FormFlow.Data.Templates.Flow do
     # FormFlow.Data.Templates.Flows). Named `label` to mirror Neo4j, where it
     # becomes the second label on the :Flow node — :Flow:Forms / :Flow:Subflows.
     field(:label, :string, default: "forms")
+
+    field(:tenant_id, :string)
 
     # Open domain data in the Neo4j property-graph style, like a node's
     # properties. Carries "form_flow_type" for "forms" flows — the id of the
@@ -77,26 +90,42 @@ defmodule FormFlow.Data.Templates.Flow do
   @doc """
   Builds a changeset for a flow.
 
-  `:name`, `:properties`, and `:owner_flow_id` are castable; `:label` is
-  castable at creation and immutable afterwards — the declared flavor is a commitment, and the
-  escape hatch is wrapping in a new parent flow, not converting.
+  `:name`, `:properties`, and `:owner_flow_id` are castable; `:label` and
+  `:tenant_id` are castable at creation and immutable afterwards — the
+  declared flavor is a commitment (the escape hatch is wrapping in a new
+  parent flow, not converting), and a template never changes tenants.
   `:made_reusable_at` is deliberately not castable — it is only stamped by
   `FormFlow.Data.Templates.Flows.make_reusable/1`.
   """
   def changeset(flow, attrs \\ %{}) do
     flow
-    |> cast(attrs, [:name, :label, :properties, :owner_flow_id])
+    |> cast(attrs, [:name, :label, :tenant_id, :properties, :owner_flow_id])
     |> validate_inclusion(:label, ~w(forms subflows))
-    |> validate_label_immutable()
+    |> validate_immutable(:label)
+    |> validate_immutable(:tenant_id)
     |> validate_owned_flows_are_not_reusable()
+    |> copy_into_properties(:tenant_id, "tenant_id")
     |> foreign_key_constraint(:owner_flow_id)
   end
 
-  defp validate_label_immutable(changeset) do
-    if changeset.data.__meta__.state == :loaded and get_change(changeset, :label) do
-      add_error(changeset, :label, "cannot be changed after creation")
+  defp validate_immutable(changeset, field) do
+    if changeset.data.__meta__.state == :loaded and get_change(changeset, field) do
+      add_error(changeset, field, "cannot be changed after creation")
     else
       changeset
+    end
+  end
+
+  # The dual-write: properties carry a copy of the column, for Neo4j
+  defp copy_into_properties(changeset, field, key) do
+    case get_field(changeset, field) do
+      nil ->
+        changeset
+
+      value ->
+        properties = get_field(changeset, :properties) || %{}
+
+        put_change(changeset, :properties, Map.put(properties, key, value))
     end
   end
 

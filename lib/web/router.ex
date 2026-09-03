@@ -94,10 +94,11 @@ defmodule FormFlow.Web.Router do
   attr(:tenant_id, :string,
     default: nil,
     doc:
-      "opaque host identity of the current user's tenant — stamped on flow " <>
-        "instances started here and on form instances started inside them. " <>
-        "Only multitenant hosts set it; the default leaves the column nil. " <>
-        "Never interpreted by the library"
+      "opaque host identity of the current user's tenant — stamped on the " <>
+        "flow and form templates created here, on flow instances started " <>
+        "here, and on form instances started inside them; the index pages " <>
+        "list only that tenant's. Only multitenant hosts set it; the default " <>
+        "leaves the column nil. Never interpreted by the library"
   )
 
   attr(:config, :atom,
@@ -157,11 +158,17 @@ defmodule FormFlow.Web.Router do
               module={Flows.Index}
               id="flows-index"
               base={@base}
+              tenant_id={@tenant_id}
               uri={@uri}
               params={@params}
             />
           <% :new -> %>
-            <.live_component module={Flows.New} id="flows-new" base={@base} />
+            <.live_component
+              module={Flows.New}
+              id="flows-new"
+              base={@base}
+              tenant_id={@tenant_id}
+            />
           <% {:show, id} -> %>
             <.live_component
               module={Flows.Show}
@@ -210,11 +217,17 @@ defmodule FormFlow.Web.Router do
               module={Forms.Index}
               id="forms-index"
               base={@base}
+              tenant_id={@tenant_id}
               uri={@uri}
               params={@params}
             />
           <% :new -> %>
-            <.live_component module={Forms.New} id="forms-new" base={@base} />
+            <.live_component
+              module={Forms.New}
+              id="forms-new"
+              base={@base}
+              tenant_id={@tenant_id}
+            />
           <% {:show, form_id, version_id} -> %>
             <.live_component
               module={Forms.Show}

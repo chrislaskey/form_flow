@@ -41,10 +41,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
-    query = Flows.roots_query()
+    query = Flows.roots_query(tenant_id: socket.assigns.tenant_id)
 
     {:ok,
      socket

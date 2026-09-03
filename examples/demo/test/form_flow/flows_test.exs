@@ -245,6 +245,71 @@ defmodule Demo.FormFlowFlowsTest do
     end
   end
 
+  describe "tenancy" do
+    test "owned children created at save take the root's tenant, column and properties" do
+      {:ok, root} = Flows.create(%{label: "subflows", tenant_id: "acme"})
+
+      {:ok, _} =
+        Flows.update(root, %{
+          nodes: [
+            %{
+              id: Ecto.UUID.generate(),
+              properties: %{
+                "type" => "subflow",
+                "data" => %{"label" => "Documents", "subflow_label" => "forms"}
+              }
+            }
+          ],
+          relationships: []
+        })
+
+      assert [node] = Flows.get(root.id).nodes
+      child = Flows.get(node.subflow_id)
+      assert child.tenant_id == "acme"
+      assert child.properties["tenant_id"] == "acme"
+
+      {:ok, _} =
+        Flows.update(child, %{
+          nodes: [
+            %{
+              id: Ecto.UUID.generate(),
+              properties: %{"data" => %{"kind" => "form", "label" => "Intake"}}
+            }
+          ],
+          relationships: []
+        })
+
+      assert [form_node] = Flows.get(child.id).nodes
+      form = FormFlow.Data.Templates.Forms.get(form_node.form_id)
+      assert form.tenant_id == "acme"
+      assert form.properties["tenant_id"] == "acme"
+    end
+
+    test "duplicate carries the tenant into the copy and everything it owns" do
+      {:ok, root} = Flows.create(%{tenant_id: "acme"})
+      {:ok, child} = Flows.create(%{owner_flow_id: root.id, tenant_id: "acme"})
+      insert_subflow_node(root, child)
+
+      {:ok, copy} = Flows.duplicate(root)
+
+      assert copy.tenant_id == "acme"
+      assert copy.properties["tenant_id"] == "acme"
+
+      assert [copied_node] = copy.nodes
+      assert Flows.get(copied_node.subflow_id).tenant_id == "acme"
+    end
+
+    test "the listings narrow by tenant" do
+      {:ok, mine} = Flows.create(%{name: "Mine", tenant_id: "acme"})
+      {:ok, _theirs} = Flows.create(%{name: "Theirs", tenant_id: "globex"})
+      {:ok, _untenanted} = Flows.create(%{name: "Nobody's"})
+
+      assert [%Flow{id: id}] = Flows.list(tenant_id: "acme")
+      assert id == mine.id
+      assert length(Flows.list()) == 3
+    end
+  end
+
   describe "subflows and ownership" do
     test "an owned subflow: created, referenced, drilled into" do
       {:ok, root} = Flows.create()

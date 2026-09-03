@@ -145,7 +145,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   describe "an instance's host identities" do
-    test "starting a form stamps the user on it, copied into metadata", %{conn: conn} do
+    test "starting a form stamps the user on it", %{conn: conn} do
       %{instance: instance, forms: [name, _address]} = flow_of_two()
 
       {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
@@ -153,7 +153,6 @@ defmodule Demo.FormFlowInstancesTest do
       form_instance = instance_at(instance, [name.id])
       assert form_instance.user_id == "demo-user"
       assert form_instance.tenant_id == nil
-      assert form_instance.metadata == %{"user_id" => "demo-user"}
     end
 
     test "a tenant is stamped on the journey and its forms, and narrows the listing" do
@@ -169,9 +168,7 @@ defmodule Demo.FormFlowInstancesTest do
         )
 
       assert tenant_instance.tenant_id == "acme"
-      assert tenant_instance.metadata == %{"user_id" => "demo-user", "tenant_id" => "acme"}
       assert form_instance.tenant_id == "acme"
-      assert form_instance.metadata == %{"user_id" => "demo-user", "tenant_id" => "acme"}
 
       assert [%{id: id}] = Instances.Flows.list(user_id: "demo-user", tenant_id: "acme")
       assert id == tenant_instance.id

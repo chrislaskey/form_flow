@@ -87,10 +87,11 @@ defmodule FormFlow.Data.Templates.Flows do
   for listings.
 
   Owned subflow children are deliberately excluded: they live inside their
-  root and are reached by drill-in, not listed beside it.
+  root and are reached by drill-in, not listed beside it. `opts[:tenant_id]`
+  narrows to one tenant — a listing convenience, not access control.
   """
-  def list do
-    Repo.all(from(f in roots_query(), order_by: [asc: f.inserted_at]))
+  def list(opts \\ []) do
+    Repo.all(from(f in roots_query(opts), order_by: [asc: f.inserted_at]))
   end
 
   @doc """
@@ -100,9 +101,9 @@ defmodule FormFlow.Data.Templates.Flows do
   The counts come from grouped subqueries joined 1:1 rather than a `group_by`
   on the flows themselves, so callers (like Slab's table in query mode) can
   layer `order_by`, `limit`/`offset`, and `Repo.aggregate(:count)` on top
-  without fighting the grouping.
+  without fighting the grouping. `opts[:tenant_id]` narrows as in `list/1`.
   """
-  def roots_query do
+  def roots_query(opts \\ []) do
     node_counts =
       from(n in Node, group_by: n.flow_id, select: %{flow_id: n.flow_id, count: count(n.id)})
 
@@ -124,22 +125,28 @@ defmodule FormFlow.Data.Templates.Flows do
           relationships_count: coalesce(rc.count, 0)
       }
     )
+    |> narrow_tenant(Keyword.get(opts, :tenant_id))
   end
 
   @doc """
   Returns the reusable catalog: flows made reusable, newest first.
+  `opts[:tenant_id]` narrows to one tenant.
 
   Backed by a partial index on `made_reusable_at`, so this is a real-time
   query — no caching needed.
   """
-  def list_reusable do
+  def list_reusable(opts \\ []) do
     Repo.all(
       from(f in Flow,
         where: not is_nil(f.made_reusable_at),
         order_by: [desc: f.made_reusable_at]
       )
+      |> narrow_tenant(Keyword.get(opts, :tenant_id))
     )
   end
+
+  defp narrow_tenant(query, nil), do: query
+  defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
 
   @doc """
   Fetches one flow by id with its nodes and relationships loaded, or `nil`.
@@ -700,6 +707,7 @@ defmodule FormFlow.Data.Templates.Flows do
       child_attrs = %{
         name: get_in(node.properties, ["data", "label"]) || "Untitled subflow",
         label: get_in(node.properties, ["data", "subflow_label"]) || "forms",
+        tenant_id: flow.tenant_id,
         owner_flow_id: root_id,
         nodes: starter_nodes(),
         relationships: []
@@ -868,7 +876,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
     {:ok, _flow} =
       %Flow{id: copy_id}
-      |> Ecto.Changeset.change(owner_flow_id: owner_id)
+      |> Flow.changeset(%{owner_flow_id: owner_id, tenant_id: source.tenant_id})
       |> Repo.insert()
 
     node_ids = Map.new(source.nodes, fn node -> {node.id, Ecto.UUID.generate()} end)
@@ -951,6 +959,7 @@ defmodule FormFlow.Data.Templates.Flows do
     |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
       form_attrs = %{
         name: get_in(node.properties, ["data", "label"]) || "Untitled form",
+        tenant_id: flow.tenant_id,
         owner_flow_id: root_id
       }
 

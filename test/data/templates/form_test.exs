@@ -35,6 +35,40 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.properties == %{"form_type" => "prefill"}
   end
 
+  test "tenant_id is written to the column and copied into properties" do
+    changeset =
+      Form.changeset(%Form{}, %{
+        name: "W-2 Details",
+        tenant_id: "acme",
+        properties: %{"form_type" => "prefill"}
+      })
+
+    assert changeset.valid?
+    assert changeset.changes.tenant_id == "acme"
+    assert changeset.changes.properties == %{"form_type" => "prefill", "tenant_id" => "acme"}
+
+    # A host with no tenants: nil column, no key
+    refute Map.has_key?(Form.changeset(%Form{}, %{name: "Solo"}).changes, :properties)
+  end
+
+  test "tenant_id is immutable, and the column overwrites a stale properties copy" do
+    persisted =
+      %Form{name: "W-2 Details", tenant_id: "acme", properties: %{"tenant_id" => "acme"}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Form.changeset(persisted, %{tenant_id: "other"})
+    refute changeset.valid?
+    assert {"cannot be changed after creation", _opts} = changeset.errors[:tenant_id]
+
+    changeset =
+      Form.changeset(persisted, %{
+        properties: %{"form_type" => "review", "tenant_id" => "impostor"}
+      })
+
+    assert changeset.valid?
+    assert changeset.changes.properties == %{"form_type" => "review", "tenant_id" => "acme"}
+  end
+
   test "copied_from_form_id is not castable — only copy/2 stamps provenance" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", copied_from_form_id: Ecto.UUID.generate()})

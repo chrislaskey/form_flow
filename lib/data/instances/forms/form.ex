@@ -24,16 +24,11 @@ defmodule FormFlow.Data.Instances.Form do
   An instance carries two opaque host identities, the same pair as
   `FormFlow.Data.Instances.Flow`: `user_id`, the user who started it, and
   `tenant_id`, the host tenant it belongs to, `nil` for a host with no
-  tenants. Both are stamped at creation and immutable afterwards, and both
-  are written to two locations: the dedicated column, so the database can
-  index and narrow by them, and a `"user_id"` / `"tenant_id"` key inside
-  `metadata`, the same way nodes keep a copy of `flow_id` in their
-  properties. The changeset keeps the copies in sync — the column is
-  authoritative, and a stale copy arriving in `metadata` is overwritten.
+  tenants. Both are stamped at creation and immutable afterwards.
 
-  Beyond those two keys, `metadata` is an opaque host-app map: whatever the
-  host wants to attach — including who a form instance concerns, until
-  about-ness earns a named column. FormFlow never interprets it.
+  `metadata` is an opaque host-app map: whatever the host wants to attach —
+  including who a form instance concerns, until about-ness earns a named column.
+  FormFlow never interprets it.
 
   A form instance filled inside a whole root flow instance — a journey —
   rather than on its own carries its visit identity: `instance_flow_id` and
@@ -130,8 +125,6 @@ defmodule FormFlow.Data.Instances.Form do
     |> validate_required([:template_form_version_id])
     |> validate_immutable(:user_id)
     |> validate_immutable(:tenant_id)
-    |> copy_into_metadata(:user_id, "user_id")
-    |> copy_into_metadata(:tenant_id, "tenant_id")
     |> validate_visit_identity()
     |> optimistic_lock(:lock_version)
     |> foreign_key_constraint(:template_form_version_id)
@@ -169,19 +162,6 @@ defmodule FormFlow.Data.Instances.Form do
       add_error(changeset, field, "cannot be changed after creation")
     else
       changeset
-    end
-  end
-
-  # The dual-write: metadata carries a copy of the column
-  defp copy_into_metadata(changeset, field, key) do
-    case get_field(changeset, field) do
-      nil ->
-        changeset
-
-      value ->
-        metadata = get_field(changeset, :metadata) || %{}
-
-        put_change(changeset, :metadata, Map.put(metadata, key, value))
     end
   end
 end

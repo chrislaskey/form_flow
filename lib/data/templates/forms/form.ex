@@ -22,6 +22,17 @@ defmodule FormFlow.Data.Templates.Form do
   `copied_from_form_id` records provenance across copies — which lineage this
   one was rolled over from — for cross-cycle identity and future prefill.
   It is not castable: only `FormFlow.Data.Templates.Forms.copy/2` sets it.
+
+  ## Tenancy
+
+  `tenant_id` is the host tenant the lineage belongs to — an opaque host
+  identity, `nil` for a host with no tenants — stamped at creation and
+  immutable afterwards; owned forms and copies take their flow tree's. Like a
+  node's `flow_id` it is written to both locations: the dedicated column,
+  so the database can index and narrow by it, and a `"tenant_id"` key inside
+  `properties`, the copy that carries over to Neo4j. The changeset keeps
+  the copy in sync — the column is authoritative, and a stale `"tenant_id"`
+  arriving in `properties` is overwritten.
   """
 
   use Ecto.Schema
@@ -37,6 +48,7 @@ defmodule FormFlow.Data.Templates.Form do
   schema "form_flow_template_forms" do
     field(:name, :string)
     field(:description, :string)
+    field(:tenant_id, :string)
 
     # Open domain data in the Neo4j property-graph style, like a flow's.
     # Carries "form_type" — the id of the `FormFlow.Config.Forms.Type`
@@ -56,13 +68,37 @@ defmodule FormFlow.Data.Templates.Form do
   Builds a changeset for a form lineage — identity fields and properties only.
 
   The definition lives on versions, never here. `copied_from_form_id` is not
-  castable; provenance is stamped only by the copy operation.
+  castable; provenance is stamped only by the copy operation. `tenant_id`
+  is castable at creation and immutable afterwards.
   """
   def changeset(form, attrs \\ %{}) do
     form
-    |> cast(attrs, [:name, :description, :properties, :owner_flow_id])
+    |> cast(attrs, [:name, :description, :tenant_id, :properties, :owner_flow_id])
     |> validate_required([:name])
+    |> validate_immutable(:tenant_id)
+    |> copy_into_properties(:tenant_id, "tenant_id")
     |> foreign_key_constraint(:owner_flow_id)
     |> unique_constraint(:name, name: :form_flow_template_forms_name_index)
+  end
+
+  defp validate_immutable(changeset, field) do
+    if changeset.data.__meta__.state == :loaded and get_change(changeset, field) do
+      add_error(changeset, field, "cannot be changed after creation")
+    else
+      changeset
+    end
+  end
+
+  # The dual-write: properties carry a copy of the column, for Neo4j
+  defp copy_into_properties(changeset, field, key) do
+    case get_field(changeset, field) do
+      nil ->
+        changeset
+
+      value ->
+        properties = get_field(changeset, :properties) || %{}
+
+        put_change(changeset, :properties, Map.put(properties, key, value))
+    end
   end
 end

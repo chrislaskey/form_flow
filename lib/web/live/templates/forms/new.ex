@@ -31,7 +31,8 @@ defmodule FormFlow.Web.Templates.Forms.New do
   def update(%{event: "create", payload: payload}, socket) do
     attrs = %{
       name: payload.data[:name],
-      description: payload.data[:description]
+      description: payload.data[:description],
+      tenant_id: socket.assigns.tenant_id
     }
 
     case Forms.create(attrs) do
@@ -55,7 +56,8 @@ defmodule FormFlow.Web.Templates.Forms.New do
     {:ok,
      socket
      |> assign(assigns)
-     |> assign_new(:base, fn -> "" end)}
+     |> assign_new(:base, fn -> "" end)
+     |> assign_new(:tenant_id, fn -> nil end)}
   end
 
   @impl true

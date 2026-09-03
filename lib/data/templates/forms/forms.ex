@@ -85,10 +85,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   @doc "Updates a lineage's identity fields (name, description) and properties."
   def update(%Form{} = form, attrs) do
-    form
-    |> Ecto.Changeset.cast(attrs, [:name, :description, :properties])
-    |> Ecto.Changeset.validate_required([:name])
-    |> Repo.update()
+    Repo.update(Form.changeset(form, attrs))
   end
 
   @doc """
@@ -137,6 +134,7 @@ defmodule FormFlow.Data.Templates.Forms do
         |> Form.changeset(%{
           name: form.name,
           description: form.description,
+          tenant_id: form.tenant_id,
           owner_flow_id: owner_flow_id
         })
         |> Ecto.Changeset.put_change(:copied_from_form_id, form.id)
@@ -160,20 +158,26 @@ defmodule FormFlow.Data.Templates.Forms do
   Lists the catalog: reusable forms (no owner), oldest first.
 
   Owned forms live inside their flow trees and are reached by drill-in,
-  never listed beside the catalog.
+  never listed beside the catalog. `opts[:tenant_id]` narrows to one tenant
+  — a listing convenience, not access control.
   """
-  def list do
-    Repo.all(from(f in catalog_query(), order_by: [asc: f.inserted_at]))
+  def list(opts \\ []) do
+    Repo.all(from(f in catalog_query(opts), order_by: [asc: f.inserted_at]))
   end
 
   @doc """
   The catalog listing as a composable query: the reusable forms (never
   owned ones), unordered — for callers like Slab's table in query mode
-  that layer their own ordering and pagination on top.
+  that layer their own ordering and pagination on top. `opts[:tenant_id]`
+  narrows as in `list/1`.
   """
-  def catalog_query do
+  def catalog_query(opts \\ []) do
     from(f in Form, where: is_nil(f.owner_flow_id))
+    |> narrow_tenant(Keyword.get(opts, :tenant_id))
   end
+
+  defp narrow_tenant(query, nil), do: query
+  defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
 
   @doc "Lists a lineage's versions, drafts and published alike, newest first."
   def list_versions(form_id) do

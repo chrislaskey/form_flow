@@ -37,10 +37,11 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
-    query = Forms.catalog_query()
+    query = Forms.catalog_query(tenant_id: socket.assigns.tenant_id)
 
     {:ok,
      socket

@@ -52,6 +52,48 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert changeset.changes.owner_flow_id == owner_id
   end
 
+  test "tenant_id is written to the column and copied into properties" do
+    changeset =
+      Flow.changeset(%Flow{}, %{
+        tenant_id: "acme",
+        properties: %{"form_flow_type" => "wizard_any_order"}
+      })
+
+    assert changeset.valid?
+    assert changeset.changes.tenant_id == "acme"
+
+    assert changeset.changes.properties == %{
+             "form_flow_type" => "wizard_any_order",
+             "tenant_id" => "acme"
+           }
+
+    # A host with no tenants: nil column, no key
+    assert Flow.changeset(%Flow{}, %{name: "Solo"}).changes == %{name: "Solo"}
+  end
+
+  test "tenant_id is immutable, and the column overwrites a stale properties copy" do
+    persisted =
+      %Flow{tenant_id: "acme", properties: %{"tenant_id" => "acme"}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Flow.changeset(persisted, %{tenant_id: "other"})
+    refute changeset.valid?
+    assert {"cannot be changed after creation", _opts} = changeset.errors[:tenant_id]
+
+    # The editor round-trips properties; a copy it drops or corrupts is restored
+    changeset =
+      Flow.changeset(persisted, %{
+        properties: %{"form_flow_type" => "wizard_in_order", "tenant_id" => "impostor"}
+      })
+
+    assert changeset.valid?
+
+    assert changeset.changes.properties == %{
+             "form_flow_type" => "wizard_in_order",
+             "tenant_id" => "acme"
+           }
+  end
+
   test "made_reusable_at is not castable — only make_reusable/1 stamps it" do
     changeset = Flow.changeset(%Flow{}, %{made_reusable_at: DateTime.utc_now()})
 

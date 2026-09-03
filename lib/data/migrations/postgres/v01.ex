@@ -18,6 +18,12 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #
   # Flows are created first: `template_forms.owner_flow_id` references them.
   #
+  # `tenant_id` on flows and template forms is the host tenant a template
+  # belongs to — an opaque host identity, NULL for a host with no tenants,
+  # stamped at creation and immutable. Like `flow_id` on nodes it is written
+  # to both locations: the column, for indexing, and a copy inside
+  # `properties`, the location that carries over to Neo4j.
+  #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
   # only mode): `:restrict` would push deletion ordering onto every caller, and
   # for a diagram editor detach-delete is what the UI means.
@@ -56,13 +62,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     in flight — and `:restrict`ed: journeys can never be orphaned by
   #     template deletion. `user_id` is the creating user and `tenant_id`
   #     the host tenant it belongs to, both opaque host identities, stamped
-  #     at creation and immutable; the schemas also keep a copy of each
-  #     inside `metadata`, as nodes do with `flow_id` in properties.
-  #     Traversal state is never stored; it is derived
-  #     (FormFlow.Data.Instances.FlowProgress).
+  #     at creation and immutable. Traversal state is never stored; it is
+  #     derived (FormFlow.Data.Instances.FlowProgress).
   #   * `instance_forms.user_id` + `tenant_id` — the same two stamps on a form
-  #     instance: the user who started it and the tenant it belongs to, with
-  #     the same copies inside `metadata`.
+  #     instance: the user who started it and the tenant it belongs to.
   #   * `instance_forms.instance_flow_id` + `path` — the visit identity of an
   #     in-journey form instance: the chain of node ids from the root flow
   #     through each embedding subflow node to the form node itself.
@@ -97,6 +100,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:id, :uuid, primary_key: true)
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
+      add(:tenant_id, :string)
       add(:properties, :map, null: false, default: %{})
 
       add(
@@ -110,6 +114,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     end
 
     create_if_not_exists(index(:form_flow_flows, [:owner_flow_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_flows, [:tenant_id], prefix: context.prefix))
 
     create_if_not_exists(
       index(:form_flow_flows, [:made_reusable_at],
@@ -125,6 +130,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:id, :uuid, primary_key: true)
       add(:name, :string, null: false)
       add(:description, :text)
+      add(:tenant_id, :string)
       add(:properties, :map, null: false, default: %{})
 
       add(
@@ -154,6 +160,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     create_if_not_exists(
       index(:form_flow_template_forms, [:owner_flow_id], prefix: context.prefix)
     )
+
+    create_if_not_exists(index(:form_flow_template_forms, [:tenant_id], prefix: context.prefix))
 
     create_if_not_exists table(:form_flow_template_form_versions,
                            primary_key: false,

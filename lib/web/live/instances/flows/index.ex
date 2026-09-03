@@ -61,7 +61,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       )
 
     flows =
-      Repo.all(Templates.Flows.roots_query())
+      Repo.all(Templates.Flows.roots_query(tenant_id: socket.assigns.tenant_id))
       |> Enum.reject(& &1.made_reusable_at)
 
     {:ok,

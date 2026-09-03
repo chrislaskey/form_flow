@@ -30,12 +30,19 @@ defmodule FormFlow.Web.Templates.Flows.New do
     {:ok,
      socket
      |> assign(assigns)
-     |> assign_new(:base, fn -> "" end)}
+     |> assign_new(:base, fn -> "" end)
+     |> assign_new(:tenant_id, fn -> nil end)}
   end
 
   @impl true
   def handle_event("create", %{"name" => name, "label" => label}, socket) do
-    attrs = %{name: name, label: label, nodes: Flows.starter_nodes(), relationships: []}
+    attrs = %{
+      name: name,
+      label: label,
+      tenant_id: socket.assigns.tenant_id,
+      nodes: Flows.starter_nodes(),
+      relationships: []
+    }
 
     case Flows.create(attrs) do
       {:ok, flow} ->

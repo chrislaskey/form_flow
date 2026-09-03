@@ -2,34 +2,50 @@
 
 ## v0.13.0
 
-### Instances know their user and their tenant
+### Templates and instances know their tenant; form instances know their user
 
-Both instance schemas now carry the same two opaque host identities.
-`FormFlow.Data.Instances.Form` gains `user_id` — the user who started the
-form, stamped when `FormFlow.Data.Instances.Forms.update_status/4` creates
-the instance from its `:user_id` option, which until now reached only the
-event. Both `FormFlow.Data.Instances.Flow` and `FormFlow.Data.Instances.Form`
-gain `tenant_id` — the host tenant the instance belongs to, `nil` for a
-host with no tenants. Each is written to two locations: its own indexed
-column, and a `"user_id"` / `"tenant_id"` key inside the instance's
-`metadata`, the way nodes and relationships keep a copy of `flow_id` in
-their properties. The column is authoritative — a stale copy arriving in
-`metadata` is overwritten — and both are immutable after creation. FormFlow
-enforces nothing with either; they are for the host's own queries and
+**New: `tenant_id`, everywhere a host's data lands.** `FormFlow.Data.Templates.Flow`,
+`FormFlow.Data.Templates.Form`, `FormFlow.Data.Instances.Flow`, and
+`FormFlow.Data.Instances.Form` each gain a `tenant_id` column — the host
+tenant the row belongs to, an opaque host identity, `nil` for a host with
+no tenants — stamped at creation and immutable afterwards. On the two
+templates it is dual-written the way a node's `flow_id` is: the indexed
+column, plus a `"tenant_id"` key inside `properties`, the copy that carries
+over to Neo4j; the column is authoritative and a stale copy arriving in
+`properties` is overwritten. On the two instances it is the column alone.
+FormFlow enforces nothing with it; it is for the host's own queries and
 authorization.
 
-- **`tenant_id` is an optional attr on `FormFlow.Web.router/1`** and on the
-  four instance LiveComponents, defaulting to `nil`. Only multitenant hosts
-  set it; it is stamped on flow instances started from the listing and on
-  form instances started inside them, exactly as `user_id` is. It also
-  reaches every `FormFlow.Config` callback as `FormFlow.Context.tenant_id`.
-- **`FormFlow.Data.Instances.Flows.list_query/1` and `list/1` narrow by
-  `tenant_id:`** alongside `user_id:`, and the listing page passes both.
+**`FormFlow.Data.Instances.Form` gains `user_id`** — the user who started
+the form, stamped when `FormFlow.Data.Instances.Forms.update_status/4`
+creates the instance from its `:user_id` option, which until now reached
+only the event. Immutable, like the flow instance's.
+
+- **`tenant_id` is an optional attr on `FormFlow.Web.router/1`**, defaulting
+  to `nil`, and on the index and new LiveComponents of both template
+  sections and the four instance LiveComponents. Only multitenant hosts set
+  it. Flows and forms created from the template pages are stamped with it;
+  so are flow instances started from the listing and form instances started
+  inside them, exactly as `user_id` is. It also reaches every
+  `FormFlow.Config` callback as `FormFlow.Context.tenant_id`.
+- **Tenancy flows down the tree.** Owned subflows and owned forms a save
+  creates take their root's tenant; `FormFlow.Data.Templates.Flows.duplicate/2`
+  and `FormFlow.Data.Templates.Forms.copy/2` carry the source's into the copy.
+- **The listings narrow by tenant.** `FormFlow.Data.Templates.Flows.list/1`,
+  `roots_query/1`, and `list_reusable/1`, `FormFlow.Data.Templates.Forms.list/1`
+  and `catalog_query/1`, and `FormFlow.Data.Instances.Flows.list/1` and
+  `list_query/1` take `tenant_id:`. The three index pages and the
+  start-a-flow picker pass the router's. Listing conveniences, not access
+  control.
 - `FormFlow.Data.Instances.Forms.update_status/4` takes `:tenant_id`,
   stamped on the instance when the call creates it.
-- **Breaking: the v01 migration changed.** `form_flow_instance_flows` gains
-  `tenant_id`; `form_flow_instance_forms` gains `user_id` and `tenant_id`;
-  both tables gain indexes on the two. Drop and recreate any database
+- `FormFlow.Data.Templates.Forms.update/2` goes through the schema
+  changeset, so a renamed catalog form colliding on `name` is a refused
+  save rather than a raised constraint error.
+- **Breaking: the v01 migration changed.** `form_flow_flows` and
+  `form_flow_template_forms` gain `tenant_id`; `form_flow_instance_flows`
+  gains `tenant_id`; `form_flow_instance_forms` gains `user_id` and
+  `tenant_id`; every one of them is indexed. Drop and recreate any database
   migrated before this version.
 
 ## v0.12.0
