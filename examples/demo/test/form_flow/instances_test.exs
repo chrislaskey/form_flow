@@ -75,7 +75,20 @@ defmodule Demo.FormFlowInstancesTest do
     def handle_mount(%Context{flow: %{name: "Decorated"}}, _config_data),
       do: {:ok, %{flow_name: "Renamed by the host"}}
 
+    # The listing has no flow in scope; the session's config_data drives it
+    def handle_mount(%Context{flow: nil}, %{"listing" => "refused"}),
+      do: {:error, "No listing for you."}
+
+    def handle_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}), do: {:redirect, "/users"}
+
     def handle_mount(_context, _config_data), do: {:ok, %{}}
+
+    @impl true
+    def flow_instances_query(_context, %{"listing" => "everyone"}),
+      do: Instances.Flows.list_query()
+
+    def flow_instances_query(context, config_data),
+      do: FormFlow.Config.Default.flow_instances_query(context, config_data)
 
     @impl true
     def enabled_form_types(context, config_data) do
@@ -94,8 +107,15 @@ defmodule Demo.FormFlowInstancesTest do
     use Phoenix.LiveView
 
     @impl true
-    def mount(_params, %{"path" => path}, socket) do
-      {:ok, Phoenix.Component.assign(socket, :path, path)}
+    def mount(_params, %{"path" => path} = session, socket) do
+      {:ok,
+       Phoenix.Component.assign(socket,
+         path: path,
+         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         params: %{},
+         tenant_id: Map.get(session, "tenant_id"),
+         config_data: Map.get(session, "config_data", %{})
+       )}
     end
 
     @impl true
@@ -103,10 +123,13 @@ defmodule Demo.FormFlowInstancesTest do
       ~H"""
       <FormFlow.Web.router
         user_id="demo-user"
+        tenant_id={@tenant_id}
+        uri={@uri}
+        params={@params}
         path={@path}
         base="/users"
         config={TestConfig}
-        config_data={%{}}
+        config_data={@config_data}
       />
       """
     end
@@ -439,6 +462,36 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "the config scopes the listing with flow_instances_query/2" do
+    test "by default the listing is the user's own", %{conn: conn} do
+      %{flow: flow, instance: mine} = flow_of_one()
+      {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
+
+      {:ok, _view, html} = isolated(conn, ["flows"])
+
+      assert html =~ mine.id
+      refute html =~ theirs.id
+    end
+
+    test "a host's query lists whoever it says; the tenant is applied on top", %{conn: conn} do
+      %{flow: flow, instance: mine} = flow_of_one()
+      {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
+
+      {:ok, acme} =
+        Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else", tenant_id: "acme"})
+
+      {:ok, _view, html} = isolated(conn, ["flows"], %{"listing" => "everyone"})
+      assert html =~ mine.id
+      assert html =~ theirs.id
+      assert html =~ acme.id
+
+      {:ok, _view, html} = isolated(conn, ["flows"], %{"listing" => "everyone"}, "acme")
+      assert html =~ acme.id
+      refute html =~ mine.id
+      refute html =~ theirs.id
+    end
+  end
+
   describe "the config gates its pages with handle_mount/2" do
     test "a refusal on edit renders the message alone and starts nothing", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
@@ -485,6 +538,20 @@ defmodule Demo.FormFlowInstancesTest do
       refute instance_at(instance, [only.id])
 
       {:ok, view, _html} = isolated(conn, ["flows", instance.id])
+      assert {"/users", _flash} = assert_redirect(view)
+    end
+
+    test "the listing asks too: a refusal draws the message, a redirect navigates",
+         %{conn: conn} do
+      %{instance: instance} = flow_of_one()
+
+      {:ok, view, html} = isolated(conn, ["flows"], %{"listing" => "refused"})
+
+      assert html =~ "No listing for you."
+      refute html =~ instance.id
+      refute has_element?(view, "button", "Start")
+
+      {:ok, view, _html} = isolated(conn, ["flows"], %{"listing" => "elsewhere"})
       assert {"/users", _flash} = assert_redirect(view)
     end
 
@@ -866,7 +933,11 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # A user-facing page, through the test config's page
-  defp isolated(conn, segments), do: live_isolated(conn, TestPage, session: %{"path" => segments})
+  defp isolated(conn, segments, config_data \\ %{}, tenant_id \\ nil) do
+    live_isolated(conn, TestPage,
+      session: %{"path" => segments, "config_data" => config_data, "tenant_id" => tenant_id}
+    )
+  end
 
   defp isolated_edit(conn, instance, path) do
     isolated(conn, ["flows", instance.id, "forms"] ++ path ++ ["edit"])

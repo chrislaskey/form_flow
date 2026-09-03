@@ -179,9 +179,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   `{:ok, assigns}` runs `on_ok` (Edit's `start/1`) and then merges the
   assigns; `{:error, message}` assigns `:mount_error`, which the page renders
   alone; `{:redirect, to}` assigns `:navigate_to` and navigates, the page
-  rendering nothing meanwhile. The flow instance's page uses this too. Host
-  code, deliberately not rescued: an exception here fails closed rather than
-  falling through to the page.
+  rendering nothing meanwhile. The flow instance's page and the listing use
+  this too. Host code, deliberately not rescued: an exception here fails
+  closed rather than falling through to the page.
   """
   def handle_mount(socket, on_ok \\ & &1) do
     %{context: context, config: config, config_data: config_data} = socket.assigns

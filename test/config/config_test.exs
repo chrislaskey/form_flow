@@ -35,6 +35,20 @@ defmodule FormFlow.ConfigTest do
     }
   end
 
+  describe "flow_instances_query/2" do
+    test "the default narrows the listing to the current user's own" do
+      query = FormFlow.Config.Default.flow_instances_query(%Context{user_id: "u-1"}, %{})
+
+      assert %Ecto.Query{} = query
+      assert inspect(query) =~ ~s(user_id == ^"u-1")
+    end
+
+    test "a custom config inherits it like every other default" do
+      assert inspect(Gated.flow_instances_query(%Context{user_id: "u-1"}, %{})) =~
+               ~s(user_id == ^"u-1")
+    end
+  end
+
   describe "handle_mount/2" do
     test "the default allows every page, adding nothing" do
       assert FormFlow.Config.Default.handle_mount(%Context{}, %{}) == {:ok, %{}}

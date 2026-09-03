@@ -48,6 +48,24 @@ only the event. Immutable, like the flow instance's.
   `tenant_id`; every one of them is indexed. Drop and recreate any database
   migrated before this version.
 
+### The listing asks the config too
+
+**New: `flow_instances_query/2` on `FormFlow.Config`.** The listing page
+shows whatever query the host's config returns — by default the current
+user's own flow instances, exactly as before. A reviewer's desk returns
+`FormFlow.Data.Instances.Flows.list_query/1` bare to list everyone's; a
+host with finer rules layers its own `where` on top. The router's
+`tenant_id` is applied after the callback answers, so a multitenant host
+never lists across tenants by accident, and the host never has to think
+about tenants in its query (`FormFlow.Data.Instances.Flows.narrow_tenant/2`
+is the public helper that does it).
+
+- **`handle_mount/2` now gates the listing as well.** Every user-facing page
+  asks before it draws. On the listing the context carries only `:user_id`
+  and `:tenant_id` — there is no flow in scope — and a refusal renders the
+  message alone, a redirect navigates.
+- The router passes `config` and `config_data` to the listing component.
+
 ### Templates have slugs
 
 **New: `slug` on `FormFlow.Data.Templates.Flow` and
@@ -59,12 +77,13 @@ per tenant within its table, dual-written into `properties["slug"]` like
 never follows a rename; it changes only when an admin changes it.
 
 - **Every template gets one by default.** `Flows.create/1` and
-  `Forms.create/1` generate a slug from the name when none is given: one or
-  two words concatenate and truncate to ten characters ("User Information"
-  is `userinform`), three or more take their initials with numbers kept
-  whole ("Dog License Application 2026" is `dla2026`). The subflows and forms
+  `Forms.create/1` generate a slug from the name when none is given, ten
+  letters at most: one word truncates, two words join with a hyphen ("Dog
+  Licensing" is `dog-license`, "User Information" is `user-inform`), three
+  or more take their initials with numbers kept whole ("Dog License
+  Application 2026" is `dla2026`). The subflows and forms
   a canvas save creates prefix their segment with the containing flow's
-  slug, so nested children carry the whole chain: `dla2026_documents_userinform`.
+  slug, so nested children carry the whole chain: `dla2026_documents_user-inform`.
   A taken slug gets `-2`, `-3`, … — chosen by querying, not by retrying the
   insert, which would abort the enclosing transaction on Postgres.
 - **`Flows.get_by_slug/2` and `Forms.get_by_slug/2`** look a template up by
@@ -73,8 +92,8 @@ never follows a rename; it changes only when an admin changes it.
   can exist once per tenant.
 - **Copies get fresh slugs.** `Flows.duplicate/2` takes `slug:`, defaulting
   to the source's with a free suffix, and rewrites its copied children's
-  prefix from the old root slug to the new one — `dla2026_userinform` under
-  a copy slugged `dla2027` becomes `dla2027_userinform`. `Forms.copy/2` takes
+  prefix from the old root slug to the new one — `dla2026_user-inform` under
+  a copy slugged `dla2027` becomes `dla2027_user-inform`. `Forms.copy/2` takes
   `slug:` the same way.
 - **Fixed: `Flows.duplicate/2` copies the identity.** The copy carries the
   source's name, label, and properties; until now it came back nameless,

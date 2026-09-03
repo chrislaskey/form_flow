@@ -493,8 +493,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   The copy's slug is `opts[:slug]`, or the source's with a free `-N` suffix
   (`FormFlow.Data.Templates.Slug.available/3`). Copied children swap the
-  source's slug for the copy's in their prefix — `dla2026_userinform` under a
-  copy slugged `dla2027` becomes `dla2027_userinform`.
+  source's slug for the copy's in their prefix — `dla2026_user-inform` under a
+  copy slugged `dla2027` becomes `dla2027_user-inform`.
 
       {:ok, copy} = FormFlow.Data.Templates.Flows.duplicate(flow)
 

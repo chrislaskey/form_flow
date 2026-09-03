@@ -43,8 +43,16 @@ defmodule FormFlow.Data.Instances.Flows do
   def list_query(opts \\ []) do
     from(i in Instances.Flow)
     |> narrow(:user_id, Keyword.get(opts, :user_id))
-    |> narrow(:tenant_id, Keyword.get(opts, :tenant_id))
+    |> narrow_tenant(Keyword.get(opts, :tenant_id))
   end
+
+  @doc """
+  `query` — one over `FormFlow.Data.Instances.Flow`, such as a host's
+  `FormFlow.Config.flow_instances_query/2` answer — narrowed to one tenant.
+  `nil` leaves it as it is, the whole table being the scope of a host with
+  no tenants.
+  """
+  def narrow_tenant(query, tenant_id), do: narrow(query, :tenant_id, tenant_id)
 
   defp narrow(query, _field, nil), do: query
   defp narrow(query, field, value), do: from(i in query, where: field(i, ^field) == ^value)

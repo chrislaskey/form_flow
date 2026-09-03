@@ -14,11 +14,13 @@ defmodule FormFlow.Data.Templates.Slug do
 
   Nothing requires a slug, but every template gets one by default so the
   host has something to look up. A template created without one is named
-  from its `name`, one **segment** of at most ten characters — lowercase
-  letters and digits only:
+  from its `name`, one **segment** of at most ten lowercase letters and
+  digits:
 
-    * one or two words concatenate and truncate: "User Information" is
-      `userinform`
+    * one word truncates: "Documentation" is `documentat`
+    * two words are joined by `-`, the second truncated to what the budget
+      leaves: "Dog Licensing" is `dog-license`, "User Information" is
+      `user-inform`
     * three or more words take each word's first letter, keeping all-digit
       words whole: "Dog License Application 2026" is `dla2026`
     * a name with nothing usable falls back to the kind: `flow` or `form`
@@ -26,7 +28,7 @@ defmodule FormFlow.Data.Templates.Slug do
   Owned children — the subflows and forms a save creates for the nodes on a
   canvas — prefix their segment with the slug of the flow that contains
   them, joined by `_`, so a form "User Information" inside `dla2026` is
-  `dla2026_userinform`, and a form inside a subflow of it carries the whole
+  `dla2026_user-inform`, and a form inside a subflow of it carries the whole
   chain. A slug already taken in the tenant gets `-2`, `-3`, … appended,
   chosen by querying the existing ones (`available/3`) rather than by
   retrying the insert, since a violated constraint aborts the enclosing
@@ -58,14 +60,21 @@ defmodule FormFlow.Data.Templates.Slug do
   """
   def segment(name, fallback) do
     case words(name) do
-      [] ->
-        fallback
+      [] -> fallback
+      [word] -> String.slice(word, 0, @segment_length)
+      [first, second] -> hyphenate(first, second)
+      words -> words |> Enum.map_join(&initial/1) |> String.slice(0, @segment_length)
+    end
+  end
 
-      words when length(words) <= 2 ->
-        words |> Enum.join() |> String.slice(0, @segment_length)
+  # The budget counts letters, not the hyphen: the first word takes what it
+  # needs, the second what is left — and no hyphen when nothing is
+  defp hyphenate(first, second) do
+    first = String.slice(first, 0, @segment_length)
 
-      words ->
-        words |> Enum.map_join(&initial/1) |> String.slice(0, @segment_length)
+    case String.slice(second, 0, @segment_length - String.length(first)) do
+      "" -> first
+      second -> first <> "-" <> second
     end
   end
 

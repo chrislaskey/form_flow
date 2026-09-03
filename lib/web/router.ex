@@ -294,6 +294,8 @@ defmodule FormFlow.Web.Router do
               base={@base}
               user_id={@user_id}
               tenant_id={@tenant_id}
+              config={@config}
+              config_data={@config_data}
               uri={@uri}
               params={@params}
             />

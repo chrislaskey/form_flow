@@ -207,14 +207,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_any_order"}})
 
     # Nothing persists until Save — a pending type is an unsaved change
-    assert Flows.get(id).properties == %{"slug" => "untitledfl"}
+    assert Flows.get(id).properties == %{"slug" => "untitled-fl"}
     assert has_element?(view, "button", "Discard changes")
 
     view |> element("button", "Save") |> render_click()
 
     assert Flows.get(id).properties == %{
              "form_flow_type" => "wizard_any_order",
-             "slug" => "untitledfl"
+             "slug" => "untitled-fl"
            }
 
     refute has_element?(view, "button", "Discard changes")
@@ -232,7 +232,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(id).properties == %{"slug" => "untitledfl"}
+    assert Flows.get(id).properties == %{"slug" => "untitled-fl"}
   end
 
   test "a complex flow has no type dropdown of its own", %{conn: conn} do
@@ -314,7 +314,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert Flows.get(node.subflow_id).properties == %{
              "form_flow_type" => "wizard_any_order",
-             "slug" => "onboarding_subflow1"
+             "slug" => "onboarding_subflow-1"
            }
 
     refute Map.has_key?(saved_node.properties["data"], "form_flow_type")
@@ -340,7 +340,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(node.subflow_id).properties == %{"slug" => "onboarding_subflow1"}
+    assert Flows.get(node.subflow_id).properties == %{"slug" => "onboarding_subflow-1"}
   end
 
   test "renaming a subflow node on the canvas renames the embedded flow", %{conn: conn} do

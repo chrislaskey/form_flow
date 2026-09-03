@@ -26,10 +26,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   *after* filtering, sorting, and counting, so it is deliberately not sortable
   — it is a joined value, not a column Slab could compile into `ORDER BY`.
 
-  "The current user" means the router's `user_id` attr: the list is narrowed
-  to instances that user created, and starting one stamps them as its creator.
-  This is a listing convenience, not access control — auth stays the host's
-  job (see `FormFlow.Web.Router`).
+  "The current user" means the router's `user_id` attr: by default the list
+  is narrowed to instances that user created, and starting one stamps them as
+  its creator. The host's config decides otherwise through
+  `FormFlow.Config.flow_instances_query/2` — a reviewer's desk lists
+  everyone's — and the router's `tenant_id` is applied on top of whatever it
+  answers. This is a listing convenience, not access control: the page asks
+  `FormFlow.Config.handle_mount/2` before it draws, like every other
+  user-facing page, and auth stays the host's job (see `FormFlow.Web.Router`).
 
   Starting a new flow stays a plain list rather than a second table: Slab
   reads `sort` and `page` straight from the URL, so two Slab tables on one
@@ -38,9 +42,12 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
   @impl true
@@ -50,26 +57,44 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:config, fn -> nil end)
+      |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
+    # The listing's context: the user and tenant, no flow in scope
+    context = %Context{user_id: socket.assigns.user_id, tenant_id: socket.assigns.tenant_id}
+
+    {:ok,
+     socket
+     |> assign(context: context, mount_error: nil, navigate_to: nil)
+     |> Shared.handle_mount(&load/1)}
+  end
+
+  # The listing itself, built only once the config allowed the page: the
+  # host's query narrowed to the router's tenant, and the flows to start
+  defp load(socket) do
+    %{context: context, config: config, config_data: config_data} = socket.assigns
+
     query =
-      Instances.Flows.list_query(
-        user_id: socket.assigns.user_id,
-        tenant_id: socket.assigns.tenant_id
-      )
+      FormFlow.Config.config_module(config).flow_instances_query(context, config_data)
+      |> Instances.Flows.narrow_tenant(socket.assigns.tenant_id)
 
     flows =
       Repo.all(Templates.Flows.roots_query(tenant_id: socket.assigns.tenant_id))
       |> Enum.reject(& &1.made_reusable_at)
 
-    {:ok,
-     socket
-     |> assign(:query, query)
-     |> assign(:empty?, not Repo.exists?(query))
-     |> assign(:flows, flows)
-     |> assign(:table_params, table_params(socket.assigns.params))}
+    socket
+    |> assign(:query, query)
+    |> assign(:empty?, not Repo.exists?(query))
+    |> assign(:flows, flows)
+    |> assign(:table_params, table_params(socket.assigns.params))
+  end
+
+  @impl true
+  def handle_async(:navigate, {:ok, to}, socket) do
+    {:noreply, push_navigate(socket, to: to)}
   end
 
   @impl true
@@ -99,7 +124,27 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     Map.merge(params, %{"sort" => "inserted_at", "sort_direction" => "desc"})
   end
 
+  # The host's config is sending the user elsewhere: nothing to draw meanwhile
   @impl true
+  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+    ~H"""
+    <div></div>
+    """
+  end
+
+  # The host's config refused the page; its message is all there is to draw
+  def render(%{mount_error: message} = assigns) when is_binary(message) do
+    ~H"""
+    <div>
+      <div class="mb-2 text-sm font-semibold">
+        Flows
+      </div>
+
+      <Components.FormPage.notice message={@mount_error} />
+    </div>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <div>

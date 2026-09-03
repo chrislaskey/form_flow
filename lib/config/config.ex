@@ -17,9 +17,10 @@ defmodule FormFlow.Config do
   and then call its callbacks directly.
 
   A host passes one config module per use of `FormFlow.Web.router/1`, so a
-  config is where per-use behavior lives — which types a section offers, and
-  who may see its pages (`handle_mount/2`) — while a type describes how a
-  form or flow behaves wherever it is used.
+  config is where per-use behavior lives — which types a section offers, who
+  may see its pages (`handle_mount/2`), and whose flow instances its listing
+  shows (`flow_instances_query/2`) — while a type describes how a form or
+  flow behaves wherever it is used.
   """
 
   alias FormFlow.Context
@@ -31,11 +32,31 @@ defmodule FormFlow.Config do
   @callback enabled_form_types(Context.t(), map()) :: [FormFlow.Config.Forms.Type.t()]
 
   @doc """
+  The flow instances the listing page shows, as a composable query over
+  `FormFlow.Data.Instances.Flow` — `FormFlow.Data.Instances.Flows.list_query/1`
+  is the building block. The default narrows to the current user's own:
+
+      def flow_instances_query(context, _config_data) do
+        FormFlow.Data.Instances.Flows.list_query(user_id: context.user_id)
+      end
+
+  A reviewer's desk lists everyone's by returning `list_query()` bare; a host
+  with finer rules layers its own `where` on top. Tenant narrowing is not the
+  host's to do or undo: the page applies the router's `tenant_id` after this
+  returns, so a multitenant host never lists across tenants by accident.
+  The context carries `:user_id` and `:tenant_id` and nothing else — the
+  listing spans every flow, so there is no flow in scope. A listing
+  convenience, not access control: gate the page with `handle_mount/2`.
+  """
+  @callback flow_instances_query(Context.t(), map()) :: Ecto.Query.t()
+
+  @doc """
   Whether a user-facing page may render for this user, asked once the page
   has resolved what it addresses and before anything is drawn. The pages that
-  ask are the flow instance's page and the two form pages, edit and Show; on
-  the edit page it is asked before the form is started, so a refused visitor
-  starts nothing. The context is the page's: on the flow instance's page
+  ask are the listing, the flow instance's page, and the two form pages, edit
+  and Show; on the edit page it is asked before the form is started, so a
+  refused visitor starts nothing. The context is the page's: on the listing
+  only `:user_id` and `:tenant_id` are set; on the flow instance's page
   `:flow` and `:subflow` are the root flow and `:flow_instance_progress` its
   forms, with no form in scope; on a form page it is the form's, with
   `:form_instance` the live instance or nil for a form not yet started.
@@ -71,7 +92,14 @@ defmodule FormFlow.Config do
         FormFlow.Config.Default.handle_mount(context, config_data)
       end
 
-      defoverridable enabled_flow_types: 2, enabled_form_types: 2, handle_mount: 2
+      def flow_instances_query(context, config_data) do
+        FormFlow.Config.Default.flow_instances_query(context, config_data)
+      end
+
+      defoverridable enabled_flow_types: 2,
+                     enabled_form_types: 2,
+                     handle_mount: 2,
+                     flow_instances_query: 2
     end
   end
 

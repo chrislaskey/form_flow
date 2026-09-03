@@ -484,14 +484,14 @@ defmodule Demo.FormFlowFormsTest do
   describe "slugs" do
     test "create generates one from the name; copies get a free suffix or the given slug" do
       {:ok, form} = Forms.create(%{name: "User Information"})
-      assert form.slug == "userinform"
-      assert form.properties["slug"] == "userinform"
+      assert form.slug == "user-inform"
+      assert form.properties["slug"] == "user-inform"
 
       # Owned copies — a catalog copy would collide on name, not slug
       {:ok, root} = FormFlow.Data.Templates.Flows.create()
 
       {:ok, copy} = Forms.copy(form, owner_flow_id: root.id)
-      assert copy.slug == "userinform-2"
+      assert copy.slug == "user-inform-2"
 
       {:ok, named} = Forms.copy(form, owner_flow_id: root.id, slug: "userinfo2027")
       assert named.slug == "userinfo2027"

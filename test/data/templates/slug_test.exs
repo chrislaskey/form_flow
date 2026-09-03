@@ -5,10 +5,22 @@ defmodule FormFlow.Data.Templates.SlugTest do
   alias FormFlow.Data.Templates.Slug
 
   describe "segment/2" do
-    test "one or two words concatenate and truncate to ten characters" do
+    test "one word truncates to ten characters" do
       assert Slug.segment("Intake", "form") == "intake"
-      assert Slug.segment("User Information", "form") == "userinform"
-      assert Slug.segment("W-2 Details", "form") == "w2details"
+      assert Slug.segment("Documentation", "form") == "documentat"
+    end
+
+    test "two words join with a hyphen; the budget counts letters, not the hyphen" do
+      assert Slug.segment("Dog License", "flow") == "dog-license"
+      assert Slug.segment("Dog Licensing", "flow") == "dog-licensi"
+      assert Slug.segment("User Information", "form") == "user-inform"
+      assert Slug.segment("W-2 Details", "form") == "w2-details"
+      assert Slug.segment("Subflow 1", "flow") == "subflow-1"
+    end
+
+    test "a first word that spends the whole budget leaves no dangling hyphen" do
+      assert Slug.segment("Documentation Review", "form") == "documentat"
+      assert Slug.segment("Documentat Review", "form") == "documentat"
     end
 
     test "three or more words become initials, keeping numbers whole" do
@@ -22,8 +34,8 @@ defmodule FormFlow.Data.Templates.SlugTest do
     end
 
     test "lowercases and strips accents and punctuation" do
-      assert Slug.segment("Café Menu", "form") == "cafemenu"
-      assert Slug.segment("Q&A: Follow-up!", "form") == "qafollowup"
+      assert Slug.segment("Café Menu", "form") == "cafe-menu"
+      assert Slug.segment("Q&A: Follow-up!", "form") == "qa-followup"
     end
 
     test "a name with nothing usable falls back" do
@@ -34,13 +46,13 @@ defmodule FormFlow.Data.Templates.SlugTest do
   end
 
   test "join/2 prefixes a child's segment with its containing flow's slug" do
-    assert Slug.join("dla2026", "userinform") == "dla2026_userinform"
-    assert Slug.join(nil, "userinform") == "userinform"
+    assert Slug.join("dla2026", "user-inform") == "dla2026_user-inform"
+    assert Slug.join(nil, "user-inform") == "user-inform"
   end
 
   describe "rewrite/3" do
     test "swaps the old root prefix for the new one" do
-      assert Slug.rewrite("dla2026_userinform", "dla2026", "dla2027") == "dla2027_userinform"
+      assert Slug.rewrite("dla2026_user-inform", "dla2026", "dla2027") == "dla2027_user-inform"
       assert Slug.rewrite("dla2026_docs_intake", "dla2026", "dla2027") == "dla2027_docs_intake"
     end
 

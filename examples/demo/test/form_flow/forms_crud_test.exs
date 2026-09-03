@@ -113,7 +113,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {path, _flash} = assert_redirect(view)
     assert "/admin/forms/" <> id = path
-    assert Forms.get(id).slug == "userinform"
+    assert Forms.get(id).slug == "user-inform"
 
     {:ok, view, _html} = live(conn, "/admin/forms/new")
 

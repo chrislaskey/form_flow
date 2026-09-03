@@ -171,8 +171,8 @@ defmodule FormFlow.Data.Templates.Forms do
   tenant, so a multitenant host passes it; a host with no tenants needs
   nothing more than the slug.
 
-      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_userinform")
-      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_userinform", tenant_id: "acme")
+      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_user-inform")
+      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_user-inform", tenant_id: "acme")
   """
   def get_by_slug(slug, opts \\ []) when is_binary(slug) do
     from(f in Form, where: f.slug == ^slug)

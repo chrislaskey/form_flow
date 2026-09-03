@@ -404,7 +404,7 @@ defmodule Demo.FormFlowFlowsTest do
         |> Enum.map(&Forms.get(&1.form_id).slug)
         |> Enum.sort()
 
-      assert slugs == ["dla2026_documents_userinform", "dla2026_documents_userinform-2"]
+      assert slugs == ["dla2026_documents_user-inform", "dla2026_documents_user-inform-2"]
     end
 
     test "duplicate takes a slug and rewrites the children's prefix" do
