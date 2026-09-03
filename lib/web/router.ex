@@ -91,6 +91,15 @@ defmodule FormFlow.Web.Router do
         "events. Never interpreted by the library; auth stays the host's job"
   )
 
+  attr(:tenant_id, :string,
+    default: nil,
+    doc:
+      "opaque host identity of the current user's tenant — stamped on flow " <>
+        "instances started here and on form instances started inside them. " <>
+        "Only multitenant hosts set it; the default leaves the column nil. " <>
+        "Never interpreted by the library"
+  )
+
   attr(:config, :atom,
     default: nil,
     doc: "a module using `FormFlow.Config`, for customizing the router's behavior"
@@ -271,6 +280,7 @@ defmodule FormFlow.Web.Router do
               id="instance-flows-index"
               base={@base}
               user_id={@user_id}
+              tenant_id={@tenant_id}
               uri={@uri}
               params={@params}
             />
@@ -281,6 +291,7 @@ defmodule FormFlow.Web.Router do
               flow_instance_id={id}
               base={@base}
               user_id={@user_id}
+              tenant_id={@tenant_id}
               config={@config}
               config_data={@config_data}
             />
@@ -292,6 +303,7 @@ defmodule FormFlow.Web.Router do
               path={form_path}
               base={@base}
               user_id={@user_id}
+              tenant_id={@tenant_id}
               config={@config}
               config_data={@config_data}
             />
@@ -303,6 +315,7 @@ defmodule FormFlow.Web.Router do
               path={form_path}
               base={@base}
               user_id={@user_id}
+              tenant_id={@tenant_id}
               config={@config}
               config_data={@config_data}
             />

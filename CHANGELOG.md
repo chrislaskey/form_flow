@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.13.0
+
+### Instances know their user and their tenant
+
+Both instance schemas now carry the same two opaque host identities.
+`FormFlow.Data.Instances.Form` gains `user_id` — the user who started the
+form, stamped when `FormFlow.Data.Instances.Forms.update_status/4` creates
+the instance from its `:user_id` option, which until now reached only the
+event. Both `FormFlow.Data.Instances.Flow` and `FormFlow.Data.Instances.Form`
+gain `tenant_id` — the host tenant the instance belongs to, `nil` for a
+host with no tenants. Each is written to two locations: its own indexed
+column, and a `"user_id"` / `"tenant_id"` key inside the instance's
+`metadata`, the way nodes and relationships keep a copy of `flow_id` in
+their properties. The column is authoritative — a stale copy arriving in
+`metadata` is overwritten — and both are immutable after creation. FormFlow
+enforces nothing with either; they are for the host's own queries and
+authorization.
+
+- **`tenant_id` is an optional attr on `FormFlow.Web.router/1`** and on the
+  four instance LiveComponents, defaulting to `nil`. Only multitenant hosts
+  set it; it is stamped on flow instances started from the listing and on
+  form instances started inside them, exactly as `user_id` is. It also
+  reaches every `FormFlow.Config` callback as `FormFlow.Context.tenant_id`.
+- **`FormFlow.Data.Instances.Flows.list_query/1` and `list/1` narrow by
+  `tenant_id:`** alongside `user_id:`, and the listing page passes both.
+- `FormFlow.Data.Instances.Forms.update_status/4` takes `:tenant_id`,
+  stamped on the instance when the call creates it.
+- **Breaking: the v01 migration changed.** `form_flow_instance_flows` gains
+  `tenant_id`; `form_flow_instance_forms` gains `user_id` and `tenant_id`;
+  both tables gain indexes on the two. Drop and recreate any database
+  migrated before this version.
+
 ## v0.12.0
 
 ### The config gates its pages: `handle_mount/2`

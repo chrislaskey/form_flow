@@ -24,8 +24,9 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @doc """
   Journeys, newest first, with `:flow` preloaded. `opts[:user_id]` narrows
-  to one creator — a query convenience for "my journeys" listings, not
-  access control: the library never enforces visibility.
+  to one creator and `opts[:tenant_id]` to one tenant — query conveniences
+  for "my journeys" listings, not access control: the library never
+  enforces visibility.
   """
   def list(opts \\ []) do
     Repo.all(from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:flow]))
@@ -36,24 +37,24 @@ defmodule FormFlow.Data.Instances.Flows do
   callers (like Slab's table in query mode) can layer `order_by`,
   `limit`/`offset`, `Repo.aggregate(:count)`, and their own preloads on top.
 
-  `opts[:user_id]` narrows to one creator, exactly as in `list/1` — and with
-  the same caveat: a listing convenience, not access control.
+  `opts[:user_id]` and `opts[:tenant_id]` narrow exactly as in `list/1` —
+  and with the same caveat: listing conveniences, not access control.
   """
   def list_query(opts \\ []) do
-    query = from(i in Instances.Flow)
-
-    case Keyword.get(opts, :user_id) do
-      nil -> query
-      user_id -> from(i in query, where: i.user_id == ^user_id)
-    end
+    from(i in Instances.Flow)
+    |> narrow(:user_id, Keyword.get(opts, :user_id))
+    |> narrow(:tenant_id, Keyword.get(opts, :tenant_id))
   end
+
+  defp narrow(query, _field, nil), do: query
+  defp narrow(query, field, value), do: from(i in query, where: field(i, ^field) == ^value)
 
   @doc """
   Creates a journey and its `created` event in one transaction.
 
-  The journey's own `user_id` (the owner) comes from `attrs`; the event's
-  `user_id` (the actor of this creation) defaults to the same and can be
-  overridden with `opts[:user_id]`.
+  The journey's own `user_id` (the owner) and `tenant_id` come from
+  `attrs`; the event's `user_id` (the actor of this creation) defaults to
+  the owner and can be overridden with `opts[:user_id]`.
   """
   def create(attrs \\ %{}, opts \\ []) do
     Repo.transaction(fn ->

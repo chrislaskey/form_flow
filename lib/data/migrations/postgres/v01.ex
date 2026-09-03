@@ -54,9 +54,15 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #   * `instance_flows` — one traversal of a root flow (a journey). The root
   #     is referenced live — no flow versioning, edits propagate to journeys
   #     in flight — and `:restrict`ed: journeys can never be orphaned by
-  #     template deletion. `user_id` is the creating user, stamped and
-  #     immutable. Traversal state is never stored; it is derived
+  #     template deletion. `user_id` is the creating user and `tenant_id`
+  #     the host tenant it belongs to, both opaque host identities, stamped
+  #     at creation and immutable; the schemas also keep a copy of each
+  #     inside `metadata`, as nodes do with `flow_id` in properties.
+  #     Traversal state is never stored; it is derived
   #     (FormFlow.Data.Instances.FlowProgress).
+  #   * `instance_forms.user_id` + `tenant_id` — the same two stamps on a form
+  #     instance: the user who started it and the tenant it belongs to, with
+  #     the same copies inside `metadata`.
   #   * `instance_forms.instance_flow_id` + `path` — the visit identity of an
   #     in-journey form instance: the chain of node ids from the root flow
   #     through each embedding subflow node to the form node itself.
@@ -210,6 +216,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(:status, :string, null: false, default: "in_progress")
       add(:user_id, :string)
+      add(:tenant_id, :string)
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
 
@@ -218,6 +225,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(index(:form_flow_instance_flows, [:flow_id], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_instance_flows, [:status], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_instance_flows, [:user_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_instance_flows, [:tenant_id], prefix: context.prefix))
 
     create_if_not_exists table(:form_flow_instance_forms,
                            primary_key: false,
@@ -237,6 +246,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(:status, :string, null: false, default: "in_progress")
       add(:lock_version, :integer, null: false, default: 1)
+      add(:user_id, :string)
+      add(:tenant_id, :string)
       add(:data, :map, null: false, default: %{})
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
@@ -274,6 +285,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     )
 
     create_if_not_exists(index(:form_flow_instance_forms, [:status], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_instance_forms, [:user_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_instance_forms, [:tenant_id], prefix: context.prefix))
 
     create_if_not_exists table(:form_flow_instance_form_events,
                            primary_key: false,

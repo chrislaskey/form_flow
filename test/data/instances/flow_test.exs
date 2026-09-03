@@ -33,9 +33,9 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
-    test "flow_id and user_id are immutable after creation" do
+    test "flow_id, user_id, and tenant_id are immutable after creation" do
       persisted =
-        %Instances.Flow{flow_id: @flow_id, user_id: "user-42"}
+        %Instances.Flow{flow_id: @flow_id, user_id: "user-42", tenant_id: "tenant-1"}
         |> Ecto.put_meta(state: :loaded)
 
       changeset = Instances.Flow.changeset(persisted, %{flow_id: Ecto.UUID.generate()})
@@ -46,7 +46,62 @@ defmodule FormFlow.Data.Instances.FlowTest do
       refute changeset.valid?
       assert {"cannot be changed after creation", _} = changeset.errors[:user_id]
 
+      changeset = Instances.Flow.changeset(persisted, %{tenant_id: "tenant-2"})
+      refute changeset.valid?
+      assert {"cannot be changed after creation", _} = changeset.errors[:tenant_id]
+
       assert Instances.Flow.changeset(persisted, %{metadata: %{"note" => "ok"}}).valid?
+    end
+
+    test "user_id and tenant_id are written to the column and copied into metadata" do
+      changeset =
+        Instances.Flow.changeset(%Instances.Flow{}, %{
+          flow_id: @flow_id,
+          user_id: "user-42",
+          tenant_id: "tenant-1",
+          metadata: %{"cycle" => "2026"}
+        })
+
+      assert Ecto.Changeset.get_field(changeset, :user_id) == "user-42"
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == "tenant-1"
+
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{
+               "cycle" => "2026",
+               "user_id" => "user-42",
+               "tenant_id" => "tenant-1"
+             }
+    end
+
+    test "a host with no tenants leaves tenant_id nil and out of metadata" do
+      changeset =
+        Instances.Flow.changeset(%Instances.Flow{}, %{flow_id: @flow_id, user_id: "user-42"})
+
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == nil
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{"user_id" => "user-42"}
+    end
+
+    test "the column is authoritative — a stale copy in metadata is overwritten" do
+      persisted =
+        %Instances.Flow{
+          flow_id: @flow_id,
+          user_id: "user-42",
+          tenant_id: "tenant-1",
+          metadata: %{"user_id" => "user-42", "tenant_id" => "tenant-1"}
+        }
+        |> Ecto.put_meta(state: :loaded)
+
+      changeset =
+        Instances.Flow.changeset(persisted, %{
+          metadata: %{"user_id" => "impostor", "tenant_id" => "elsewhere", "note" => "ok"}
+        })
+
+      assert changeset.valid?
+
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{
+               "user_id" => "user-42",
+               "tenant_id" => "tenant-1",
+               "note" => "ok"
+             }
     end
   end
 

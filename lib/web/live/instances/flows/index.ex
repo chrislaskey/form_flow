@@ -49,11 +49,16 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
-    query = Instances.Flows.list_query(user_id: socket.assigns.user_id)
+    query =
+      Instances.Flows.list_query(
+        user_id: socket.assigns.user_id,
+        tenant_id: socket.assigns.tenant_id
+      )
 
     flows =
       Repo.all(Templates.Flows.roots_query())
@@ -69,7 +74,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   @impl true
   def handle_event("start", %{"flow-id" => flow_id}, socket) do
-    attrs = %{flow_id: flow_id, user_id: socket.assigns.user_id}
+    attrs = %{
+      flow_id: flow_id,
+      user_id: socket.assigns.user_id,
+      tenant_id: socket.assigns.tenant_id
+    }
 
     case Instances.Flows.create(attrs) do
       {:ok, flow_instance} ->

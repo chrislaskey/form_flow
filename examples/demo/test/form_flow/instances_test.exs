@@ -144,6 +144,42 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "an instance's host identities" do
+    test "starting a form stamps the user on it, copied into metadata", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+
+      {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
+
+      form_instance = instance_at(instance, [name.id])
+      assert form_instance.user_id == "demo-user"
+      assert form_instance.tenant_id == nil
+      assert form_instance.metadata == %{"user_id" => "demo-user"}
+    end
+
+    test "a tenant is stamped on the journey and its forms, and narrows the listing" do
+      %{flow: flow, forms: [name, _address]} = flow_of_two()
+
+      {:ok, tenant_instance} =
+        Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user", tenant_id: "acme"})
+
+      {:ok, form_instance} =
+        Instances.Forms.update_status(tenant_instance, [name.id], :in_progress,
+          user_id: "demo-user",
+          tenant_id: "acme"
+        )
+
+      assert tenant_instance.tenant_id == "acme"
+      assert tenant_instance.metadata == %{"user_id" => "demo-user", "tenant_id" => "acme"}
+      assert form_instance.tenant_id == "acme"
+      assert form_instance.metadata == %{"user_id" => "demo-user", "tenant_id" => "acme"}
+
+      assert [%{id: id}] = Instances.Flows.list(user_id: "demo-user", tenant_id: "acme")
+      assert id == tenant_instance.id
+      assert Instances.Flows.list(user_id: "demo-user", tenant_id: "other") == []
+      assert length(Instances.Flows.list(user_id: "demo-user")) == 2
+    end
+  end
+
   describe "a form's URL addresses its position" do
     test "edit starts the form it names, on an ordinary page load", %{conn: conn} do
       %{instance: instance, forms: [name, _address]} = flow_of_two()

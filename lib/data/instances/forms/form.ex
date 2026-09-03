@@ -21,9 +21,19 @@ defmodule FormFlow.Data.Instances.Form do
   snapshot — is a deliberately deferred optimization; see
   `archive/plans/instances-next.md`.)
 
-  `metadata` is an opaque host-app map: whatever the host wants to attach —
-  including who a form instance concerns, until about-ness earns a named column.
-  FormFlow never interprets it.
+  An instance carries two opaque host identities, the same pair as
+  `FormFlow.Data.Instances.Flow`: `user_id`, the user who started it, and
+  `tenant_id`, the host tenant it belongs to, `nil` for a host with no
+  tenants. Both are stamped at creation and immutable afterwards, and both
+  are written to two locations: the dedicated column, so the database can
+  index and narrow by them, and a `"user_id"` / `"tenant_id"` key inside
+  `metadata`, the same way nodes keep a copy of `flow_id` in their
+  properties. The changeset keeps the copies in sync — the column is
+  authoritative, and a stale copy arriving in `metadata` is overwritten.
+
+  Beyond those two keys, `metadata` is an opaque host-app map: whatever the
+  host wants to attach — including who a form instance concerns, until
+  about-ness earns a named column. FormFlow never interprets it.
 
   A form instance filled inside a whole root flow instance — a journey —
   rather than on its own carries its visit identity: `instance_flow_id` and
@@ -57,6 +67,8 @@ defmodule FormFlow.Data.Instances.Form do
 
     field(:status, :string, default: "in_progress")
     field(:lock_version, :integer, default: 1)
+    field(:user_id, :string)
+    field(:tenant_id, :string)
     field(:data, :map, default: %{})
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
@@ -75,15 +87,18 @@ defmodule FormFlow.Data.Instances.Form do
 
   `status` and `completed_at` are not castable — they are stamped by
   completion machinery, never supplied by callers (the same discipline as
-  `FormFlow.Data.Instances.Flow`). Updates go
-  through the optimistic lock: two editors of one instance's `data` surface
-  `Ecto.StaleEntryError` instead of a silent last-write-wins.
+  `FormFlow.Data.Instances.Flow`). `user_id` and `tenant_id` are castable
+  at creation and immutable afterwards. Updates go through the optimistic
+  lock: two editors of one instance's `data` surface `Ecto.StaleEntryError`
+  instead of a silent last-write-wins.
   """
   def changeset(instance, attrs \\ %{}) do
     instance
     |> cast(attrs, [
       :template_form_version_id,
       :instance_flow_id,
+      :user_id,
+      :tenant_id,
       :data,
       :metadata
     ])
@@ -100,6 +115,8 @@ defmodule FormFlow.Data.Instances.Form do
     instance
     |> cast(attrs, [
       :template_form_version_id,
+      :user_id,
+      :tenant_id,
       :data,
       :metadata
     ])
@@ -111,6 +128,10 @@ defmodule FormFlow.Data.Instances.Form do
   defp finalize(changeset) do
     changeset
     |> validate_required([:template_form_version_id])
+    |> validate_immutable(:user_id)
+    |> validate_immutable(:tenant_id)
+    |> copy_into_metadata(:user_id, "user_id")
+    |> copy_into_metadata(:tenant_id, "tenant_id")
     |> validate_visit_identity()
     |> optimistic_lock(:lock_version)
     |> foreign_key_constraint(:template_form_version_id)
@@ -138,6 +159,29 @@ defmodule FormFlow.Data.Instances.Form do
 
       true ->
         add_error(changeset, :path, "is required for an in-journey form instance")
+    end
+  end
+
+  # The same rule Instances.Flow applies to its identities: castable at
+  # creation, a commitment afterwards.
+  defp validate_immutable(changeset, field) do
+    if changeset.data.__meta__.state == :loaded and get_change(changeset, field) do
+      add_error(changeset, field, "cannot be changed after creation")
+    else
+      changeset
+    end
+  end
+
+  # The dual-write: metadata carries a copy of the column
+  defp copy_into_metadata(changeset, field, key) do
+    case get_field(changeset, field) do
+      nil ->
+        changeset
+
+      value ->
+        metadata = get_field(changeset, :metadata) || %{}
+
+        put_change(changeset, :metadata, Map.put(metadata, key, value))
     end
   end
 end

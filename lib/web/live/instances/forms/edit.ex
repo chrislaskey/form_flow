@@ -92,6 +92,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)

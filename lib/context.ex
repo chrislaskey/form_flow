@@ -11,8 +11,10 @@ defmodule FormFlow.Context do
 
   ## Fields
 
-    * `:user_id` - the acting user's opaque host-app identity, or `nil` — not
-      populated anywhere yet; the web layer has no current-user concept today
+    * `:user_id` - the acting user's opaque host-app identity — the router's
+      `user_id` attr — or `nil`
+    * `:tenant_id` - the acting user's host tenant — the router's optional
+      `tenant_id` attr — or `nil`, the value for a host with no tenants
     * `:flow` - the root `FormFlow.Data.Templates.Flow` — the top-level
       ancestor, however deep the current view has drilled in
     * `:subflow` - the `FormFlow.Data.Templates.Flow` whose content is
@@ -55,6 +57,7 @@ defmodule FormFlow.Context do
 
   defstruct [
     :user_id,
+    :tenant_id,
     :flow,
     :subflow,
     :subflow_node,
@@ -71,6 +74,7 @@ defmodule FormFlow.Context do
 
   @type t :: %__MODULE__{
           user_id: String.t() | nil,
+          tenant_id: String.t() | nil,
           flow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,

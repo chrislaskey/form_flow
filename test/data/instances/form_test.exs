@@ -88,6 +88,100 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert changeset.valid?
       assert Ecto.Changeset.get_field(changeset, :superseded_at) == nil
     end
+
+    test "user_id and tenant_id are written to the column and copied into metadata" do
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          user_id: "user-42",
+          tenant_id: "tenant-1",
+          metadata: %{"source" => "import"}
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :user_id) == "user-42"
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == "tenant-1"
+
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{
+               "source" => "import",
+               "user_id" => "user-42",
+               "tenant_id" => "tenant-1"
+             }
+    end
+
+    test "visit_changeset/4 stamps the same identities" do
+      changeset =
+        Instances.Form.visit_changeset(
+          %Instances.Form{},
+          %{template_form_version_id: @version_id, user_id: "user-42", tenant_id: "tenant-1"},
+          Ecto.UUID.generate(),
+          [Ecto.UUID.generate()]
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :user_id) == "user-42"
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == "tenant-1"
+
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{
+               "user_id" => "user-42",
+               "tenant_id" => "tenant-1"
+             }
+    end
+
+    test "a host with no tenants leaves tenant_id nil and out of metadata" do
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          user_id: "user-42"
+        })
+
+      assert Ecto.Changeset.get_field(changeset, :tenant_id) == nil
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{"user_id" => "user-42"}
+    end
+
+    test "user_id and tenant_id are immutable after creation" do
+      persisted =
+        %Instances.Form{
+          template_form_version_id: @version_id,
+          user_id: "user-42",
+          tenant_id: "tenant-1"
+        }
+        |> Ecto.put_meta(state: :loaded)
+
+      changeset = Instances.Form.changeset(persisted, %{user_id: "user-43"})
+      refute changeset.valid?
+      assert {"cannot be changed after creation", _} = changeset.errors[:user_id]
+
+      changeset = Instances.Form.changeset(persisted, %{tenant_id: "tenant-2"})
+      refute changeset.valid?
+      assert {"cannot be changed after creation", _} = changeset.errors[:tenant_id]
+
+      assert Instances.Form.changeset(persisted, %{data: %{"name" => "Ada"}}).valid?
+    end
+
+    test "the column is authoritative — a stale copy in metadata is overwritten" do
+      persisted =
+        %Instances.Form{
+          template_form_version_id: @version_id,
+          user_id: "user-42",
+          tenant_id: "tenant-1",
+          metadata: %{"user_id" => "user-42", "tenant_id" => "tenant-1"}
+        }
+        |> Ecto.put_meta(state: :loaded)
+
+      changeset =
+        Instances.Form.changeset(persisted, %{
+          metadata: %{"user_id" => "impostor", "tenant_id" => "elsewhere", "source" => "import"}
+        })
+
+      assert changeset.valid?
+
+      assert Ecto.Changeset.get_field(changeset, :metadata) == %{
+               "user_id" => "user-42",
+               "tenant_id" => "tenant-1",
+               "source" => "import"
+             }
+    end
   end
 
   describe "Instances.Form.Event.changeset/2" do

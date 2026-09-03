@@ -123,13 +123,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   position is no longer one of the tree's forms, so the flow instance's own
   flow answers for it.
   """
-  def context(%{flow_instance: flow_instance, path: path, user_id: user_id}, tree, forms) do
+  def context(%{flow_instance: flow_instance, path: path} = assigns, tree, forms) do
     form = FlowProgress.find_form(forms, path)
 
     subflow = (form && form.flow) || (tree && tree.flow)
 
     %Context{
-      user_id: user_id,
+      user_id: assigns.user_id,
+      tenant_id: assigns.tenant_id,
       flow: tree && tree.flow,
       subflow: subflow,
       subflow_node: form && List.last(form.ancestors),
@@ -214,9 +215,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   closed, is left as it is; a start that fails leaves `:start_error`.
   """
   def start(%{assigns: %{form_instance: nil, editable?: true}} = socket) do
-    %{flow_instance: flow_instance, path: path, user_id: user_id} = socket.assigns
+    %{flow_instance: flow_instance, path: path} = socket.assigns
 
-    case start_instance(flow_instance, path, user_id) do
+    case start_instance(flow_instance, path, socket.assigns) do
       {:ok, _started} -> assigns(socket)
       {:error, message} -> assign(socket, :start_error, message)
     end
@@ -224,8 +225,11 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   def start(socket), do: socket
 
-  defp start_instance(flow_instance, path, user_id) do
-    case Instances.Forms.update_status(flow_instance, path, :in_progress, user_id: user_id) do
+  defp start_instance(flow_instance, path, %{user_id: user_id, tenant_id: tenant_id}) do
+    case Instances.Forms.update_status(flow_instance, path, :in_progress,
+           user_id: user_id,
+           tenant_id: tenant_id
+         ) do
       {:ok, form_instance} ->
         {:ok, form_instance}
 

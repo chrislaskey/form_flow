@@ -40,6 +40,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -52,7 +53,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     path = String.split(joined, ",")
 
     case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
-           user_id: socket.assigns.user_id
+           user_id: socket.assigns.user_id,
+           tenant_id: socket.assigns.tenant_id
          ) do
       {:ok, _reopened} -> {:noreply, load(socket)}
       {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
@@ -78,6 +80,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         # scope — for the host's config to answer handle_mount/2 with
         context = %Context{
           user_id: socket.assigns.user_id,
+          tenant_id: socket.assigns.tenant_id,
           flow: flow,
           subflow: flow,
           flow_type_property_values: FormFlow.Config.Flows.Type.property_values(flow),
@@ -105,6 +108,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     for form <- forms do
       context = %Context{
         user_id: assigns.user_id,
+        tenant_id: assigns.tenant_id,
         flow: tree.flow,
         subflow: form.flow,
         subflow_node: List.last(form.ancestors),

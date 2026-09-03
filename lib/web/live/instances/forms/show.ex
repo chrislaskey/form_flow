@@ -36,6 +36,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:config, fn -> nil end)
       |> assign_new(:config_data, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -48,7 +49,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
     case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
-           user_id: socket.assigns.user_id
+           user_id: socket.assigns.user_id,
+           tenant_id: socket.assigns.tenant_id
          ) do
       {:ok, reopened} ->
         to = Paths.form_edit_path(socket.assigns.base, flow_instance.id, reopened.path)

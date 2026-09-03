@@ -92,6 +92,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
       add(:status, :string, null: false, default: "in_progress")
       add(:user_id, :string)
+      add(:tenant_id, :string)
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
 
@@ -100,6 +101,8 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_instance_flows, [:flow_id]))
     create_if_not_exists(index(:form_flow_instance_flows, [:status]))
+    create_if_not_exists(index(:form_flow_instance_flows, [:user_id]))
+    create_if_not_exists(index(:form_flow_instance_flows, [:tenant_id]))
 
     create_if_not_exists table(:form_flow_instance_forms, primary_key: false) do
       add(:id, :uuid, primary_key: true)
@@ -112,6 +115,8 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
       add(:status, :string, null: false, default: "in_progress")
       add(:lock_version, :integer, null: false, default: 1)
+      add(:user_id, :string)
+      add(:tenant_id, :string)
       add(:data, :map, null: false)
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
@@ -129,6 +134,8 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_instance_forms, [:template_form_version_id]))
     create_if_not_exists(index(:form_flow_instance_forms, [:status]))
+    create_if_not_exists(index(:form_flow_instance_forms, [:user_id]))
+    create_if_not_exists(index(:form_flow_instance_forms, [:tenant_id]))
     create_if_not_exists(index(:form_flow_instance_forms, [:instance_flow_id]))
 
     # One *active* form instance per visit (superseded rows never block)

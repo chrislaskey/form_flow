@@ -89,7 +89,10 @@ defmodule FormFlow.Data.Instances.Forms do
 
     * `:data` — the answers, written on `:completed` (left untouched when
       absent, so a bare re-stamp never wipes answers)
-    * `:user_id` — the acting user, recorded on the event
+    * `:user_id` — the acting user, recorded on the event and, when the
+      call creates the instance, stamped on it as the user who started it
+    * `:tenant_id` — the host tenant, stamped on the instance when the call
+      creates it
     * `:snapshot_data` — free-form event payload
 
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
@@ -283,7 +286,11 @@ defmodule FormFlow.Data.Instances.Forms do
       changeset =
         Instances.Form.visit_changeset(
           %Instances.Form{},
-          %{template_form_version_id: version.id},
+          %{
+            template_form_version_id: version.id,
+            user_id: Keyword.get(opts, :user_id),
+            tenant_id: Keyword.get(opts, :tenant_id)
+          },
           journey.id,
           path
         )
