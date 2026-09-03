@@ -104,6 +104,55 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert render(view) =~ "is not valid JSON"
   end
 
+  test "the new page generates a slug, or keeps the one typed", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/admin/forms/new")
+
+    view
+    |> element("#forms-new-form-form")
+    |> render_submit(%{"dynamic_form" => %{"name" => "User Information"}})
+
+    {path, _flash} = assert_redirect(view)
+    assert "/admin/forms/" <> id = path
+    assert Forms.get(id).slug == "userinform"
+
+    {:ok, view, _html} = live(conn, "/admin/forms/new")
+
+    view
+    |> element("#forms-new-form-form")
+    |> render_submit(%{"dynamic_form" => %{"name" => "Anything", "slug" => "Chosen"}})
+
+    {path, _flash} = assert_redirect(view)
+    assert "/admin/forms/" <> id = path
+    assert Forms.get(id).slug == "chosen"
+  end
+
+  test "Save writes the slug too, and a taken one is refused by name", %{conn: conn} do
+    {:ok, _other} = Forms.create(%{name: "Other", slug: "taken"})
+    {:ok, form} = Forms.create(%{name: "Mine"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    assert html =~ "mine"
+
+    # The save lands through send_update after the submit, so render the
+    # view again rather than reading the submit's own response
+    submit = fn slug ->
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Mine", "slug" => slug, "definition" => ~s({"fields": []})}
+      })
+
+      render(view)
+    end
+
+    assert submit.("taken") =~ "The slug has already been taken."
+    assert Forms.get(form.id).slug == "mine"
+
+    assert submit.("mine2027") =~ "Saved."
+    assert Forms.get(form.id).slug == "mine2027"
+  end
+
   test "one Save writes identity to the lineage and the definition to the draft",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Before", description: "Old"})
@@ -175,7 +224,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     # The type and its property values, under the type's own key
     assert Forms.get(form.id).properties == %{
              "form_type" => "demo_prefill",
-             "form_type_property_values" => %{"name" => "Ada", "salutation" => "dr"}
+             "form_type_property_values" => %{"name" => "Ada", "salutation" => "dr"},
+             "slug" => "typed"
            }
 
     # Show mode renders the stored type as its name, with its property values
@@ -199,7 +249,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       }
     })
 
-    assert Forms.get(form.id).properties == %{}
+    assert Forms.get(form.id).properties == %{"slug" => "typed"}
   end
 
   test "a related-form property offers the forms earlier in the flow", %{conn: conn} do

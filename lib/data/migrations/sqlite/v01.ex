@@ -18,6 +18,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
+      add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :delete_all))
       add(:made_reusable_at, :utc_datetime_usec)
@@ -29,6 +30,13 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     create_if_not_exists(index(:form_flow_flows, [:tenant_id]))
 
     create_if_not_exists(
+      unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_flows_slug_tenant_index
+      )
+    )
+
+    create_if_not_exists(
       index(:form_flow_flows, [:made_reusable_at], where: "made_reusable_at IS NOT NULL")
     )
 
@@ -37,6 +45,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:name, :string, null: false)
       add(:description, :text)
       add(:tenant_id, :string)
+      add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :nilify_all))
 
@@ -54,6 +63,13 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_template_forms, [:owner_flow_id]))
     create_if_not_exists(index(:form_flow_template_forms, [:tenant_id]))
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_forms, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_template_forms_slug_tenant_index
+      )
+    )
 
     create_if_not_exists table(:form_flow_template_form_versions, primary_key: false) do
       add(:id, :uuid, primary_key: true)

@@ -310,6 +310,137 @@ defmodule Demo.FormFlowFlowsTest do
     end
   end
 
+  describe "slugs" do
+    alias FormFlow.Data.Templates.Forms
+
+    test "create generates one from the name; a given one is kept, normalized" do
+      {:ok, flow} = Flows.create(%{name: "Dog License Application 2026"})
+      assert flow.slug == "dla2026"
+      assert flow.properties["slug"] == "dla2026"
+
+      {:ok, named} = Flows.create(%{name: "Whatever", slug: " Custom-Slug "})
+      assert named.slug == "custom-slug"
+
+      {:ok, nameless} = Flows.create()
+      assert nameless.slug == "flow"
+    end
+
+    test "a taken slug gets the first free -N suffix, per tenant" do
+      {:ok, first} = Flows.create(%{name: "Intake"})
+      {:ok, second} = Flows.create(%{name: "Intake"})
+      {:ok, third} = Flows.create(%{name: "Intake"})
+      {:ok, elsewhere} = Flows.create(%{name: "Intake", tenant_id: "acme"})
+
+      assert first.slug == "intake"
+      assert second.slug == "intake-2"
+      assert third.slug == "intake-3"
+      assert elsewhere.slug == "intake"
+    end
+
+    test "the database refuses a duplicate, hosts with no tenants included" do
+      {:ok, _} = Flows.create(%{name: "A", slug: "taken"})
+
+      assert {:error, changeset} = Flows.create(%{name: "B", slug: "taken"})
+      assert {"has already been taken", _} = changeset.errors[:slug]
+
+      # The same slug in another tenant is fine — and a second untenanted one is not
+      assert {:ok, _} = Flows.create(%{name: "C", slug: "taken", tenant_id: "acme"})
+      assert {:error, _} = Flows.create(%{name: "D", slug: "taken"})
+    end
+
+    test "a rename leaves the slug alone; an admin can change or clear it" do
+      {:ok, flow} = Flows.create(%{name: "Dog License Application 2026"})
+
+      {:ok, renamed} = Flows.update(flow, %{name: "Dog License Application 2027"})
+      assert renamed.slug == "dla2026"
+
+      {:ok, changed} = Flows.update(renamed, %{slug: "dla2027"})
+      assert changed.slug == "dla2027"
+      assert changed.properties["slug"] == "dla2027"
+
+      {:ok, cleared} = Flows.update(changed, %{slug: nil})
+      assert cleared.slug == nil
+      refute Map.has_key?(cleared.properties, "slug")
+    end
+
+    test "owned children carry the chain: root, subflow, form" do
+      {:ok, root} = Flows.create(%{name: "Dog License Application 2026", label: "subflows"})
+
+      {:ok, _} =
+        Flows.update(root, %{
+          nodes: [
+            %{
+              id: Ecto.UUID.generate(),
+              properties: %{
+                "type" => "subflow",
+                "data" => %{"label" => "Documents", "subflow_label" => "forms"}
+              }
+            }
+          ],
+          relationships: []
+        })
+
+      [node] = Flows.get(root.id).nodes
+      documents = Flows.get(node.subflow_id)
+      assert documents.slug == "dla2026_documents"
+
+      {:ok, _} =
+        Flows.update(documents, %{
+          nodes: [
+            %{
+              id: Ecto.UUID.generate(),
+              properties: %{"data" => %{"kind" => "form", "label" => "User Information"}}
+            },
+            %{
+              id: Ecto.UUID.generate(),
+              properties: %{"data" => %{"kind" => "form", "label" => "User Information"}}
+            }
+          ],
+          relationships: []
+        })
+
+      slugs =
+        Flows.get(documents.id).nodes
+        |> Enum.map(&Forms.get(&1.form_id).slug)
+        |> Enum.sort()
+
+      assert slugs == ["dla2026_documents_userinform", "dla2026_documents_userinform-2"]
+    end
+
+    test "duplicate takes a slug and rewrites the children's prefix" do
+      {:ok, root} = Flows.create(%{name: "Dog License Application 2026"})
+
+      {:ok, child} =
+        Flows.create(%{name: "Documents", slug: "dla2026_documents", owner_flow_id: root.id})
+
+      insert_subflow_node(root, child)
+
+      {:ok, copy} = Flows.duplicate(root, slug: "dla2027")
+      assert copy.slug == "dla2027"
+      [copied_node] = copy.nodes
+      assert Flows.get(copied_node.subflow_id).slug == "dla2027_documents"
+
+      # Without a slug the copy takes the next free suffix of the source's
+      {:ok, second} = Flows.duplicate(root)
+      assert second.slug == "dla2026-2"
+      [second_node] = second.nodes
+      assert Flows.get(second_node.subflow_id).slug == "dla2026-2_documents"
+    end
+
+    test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do
+      {:ok, plain} = Flows.create(%{name: "Intake"})
+      {:ok, acme} = Flows.create(%{name: "Intake", tenant_id: "acme"})
+
+      assert %Flow{id: id, nodes: []} = Flows.get_by_slug("intake", tenant_id: "acme")
+      assert id == acme.id
+      assert Flows.get_by_slug("nope") == nil
+      assert Flows.get_by_slug("intake", tenant_id: "globex") == nil
+
+      {:ok, _} = Flows.delete(acme)
+      assert Flows.get_by_slug("intake").id == plain.id
+    end
+  end
+
   describe "subflows and ownership" do
     test "an owned subflow: created, referenced, drilled into" do
       {:ok, root} = Flows.create()

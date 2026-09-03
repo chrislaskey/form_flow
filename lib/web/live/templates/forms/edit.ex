@@ -83,6 +83,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     identity = %{
       name: payload.data[:name],
       description: payload.data[:description],
+      slug: payload.data[:slug],
       properties:
         template_properties(
           socket.assigns.form,
@@ -114,10 +115,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
            notice: nil
          )}
 
-      {:error, %Ecto.Changeset{}} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:ok,
          assign(socket,
-           error: "Could not save. Please try again.",
+           error: Shared.save_error(changeset, "Could not save. Please try again."),
            notice: nil
          )}
     end
@@ -224,6 +225,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: to_string(form.name),
       description: to_string(form.description),
+      slug: to_string(form.slug),
       form_type: to_string(form.properties["form_type"]),
       property_values: FormFlow.Config.Forms.Type.property_values(form),
       definition: to_string(definition_json)
@@ -234,6 +236,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: to_string(payload_data[:name] || ""),
       description: to_string(payload_data[:description] || ""),
+      slug: to_string(payload_data[:slug] || ""),
       form_type: to_string(pending_type),
       property_values: Shared.payload_property_values(payload_data, properties),
       definition: to_string(payload_data[:definition] || "")
@@ -270,6 +273,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: form.name,
       description: form.description,
+      slug: form.slug,
       form_type: type_id,
       definition: assigns.definition_json
     }
@@ -289,7 +293,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
       form_data =
         payload.data
-        |> Map.take([:name, :description, :definition])
+        |> Map.take([:name, :description, :slug, :definition])
         |> Map.put(:form_type, pending_type)
         |> Map.merge(Shared.field_data(Shared.properties(types, pending_type), values))
 
@@ -597,6 +601,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             change_debounce_in_ms={if(@auto_update?, do: 500)}
           >
         <:field type="text" name="name" label="Name" required />
+        <:field
+          type="text"
+          name="slug"
+          label="Slug"
+          description="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+        />
         <:field type="comment" name="description" label="Description" />
         <:field
           :if={@form_types != []}

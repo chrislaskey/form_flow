@@ -48,6 +48,44 @@ only the event. Immutable, like the flow instance's.
   `tenant_id`; every one of them is indexed. Drop and recreate any database
   migrated before this version.
 
+### Templates have slugs
+
+**New: `slug` on `FormFlow.Data.Templates.Flow` and
+`FormFlow.Data.Templates.Form`** — a stable secondary identifier a host
+looks a template up by without knowing its `id`, which differs between
+environments (`FormFlow.Data.Templates.Slug`). Optional and nullable, unique
+per tenant within its table, dual-written into `properties["slug"]` like
+`tenant_id`, and never a foreign key — `id` still does that job. A slug
+never follows a rename; it changes only when an admin changes it.
+
+- **Every template gets one by default.** `Flows.create/1` and
+  `Forms.create/1` generate a slug from the name when none is given: one or
+  two words concatenate and truncate to ten characters ("User Information"
+  is `userinform`), three or more take their initials with numbers kept
+  whole ("Dog License Application 2026" is `dla2026`). The subflows and forms
+  a canvas save creates prefix their segment with the containing flow's
+  slug, so nested children carry the whole chain: `dla2026_documents_userinform`.
+  A taken slug gets `-2`, `-3`, … — chosen by querying, not by retrying the
+  insert, which would abort the enclosing transaction on Postgres.
+- **`Flows.get_by_slug/2` and `Forms.get_by_slug/2`** look a template up by
+  slug. `tenant_id:` is an optional keyword: a host with no tenants passes
+  only the slug; a multitenant host passes the tenant, since the same slug
+  can exist once per tenant.
+- **Copies get fresh slugs.** `Flows.duplicate/2` takes `slug:`, defaulting
+  to the source's with a free suffix, and rewrites its copied children's
+  prefix from the old root slug to the new one — `dla2026_userinform` under
+  a copy slugged `dla2027` becomes `dla2027_userinform`. `Forms.copy/2` takes
+  `slug:` the same way.
+- **A Slug field on every template page.** The new-flow and new-form pages
+  take one and generate it when left blank; the flow edit header and the
+  form edit page let an admin change or clear it, and a slug that is taken
+  or malformed is a refused save that names the field.
+- **Breaking: the v01 migration changed again.** `form_flow_flows` and
+  `form_flow_template_forms` gain `slug`, with a partial unique index over
+  `slug` and `COALESCE(tenant_id, '')` — coalesced because both databases
+  treat NULLs as distinct, which would let a host with no tenants reuse a
+  slug. Drop and recreate any database migrated before this version.
+
 ## v0.12.0
 
 ### The config gates its pages: `handle_mount/2`

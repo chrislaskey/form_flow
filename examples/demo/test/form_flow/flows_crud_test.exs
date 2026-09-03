@@ -109,6 +109,66 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute render(view) =~ "Saved."
   end
 
+  test "the new page generates a slug, or keeps the one typed", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/admin/flows/new")
+
+    view
+    |> element("form")
+    |> render_submit(%{"name" => "Dog License Application 2026", "label" => "forms"})
+
+    {path, _flash} = assert_redirect(view)
+    assert "/admin/flows/" <> rest = path
+    [id, "edit"] = String.split(rest, "/")
+    assert Flows.get(id).slug == "dla2026"
+
+    {:ok, view, _html} = live(conn, "/admin/flows/new")
+
+    view
+    |> element("form")
+    |> render_submit(%{"name" => "Anything", "label" => "forms", "slug" => "Chosen"})
+
+    {path, _flash} = assert_redirect(view)
+    assert "/admin/flows/" <> rest = path
+    [id, "edit"] = String.split(rest, "/")
+    assert Flows.get(id).slug == "chosen"
+  end
+
+  test "the slug is edited from the edit header and saved with the rest", %{conn: conn} do
+    id = create_flow(conn, "Dog License Application 2026")
+    assert Flows.get(id).slug == "dla2026"
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    assert html =~ "dla2026"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"slug" => "dla2027"}})
+
+    assert Flows.get(id).slug == "dla2026"
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(id).slug == "dla2027"
+    refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "a taken slug is a refused save that names the field", %{conn: conn} do
+    {:ok, _other} = Flows.create(%{name: "Other", slug: "taken"})
+    id = create_flow(conn, "Mine")
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"slug" => "taken"}})
+
+    view |> element("button", "Save") |> render_click()
+
+    assert render(view) =~ "The slug has already been taken."
+    assert Flows.get(id).slug == "mine"
+  end
+
   test "renaming from the edit header persists", %{conn: conn} do
     id = create_flow(conn)
 
@@ -147,12 +207,16 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_any_order"}})
 
     # Nothing persists until Save — a pending type is an unsaved change
-    assert Flows.get(id).properties == %{}
+    assert Flows.get(id).properties == %{"slug" => "untitledfl"}
     assert has_element?(view, "button", "Discard changes")
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(id).properties == %{"form_flow_type" => "wizard_any_order"}
+    assert Flows.get(id).properties == %{
+             "form_flow_type" => "wizard_any_order",
+             "slug" => "untitledfl"
+           }
+
     refute has_element?(view, "button", "Discard changes")
 
     # Show mode renders the stored type as a string, not a dropdown
@@ -168,7 +232,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(id).properties == %{}
+    assert Flows.get(id).properties == %{"slug" => "untitledfl"}
   end
 
   test "a complex flow has no type dropdown of its own", %{conn: conn} do
@@ -198,7 +262,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # One stored copy — the form lineage's properties; the node keeps none
     [saved_node] = Flows.get(id).nodes
-    assert Forms.get(node.form_id).properties == %{"form_type" => "review"}
+
+    assert Forms.get(node.form_id).properties == %{
+             "form_type" => "review",
+             "slug" => "applicatio_intake"
+           }
+
     refute Map.has_key?(saved_node.properties["data"], "form_type")
 
     # Loading projects the stored type back into the node's data, so the
@@ -220,7 +289,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
-    assert Forms.get(node.form_id).properties == %{}
+    assert Forms.get(node.form_id).properties == %{"slug" => "applicatio_intake"}
   end
 
   test "a subflow node's form_flow_type writes through to the embedded flow", %{conn: conn} do
@@ -242,7 +311,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # One stored copy — the embedded flow's properties; the node keeps none
     [saved_node] = Flows.get(root_id).nodes
-    assert Flows.get(node.subflow_id).properties == %{"form_flow_type" => "wizard_any_order"}
+
+    assert Flows.get(node.subflow_id).properties == %{
+             "form_flow_type" => "wizard_any_order",
+             "slug" => "onboarding_subflow1"
+           }
+
     refute Map.has_key?(saved_node.properties["data"], "form_flow_type")
 
     # Loading projects the stored type back into the node's data, so the
@@ -266,7 +340,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(node.subflow_id).properties == %{}
+    assert Flows.get(node.subflow_id).properties == %{"slug" => "onboarding_subflow1"}
   end
 
   test "renaming a subflow node on the canvas renames the embedded flow", %{conn: conn} do

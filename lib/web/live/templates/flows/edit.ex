@@ -109,6 +109,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     {:ok,
      socket
      |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
+     |> assign(:pending_slug, Map.get(payload.data, :slug, socket.assigns.pending_slug))
      |> assign(:pending_type, pending_type)
      |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
      |> reset_form_data_on_switch(pending_type)
@@ -139,6 +140,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        current: data,
        root: root,
        pending_name: flow && flow.name,
+       pending_slug: flow && flow.slug,
        pending_type: flow && flow.properties["form_flow_type"],
        pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
        form_data: form_data(flow, types),
@@ -162,11 +164,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     type_id = flow.properties["form_flow_type"]
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
-    form_data(flow.name, type_id, Shared.properties(types, type_id), values)
+    form_data(flow.name, flow.slug, type_id, Shared.properties(types, type_id), values)
   end
 
-  defp form_data(name, type_id, properties, values) do
-    Map.merge(%{name: name, form_flow_type: type_id}, Shared.field_data(properties, values))
+  defp form_data(name, slug, type_id, properties, values) do
+    Map.merge(
+      %{name: name, slug: slug, form_flow_type: type_id},
+      Shared.field_data(properties, values)
+    )
   end
 
   # What the config offers for a flow in this context — see FormFlow.Config.
@@ -189,7 +194,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     if pending_type == socket.assigns.form_data[:form_flow_type] do
       socket
     else
-      %{flow: flow, flow_types: types, pending_name: name} = socket.assigns
+      %{flow: flow, flow_types: types, pending_name: name, pending_slug: slug} = socket.assigns
       saved_type = flow.properties["form_flow_type"]
 
       values =
@@ -200,7 +205,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       assign(
         socket,
         :form_data,
-        form_data(name, pending_type, Shared.properties(types, pending_type), values)
+        form_data(name, slug, pending_type, Shared.properties(types, pending_type), values)
       )
     end
   end
@@ -332,6 +337,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp unsaved_changes?(assigns) do
     assigns.current != assigns.data or
       assigns.pending_name != assigns.flow.name or
+      assigns.pending_slug != assigns.flow.slug or
       assigns.pending_type != assigns.flow.properties["form_flow_type"] or
       assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow)
   end
@@ -407,6 +413,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       socket.assigns.current
       |> ReactFlow.to_flow_attrs()
       |> Map.put(:name, socket.assigns.pending_name)
+      |> Map.put(:slug, socket.assigns.pending_slug)
       |> Map.put(:properties, pending_template_properties(socket.assigns))
 
     case Flows.update(socket.assigns.flow, attrs) do
@@ -421,6 +428,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             data: data,
             current: data,
             pending_name: flow.name,
+            pending_slug: flow.slug,
             pending_type: flow.properties["form_flow_type"],
             pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
             form_data: form_data(flow, socket.assigns.flow_types),
@@ -430,8 +438,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
         {:ok, socket, attrs.id_map}
 
-      {:error, %Ecto.Changeset{}} ->
-        {:error, assign(socket, :error, "Could not save the flow. Please try again.")}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         assign(
+           socket,
+           :error,
+           Shared.save_error(changeset, "Could not save the flow. Please try again.")
+         )}
     end
   end
 
@@ -618,6 +631,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           on_change={&changed(&1, @id)}
         >
           <:field type="text" name="name" label="Name" />
+          <:field
+            type="text"
+            name="slug"
+            label="Slug"
+            description="A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+          />
           <:field
             :if={@flow_types != []}
             type="dropdown"

@@ -19,6 +19,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Templates
 
   @impl true
   def mount(socket) do
@@ -35,10 +36,11 @@ defmodule FormFlow.Web.Templates.Flows.New do
   end
 
   @impl true
-  def handle_event("create", %{"name" => name, "label" => label}, socket) do
+  def handle_event("create", %{"name" => name, "label" => label} = params, socket) do
     attrs = %{
       name: name,
       label: label,
+      slug: Map.get(params, "slug"),
       tenant_id: socket.assigns.tenant_id,
       nodes: Flows.starter_nodes(),
       relationships: []
@@ -48,8 +50,13 @@ defmodule FormFlow.Web.Templates.Flows.New do
       {:ok, flow} ->
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{flow.id}/edit")}
 
-      {:error, %Ecto.Changeset{}} ->
-        {:noreply, assign(socket, :error, "Could not create the flow. Please try again.")}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           Templates.Shared.save_error(changeset, "Could not create the flow. Please try again.")
+         )}
     end
   end
 
@@ -85,6 +92,19 @@ defmodule FormFlow.Web.Templates.Flows.New do
             required
             class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
           />
+        </label>
+
+        <label class="block">
+          <span class="text-xs font-medium text-zinc-600">Slug</span>
+          <input
+            type="text"
+            name="slug"
+            placeholder="Generated from the name when left blank"
+            class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          />
+          <span class="mt-1 block text-xs text-zinc-500">
+            A stable name for looking this flow up in code — lowercase letters, numbers, _ and -.
+          </span>
         </label>
 
         <fieldset class="space-y-2">

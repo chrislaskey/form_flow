@@ -21,6 +21,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates
 
   @impl true
   def mount(socket) do
@@ -32,6 +33,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
     attrs = %{
       name: payload.data[:name],
       description: payload.data[:description],
+      slug: payload.data[:slug],
       tenant_id: socket.assigns.tenant_id
     }
 
@@ -42,11 +44,15 @@ defmodule FormFlow.Web.Templates.Forms.New do
         to = "#{socket.assigns.base}/forms/#{form.id}"
         {:ok, start_async(socket, :navigate, fn -> to end)}
 
-      {:error, %Ecto.Changeset{errors: errors}} ->
+      {:error, %Ecto.Changeset{errors: errors} = changeset} ->
         message =
           if Keyword.has_key?(errors, :name),
             do: "A form with that name already exists.",
-            else: "Could not create the form. Please try again."
+            else:
+              Templates.Shared.save_error(
+                changeset,
+                "Could not create the form. Please try again."
+              )
 
         {:ok, assign(socket, :error, message)}
     end
@@ -94,6 +100,12 @@ defmodule FormFlow.Web.Templates.Forms.New do
           on_success={&created(&1, @id)}
         >
           <:field type="text" name="name" label="Name" default="Untitled form" required />
+          <:field
+            type="text"
+            name="slug"
+            label="Slug"
+            description="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. Generated from the name when left blank."
+          />
           <:field type="comment" name="description" label="Description" />
         </DynamicForm.form>
       </div>

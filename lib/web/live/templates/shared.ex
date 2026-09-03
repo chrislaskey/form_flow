@@ -192,4 +192,16 @@ defmodule FormFlow.Web.Templates.Shared do
       to_string(value)
     end
   end
+
+  @doc """
+  The message a failed template save shows. A slug the changeset refused —
+  taken, or malformed — is named, since it is the one field an admin can
+  fix by typing; anything else is the generic retry.
+  """
+  def save_error(%Ecto.Changeset{errors: errors}, fallback) do
+    case Keyword.get(errors, :slug) do
+      {message, _opts} -> "The slug #{message}."
+      nil -> fallback
+    end
+  end
 end

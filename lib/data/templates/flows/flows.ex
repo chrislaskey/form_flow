@@ -79,6 +79,7 @@ defmodule FormFlow.Data.Templates.Flows do
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flow.Node
   alias FormFlow.Data.Templates.Flow.Relationship
+  alias FormFlow.Data.Templates.Slug
 
   @doc """
   Returns the top-level flows — root flows and reusable subflows — oldest
@@ -157,13 +158,36 @@ defmodule FormFlow.Data.Templates.Flows do
   def get(id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Flow{} = flow <- Repo.get(Flow, id) do
-      # Each node's entity comes along so ReactFlow.to_data/1 can project the
-      # embedded flow's form_flow_type and name (or the form's name) into the
-      # node's data
-      Repo.preload(flow, [:relationships, nodes: [:subflow, :form]])
+      preload_contents(flow)
     else
       _other -> nil
     end
+  end
+
+  @doc """
+  Fetches one flow by its slug (`FormFlow.Data.Templates.Slug`), loaded like
+  `get/1`, or `nil`. `opts[:tenant_id]` scopes the lookup to one tenant —
+  slugs are unique per tenant, so a multitenant host passes it; a host with
+  no tenants needs nothing more than the slug.
+
+      FormFlow.Data.Templates.Flows.get_by_slug("dla2026")
+      FormFlow.Data.Templates.Flows.get_by_slug("dla2026", tenant_id: "acme")
+  """
+  def get_by_slug(slug, opts \\ []) when is_binary(slug) do
+    from(f in Flow, where: f.slug == ^slug)
+    |> narrow_tenant(Keyword.get(opts, :tenant_id))
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      flow -> preload_contents(flow)
+    end
+  end
+
+  # Each node's entity comes along so ReactFlow.to_data/1 can project the
+  # embedded flow's form_flow_type and name (or the form's name) into the
+  # node's data
+  defp preload_contents(flow) do
+    Repo.preload(flow, [:relationships, nodes: [:subflow, :form]])
   end
 
   @doc """
@@ -252,10 +276,21 @@ defmodule FormFlow.Data.Templates.Flows do
         FormFlow.Data.Templates.Flows.create(%{nodes: [...], relationships: [...]})
 
   Pass `:owner_flow_id` to create a flow owned by a root flow — the default
-  for subflows.
+  for subflows. A missing `:slug` is generated from the name
+  (`FormFlow.Data.Templates.Slug`).
   """
   def create(attrs \\ %{}) do
+    attrs = Slug.put_default(attrs, default_slug(attrs))
+
     save(Flow.changeset(%Flow{}, attrs), attrs, &Repo.insert/1, sweep?: false)
+  end
+
+  defp default_slug(attrs) do
+    Slug.available(
+      Flow,
+      Slug.segment(Slug.get(attrs, :name), "flow"),
+      Slug.get(attrs, :tenant_id)
+    )
   end
 
   @doc """
@@ -455,16 +490,22 @@ defmodule FormFlow.Data.Templates.Flows do
   deep-copied along with it; *reusable* flows stay shared references. The
   copy is never in the reusable catalog — `made_reusable_at` starts empty.
 
+  The copy's slug is `opts[:slug]`, or the source's with a free `-N` suffix
+  (`FormFlow.Data.Templates.Slug.available/3`). Copied children swap the
+  source's slug for the copy's in their prefix — `dla2026_userinform` under a
+  copy slugged `dla2027` becomes `dla2027_userinform`.
+
       {:ok, copy} = FormFlow.Data.Templates.Flows.duplicate(flow)
 
       {:ok, copy} =
-        FormFlow.Data.Templates.Flows.duplicate(flow, owner_flow_id: root.id)
+        FormFlow.Data.Templates.Flows.duplicate(flow, owner_flow_id: root.id, slug: "dla2027")
   """
   def duplicate(%Flow{} = flow, opts \\ []) do
     owner_id = Keyword.get(opts, :owner_flow_id)
 
     Repo.transaction(fn ->
-      copy_id = copy_flow(flow.id, owner_id, nil)
+      slug = Keyword.get(opts, :slug) || Slug.available(Flow, flow.slug, flow.tenant_id)
+      copy_id = copy_flow(flow.id, owner_id, nil, slug, {flow.slug, slug})
 
       Repo.preload(Repo.get(Flow, copy_id), [:nodes, :relationships])
     end)
@@ -704,10 +745,13 @@ defmodule FormFlow.Data.Templates.Flows do
       node.properties["type"] == "subflow" and is_nil(node.subflow_id)
     end)
     |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
+      name = get_in(node.properties, ["data", "label"]) || "Untitled subflow"
+
       child_attrs = %{
-        name: get_in(node.properties, ["data", "label"]) || "Untitled subflow",
+        name: name,
         label: get_in(node.properties, ["data", "subflow_label"]) || "forms",
         tenant_id: flow.tenant_id,
+        slug: child_slug(Flow, flow, name, "subflow"),
         owner_flow_id: root_id,
         nodes: starter_nodes(),
         relationships: []
@@ -868,15 +912,16 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # Copies one flow and, recursively, everything it owns. `domain_id` is the
   # ownership root of the new tree: the requested owner, or the top copy
-  # itself once it exists.
-  defp copy_flow(source_id, owner_id, domain_id) do
+  # itself once it exists. `rewrite` is the {old, new} root slug pair every
+  # copied child's prefix is swapped by.
+  defp copy_flow(source_id, owner_id, domain_id, slug, rewrite) do
     source = get(source_id)
     copy_id = Ecto.UUID.generate()
     domain_id = domain_id || owner_id || copy_id
 
     {:ok, _flow} =
       %Flow{id: copy_id}
-      |> Flow.changeset(%{owner_flow_id: owner_id, tenant_id: source.tenant_id})
+      |> Flow.changeset(%{owner_flow_id: owner_id, tenant_id: source.tenant_id, slug: slug})
       |> Repo.insert()
 
     node_ids = Map.new(source.nodes, fn node -> {node.id, Ecto.UUID.generate()} end)
@@ -887,11 +932,11 @@ defmodule FormFlow.Data.Templates.Flows do
         |> Node.changeset(%{
           id: node_ids[node.id],
           flow_id: copy_id,
-          subflow_id: copy_subflow_reference(node.subflow_id, domain_id),
+          subflow_id: copy_subflow_reference(node.subflow_id, domain_id, rewrite),
           # Explicit, even when unchanged: the source properties still carry
           # the OLD form id, and the changeset's adopt-from-properties path
           # would re-point the copy at the original if the column arrived nil
-          form_id: copy_form_reference(node.form_id, domain_id),
+          form_id: copy_form_reference(node.form_id, domain_id, rewrite),
           labels: node.labels,
           properties: node.properties
         })
@@ -915,30 +960,39 @@ defmodule FormFlow.Data.Templates.Flows do
     copy_id
   end
 
-  defp copy_subflow_reference(nil, _domain_id), do: nil
+  defp copy_subflow_reference(nil, _domain_id, _rewrite), do: nil
 
-  defp copy_subflow_reference(subflow_id, domain_id) do
+  defp copy_subflow_reference(subflow_id, domain_id, rewrite) do
     # The copy boundary: owned flows are copied into the new domain,
     # reusable flows stay shared references
     case Repo.get(Flow, subflow_id) do
-      %Flow{owner_flow_id: nil} -> subflow_id
-      %Flow{} -> copy_flow(subflow_id, domain_id, domain_id)
-      nil -> nil
+      %Flow{owner_flow_id: nil} ->
+        subflow_id
+
+      %Flow{} = child ->
+        slug = Slug.available(Flow, rewritten(child.slug, rewrite), child.tenant_id)
+        copy_flow(subflow_id, domain_id, domain_id, slug, rewrite)
+
+      nil ->
+        nil
     end
   end
+
+  defp rewritten(slug, {old_prefix, new_prefix}), do: Slug.rewrite(slug, old_prefix, new_prefix)
 
   # The same boundary for forms: owned lineages are copied (with provenance),
   # catalog forms stay shared references — sharing is for forms whose
   # consumers want lockstep updates (archive/form-versioning.md, Decision 6)
-  defp copy_form_reference(nil, _domain_id), do: nil
+  defp copy_form_reference(nil, _domain_id, _rewrite), do: nil
 
-  defp copy_form_reference(form_id, domain_id) do
+  defp copy_form_reference(form_id, domain_id, rewrite) do
     case Repo.get(Templates.Form, form_id) do
       %Templates.Form{owner_flow_id: nil} ->
         form_id
 
       %Templates.Form{} = form ->
-        {:ok, copy} = Templates.Forms.copy(form, owner_flow_id: domain_id)
+        slug = Slug.available(Templates.Form, rewritten(form.slug, rewrite), form.tenant_id)
+        {:ok, copy} = Templates.Forms.copy(form, owner_flow_id: domain_id, slug: slug)
         copy.id
 
       nil ->
@@ -949,6 +1003,12 @@ defmodule FormFlow.Data.Templates.Flows do
   # Save-time form creation, the form-node mirror of create_missing_subflows:
   # a form node without a form gets a fresh owned lineage (with one blank
   # draft), named from the canvas label, owned by the ownership root
+  # An owned child's slug: its own segment under the containing flow's slug,
+  # so nested children carry the whole chain (FormFlow.Data.Templates.Slug)
+  defp child_slug(schema, flow, name, fallback) do
+    Slug.available(schema, Slug.join(flow.slug, Slug.segment(name, fallback)), flow.tenant_id)
+  end
+
   defp create_missing_forms(flow, nodes) do
     root_id = flow.owner_flow_id || flow.id
 
@@ -957,9 +1017,12 @@ defmodule FormFlow.Data.Templates.Flows do
       get_in(node.properties, ["data", "kind"]) == "form" and is_nil(node.form_id)
     end)
     |> Enum.reduce_while({:ok, []}, fn node, {:ok, created} ->
+      name = get_in(node.properties, ["data", "label"]) || "Untitled form"
+
       form_attrs = %{
-        name: get_in(node.properties, ["data", "label"]) || "Untitled form",
+        name: name,
         tenant_id: flow.tenant_id,
+        slug: child_slug(Templates.Form, flow, name, "form"),
         owner_flow_id: root_id
       }
 

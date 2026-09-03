@@ -33,6 +33,14 @@ defmodule FormFlow.Data.Templates.Form do
   `properties`, the copy that carries over to Neo4j. The changeset keeps
   the copy in sync — the column is authoritative, and a stale `"tenant_id"`
   arriving in `properties` is overwritten.
+
+  ## Slug
+
+  `slug` is the lineage's secondary identifier — see
+  `FormFlow.Data.Templates.Slug`: optional, unique per tenant, editable,
+  never following a rename, and dual-written into `properties["slug"]` the
+  same way. `FormFlow.Data.Templates.Forms.create/1` fills one in from the
+  name when none is given; owned forms take their flow's slug as a prefix.
   """
 
   use Ecto.Schema
@@ -41,6 +49,7 @@ defmodule FormFlow.Data.Templates.Form do
 
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Form.Version
+  alias FormFlow.Data.Templates.Slug
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -49,6 +58,7 @@ defmodule FormFlow.Data.Templates.Form do
     field(:name, :string)
     field(:description, :string)
     field(:tenant_id, :string)
+    field(:slug, :string)
 
     # Open domain data in the Neo4j property-graph style, like a flow's.
     # Carries "form_type" — the id of the `FormFlow.Config.Forms.Type`
@@ -73,10 +83,12 @@ defmodule FormFlow.Data.Templates.Form do
   """
   def changeset(form, attrs \\ %{}) do
     form
-    |> cast(attrs, [:name, :description, :tenant_id, :properties, :owner_flow_id])
+    |> cast(attrs, [:name, :description, :tenant_id, :slug, :properties, :owner_flow_id])
     |> validate_required([:name])
     |> validate_immutable(:tenant_id)
+    |> Slug.validate_slug(:form_flow_template_forms_slug_tenant_index)
     |> copy_into_properties(:tenant_id, "tenant_id")
+    |> copy_into_properties(:slug, "slug")
     |> foreign_key_constraint(:owner_flow_id)
     |> unique_constraint(:name, name: :form_flow_template_forms_name_index)
   end
@@ -89,16 +101,17 @@ defmodule FormFlow.Data.Templates.Form do
     end
   end
 
-  # The dual-write: properties carry a copy of the column, for Neo4j
+  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # none when the column is empty
   defp copy_into_properties(changeset, field, key) do
-    case get_field(changeset, field) do
-      nil ->
-        changeset
+    properties = get_field(changeset, :properties) || %{}
 
-      value ->
-        properties = get_field(changeset, :properties) || %{}
+    properties =
+      case get_field(changeset, field) do
+        nil -> Map.delete(properties, key)
+        value -> Map.put(properties, key, value)
+      end
 
-        put_change(changeset, :properties, Map.put(properties, key, value))
-    end
+    put_change(changeset, :properties, properties)
   end
 end

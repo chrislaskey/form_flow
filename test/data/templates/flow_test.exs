@@ -94,6 +94,23 @@ defmodule FormFlow.Data.Templates.FlowTest do
            }
   end
 
+  test "slug is written to the column and copied into properties; clearing it removes the copy" do
+    changeset = Flow.changeset(%Flow{}, %{slug: "dla2026", properties: %{"k" => "v"}})
+
+    assert changeset.valid?
+    assert changeset.changes.slug == "dla2026"
+    assert changeset.changes.properties == %{"k" => "v", "slug" => "dla2026"}
+
+    persisted =
+      %Flow{slug: "dla2026", properties: %{"slug" => "dla2026", "k" => "v"}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Flow.changeset(persisted, %{slug: ""})
+    assert changeset.valid?
+    assert changeset.changes.slug == nil
+    assert changeset.changes.properties == %{"k" => "v"}
+  end
+
   test "made_reusable_at is not castable — only make_reusable/1 stamps it" do
     changeset = Flow.changeset(%Flow{}, %{made_reusable_at: DateTime.utc_now()})
 

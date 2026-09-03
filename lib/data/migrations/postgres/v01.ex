@@ -24,6 +24,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   # to both locations: the column, for indexing, and a copy inside
   # `properties`, the location that carries over to Neo4j.
   #
+  # `slug` on the same two tables is a template's secondary identifier — a
+  # stable name a host looks a flow or form up by across environments, where
+  # ids differ (FormFlow.Data.Templates.Slug). Nullable, dual-written like
+  # `tenant_id`, and unique per tenant: the unique index is over `slug` and
+  # `COALESCE(tenant_id, '')` because both databases treat NULLs as distinct,
+  # which would let a host with no tenants reuse a slug freely. `slug` leads
+  # the index so a lookup by slug alone uses it.
+  #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
   # only mode): `:restrict` would push deletion ordering onto every caller, and
   # for a diagram editor detach-delete is what the UI means.
@@ -101,6 +109,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
+      add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
 
       add(
@@ -117,6 +126,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     create_if_not_exists(index(:form_flow_flows, [:tenant_id], prefix: context.prefix))
 
     create_if_not_exists(
+      unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_flows_slug_tenant_index,
+        prefix: context.prefix
+      )
+    )
+
+    create_if_not_exists(
       index(:form_flow_flows, [:made_reusable_at],
         where: "made_reusable_at IS NOT NULL",
         prefix: context.prefix
@@ -131,6 +148,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:name, :string, null: false)
       add(:description, :text)
       add(:tenant_id, :string)
+      add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
 
       add(
@@ -162,6 +180,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     )
 
     create_if_not_exists(index(:form_flow_template_forms, [:tenant_id], prefix: context.prefix))
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_forms, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_template_forms_slug_tenant_index,
+        prefix: context.prefix
+      )
+    )
 
     create_if_not_exists table(:form_flow_template_form_versions,
                            primary_key: false,

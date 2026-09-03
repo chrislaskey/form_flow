@@ -69,6 +69,22 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.properties == %{"form_type" => "review", "tenant_id" => "acme"}
   end
 
+  test "slug is written to the column and copied into properties; clearing it removes the copy" do
+    changeset = Form.changeset(%Form{}, %{name: "W-2 Details", slug: "w2details"})
+
+    assert changeset.valid?
+    assert changeset.changes.slug == "w2details"
+    assert changeset.changes.properties == %{"slug" => "w2details"}
+
+    persisted =
+      %Form{name: "W-2 Details", slug: "w2details", properties: %{"slug" => "w2details"}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Form.changeset(persisted, %{slug: nil})
+    assert changeset.valid?
+    assert changeset.changes.properties == %{}
+  end
+
   test "copied_from_form_id is not castable — only copy/2 stamps provenance" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", copied_from_form_id: Ecto.UUID.generate()})

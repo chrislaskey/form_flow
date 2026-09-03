@@ -480,4 +480,33 @@ defmodule Demo.FormFlowFormsTest do
   defp events_for(instance) do
     FormFlowRepo.all(from(e in Instances.Form.Event, where: e.instance_form_id == ^instance.id))
   end
+
+  describe "slugs" do
+    test "create generates one from the name; copies get a free suffix or the given slug" do
+      {:ok, form} = Forms.create(%{name: "User Information"})
+      assert form.slug == "userinform"
+      assert form.properties["slug"] == "userinform"
+
+      # Owned copies — a catalog copy would collide on name, not slug
+      {:ok, root} = FormFlow.Data.Templates.Flows.create()
+
+      {:ok, copy} = Forms.copy(form, owner_flow_id: root.id)
+      assert copy.slug == "userinform-2"
+
+      {:ok, named} = Forms.copy(form, owner_flow_id: root.id, slug: "userinfo2027")
+      assert named.slug == "userinfo2027"
+    end
+
+    test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do
+      {:ok, plain} = Forms.create(%{name: "Intake"})
+      {:ok, acme} = Forms.create(%{name: "Intake (Acme)", slug: "intake", tenant_id: "acme"})
+
+      assert Forms.get_by_slug("intake", tenant_id: "acme").id == acme.id
+      assert Forms.get_by_slug("intake", tenant_id: "globex") == nil
+      assert Forms.get_by_slug("nope") == nil
+
+      {:ok, _} = Forms.delete(acme)
+      assert Forms.get_by_slug("intake").id == plain.id
+    end
+  end
 end
