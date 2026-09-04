@@ -14,10 +14,10 @@ defmodule FormFlow.Web.Components.Flows.Types.WizardAnyOrder do
   alias FormFlow.Data.Instances.FormProgress
 
   @impl true
-  def editable?(%Context{form_progress: form}, _config_data), do: unfinished?(form)
+  def editable?(%Context{form_progress: form}, _callback_data), do: unfinished?(form)
 
   @impl true
-  def handle_complete(%Context{flow_progress: forms, form_progress: current}, _config_data) do
+  def handle_complete(%Context{flow_progress: forms, form_progress: current}, _callback_data) do
     index = current && Enum.find_index(forms, &(&1.path == current.path))
     {before_current, after_current} = Enum.split(forms, (index || -1) + 1)
 

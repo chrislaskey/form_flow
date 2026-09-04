@@ -6,23 +6,12 @@ defmodule FormFlow.Config.Flows.TypesTest do
   alias FormFlow.Web.Components.Flows.Types
 
   # A host's own type: overrides one callback and inherits the rest, the way
-  # a custom config module extends FormFlow.Config.
+  # a host's type list extends the library's defaults.
   defmodule Checklist do
     use FormFlow.Config.Flows.Type
 
     @impl true
-    def editable?(_context, _config_data), do: true
-  end
-
-  # A host's config, offering its own type beside the defaults.
-  defmodule Config do
-    use FormFlow.Config
-
-    @impl true
-    def enabled_flow_types(context, config_data) do
-      FormFlow.Config.Default.enabled_flow_types(context, config_data) ++
-        [%FormFlow.Config.Flows.Type{id: "demo_checklist", module: Checklist, name: "Checklist"}]
-    end
+    def editable?(_context, _callback_data), do: true
   end
 
   defp form(name, status), do: %FormProgress{path: [name], label: name, status: status}
@@ -52,7 +41,7 @@ defmodule FormFlow.Config.Flows.TypesTest do
     use FormFlow.Config.Flows.Type
 
     @impl true
-    def visible?(_context, _config_data), do: true
+    def visible?(_context, _callback_data), do: true
   end
 
   describe "visible?/2" do

@@ -13,8 +13,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   alias FormFlow.Context
 
   @impl true
-  def initial_data(%Context{form_instance: %{data: data}}, _config_data), do: data
-  def initial_data(%Context{form_instance: nil}, _config_data), do: %{}
+  def initial_data(%Context{form_instance: %{data: data}}, _callback_data), do: data
+  def initial_data(%Context{form_instance: nil}, _callback_data), do: %{}
 
   @impl true
   def edit_component(assigns) do
@@ -39,8 +39,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   end
 
   @impl true
-  def snapshot_data(_context, _config_data), do: %{}
+  def snapshot_data(_context, _callback_data), do: %{}
 
   @impl true
-  def handle_complete(_context, _config_data), do: :ok
+  def handle_complete(_context, _callback_data), do: :ok
 end

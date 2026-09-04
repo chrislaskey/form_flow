@@ -6,8 +6,12 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
   alias FormFlow.Web.Components.Flows.Types
   alias FormFlow.Web.Instances.Forms.Shared
 
-  # The assigns a page without a host config carries
-  @defaults %{config: nil, config_data: %{}}
+  # The assigns a page passed no type lists carries: the library's defaults
+  @defaults %{
+    flow_types: FormFlow.Config.Flows.Type.defaults(),
+    form_types: FormFlow.Config.Forms.Type.defaults(),
+    callback_data: %{}
+  }
 
   defmodule Checklist do
     use FormFlow.Config.Flows.Type
@@ -17,21 +21,17 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
     use FormFlow.Config.Forms.Type
   end
 
-  # A host's config, offering its own type beside the defaults.
-  defmodule Config do
-    use FormFlow.Config
-
-    @impl true
-    def enabled_flow_types(context, config_data) do
-      FormFlow.Config.Default.enabled_flow_types(context, config_data) ++
-        [%FormFlow.Config.Flows.Type{id: "demo_checklist", module: Checklist, name: "Checklist"}]
-    end
-
-    @impl true
-    def enabled_form_types(_context, _config_data) do
-      [%FormFlow.Config.Forms.Type{id: "demo_prefill", module: Prefill, name: "Prefill"}]
-    end
-  end
+  # A host's lists: its own flow type beside the defaults, and only its own
+  # form type
+  @host %{
+    flow_types:
+      FormFlow.Config.Flows.Type.defaults() ++
+        [%FormFlow.Config.Flows.Type{id: "demo_checklist", module: Checklist, name: "Checklist"}],
+    form_types: [
+      %FormFlow.Config.Forms.Type{id: "demo_prefill", module: Prefill, name: "Prefill"}
+    ],
+    callback_data: %{}
+  }
 
   defp flow(type) do
     properties = if type, do: %{"form_flow_type" => type}, else: %{}
@@ -55,21 +55,19 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
       end
     end
 
-    test "a context with no enabled types falls back to the library's defaults" do
+    test "a \"subflows\" flow has no types, so it falls back to the library's default" do
       subflows = %Flow{id: Ecto.UUID.generate(), label: "subflows"}
 
       assert %{id: nil, module: FormFlow.Config.Flows.Type.Default} =
                Shared.flow_type(%Context{subflow: subflows}, @defaults)
     end
 
-    test "a host's config resolves its own type and still the defaults" do
-      host = %{config: Config, config_data: %{}}
-
+    test "a host's list resolves its own type and still the defaults" do
       assert %{module: Checklist} =
-               Shared.flow_type(%Context{subflow: flow("demo_checklist")}, host)
+               Shared.flow_type(%Context{subflow: flow("demo_checklist")}, @host)
 
       assert %{module: Types.WizardAnyOrder} =
-               Shared.flow_type(%Context{subflow: flow("wizard_any_order")}, host)
+               Shared.flow_type(%Context{subflow: flow("wizard_any_order")}, @host)
     end
   end
 
@@ -95,12 +93,73 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
                Shared.form_type(%Context{form: nil}, @defaults)
     end
 
-    test "a host's config resolves its own type; unset or unknown falls back to its first" do
-      host = %{config: Config, config_data: %{}}
+    test "a host's list resolves its own type; unset or unknown falls back to its first" do
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form("demo_prefill")}, @host)
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form(nil)}, @host)
+      assert %{module: Prefill} = Shared.form_type(%Context{form: form("nonsense")}, @host)
+    end
+  end
 
-      assert %{module: Prefill} = Shared.form_type(%Context{form: form("demo_prefill")}, host)
-      assert %{module: Prefill} = Shared.form_type(%Context{form: form(nil)}, host)
-      assert %{module: Prefill} = Shared.form_type(%Context{form: form("nonsense")}, host)
+  describe "the library's defaults" do
+    test "flow types: the in-order wizard first, then any order, none with perspectives" do
+      assert [%{id: "wizard_in_order", perspectives: []}, %{id: "wizard_any_order"}] =
+               FormFlow.Config.Flows.Type.defaults()
+    end
+
+    test "form types: the default first, then review with its properties" do
+      assert [%{id: "default"}, %{id: "review", properties: [_ | _]}] =
+               FormFlow.Config.Forms.Type.defaults()
+    end
+  end
+
+  # A host's gate: refuses one user, decorates the rest with what the page
+  # handed it as callback_data
+  defp gate(%Context{user_id: "stranger"}, _callback_data),
+    do: {:error, "This flow is not yours."}
+
+  defp gate(%Context{}, %{greeting: greeting}), do: {:ok, %{greeting: greeting}}
+  defp gate(%Context{}, _callback_data), do: {:ok, %{}}
+
+  defp socket(on_mount, user_id \\ "stranger", callback_data \\ %{}) do
+    %Phoenix.LiveView.Socket{
+      assigns: %{
+        __changed__: %{},
+        context: %Context{user_id: user_id},
+        on_mount: on_mount,
+        callback_data: callback_data
+      }
+    }
+  end
+
+  describe "on_mount/2 applies the host's gate to the page" do
+    test "a refusal lands in :mount_error and skips the continuation" do
+      socket = Shared.on_mount(socket(&gate/2), fn _socket -> flunk("started anyway") end)
+
+      assert socket.assigns.mount_error == "This flow is not yours."
+    end
+
+    test "an allowance runs the continuation first, then merges the assigns" do
+      socket =
+        Shared.on_mount(
+          socket(&gate/2, "owner", %{greeting: "hi"}),
+          &Phoenix.Component.assign(&1, :started?, true)
+        )
+
+      assert socket.assigns.started? == true
+      assert socket.assigns.greeting == "hi"
+      refute Map.has_key?(socket.assigns, :mount_error)
+    end
+
+    test "no gate allows, running the continuation" do
+      socket = Shared.on_mount(socket(nil), &Phoenix.Component.assign(&1, :started?, true))
+
+      assert socket.assigns.started? == true
+    end
+
+    test "a malformed answer fails closed" do
+      assert_raise ArgumentError, ~r/on_mount returned :whatever/, fn ->
+        Shared.on_mount(socket(fn _context, _callback_data -> :whatever end))
+      end
     end
   end
 end

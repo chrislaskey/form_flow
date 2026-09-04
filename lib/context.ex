@@ -1,9 +1,10 @@
 defmodule FormFlow.Context do
   @moduledoc """
-  The value passed to every `FormFlow.Config` callback, alongside its own
-  `config_data` argument.
+  The value passed to every callback a host hands FormFlow — a type's
+  (`FormFlow.Config.Flows.Type`, `FormFlow.Config.Forms.Type`) and the
+  router's `on_mount` — alongside the host's own `callback_data` argument.
 
-  One common shape lets high-granularity config callbacks all read the same
+  One common shape lets high-granularity callbacks all read the same
   fields instead of each expecting a different payload. Every field is optional
   — a callback firing near the top of the router (before anything has been
       loaded) sees mostly `nil`; one firing deep inside a specific
@@ -57,9 +58,11 @@ defmodule FormFlow.Context do
       form of every flow in it, in order (`FormFlow.Data.Instances.FlowProgress.forms/2`)
       — where a form finds one it relates to (`FormFlow.Config.Forms.Type.related_form/2`)
 
-  `:config_data` is deliberately not a field here — it is passed to callbacks
-  as its own argument, since it is caller-supplied and unrelated to what
-  FormFlow itself knows about the current request.
+  `callback_data` is deliberately not a field here — it is passed to every
+  callback as its own second argument. The context is FormFlow's view of the
+  request; `callback_data` is the host's, filled at the mount from whatever
+  the page knows, and keeping them apart is what lets a callback tell them
+  apart.
   """
 
   defstruct [

@@ -8,16 +8,16 @@ defmodule FormFlow.Config.Forms.TypesTest do
   alias FormFlow.Data.Instances
 
   # A host's own type: prefills around the stored answers by reaching the
-  # defaults from its override, the way a custom config module extends
-  # FormFlow.Config.
+  # defaults from its override, the way a host's type list extends the
+  # library's defaults.
   defmodule Prefill do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def initial_data(context, config_data) do
+    def initial_data(context, callback_data) do
       Map.merge(
         %{"name" => "Prefilled", "email" => "p@example.com"},
-        Type.Default.initial_data(context, config_data)
+        Type.Default.initial_data(context, callback_data)
       )
     end
   end
@@ -51,7 +51,7 @@ defmodule FormFlow.Config.Forms.TypesTest do
           instance: parsed,
           data: %{"name" => "Grace"},
           context: %Context{},
-          config_data: %{}
+          callback_data: %{}
         )
 
       assert html =~ ~r/<fieldset[^>]*disabled/

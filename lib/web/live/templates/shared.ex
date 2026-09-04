@@ -25,6 +25,26 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc "The type among `types` with `id`, or nil."
   def type(types, id), do: Enum.find(types, &(&1.id == id))
 
+  @doc """
+  The type id a stored value amounts to: itself when set, otherwise the first
+  of `types` — the one every page resolves an unset type to
+  (`FormFlow.Web.Instances.Forms.Shared.flow_type/2`), so the edit and show
+  pages present a flow that never chose as what it will behave as. `nil`
+  when there are no types to choose from.
+  """
+  def effective_type(types, nil), do: with(%{id: id} <- List.first(types), do: id)
+  def effective_type(_types, id), do: id
+
+  @doc """
+  The page's `flow_types` for the flow at the context's `:subflow`: flow
+  types apply to "forms" flows, so a "subflows" flow — or no flow — gets
+  none, and no dropdown.
+  """
+  def flow_types_for(%FormFlow.Context{subflow: %{label: "forms"}}, assigns),
+    do: assigns.flow_types
+
+  def flow_types_for(_context, _assigns), do: []
+
   @doc "The properties the type with `id` declares — none for no type."
   def properties(types, id) do
     case type(types, id) do
@@ -149,7 +169,7 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc """
   The property values a `DynamicForm` payload carries for these properties,
   keyed by property id, blanks dropped. Field names become atoms in a
-  payload; the set is bounded by what the config declares.
+  payload; the set is bounded by what the type declares.
   """
   def payload_property_values(payload_data, properties) do
     properties

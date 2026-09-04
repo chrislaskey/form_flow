@@ -15,8 +15,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   When every form the viewer can see is done but the instance is not, the
   page says so: their part is finished, the rest is someone else's.
 
-  Whether the page renders at all is the host config's to say
-  (`FormFlow.Config.handle_instance_mount/2`, with the flow instance's context):
+  Whether the page renders at all is the host's `on_mount` to say (with the
+  flow instance's context):
   refused, only its message is drawn; redirected, nothing is until the
   navigation lands.
 
@@ -46,8 +46,12 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:perspectives, fn -> [] end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:on_mount, fn -> nil end)
+      |> assign_new(:instances, fn -> nil end)
+      |> assign_new(:flows, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -84,7 +88,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         flow = tree && tree.flow
 
         # The page's own context — the flow instance as a whole, no form in
-        # scope — for the host's config to answer handle_instance_mount/2 with
+        # scope — for the host's on_mount to answer with
         context = %Context{
           user_id: socket.assigns.user_id,
           tenant_id: socket.assigns.tenant_id,
@@ -110,7 +114,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
             navigate_to: nil
           )
 
-        Shared.handle_instance_mount(socket)
+        Shared.on_mount(socket)
     end
   end
 
@@ -122,7 +126,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         context = form_context(form, forms, tree, flow_instance, assigns),
         type = Shared.flow_type(context, assigns),
         Shared.visible?(type, context, assigns) do
-      %{form: form, editable?: type.module.editable?(context, assigns.config_data)}
+      %{form: form, editable?: type.module.editable?(context, assigns.callback_data)}
     end
   end
 
@@ -158,14 +162,14 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     """
   end
 
-  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
   def render(%{navigate_to: to} = assigns) when is_binary(to) do
     ~H"""
     <div></div>
     """
   end
 
-  # The host's config refused the page; its message is all there is to draw
+  # The host's on_mount refused the page; its message is all there is to draw
   def render(%{mount_error: message} = assigns) when is_binary(message) do
     ~H"""
     <div>

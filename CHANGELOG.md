@@ -50,6 +50,10 @@ only the event. Immutable, like the flow instance's.
 
 ### The listing asks the config too
 
+*Superseded within this release by "Every entry point takes values" below:
+the two callbacks became the `instances` and `flows` attrs, with the same
+defaults and tenant handling.*
+
 **New: `flow_instances_query/2` on `FormFlow.Config`.** The listing page
 shows whatever query the host's config returns — by default the current
 user's own flow instances, exactly as before. A reviewer's desk returns
@@ -119,6 +123,39 @@ never follows a rename; it changes only when an admin changes it.
   `slug` and `COALESCE(tenant_id, '')` — coalesced because both databases
   treat NULLs as distinct, which would let a host with no tenants reuse a
   slug. Drop and recreate any database migrated before this version.
+
+### Every entry point takes values: `FormFlow.Config` is gone
+
+**Removed: `FormFlow.Config`**, its behaviour, `use FormFlow.Config`,
+`FormFlow.Config.Default`, and the `config` and `config_data` attrs. Nothing
+in the library reaches back into a host module by convention any more:
+every way a host shapes a page is a value it passes to the router or the
+LiveComponents. The `FormFlow.Config.*` namespace stays for the structs and
+behaviours a host builds with — `Flows.Type`, `Forms.Type`, `Perspective`,
+`Property`.
+
+- **`flow_types` and `form_types` attrs** replace `enabled_flow_types/2`
+  and `enabled_form_types/2`: lists of the type structs, defaulting to
+  `FormFlow.Config.Flows.Type.defaults/0` and
+  `FormFlow.Config.Forms.Type.defaults/0`. They are the one thing that must
+  be the same value on the admin pages and on every instance page, since a
+  type chosen on one side acts on the other — a host keeps them in one
+  function of its own and passes it everywhere. The rule that flow types
+  apply to "forms" flows only is the pages' now, not each list's.
+- **`callback_data` replaces `config_data`**: the host's own map, passed
+  unmodified as the second argument of every callback FormFlow calls — the
+  types' and `on_mount` — beside the `FormFlow.Context`. Every type callback
+  keeps its arity; only the name changed.
+- **`on_mount` replaces `handle_instance_mount/2`**: a function of the
+  page's context and `callback_data` returning the same three answers, asked
+  on every user-facing page before anything is drawn. `nil` allows
+  everything. A host shares one gate across pages by pointing at the same
+  function.
+- **`instances` replaces `flow_instances_query/2`**: the listing's query,
+  `nil` for the user's own. **`flows` replaces `enabled_instance_flows/2`**:
+  the templates the listing offers to start, structs or slugs, `nil` for
+  every root of the tenant. The router's `tenant_id` is applied on top of
+  both, as before.
 
 ### Perspectives: which kinds of user a flow is for
 

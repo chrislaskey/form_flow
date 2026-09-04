@@ -165,6 +165,13 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.display_value(@name, "Ada") == "Ada"
   end
 
+  test "effective_type/2 is the stored id, or the first type an unset one amounts to" do
+    assert Shared.effective_type(@flow_types, "review") == "review"
+    assert Shared.effective_type(@flow_types, "unknown") == "unknown"
+    assert Shared.effective_type(@flow_types, nil) == "wizard"
+    assert Shared.effective_type([], nil) == nil
+  end
+
   describe "perspectives" do
     test "the chosen type's; none for no type or a type declaring none" do
       assert Shared.perspectives(@flow_types, "review") == @perspectives

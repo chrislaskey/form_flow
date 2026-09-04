@@ -175,18 +175,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    # The field belongs to the chosen type, like its properties: none until
-    # a type is picked
+    # The field belongs to the type the subflow amounts to — a fresh one
+    # never chose, so the first type's, shown as selected
     {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
-    refute html =~ "Perspectives"
-
-    view
-    |> element("#flows-edit-flow-form-form")
-    |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_in_order"}})
-
-    html = render(view)
     assert html =~ "Perspectives"
     assert html =~ "Reviewer"
+    assert Flows.get(node.subflow_id).properties["form_flow_type"] == nil
 
     view
     |> element("#flows-edit-flow-form-form")
@@ -251,6 +245,24 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(node.subflow_id).properties["perspectives"] == ["reviewer"]
   end
 
+  test "a subflow that never chose a type shows the first one, on edit and show", %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+
+    assert html =~
+             ~r/<option[^>]*selected[^>]*value="wizard_in_order"|<option[^>]*value="wizard_in_order"[^>]*selected/
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert html =~ "Wizard (in order)"
+
+    # Shown, not stored: the subflow still behaves as the default until the
+    # admin picks, and nothing was written to make it so
+    assert Flows.get(node.subflow_id).properties["form_flow_type"] == nil
+  end
+
   test "a complex flow has no perspectives of its own — its subflows do", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
 
@@ -285,7 +297,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
 
     # The dropdown carries the FormFlow.Config defaults plus the option the
-    # demo's Config adds — proof the router's config attr reaches the
+    # demo's types add — proof the router's flow_types attr reaches the
     # page
     assert html =~ "Form flow type"
     assert html =~ "Wizard (any order)"

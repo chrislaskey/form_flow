@@ -51,8 +51,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -76,17 +77,15 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        embedded_flow_type_options:
          flow &&
            type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
-       embedded_form_type_options: flow && embedded_form_type_options(socket.assigns, flow, root)
+       embedded_form_type_options: flow && embedded_form_type_options(socket.assigns)
      )}
   end
 
-  # What the config offers for a flow in this context — see FormFlow.Config.
-  # Read-only pages still need them, to render a stored value as its name.
+  # The page's flow types for a flow in this context. Read-only pages still
+  # need them, to render a stored value as its name.
   defp flow_types(assigns, %Context{flow: root, subflow_node: node} = context) do
-    config = FormFlow.Config.config_module(assigns.config)
-
     context
-    |> config.enabled_flow_types(assigns.config_data)
+    |> Shared.flow_types_for(assigns)
     |> Shared.fill_related_forms(
       root && root.id,
       node && node.id,
@@ -103,14 +102,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
 
-  # The canvas's form nodes each collect a form; their type dropdowns share one
-  # options list, asked of the config with this flow as the context.
-  defp embedded_form_type_options(assigns, flow, root) do
-    config = FormFlow.Config.config_module(assigns.config)
-    context = %Context{flow: root || flow, subflow: flow}
-
-    type_select_options(config.enabled_form_types(context, assigns.config_data))
-  end
+  # The canvas's form nodes each collect a form; their type dropdowns share
+  # the page's one list
+  defp embedded_form_type_options(assigns), do: type_select_options(assigns.form_types)
 
   @impl true
   def handle_event("form_flow:editor_mounted", _params, socket) do
@@ -266,10 +260,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     """
   end
 
-  # The stored form_flow_type rendered as its human name — nil when unset
-  # (the configured default applies)
+  # The flow's type rendered as its human name — the stored one, or the
+  # first type an unset one amounts to; nil for a flow with no types
   defp type_label(assigns) do
-    with type when is_binary(type) <- assigns.flow.properties["form_flow_type"] do
+    with type when is_binary(type) <- shown_type(assigns) do
       case Shared.type(assigns.flow_types, type) do
         %{name: name} -> name
         nil -> type
@@ -277,10 +271,14 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     end
   end
 
+  defp shown_type(assigns) do
+    Shared.effective_type(assigns.flow_types, assigns.flow.properties["form_flow_type"])
+  end
+
   # The perspectives the flow is for, by name — the stored ids resolved
   # through its type's; an id the type no longer declares is not shown
   defp perspective_names(assigns) do
-    declared = Shared.perspectives(assigns.flow_types, assigns.flow.properties["form_flow_type"])
+    declared = Shared.perspectives(assigns.flow_types, shown_type(assigns))
 
     assigns.flow
     |> FormFlow.Config.Flows.Perspective.for_flow(declared)
@@ -292,8 +290,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   defp type_property_values(assigns) do
     values = FormFlow.Config.Flows.Type.property_values(assigns.flow)
 
-    for property <-
-          Shared.properties(assigns.flow_types, assigns.flow.properties["form_flow_type"]),
+    for property <- Shared.properties(assigns.flow_types, shown_type(assigns)),
         value = values[property.id],
         do: {property, value}
   end

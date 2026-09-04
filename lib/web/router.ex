@@ -49,9 +49,16 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
 
   Every instance component receives `user_id`, `tenant_id`, `perspectives`,
-  `config`, `config_data`, `uri`, and `params`, whether or not it reads them
-  today — a host calling the components directly should pass the same, so a
-  later feature that needs one never means rewiring.
+  `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
+  `flows`, `uri`, and `params`, whether or not it reads them today — a host
+  calling the components directly should pass the same, so a later feature
+  that needs one never means rewiring.
+
+  Nothing here reaches back into a host module by convention: every way a
+  host shapes a page is a value it passes. The two type lists are the one
+  thing that must be the *same* value on the admin pages and on every
+  instance page, since a type chosen on one side acts on the other — a host
+  keeps them in one function of its own and passes it everywhere.
 
   The two sides use the same nouns on purpose: the mount root already says
   which world you are in, so `/admin/flows/:id` is a flow *template* and
@@ -116,15 +123,63 @@ defmodule FormFlow.Web.Router do
         "template pages"
   )
 
-  attr(:config, :atom,
-    default: nil,
-    doc: "a module using `FormFlow.Config`, for customizing the router's behavior"
+  attr(:flow_types, :list,
+    default: FormFlow.Config.Flows.Type.defaults(),
+    doc:
+      "the `FormFlow.Config.Flows.Type` structs a \"forms\" flow may be given, " <>
+        "in display order — the admin pages offer them, the instance pages act " <>
+        "on them, so pass the same list to both. Defaults to the library's " <>
+        "wizards (`FormFlow.Config.Flows.Type.defaults/0`); a host's list " <>
+        "usually starts from those"
   )
 
-  attr(:config_data, :map,
+  attr(:form_types, :list,
+    default: FormFlow.Config.Forms.Type.defaults(),
+    doc:
+      "the `FormFlow.Config.Forms.Type` structs a form may be given, in display " <>
+        "order — the same on both sides, like `flow_types`. Defaults to the " <>
+        "library's default and review types (`FormFlow.Config.Forms.Type.defaults/0`)"
+  )
+
+  attr(:callback_data, :map,
     default: %{},
     doc:
-      "passed through unmodified to every `:config` callback; ignored when `:config` is not set"
+      "the host's own data, passed unmodified as the second argument of every " <>
+        "callback FormFlow calls — the types' and `on_mount` — beside the " <>
+        "`FormFlow.Context`. Whatever the page knows that a type may need: a " <>
+        "reviewer's region, a prefill source"
+  )
+
+  attr(:on_mount, :any,
+    default: nil,
+    doc:
+      "the instance pages' gate: a function of the page's `FormFlow.Context` " <>
+        "and `callback_data` returning `{:ok, assigns}` to render (merging the " <>
+        "assigns), `{:error, message}` to render the message alone, or " <>
+        "`{:redirect, to}`. Asked on every user-facing page, the listing " <>
+        "included, before anything is drawn; on the edit page before the form " <>
+        "is started. Where a host authorizes by record. `nil` allows everything. " <>
+        "Ignored by the template pages"
+  )
+
+  attr(:instances, :any,
+    default: nil,
+    doc:
+      "the flow instances the listing shows, as a composable query over " <>
+        "`FormFlow.Data.Instances.Flow` — `FormFlow.Data.Instances.Flows.list_query/1` " <>
+        "is the building block; `nil` lists the current user's own. The " <>
+        "router's `tenant_id` is applied on top. A listing convenience, not " <>
+        "access control: gate the page with `on_mount`. Ignored by the template pages"
+  )
+
+  attr(:flows, :any,
+    default: nil,
+    doc:
+      "the flow templates the listing offers to start, in display order — " <>
+        "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped; " <>
+        "`nil` offers every root flow of the tenant that has not been made " <>
+        "reusable. The router's `tenant_id` is applied on top, and the page " <>
+        "refuses to start a flow it did not offer. Ignored by the template pages"
   )
 
   attr(:uri, :string,
@@ -190,8 +245,9 @@ defmodule FormFlow.Web.Router do
               id="flows-show"
               flow_id={id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:edit, id} -> %>
             <.live_component
@@ -199,8 +255,9 @@ defmodule FormFlow.Web.Router do
               id="flows-edit"
               flow_id={id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
@@ -209,8 +266,9 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:node_edit, root_id, node_id} -> %>
             <.live_component
@@ -219,8 +277,9 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% nil -> %>
             <%!-- not a /flows path --%>
@@ -250,8 +309,9 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:edit, form_id, version_id} -> %>
             <.live_component
@@ -260,8 +320,9 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:node_show, root_id, node_id, version_id} -> %>
             <.live_component
@@ -271,8 +332,9 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% {:node_edit, root_id, node_id, version_id} -> %>
             <.live_component
@@ -282,8 +344,9 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
             />
           <% nil -> %>
             <%!-- not a /forms path --%>
@@ -310,8 +373,12 @@ defmodule FormFlow.Web.Router do
               user_id={@user_id}
               tenant_id={@tenant_id}
               perspectives={@perspectives}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
               uri={@uri}
               params={@params}
             />
@@ -324,8 +391,12 @@ defmodule FormFlow.Web.Router do
               user_id={@user_id}
               tenant_id={@tenant_id}
               perspectives={@perspectives}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
               uri={@uri}
               params={@params}
             />
@@ -339,8 +410,12 @@ defmodule FormFlow.Web.Router do
               user_id={@user_id}
               tenant_id={@tenant_id}
               perspectives={@perspectives}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
               uri={@uri}
               params={@params}
             />
@@ -354,8 +429,12 @@ defmodule FormFlow.Web.Router do
               user_id={@user_id}
               tenant_id={@tenant_id}
               perspectives={@perspectives}
-              config={@config}
-              config_data={@config_data}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
               uri={@uri}
               params={@params}
             />

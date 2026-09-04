@@ -3,9 +3,12 @@ defmodule FormFlow.Config.Flows.Type do
   Flow type definition: one way a "forms" flow presents its forms to the
   user filling them out.
 
-  `FormFlow.Config.enabled_flow_types/2` returns a list of these; the struct
-  is what the config describes, and its `:module` — `use`ing this behaviour —
-  is what the type does. `:id` is the value stored in the flow's
+  A host passes a list of these as the `flow_types` attr of
+  `FormFlow.Web.router/1` and the LiveComponents — the same list on the
+  admin pages, where a type is chosen, and on every instance page, where it
+  acts — usually from one function of its own that starts from `defaults/0`.
+  The struct is what the host describes, and its `:module` — `use`ing this
+  behaviour — is what the type does. `:id` is the value stored in the flow's
   `properties["form_flow_type"]`.
 
   Two lists on the struct are what an admin sets per flow of the type.
@@ -14,14 +17,14 @@ defmodule FormFlow.Config.Flows.Type do
   flow of this type can be for (`FormFlow.Config.Flows.Perspective`) — a
   review type declares its reviewers and approvers, a plain wizard declares
   none and is for everyone. The identity form offers the picked type's as a
-  multi-select, and the picked ids are stored on the flow. A host's config
-  sets both lists when it builds the struct, the library's built-in types
-  included: `enabled_flow_types/2` can return the defaults with
-  `perspectives` filled in.
+  multi-select, and the picked ids are stored on the flow. A host sets both
+  lists when it builds the struct, the library's built-in types included:
+  its `flow_types` can be `defaults/0` with `perspectives` filled in.
 
   Every callback takes the `FormFlow.Context` of one form in one flow
   instance — `:form_progress` is the form, `:flow_progress` its flow's forms
-  in order — plus `config_data`. The defaults, `FormFlow.Config.Flows.Type.Default`,
+  in order — plus `callback_data`, the host's own map from the attr of that
+  name. The defaults, `FormFlow.Config.Flows.Type.Default`,
   are the in-order wizard: a form can be edited where the flow allows it, and
   finishing a form moves to the nearest place work can happen next. A type
   overrides only what it changes, and can call the defaults from an override.
@@ -49,6 +52,36 @@ defmodule FormFlow.Config.Flows.Type do
           properties: [FormFlow.Config.Property.t()],
           perspectives: [FormFlow.Config.Flows.Perspective.t()]
         }
+
+  @doc """
+  The library's flow types, in display order: the in-order wizard first —
+  the fallback for a flow that never chose — then the any-order wizard. What
+  the `flow_types` attr defaults to, and what a host's own list starts from:
+
+      def flow_types do
+        FormFlow.Config.Flows.Type.defaults() ++ [checklist()]
+      end
+
+  Flow types apply to "forms" flows; the pages offer none for a "subflows"
+  flow, whatever the list.
+  """
+  @spec defaults() :: [t()]
+  def defaults do
+    [
+      %__MODULE__{
+        id: "wizard_in_order",
+        module: FormFlow.Web.Components.Flows.Types.WizardInOrder,
+        name: "Wizard (in order)",
+        description: "Form wizard. Users must complete in order."
+      },
+      %__MODULE__{
+        id: "wizard_any_order",
+        module: FormFlow.Web.Components.Flows.Types.WizardAnyOrder,
+        name: "Wizard (any order)",
+        description: "Form wizard. Users can jump ahead and complete in any order."
+      }
+    ]
+  end
 
   @doc """
   What an admin entered for the flow's type's `:properties`, keyed by
@@ -97,7 +130,7 @@ defmodule FormFlow.Config.Flows.Type do
   The flow's progress, drawn above the form being edited — return `nil` to
   draw nothing. `assigns` are those of
   `FormFlow.Web.Instances.Components.Flows.Progress.flow_progress/1`, plus
-  `:context` and `:config_data`.
+  `:context` and `:callback_data`.
   """
   @callback progress_component(map()) :: Phoenix.LiveView.Rendered.t() | nil
 
@@ -105,16 +138,16 @@ defmodule FormFlow.Config.Flows.Type do
     quote do
       @behaviour FormFlow.Config.Flows.Type
 
-      def visible?(context, config_data) do
-        FormFlow.Config.Flows.Type.Default.visible?(context, config_data)
+      def visible?(context, callback_data) do
+        FormFlow.Config.Flows.Type.Default.visible?(context, callback_data)
       end
 
-      def editable?(context, config_data) do
-        FormFlow.Config.Flows.Type.Default.editable?(context, config_data)
+      def editable?(context, callback_data) do
+        FormFlow.Config.Flows.Type.Default.editable?(context, callback_data)
       end
 
-      def handle_complete(context, config_data) do
-        FormFlow.Config.Flows.Type.Default.handle_complete(context, config_data)
+      def handle_complete(context, callback_data) do
+        FormFlow.Config.Flows.Type.Default.handle_complete(context, callback_data)
       end
 
       def progress_component(assigns) do

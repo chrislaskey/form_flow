@@ -13,8 +13,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   rather than in either of them, where two copies of one gate could drift
   apart.
 
-  `assigns/1` reads the page's `flow_instance`, `path`, and host config from
-  the socket and assigns the lot back onto it, writing nothing:
+  `assigns/1` reads the page's `flow_instance`, `path`, and the host's attrs
+  (the type lists, `callback_data`) from the socket and assigns the lot back
+  onto it, writing nothing:
 
     * `:form` - the `FormFlow.Data.Instances.FormProgress` at this path, or
       nil when the flow no longer has the position
@@ -33,15 +34,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:editable?` - whether the type allows editing here — never when the
       form is not visible
     * `:start_error` - why `start/1` could not start the form, or nil
-    * `:mount_error` / `:navigate_to` - the host config's answer from
-      `handle_instance_mount/2` when it refused or redirected, or nil
+    * `:mount_error` / `:navigate_to` - the host's `on_mount` answer when it
+      refused or redirected, or nil
     * `:clickable` - the sibling forms the type lets the user jump to, for
       `FormFlow.Web.Instances.Components.Flows.Progress`
     * `:flow_name` / `:form_label` - what the breadcrumb needs
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
-  Then each page asks the host's config whether it may render,
-  `handle_instance_mount/2`, and Edit — only Edit, and only when the config said yes —
+  Then each page asks the host's `on_mount` whether it may render
+  (`on_mount/2`), and Edit — only Edit, and only when the host said yes —
   makes the one write in here, `start/1`: a form with no instance yet is
   started when the flow's type allows it, which creates the instance and is
   the moment the form version is pinned. The order is the point: a refused
@@ -57,17 +58,17 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
 
-  # What a flow is governed by when its context enables no types at all — a
-  # "forms" flow always gets the wizards from the default config, so this is
-  # reached only by a host config that returns [] or a stranded position
-  # answered for by a "subflows" root.
+  # What a flow is governed by when its context has no types at all — a
+  # "forms" flow always has the page's flow types, so this is reached only by
+  # a host passing [] or a stranded position answered for by a "subflows"
+  # root.
   @default_type %FormFlow.Config.Flows.Type{
     module: FormFlow.Config.Flows.Type.Default,
     name: "Default"
   }
 
-  # What a form is governed by when its context enables no form types — the
-  # library ships none, so this is every form until a host enables some.
+  # What a form is governed by when the page has no form types at all — a
+  # host passing [].
   @default_form_type %FormFlow.Config.Forms.Type{
     module: FormFlow.Config.Forms.Type.Default,
     name: "Default"
@@ -107,7 +108,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       type: type,
       form_type: form_type,
       initial_data:
-        form_instance && form_type.module.initial_data(context, socket.assigns.config_data),
+        form_instance && form_type.module.initial_data(context, socket.assigns.callback_data),
       context: context,
       visible?: visible?,
       editable?: editable?,
@@ -165,7 +166,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   for this viewer — `visible?/2`, the perspectives test by default. The
   pages hide, skip, and refuse a form that is not.
   """
-  def visible?(type, context, assigns), do: type.module.visible?(context, assigns.config_data)
+  def visible?(type, context, assigns), do: type.module.visible?(context, assigns.callback_data)
 
   @doc """
   The first form of the whole flow instance the viewer can work next, in
@@ -195,16 +196,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The `FormFlow.Config.Flows.Type` governing the flow at the context's
-  `:subflow`: its stored `properties["form_flow_type"]` looked up among what
-  the host's config (`assigns.config`, or the library's defaults) enables for
-  that context. An unset or unrecognized value resolves to the first enabled
-  type — the default config lists the in-order wizard first, so it stays the
-  baseline — and a context with no enabled types to the library's defaults,
-  so a form always has a type to ask.
+  `:subflow`: its stored `properties["form_flow_type"]` looked up among the
+  page's `flow_types` (`FormFlow.Web.Templates.Shared.flow_types_for/2`, so a
+  "subflows" flow has none). An unset or unrecognized value resolves to the
+  first type — the defaults list the in-order wizard first, so it stays the
+  baseline — and a context with no types to the library's default, so a form
+  always has a type to ask.
   """
   def flow_type(%Context{subflow: flow} = context, assigns) do
-    config = FormFlow.Config.config_module(assigns.config)
-    types = config.enabled_flow_types(context, assigns.config_data)
+    types = FormFlow.Web.Templates.Shared.flow_types_for(context, assigns)
     id = flow && flow.properties["form_flow_type"]
 
     Enum.find(types, &(&1.id == id)) || List.first(types) || @default_type
@@ -212,33 +212,34 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The `FormFlow.Config.Forms.Type` governing the form at the context's
-  `:form`: its stored `properties["form_type"]` looked up among what the
-  host's config enables for that context, with the same fallbacks as
-  `flow_type/2` — the first enabled type, then the library's defaults.
+  `:form`: its stored `properties["form_type"]` looked up among the page's
+  `form_types`, with the same fallbacks as `flow_type/2` — the first type,
+  then the library's default.
   """
-  def form_type(%Context{form: form} = context, assigns) do
-    config = FormFlow.Config.config_module(assigns.config)
-    types = config.enabled_form_types(context, assigns.config_data)
+  def form_type(%Context{form: form}, assigns) do
+    types = assigns.form_types
     id = form && form.properties["form_type"]
 
     Enum.find(types, &(&1.id == id)) || List.first(types) || @default_form_type
   end
 
   @doc """
-  Asks the host's config (`FormFlow.Config.handle_instance_mount/2`) whether the page
-  may render, with the page's `:context`, and applies the answer:
-  `{:ok, assigns}` runs `on_ok` (Edit's `start/1`) and then merges the
-  assigns; `{:error, message}` assigns `:mount_error`, which the page renders
-  alone; `{:redirect, to}` assigns `:navigate_to` and navigates, the page
-  rendering nothing meanwhile. The flow instance's page and the listing use
-  this too. Host code, deliberately not rescued: an exception here fails
-  closed rather than falling through to the page.
+  Asks the host's `on_mount` whether the page may render, with the page's
+  `:context` and its `callback_data`, and applies the answer: `{:ok, assigns}`
+  runs `on_ok` (Edit's `start/1`) and then merges the assigns; `{:error,
+  message}` assigns `:mount_error`, which the page renders alone;
+  `{:redirect, to}` assigns `:navigate_to` and navigates, the page rendering
+  nothing meanwhile. The flow instance's page and the listing use this too.
+  No `on_mount` allows everything. Host code, deliberately not rescued: an
+  exception here fails closed rather than falling through to the page.
   """
-  def handle_instance_mount(socket, on_ok \\ & &1) do
-    %{context: context, config: config, config_data: config_data} = socket.assigns
-    module = FormFlow.Config.config_module(config)
+  def on_mount(socket, on_ok \\ & &1) do
+    %{context: context, on_mount: gate, callback_data: callback_data} = socket.assigns
 
-    case module.handle_instance_mount(context, config_data) do
+    case gate && gate.(context, callback_data) do
+      nil ->
+        on_ok.(socket)
+
       {:ok, extra} when is_map(extra) ->
         socket |> on_ok.() |> assign(extra)
 
@@ -252,7 +253,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
       other ->
         raise ArgumentError,
-              "#{inspect(module)}.handle_instance_mount/2 returned #{inspect(other)}; " <>
+              "on_mount returned #{inspect(other)}; " <>
                 "expected {:ok, assigns}, {:error, message}, or {:redirect, to}"
     end
   end
@@ -316,7 +317,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     {visible?, visible? and editable?(type, context, assigns)}
   end
 
-  defp editable?(type, context, assigns), do: type.module.editable?(context, assigns.config_data)
+  defp editable?(type, context, assigns),
+    do: type.module.editable?(context, assigns.callback_data)
 
   # The sibling forms the user may jump to — asked of the type one form at a
   # time. Navigating to the one this page addresses would do nothing, so it

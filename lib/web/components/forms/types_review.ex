@@ -125,7 +125,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   end
 
   @impl true
-  def snapshot_data(context, _config_data) do
+  def snapshot_data(context, _callback_data) do
     path = (context.form_type_property_values || %{})["source"]
 
     %{"reviewed" => reviewed(path, Type.related_form(context, "source"))}

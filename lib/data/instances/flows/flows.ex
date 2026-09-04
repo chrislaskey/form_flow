@@ -48,7 +48,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @doc """
   `query` — one over `FormFlow.Data.Instances.Flow`, such as a host's
-  `FormFlow.Config.flow_instances_query/2` answer — narrowed to one tenant.
+  `instances` attr — narrowed to one tenant.
   `nil` leaves it as it is, the whole table being the scope of a host with
   no tenants.
   """

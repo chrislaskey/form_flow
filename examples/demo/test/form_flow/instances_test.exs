@@ -34,13 +34,13 @@ defmodule Demo.FormFlowInstancesTest do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def snapshot_data(context, _config_data) do
+    def snapshot_data(context, _callback_data) do
       Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:snapshot_data, context})
       %{"seen" => %{"status" => context.form_instance.status}}
     end
 
     @impl true
-    def handle_complete(context, _config_data) do
+    def handle_complete(context, _callback_data) do
       Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:handle_complete, context})
     end
   end
@@ -49,87 +49,75 @@ defmodule Demo.FormFlowInstancesTest do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def snapshot_data(_context, _config_data), do: raise("nothing to record")
+    def snapshot_data(_context, _callback_data), do: raise("nothing to record")
   end
 
   defmodule FailingReaction do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def handle_complete(_context, _config_data), do: raise("the host's job queue is down")
+    def handle_complete(_context, _callback_data), do: raise("the host's job queue is down")
   end
 
-  # The demo's config with the three types above enabled beside the library's,
-  # gating its pages by the flow's name so one config exercises every answer
-  # handle_instance_mount/2 can give
-  defmodule TestConfig do
-    use FormFlow.Config
+  # The demo's type lists with the three types above beside the library's —
+  # every flow type for applicants or reviewers, the vocabulary being the
+  # type's, set on the library's wizards too
+  defmodule TestTypes do
+    def flow_types do
+      perspectives = [
+        %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
+        %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer"}
+      ]
 
-    @impl true
-    def handle_instance_mount(%Context{flow: %{name: "Refused"}}, _config_data),
-      do: {:error, "You may not see this flow."}
+      Enum.map(FormFlow.Config.Flows.Type.defaults(), &%{&1 | perspectives: perspectives})
+    end
 
-    def handle_instance_mount(%Context{flow: %{name: "Elsewhere"}}, _config_data),
-      do: {:redirect, "/users"}
-
-    def handle_instance_mount(%Context{flow: %{name: "Decorated"}}, _config_data),
-      do: {:ok, %{flow_name: "Renamed by the host"}}
-
-    # The listing has no flow in scope; the session's config_data drives it
-    def handle_instance_mount(%Context{flow: nil}, %{"listing" => "refused"}),
-      do: {:error, "No listing for you."}
-
-    def handle_instance_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}),
-      do: {:redirect, "/users"}
-
-    def handle_instance_mount(_context, _config_data), do: {:ok, %{}}
-
-    @impl true
-    def flow_instances_query(_context, %{"listing" => "everyone"}),
-      do: Instances.Flows.list_query()
-
-    def flow_instances_query(context, config_data),
-      do: FormFlow.Config.Default.flow_instances_query(context, config_data)
-
-    @impl true
-    def enabled_instance_flows(_context, %{"offer" => slug}),
-      do: [Flows.get_by_slug(slug)]
-
-    def enabled_instance_flows(context, config_data),
-      do: FormFlow.Config.Default.enabled_instance_flows(context, config_data)
-
-    @impl true
-    def enabled_form_types(context, config_data) do
-      FormFlow.Config.Default.enabled_form_types(context, config_data) ++
+    def form_types do
+      FormFlow.Config.Forms.Type.defaults() ++
         [
           %FormFlow.Config.Forms.Type{id: "recording", module: Recording, name: "Recording"},
           %FormFlow.Config.Forms.Type{id: "refusing", module: RefusingRecord, name: "Refusing"},
           %FormFlow.Config.Forms.Type{id: "failing", module: FailingReaction, name: "Failing"}
         ]
     end
+  end
 
-    # Every flow type is for applicants or reviewers — the vocabulary is the
-    # type's, and the config sets it on the library's wizards too
-    @impl true
-    def enabled_flow_types(context, config_data) do
-      perspectives = [
-        %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
-        %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer"}
-      ]
+  # The test page's gate: refuses, redirects, or decorates by the flow's name,
+  # so one function exercises every answer on_mount can give; on the listing,
+  # which has no flow in scope, the page's callback_data drives it — the
+  # host's own data reaching the host's own gate
+  defmodule TestGate do
+    def on_mount(%Context{flow: %{name: "Refused"}}, _callback_data),
+      do: {:error, "You may not see this flow."}
 
-      context
-      |> FormFlow.Config.Default.enabled_flow_types(config_data)
-      |> Enum.map(&%{&1 | perspectives: perspectives})
-    end
+    def on_mount(%Context{flow: %{name: "Elsewhere"}}, _callback_data),
+      do: {:redirect, "/users"}
+
+    def on_mount(%Context{flow: %{name: "Decorated"}}, _callback_data),
+      do: {:ok, %{flow_name: "Renamed by the host"}}
+
+    def on_mount(%Context{flow: nil}, %{"listing" => "refused"}),
+      do: {:error, "No listing for you."}
+
+    def on_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}),
+      do: {:redirect, "/users"}
+
+    def on_mount(_context, _callback_data), do: {:ok, %{}}
   end
 
   # The users page as `DemoWeb.FormFlowLive.Users` renders it, with the test
-  # config in place of the demo's — mounted without a route (live_isolated/3)
+  # types and gate in place of the demo's — mounted without a route
+  # (live_isolated/3). The session's "callback_data" is the page's
+  # callback_data, and also picks the listing's `instances` ("listing" =>
+  # "everyone") and `flows` ("offer" => slug), the way a host page would
+  # build those attrs from what it knows.
   defmodule TestPage do
     use Phoenix.LiveView
 
     @impl true
     def mount(_params, %{"path" => path} = session, socket) do
+      callback_data = Map.get(session, "callback_data", %{})
+
       {:ok,
        Phoenix.Component.assign(socket,
          path: path,
@@ -137,9 +125,17 @@ defmodule Demo.FormFlowInstancesTest do
          params: %{},
          tenant_id: Map.get(session, "tenant_id"),
          perspectives: Map.get(session, "perspectives", []),
-         config_data: Map.get(session, "config_data", %{})
+         callback_data: callback_data,
+         instances: instances(callback_data),
+         flows: flows(callback_data)
        )}
     end
+
+    defp instances(%{"listing" => "everyone"}), do: Instances.Flows.list_query()
+    defp instances(_callback_data), do: nil
+
+    defp flows(%{"offer" => slug}), do: [slug]
+    defp flows(_callback_data), do: nil
 
     @impl true
     def render(assigns) do
@@ -152,8 +148,12 @@ defmodule Demo.FormFlowInstancesTest do
         params={@params}
         path={@path}
         base="/users"
-        config={TestConfig}
-        config_data={@config_data}
+        flow_types={TestTypes.flow_types()}
+        form_types={TestTypes.form_types()}
+        callback_data={@callback_data}
+        on_mount={&TestGate.on_mount/2}
+        instances={@instances}
+        flows={@flows}
       />
       """
     end
@@ -608,7 +608,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
-  describe "the config scopes the listing with flow_instances_query/2" do
+  describe "the instances attr scopes the listing" do
     test "by default the listing is the user's own", %{conn: conn} do
       %{flow: flow, instance: mine} = flow_of_one()
       {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
@@ -638,7 +638,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
-  describe "the config picks the flows to start with enabled_instance_flows/2" do
+  describe "the flows attr picks the flows to start" do
     test "by default every root of the tenant is offered", %{conn: conn} do
       {:ok, dog} = Flows.create(%{name: "Dog License"})
       {:ok, cat} = Flows.create(%{name: "Cat License"})
@@ -688,7 +688,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
-  describe "the config gates its pages with handle_instance_mount/2" do
+  describe "on_mount gates the pages" do
     test "a refusal on edit renders the message alone and starts nothing", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
 
@@ -1131,11 +1131,11 @@ defmodule Demo.FormFlowInstancesTest do
   # A user-facing page, through the test config's page
   defp start_button(flow), do: "button[phx-value-flow-id='#{flow.id}']"
 
-  defp isolated(conn, segments, config_data \\ %{}, tenant_id \\ nil, perspectives \\ []) do
+  defp isolated(conn, segments, callback_data \\ %{}, tenant_id \\ nil, perspectives \\ []) do
     live_isolated(conn, TestPage,
       session: %{
         "path" => segments,
-        "config_data" => config_data,
+        "callback_data" => callback_data,
         "tenant_id" => tenant_id,
         "perspectives" => perspectives
       }

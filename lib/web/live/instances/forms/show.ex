@@ -14,8 +14,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
   difference is that this page never starts anything. With nothing filled in
   yet it says so and offers the link across to Edit, which does. Like Edit, it
-  asks the host's config whether it may render at all (`handle_instance_mount/2`) and
-  draws only the config's message, or nothing while redirecting, when not.
+  asks the host's `on_mount` whether it may render at all and draws only its
+  message, or nothing while redirecting, when not.
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
@@ -38,8 +38,12 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:perspectives, fn -> [] end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:on_mount, fn -> nil end)
+      |> assign_new(:instances, fn -> nil end)
+      |> assign_new(:flows, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -72,7 +76,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       flow_instance ->
         socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
 
-        Shared.handle_instance_mount(socket)
+        Shared.on_mount(socket)
     end
   end
 
@@ -88,14 +92,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
   def render(%{navigate_to: to} = assigns) when is_binary(to) do
     ~H"""
     <div></div>
     """
   end
 
-  # The host's config refused the page; its message is all there is to draw
+  # The host's on_mount refused the page; its message is all there is to draw
   def render(%{mount_error: message} = assigns) when is_binary(message) do
     ~H"""
     <div>
@@ -200,7 +204,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         current_path: @path,
         clickable: @clickable,
         context: @context,
-        config_data: @config_data
+        callback_data: @callback_data
       })}
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
@@ -235,7 +239,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         instance: @parsed,
         data: @form_instance.data,
         context: @context,
-        config_data: @config_data
+        callback_data: @callback_data
       })}
     </div>
     """

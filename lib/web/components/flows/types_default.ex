@@ -16,13 +16,13 @@ defmodule FormFlow.Web.Components.Flows.Types.Default do
   alias FormFlow.Web.Instances.Components
 
   @impl true
-  def visible?(%Context{} = context, _config_data), do: Perspective.visible?(context)
+  def visible?(%Context{} = context, _callback_data), do: Perspective.visible?(context)
 
   @impl true
-  def editable?(%Context{form_progress: form}, _config_data), do: FlowProgress.actionable?(form)
+  def editable?(%Context{form_progress: form}, _callback_data), do: FlowProgress.actionable?(form)
 
   @impl true
-  def handle_complete(%Context{flow_progress: forms}, _config_data) do
+  def handle_complete(%Context{flow_progress: forms}, _callback_data) do
     Enum.find(forms, &FlowProgress.actionable?/1)
   end
 

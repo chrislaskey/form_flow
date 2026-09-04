@@ -49,7 +49,7 @@ defmodule FormFlow.Web.Components.Editor do
     default: [],
     doc:
       "form_flow_type choices as {label, value} tuples for the flows the " <>
-        "canvas's form subflow nodes embed (the configured `enabled_flow_types`, " <>
+        "canvas's form subflow nodes embed (the page's `flow_types`, " <>
         "as name and id); those nodes render them as a dropdown when editable " <>
         "and as the value's label when not"
   )
@@ -58,7 +58,7 @@ defmodule FormFlow.Web.Components.Editor do
     default: [],
     doc:
       "form_type choices as {label, value} tuples for the forms the canvas's " <>
-        "form nodes collect (the configured `enabled_form_types`, as name and " <>
+        "form nodes collect (the page's `form_types`, as name and " <>
         "id); those nodes render them as a dropdown when editable and as the " <>
         "value's label when not"
   )
@@ -67,7 +67,7 @@ defmodule FormFlow.Web.Components.Editor do
     default: [],
     doc:
       "perspective names as {label, value} tuples (every perspective the " <>
-        "configured flow types declare, as name and id); a form subflow node names " <>
+        "page's flow types declare, as name and id); a form subflow node names " <>
         "the perspectives its embedded flow is for, read-only — they are set " <>
         "on the subflow's own page"
   )

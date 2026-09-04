@@ -25,7 +25,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   import FormFlow.Web.Helpers.Paths
 
-  alias FormFlow.Context
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
@@ -65,8 +64,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       |> assign_new(:version_id, fn -> nil end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
 
     {:ok, load(socket)}
   end
@@ -96,16 +96,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     |> assign_breadcrumb(node)
   end
 
-  # What the config offers for this form — see FormFlow.Config. Read-only
-  # pages still need them, to render a stored value as its name.
+  # The page's form types, with each related-form property's choices filled
+  # in for this form's place in its flow. Read-only pages still need
+  # them, to render a stored value as its name.
   defp form_types(_assigns, nil, _version, _node), do: []
 
-  defp form_types(assigns, form, version, node) do
-    config = FormFlow.Config.config_module(assigns.config)
-    context = %Context{form: form, form_version: version, subflow_node: node}
-
-    context
-    |> config.enabled_form_types(assigns.config_data)
+  defp form_types(assigns, form, _version, _node) do
+    assigns.form_types
     |> Shared.fill_related_forms(
       assigns.root_id,
       assigns.node_id,

@@ -14,16 +14,17 @@ defmodule DemoWeb.FormFlowLive.Checklist do
 
   A type that only wanted to change *one* of those would override just that
   callback and inherit the rest (the in-order wizard's behavior), the same
-  way the demo's config module extends `FormFlow.Config`.
+  way the demo's type lists extend the library's defaults.
   """
 
   use FormFlow.Config.Flows.Type
 
   @impl true
-  def editable?(%{form_progress: form}, _config_data), do: unfinished?(form)
+  def editable?(%{form_progress: form}, _callback_data), do: unfinished?(form)
 
   @impl true
-  def handle_complete(%{flow_progress: forms}, _config_data), do: Enum.find(forms, &unfinished?/1)
+  def handle_complete(%{flow_progress: forms}, _callback_data),
+    do: Enum.find(forms, &unfinished?/1)
 
   @impl true
   def progress_component(assigns) do

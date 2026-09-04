@@ -16,8 +16,8 @@ defmodule DemoWeb.FormFlowLive.Prefill do
   It shows the shape every prefill takes: load the host's data, then merge
   the user's stored answers *over* it, so a returning user never sees their
   edits replaced. The stored answers come from the default type's
-  `initial_data/2`, reached the same way a custom config module reaches
-  `FormFlow.Config.Default`.
+  `initial_data/2`, reached the same way a host's own type list reaches
+  the library's defaults.
   """
 
   use FormFlow.Config.Forms.Type
@@ -49,8 +49,8 @@ defmodule DemoWeb.FormFlowLive.Prefill do
   end
 
   @impl true
-  def initial_data(context, config_data) do
-    stored = Type.Default.initial_data(context, config_data)
+  def initial_data(context, callback_data) do
+    stored = Type.Default.initial_data(context, callback_data)
 
     case prefilled_name(context.form_type_property_values) do
       nil -> stored

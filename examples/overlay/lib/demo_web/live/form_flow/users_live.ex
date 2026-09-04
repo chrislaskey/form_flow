@@ -46,8 +46,9 @@ defmodule DemoWeb.FormFlowLive.Users do
             params={@params}
             path={@path}
             base="/users"
-            config={DemoWeb.FormFlowLive.Config}
-            config_data={%{hello: "world"}}
+            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+            form_types={DemoWeb.FormFlowLive.Types.form_types()}
+            callback_data={%{hello: "world"}}
           />
         </div>
       </div>

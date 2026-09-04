@@ -28,14 +28,13 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   "The current user" means the router's `user_id` attr: by default the list
   is narrowed to instances that user created, and starting one stamps them as
-  its creator. The host's config decides otherwise through
-  `FormFlow.Config.flow_instances_query/2` — a reviewer's desk lists
-  everyone's — and which flows the page offers to start through
-  `FormFlow.Config.enabled_instance_flows/2`, refusing to start any other.
-  The router's `tenant_id` is applied on top of both answers. This is a
-  listing convenience, not access control: the page asks
-  `FormFlow.Config.handle_instance_mount/2` before it draws, like every other
-  user-facing page, and auth stays the host's job (see `FormFlow.Web.Router`).
+  its creator. The host decides otherwise through the `instances` attr — a
+  reviewer's desk passes `Instances.Flows.list_query()` bare to list
+  everyone's — and which flows the page offers to start through the `flows`
+  attr, refusing to start any other. The router's `tenant_id` is applied on
+  top of both. This is a listing convenience, not access control: the page
+  asks the host's `on_mount` before it draws, like every other user-facing
+  page, and auth stays the host's job (see `FormFlow.Web.Router`).
 
   Starting a new flow stays a plain list rather than a second table: Slab
   reads `sort` and `page` straight from the URL, so two Slab tables on one
@@ -48,6 +47,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -60,8 +60,12 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:perspectives, fn -> [] end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:on_mount, fn -> nil end)
+      |> assign_new(:instances, fn -> nil end)
+      |> assign_new(:flows, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -76,24 +80,24 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:ok,
      socket
      |> assign(context: context, mount_error: nil, navigate_to: nil)
-     |> Shared.handle_instance_mount(&load/1)}
+     |> Shared.on_mount(&load/1)}
   end
 
-  # The listing itself, built only once the config allowed the page: the
-  # host's query and the host's flows to start, each narrowed to the
-  # router's tenant
+  # The listing itself, built only once the host allowed the page: the
+  # host's query and the host's flows to start — or the defaults, the user's
+  # own and every root of the tenant — each narrowed to the router's tenant
   defp load(socket) do
-    %{context: context, config: config, config_data: config_data} = socket.assigns
-    module = FormFlow.Config.config_module(config)
+    %{user_id: user_id, tenant_id: tenant_id} = socket.assigns
 
     query =
-      module.flow_instances_query(context, config_data)
-      |> Instances.Flows.narrow_tenant(socket.assigns.tenant_id)
+      (socket.assigns.instances || Instances.Flows.list_query(user_id: user_id))
+      |> Instances.Flows.narrow_tenant(tenant_id)
 
     flows =
-      module.enabled_instance_flows(context, config_data)
+      socket.assigns.flows
+      |> offered(tenant_id)
       |> Enum.reject(&is_nil/1)
-      |> in_tenant(socket.assigns.tenant_id)
+      |> in_tenant(tenant_id)
 
     socket
     |> assign(:query, query)
@@ -105,6 +109,20 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
+  end
+
+  # The host's flows to offer — structs, or slugs resolved in the tenant —
+  # or, given none, every root flow of the tenant not made reusable
+  defp offered(nil, tenant_id) do
+    Templates.Flows.list(tenant_id: tenant_id) |> Enum.reject(& &1.made_reusable_at)
+  end
+
+  defp offered(flows, tenant_id) when is_list(flows) do
+    Enum.map(flows, fn
+      %Templates.Flow{} = flow -> flow
+      slug when is_binary(slug) -> Templates.Flows.get_by_slug(slug, tenant_id: tenant_id)
+      nil -> nil
+    end)
   end
 
   defp in_tenant(flows, nil), do: flows
@@ -146,7 +164,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     Map.merge(params, %{"sort" => "inserted_at", "sort_direction" => "desc"})
   end
 
-  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
   @impl true
   def render(%{navigate_to: to} = assigns) when is_binary(to) do
     ~H"""
@@ -154,7 +172,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     """
   end
 
-  # The host's config refused the page; its message is all there is to draw
+  # The host's on_mount refused the page; its message is all there is to draw
   def render(%{mount_error: message} = assigns) when is_binary(message) do
     ~H"""
     <div>

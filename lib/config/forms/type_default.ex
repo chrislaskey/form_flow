@@ -4,8 +4,8 @@ defmodule FormFlow.Config.Forms.Type.Default do
   answers and nothing more, for a custom type to reach when it prefills
   around them:
 
-      def initial_data(context, config_data) do
-        Map.merge(%{"email" => user_email(context)}, FormFlow.Config.Forms.Type.Default.initial_data(context, config_data))
+      def initial_data(context, callback_data) do
+        Map.merge(%{"email" => user_email(context)}, FormFlow.Config.Forms.Type.Default.initial_data(context, callback_data))
       end
 
   Delegates to the private internal implementation in
@@ -16,9 +16,9 @@ defmodule FormFlow.Config.Forms.Type.Default do
 
   alias FormFlow.Web.Components.Forms.Types
 
-  defdelegate initial_data(context, config_data), to: Types.Default
+  defdelegate initial_data(context, callback_data), to: Types.Default
   defdelegate edit_component(assigns), to: Types.Default
   defdelegate show_component(assigns), to: Types.Default
-  defdelegate snapshot_data(context, config_data), to: Types.Default
-  defdelegate handle_complete(context, config_data), to: Types.Default
+  defdelegate snapshot_data(context, callback_data), to: Types.Default
+  defdelegate handle_complete(context, callback_data), to: Types.Default
 end

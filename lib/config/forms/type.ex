@@ -2,15 +2,18 @@ defmodule FormFlow.Config.Forms.Type do
   @moduledoc """
   Form type definition: one way a form behaves for the user filling it out.
 
-  `FormFlow.Config.enabled_form_types/2` returns a list of these; the struct
-  is what the config describes, and its `:module` — `use`ing this behaviour —
-  is what the type does. `:id` is the value stored in the form's
+  A host passes a list of these as the `form_types` attr of
+  `FormFlow.Web.router/1` and the LiveComponents — the same list on the
+  admin pages, where a type is chosen, and on every instance page, where it
+  acts — usually from one function of its own that starts from `defaults/0`.
+  The struct is what the host describes, and its `:module` — `use`ing this
+  behaviour — is what the type does. `:id` is the value stored in the form's
   `properties["form_type"]`.
 
   Every callback takes the `FormFlow.Context` of one form in one flow
   instance — `:form` and `:form_version` are the template, `:form_instance`
-  the user's answers so far — plus `config_data`, or the assigns of the page
-  drawing the form. The defaults, `FormFlow.Config.Forms.Type.Default`,
+  the user's answers so far — plus `callback_data`, the host's own map from
+  the attr of that name, or the assigns of the page drawing the form. The defaults, `FormFlow.Config.Forms.Type.Default`,
   render the stored answers and nothing more, on the edit page and the Show
   page alike, record nothing when the form is submitted, and react to
   nothing. A type overrides only what it changes, and
@@ -19,8 +22,7 @@ defmodule FormFlow.Config.Forms.Type do
   around the form still renders the form itself through the default
   `edit_component/1`.
 
-  Two ship with the library, both enabled by default
-  (`FormFlow.Config.Default.enabled_form_types/2`): `"default"`, the form as
+  Two ship with the library, both in `defaults/0`: `"default"`, the form as
   designed, and `"review"` (`FormFlow.Web.Components.Forms.Types.Review`),
   which shows an earlier form's answers beside it.
   """
@@ -39,6 +41,35 @@ defmodule FormFlow.Config.Forms.Type do
           description: String.t() | nil,
           properties: [FormFlow.Config.Property.t()]
         }
+
+  @doc """
+  The library's form types, in display order: the default first — the form
+  as designed, and the fallback for a form that never chose — then the
+  review type. What the `form_types` attr defaults to, and what a host's own
+  list starts from:
+
+      def form_types do
+        FormFlow.Config.Forms.Type.defaults() ++ [prefill()]
+      end
+  """
+  @spec defaults() :: [t()]
+  def defaults do
+    [
+      %__MODULE__{
+        id: "default",
+        module: FormFlow.Config.Forms.Type.Default,
+        name: "Default",
+        description: "The form as designed, nothing more."
+      },
+      %__MODULE__{
+        id: "review",
+        module: FormFlow.Web.Components.Forms.Types.Review,
+        name: "Review",
+        description: "Shows an earlier form's answers beside this one, for checking them.",
+        properties: FormFlow.Web.Components.Forms.Types.Review.properties()
+      }
+    ]
+  end
 
   @doc """
   What an admin entered for the form's type's `:properties`, keyed by
@@ -66,7 +97,7 @@ defmodule FormFlow.Config.Forms.Type do
   @doc """
   The edit page's form, drawn. `assigns` are `DynamicForm.form/1`'s — `:id`,
   `:instance` (the parsed definition), `:data` (from `initial_data/2`),
-  `:on_success` — plus `:context` and `:config_data`. The default renders the
+  `:on_success` — plus `:context` and `:callback_data`. The default renders the
   form and nothing else; a type that draws more around it renders the form
   itself by calling the default with the same assigns.
   """
@@ -109,8 +140,8 @@ defmodule FormFlow.Config.Forms.Type do
     quote do
       @behaviour FormFlow.Config.Forms.Type
 
-      def initial_data(context, config_data) do
-        FormFlow.Config.Forms.Type.Default.initial_data(context, config_data)
+      def initial_data(context, callback_data) do
+        FormFlow.Config.Forms.Type.Default.initial_data(context, callback_data)
       end
 
       def edit_component(assigns) do
@@ -121,12 +152,12 @@ defmodule FormFlow.Config.Forms.Type do
         FormFlow.Config.Forms.Type.Default.show_component(assigns)
       end
 
-      def snapshot_data(context, config_data) do
-        FormFlow.Config.Forms.Type.Default.snapshot_data(context, config_data)
+      def snapshot_data(context, callback_data) do
+        FormFlow.Config.Forms.Type.Default.snapshot_data(context, callback_data)
       end
 
-      def handle_complete(context, config_data) do
-        FormFlow.Config.Forms.Type.Default.handle_complete(context, config_data)
+      def handle_complete(context, callback_data) do
+        FormFlow.Config.Forms.Type.Default.handle_complete(context, callback_data)
       end
 
       defoverridable initial_data: 2,

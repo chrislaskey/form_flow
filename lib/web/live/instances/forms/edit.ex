@@ -15,7 +15,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   position with no instance yet gets one created on mount — which is the
   moment the form version is pinned — gated by the flow type's `editable?/2`
   the flow instance's page asks before offering the link, and by the host
-  config's `handle_instance_mount/2`, asked first: a refused or redirected visitor
+  `on_mount`, asked first: a refused or redirected visitor
   starts nothing. Starting is idempotent afterwards, so this URL is an
   ordinary link from everywhere and survives a refresh or a Back — and a form
   either gate can't be started by typing its URL.
@@ -67,10 +67,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       form_instance: form_instance,
       context: context,
       form_type: form_type,
-      config_data: config_data
+      callback_data: callback_data
     } = socket.assigns
 
-    with {:ok, snapshot} <- snapshot(form_type, context, config_data),
+    with {:ok, snapshot} <- snapshot(form_type, context, callback_data),
          {:ok, completed} <-
            Instances.Forms.update_status(flow_instance, form_instance.path, :completed,
              data: payload.data,
@@ -78,7 +78,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
              snapshot_data: snapshot
            ) do
       fresh = fresh_context(socket.assigns, completed)
-      notify(form_type, fresh, config_data)
+      notify(form_type, fresh, callback_data)
       to = next_destination(fresh, socket.assigns)
       {:ok, start_async(socket, :navigate, fn -> to end)}
     else
@@ -94,8 +94,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:perspectives, fn -> [] end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:on_mount, fn -> nil end)
+      |> assign_new(:instances, fn -> nil end)
+      |> assign_new(:flows, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
@@ -116,15 +120,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       flow_instance ->
         socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
 
-        Shared.handle_instance_mount(socket, &Shared.start/1)
+        Shared.on_mount(socket, &Shared.start/1)
     end
   end
 
   # The form type's record of what it saw, taken before the write so a form
   # is never completed without it. Host code: an exception becomes the page's
   # error, never a crashed LiveView that loses what the user typed.
-  defp snapshot(form_type, context, config_data) do
-    case form_type.module.snapshot_data(context, config_data) do
+  defp snapshot(form_type, context, callback_data) do
+    case form_type.module.snapshot_data(context, callback_data) do
       snapshot when is_map(snapshot) -> {:ok, snapshot}
       other -> {:error, {:not_a_map, other}}
     end
@@ -150,8 +154,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # The form type reacts after the fact. The completion is already written,
   # so an exception here is logged and the user carries on.
-  defp notify(form_type, context, config_data) do
-    form_type.module.handle_complete(context, config_data)
+  defp notify(form_type, context, callback_data) do
+    form_type.module.handle_complete(context, callback_data)
     :ok
   rescue
     error ->
@@ -176,7 +180,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # flow has nothing left, carrying the user on to whatever follows it — the
   # nearest form that is theirs to work, skipping other perspectives' flows.
   defp next_path(context, assigns) do
-    case assigns.type.module.handle_complete(context, assigns.config_data) do
+    case assigns.type.module.handle_complete(context, assigns.callback_data) do
       %FormProgress{path: next} ->
         next
 
@@ -200,14 +204,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # The host's config is sending the user elsewhere: nothing to draw meanwhile
+  # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
   def render(%{navigate_to: to} = assigns) when is_binary(to) do
     ~H"""
     <div></div>
     """
   end
 
-  # The host's config refused the page; its message is all there is to draw
+  # The host's on_mount refused the page; its message is all there is to draw
   def render(%{mount_error: message} = assigns) when is_binary(message) do
     ~H"""
     <div>
@@ -329,7 +333,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         current_path: @path,
         clickable: @clickable,
         context: @context,
-        config_data: @config_data
+        callback_data: @callback_data
       })}
 
       <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
@@ -343,7 +347,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         data: @initial_data,
         on_success: &submitted(&1, @id),
         context: @context,
-        config_data: @config_data
+        callback_data: @callback_data
       })}
     </div>
     """

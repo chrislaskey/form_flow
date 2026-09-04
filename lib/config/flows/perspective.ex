@@ -5,7 +5,7 @@ defmodule FormFlow.Config.Flows.Perspective do
 
   A flow type declares them: `FormFlow.Config.Flows.Type`'s `:perspectives`
   is a list of these, beside its `:properties`. The struct is what the
-  config describes — `:id`, `:name`, `:description`, and whatever else the
+  host describes — `:id`, `:name`, `:description`, and whatever else the
   host wants to carry along in `:metadata` — and the admin building a
   template picks from the chosen type's, on the identity form of each
   "forms" flow, which perspectives that flow is for. The picked ids are
@@ -15,9 +15,9 @@ defmodule FormFlow.Config.Flows.Perspective do
 
   Roles belong with the type that gives them meaning: a review type declares
   its reviewers and approvers, and a plain wizard declares none — its flows
-  are for everyone. The host's config sets the list when it builds the type
-  structs in `FormFlow.Config.enabled_flow_types/2`, the library's built-in
-  wizards included, so the vocabulary is per type and per use at once.
+  are for everyone. The host sets the list when it builds the type structs it
+  passes as `flow_types`, the library's built-in wizards included, so the
+  vocabulary is per type and per use at once.
 
   A perspective is set on a flow of forms, and only there: the forms inside
   read their flow's, and a "subflows" root has none of its own. When one
@@ -30,8 +30,8 @@ defmodule FormFlow.Config.Flows.Perspective do
   `visible?/1` here: a flow is for everyone when it names no perspective, a
   viewer with no perspective sees everything, and otherwise the flow shows
   for a viewer sharing at least one of its perspectives. Perspective is
-  routing and hiding, not authorization — `FormFlow.Config.handle_instance_mount/2`
-  is the gate.
+  routing and hiding, not authorization — the router's `on_mount` is the
+  gate.
 
   The viewer's perspectives arrive through the `perspectives` attr of
   `FormFlow.Web.router/1` and the instance LiveComponents — a string or a

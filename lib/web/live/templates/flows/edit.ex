@@ -105,7 +105,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   @impl true
   def update(%{event: "change", payload: payload}, socket) do
     pending_type = pending_type(payload, socket.assigns.pending_type)
-    properties = Shared.properties(socket.assigns.flow_types, pending_type)
+    types = socket.assigns.flow_types
+    properties = Shared.properties(types, Shared.effective_type(types, pending_type))
 
     {:ok,
      socket
@@ -125,8 +126,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:root_id, fn -> nil end)
       |> assign_new(:node_id, fn -> nil end)
-      |> assign_new(:config, fn -> nil end)
-      |> assign_new(:config_data, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:callback_data, fn -> %{} end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -153,11 +155,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     }
   end
 
-  # The perspectives the admin has checked, among those the pending type
-  # declares: a type that declares none has no field and its flows are for
-  # everyone, and switching types keeps only the ids both types share.
+  # The perspectives the admin has checked, among those the pending type —
+  # or, unset, the type it amounts to — declares: a type that declares none
+  # has no field and its flows are for everyone, and switching types keeps
+  # only the ids both types share.
   defp pending_perspectives(payload, pending_type, assigns) do
-    offered = for %{id: id} <- Shared.perspectives(assigns.flow_types, pending_type), do: id
+    types = assigns.flow_types
+    shown = Shared.effective_type(types, pending_type)
+    offered = for %{id: id} <- Shared.perspectives(types, shown), do: id
 
     payload.data[:perspectives]
     |> List.wrap()
@@ -183,7 +188,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       data: data,
       current: data,
       embedded_flow_type_options: type_select_options(flow_types(assigns, embedded)),
-      embedded_form_type_options: embedded_form_type_options(assigns, flow, root),
+      embedded_form_type_options: embedded_form_type_options(assigns),
       embedded_perspective_options:
         Shared.perspective_options(Shared.all_perspectives(flow_types(assigns, embedded)))
     }
@@ -195,10 +200,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # from its data — so at that moment the data becomes the pending values
   # (reset_form_data_on_switch/2), and the name the admin was typing survives.
   # Otherwise it holds still, which is what keeps in-progress input alive.
+  # The type shown is the one the flow amounts to: a flow that never chose
+  # shows the first type, which is what it behaves as everywhere else, while
+  # its stored value stays unset — "the default" — until the admin picks.
   defp form_data(nil, _types), do: nil
 
   defp form_data(flow, types) do
-    type_id = flow.properties["form_flow_type"]
+    type_id = Shared.effective_type(types, flow.properties["form_flow_type"])
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
     form_data(
@@ -218,15 +226,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     )
   end
 
-  # What the config offers for a flow in this context — see FormFlow.Config.
-  # Empty means the flow has no type of its own, and no dropdown.
-  defp flow_types(_assigns, %Context{subflow: nil}), do: []
-
+  # The page's flow types for a flow in this context. Empty means the flow
+  # has no type of its own, and no dropdown.
   defp flow_types(assigns, %Context{flow: root, subflow_node: node} = context) do
-    config = FormFlow.Config.config_module(assigns.config)
-
     context
-    |> config.enabled_flow_types(assigns.config_data)
+    |> Shared.flow_types_for(assigns)
     |> Shared.fill_related_forms(
       root && root.id,
       node && node.id,
@@ -235,21 +239,23 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp reset_form_data_on_switch(socket, pending_type) do
-    if pending_type == socket.assigns.form_data[:form_flow_type] do
+    types = socket.assigns.flow_types
+    shown_type = Shared.effective_type(types, pending_type)
+
+    if shown_type == socket.assigns.form_data[:form_flow_type] do
       socket
     else
       %{
         flow: flow,
-        flow_types: types,
         pending_name: name,
         pending_slug: slug,
         pending_perspectives: perspectives
       } = socket.assigns
 
-      saved_type = flow.properties["form_flow_type"]
+      saved_type = Shared.effective_type(types, flow.properties["form_flow_type"])
 
       values =
-        if pending_type == saved_type,
+        if shown_type == saved_type,
           do: FormFlow.Config.Flows.Type.property_values(flow),
           else: %{}
 
@@ -260,8 +266,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           name,
           slug,
           perspectives,
-          pending_type,
-          Shared.properties(types, pending_type),
+          shown_type,
+          Shared.properties(types, shown_type),
           values
         )
       )
@@ -277,14 +283,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   defp type_select_options(types), do: Enum.map(types, &{&1.name, &1.id})
 
-  # The canvas's form nodes each collect a form; their type dropdowns share one
-  # options list, asked of the config with this flow as the context.
-  defp embedded_form_type_options(assigns, flow, root) do
-    config = FormFlow.Config.config_module(assigns.config)
-    context = %Context{flow: root || flow, subflow: flow}
+  # The canvas's form nodes each collect a form; their type dropdowns share
+  # the page's one list
+  defp embedded_form_type_options(assigns), do: type_select_options(assigns.form_types)
 
-    type_select_options(config.enabled_form_types(context, assigns.config_data))
-  end
+  # The type the identity form shows and keys its fields on: the pending
+  # choice, or the type an unset one amounts to
+  defp shown_type(assigns), do: Shared.effective_type(assigns.flow_types, assigns.pending_type)
 
   # The raw param, not the applied changeset data: picking the prompt again
   # ("") must clear the pending type, and Ecto's cast treats "" as a missing
@@ -684,10 +689,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             writes both — on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
             *saved* values; pending ones live in this component's assigns.
-            The type dropdown exists only when the `FormFlow.Config`
-            behaviour (enabled_flow_types) offers this flow any types — how
-            the forms are presented belongs to the flow of forms itself, so
-            by default that is "forms" flows only. --%>
+            The type dropdown exists only when the page's flow_types apply
+            to this flow — how the forms are presented belongs to the flow
+            of forms itself, so that is "forms" flows only. --%>
       <div class="mb-3 max-w-md">
         <DynamicForm.form
           id={"#{@id}-flow-form"}
@@ -710,25 +714,27 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             options={type_select_options(@flow_types)}
           />
           <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective):
-                the pending type's, like its properties below — a type that
+                the shown type's, like its properties below — a type that
                 declares none has no field --%>
           <:field
-            :if={Shared.perspectives(@flow_types, @pending_type) != []}
+            :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []}
             type="checkbox"
             name="perspectives"
             label="Perspectives"
             description={
               Shared.perspectives_description(
                 @flow,
-                Shared.perspectives(@flow_types, @pending_type)
+                Shared.perspectives(@flow_types, shown_type(assigns))
               )
             }
-            options={Shared.perspective_options(Shared.perspectives(@flow_types, @pending_type))}
+            options={
+              Shared.perspective_options(Shared.perspectives(@flow_types, shown_type(assigns)))
+            }
           />
-          <%!-- The pending type's properties (FormFlow.Config.Property), one
+          <%!-- The shown type's properties (FormFlow.Config.Property), one
                 field each; picking another type swaps them --%>
           <:field
-            :for={property <- Shared.properties(@flow_types, @pending_type)}
+            :for={property <- Shared.properties(@flow_types, shown_type(assigns))}
             type={Shared.field_type(property)}
             input_type={Shared.input_type(property)}
             name={Shared.field_name(property)}
