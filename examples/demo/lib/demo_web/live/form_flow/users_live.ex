@@ -2,12 +2,12 @@ defmodule DemoWeb.FormFlowLive.Users do
   @moduledoc """
   The dedicated page for FormFlow's user-facing form instances.
 
-  Mounted on `live "/users/*path", FormFlowLive.Users`, so `/users` (a landing
-  linking the two indexes), `/users/flows/*`, and `/users/forms/*` all land
-  here. FormFlow's router dispatches the remaining path to the right
-  LiveComponent — this page just supplies the layout around it.
-  `base="/users"` is what makes every link the components build carry the
-  mount prefix.
+  Mounted on `live "/users/*path", FormFlowLive.Users`, so `/users` (the
+  listing of the user's flow instances), `/users/:id` (one instance), and
+  `/users/:id/forms/*` (a form inside it) all land here. FormFlow's router
+  dispatches the remaining path to the right LiveComponent — this page just
+  supplies the layout around it. `base="/users"` is what makes every link
+  the components build carry the mount prefix.
   """
 
   use DemoWeb, :live_view

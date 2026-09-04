@@ -24,9 +24,10 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @doc """
   Journeys, newest first, with `:flow` preloaded. `opts[:user_id]` narrows
-  to one creator and `opts[:tenant_id]` to one tenant — query conveniences
-  for "my journeys" listings, not access control: the library never
-  enforces visibility.
+  to one creator, `opts[:tenant_id]` to one tenant, and `opts[:flow]` to
+  instances of one or more flow templates (see `narrow_flow/2`) — query
+  conveniences for "my journeys" listings, not access control: the library
+  never enforces visibility.
   """
   def list(opts \\ []) do
     Repo.all(from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:flow]))
@@ -37,14 +38,46 @@ defmodule FormFlow.Data.Instances.Flows do
   callers (like Slab's table in query mode) can layer `order_by`,
   `limit`/`offset`, `Repo.aggregate(:count)`, and their own preloads on top.
 
-  `opts[:user_id]` and `opts[:tenant_id]` narrow exactly as in `list/1` —
-  and with the same caveat: listing conveniences, not access control.
+  `opts[:user_id]`, `opts[:tenant_id]`, and `opts[:flow]` narrow exactly as
+  in `list/1` — and with the same caveat: listing conveniences, not access
+  control. This is the building block for the `instances` attr of
+  `FormFlow.Web.router/1`: the listing page's own default is
+  `list_query(user_id: user_id)`, narrowed to the flows the page offers
+  when it offers some in particular.
   """
   def list_query(opts \\ []) do
     from(i in Instances.Flow)
     |> narrow(:user_id, Keyword.get(opts, :user_id))
     |> narrow_tenant(Keyword.get(opts, :tenant_id))
+    |> narrow_flow(Keyword.get(opts, :flow))
   end
+
+  @doc """
+  `query` — one over `FormFlow.Data.Instances.Flow` — narrowed to instances
+  of one or more flow templates: a `FormFlow.Data.Templates.Flow`, an id, or
+  a slug, or a list mixing them (`nil` entries dropped). `nil` leaves the
+  query as it is; `[]` matches nothing.
+
+  Slugs are unique per tenant, not globally, so a slug alone matches the
+  flow of that slug in every tenant — pair it with `tenant_id:` when that
+  matters, as the listing page does.
+  """
+  def narrow_flow(query, nil), do: query
+
+  def narrow_flow(query, flows) do
+    refs = flows |> List.wrap() |> Enum.reject(&is_nil/1)
+    struct_ids = for %Templates.Flow{id: id} <- refs, do: id
+    {ids, slugs} = refs |> Enum.filter(&is_binary/1) |> Enum.split_with(&uuid?/1)
+    ids = struct_ids ++ ids
+
+    templates = from(f in Templates.Flow, where: f.id in ^ids or f.slug in ^slugs, select: f.id)
+
+    from(i in query, where: i.flow_id in subquery(templates))
+  end
+
+  # Node and flow ids are UUIDs and slugs never are, so one string can only
+  # be one of the two — the same distinction the router draws in a URL
+  defp uuid?(value), do: match?({:ok, _uuid}, Ecto.UUID.cast(value))
 
   @doc """
   `query` — one over `FormFlow.Data.Instances.Flow`, such as a host's

@@ -330,20 +330,20 @@ defmodule Demo.FormFlowInstancesTest do
     test "the flow's page lists only the forms for the viewer's perspective", %{conn: conn} do
       %{instance: instance} = licensing()
 
-      {:ok, _view, applicant} = as(conn, "applicant", ["flows", instance.id])
+      {:ok, _view, applicant} = as(conn, "applicant", [instance.id])
       assert applicant =~ "Application / Intake"
       refute applicant =~ "Review / Review"
 
-      {:ok, _view, reviewer} = as(conn, "reviewer", ["flows", instance.id])
+      {:ok, _view, reviewer} = as(conn, "reviewer", [instance.id])
       assert reviewer =~ "Review / Review"
       refute reviewer =~ "Application / Intake"
 
       # A viewer with no perspective, and a viewer of both, sees everything
-      {:ok, _view, everyone} = isolated(conn, ["flows", instance.id])
+      {:ok, _view, everyone} = isolated(conn, [instance.id])
       assert everyone =~ "Application / Intake"
       assert everyone =~ "Review / Review"
 
-      {:ok, _view, both} = as(conn, ["applicant", "reviewer"], ["flows", instance.id])
+      {:ok, _view, both} = as(conn, ["applicant", "reviewer"], [instance.id])
       assert both =~ "Application / Intake"
       assert both =~ "Review / Review"
     end
@@ -352,19 +352,19 @@ defmodule Demo.FormFlowInstancesTest do
       %{instance: instance, intake: intake} = licensing()
 
       {:ok, _view, html} =
-        as(conn, "reviewer", ["flows", instance.id, "forms"] ++ intake ++ ["edit"])
+        as(conn, "reviewer", [instance.id, "forms"] ++ intake ++ ["edit"])
 
       assert html =~ "This form is not part of your work here."
       refute instance_at(instance, intake)
 
       complete(instance, intake, %{"name" => "Ada"})
 
-      {:ok, _view, html} = as(conn, "reviewer", ["flows", instance.id, "forms"] ++ intake)
+      {:ok, _view, html} = as(conn, "reviewer", [instance.id, "forms"] ++ intake)
       assert html =~ "This form is not part of your work here."
       refute html =~ "Ada"
 
       # The applicant, whose form it is, sees the answers
-      {:ok, _view, html} = as(conn, "applicant", ["flows", instance.id, "forms"] ++ intake)
+      {:ok, _view, html} = as(conn, "applicant", [instance.id, "forms"] ++ intake)
       assert html =~ "Ada"
     end
 
@@ -373,7 +373,7 @@ defmodule Demo.FormFlowInstancesTest do
       %{instance: instance, intake: intake} = licensing()
 
       {:ok, view, _html} =
-        as(conn, "applicant", ["flows", instance.id, "forms"] ++ intake ++ ["edit"])
+        as(conn, "applicant", [instance.id, "forms"] ++ intake ++ ["edit"])
 
       submit(view, instance_at(instance, intake), %{"name" => "Ada"})
 
@@ -382,12 +382,12 @@ defmodule Demo.FormFlowInstancesTest do
       assert {path, _flash} = assert_redirect(view)
       assert path == flow_path(instance)
 
-      {:ok, _view, html} = as(conn, "applicant", ["flows", instance.id])
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
       assert html =~ "Your part is done"
       assert html =~ "Done"
 
       # The reviewer's page has work waiting and no such notice
-      {:ok, _view, html} = as(conn, "reviewer", ["flows", instance.id])
+      {:ok, _view, html} = as(conn, "reviewer", [instance.id])
       refute html =~ "Your part is done"
       assert html =~ "Available"
     end
@@ -613,7 +613,7 @@ defmodule Demo.FormFlowInstancesTest do
       %{flow: flow, instance: mine} = flow_of_one()
       {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
 
-      {:ok, _view, html} = isolated(conn, ["flows"])
+      {:ok, _view, html} = isolated(conn, [])
 
       assert html =~ mine.id
       refute html =~ theirs.id
@@ -626,12 +626,12 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, acme} =
         Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else", tenant_id: "acme"})
 
-      {:ok, _view, html} = isolated(conn, ["flows"], %{"listing" => "everyone"})
+      {:ok, _view, html} = isolated(conn, [], %{"listing" => "everyone"})
       assert html =~ mine.id
       assert html =~ theirs.id
       assert html =~ acme.id
 
-      {:ok, _view, html} = isolated(conn, ["flows"], %{"listing" => "everyone"}, "acme")
+      {:ok, _view, html} = isolated(conn, [], %{"listing" => "everyone"}, "acme")
       assert html =~ acme.id
       refute html =~ mine.id
       refute html =~ theirs.id
@@ -646,14 +646,14 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, _} = Flows.make_reusable(reusable)
       {:ok, acme} = Flows.create(%{name: "Elsewhere", tenant_id: "acme"})
 
-      {:ok, view, _html} = isolated(conn, ["flows"])
+      {:ok, view, _html} = isolated(conn, [])
 
       assert has_element?(view, start_button(dog))
       assert has_element?(view, start_button(cat))
       refute has_element?(view, start_button(reusable))
       assert has_element?(view, start_button(acme))
 
-      {:ok, view, _html} = isolated(conn, ["flows"], %{}, "acme")
+      {:ok, view, _html} = isolated(conn, [], %{}, "acme")
       assert has_element?(view, start_button(acme))
       refute has_element?(view, start_button(dog))
     end
@@ -662,7 +662,7 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, dog} = Flows.create(%{name: "Dog License"})
       {:ok, cat} = Flows.create(%{name: "Cat License"})
 
-      {:ok, view, _html} = isolated(conn, ["flows"], %{"offer" => "dog-license"})
+      {:ok, view, _html} = isolated(conn, [], %{"offer" => "dog-license"})
 
       assert has_element?(view, start_button(dog))
       refute has_element?(view, start_button(cat))
@@ -674,7 +674,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert Instances.Flows.list() == []
 
       # A slug that resolves to nothing offers nothing, and does not fail
-      {:ok, view, html} = isolated(conn, ["flows"], %{"offer" => "nope"})
+      {:ok, view, html} = isolated(conn, [], %{"offer" => "nope"})
       refute has_element?(view, start_button(dog))
       assert html =~ "Nothing started yet"
     end
@@ -682,9 +682,85 @@ defmodule Demo.FormFlowInstancesTest do
     test "a flow of another tenant is never offered, whatever the host says", %{conn: conn} do
       {:ok, acme} = Flows.create(%{name: "Dog License", tenant_id: "acme"})
 
-      {:ok, view, _html} = isolated(conn, ["flows"], %{"offer" => "dog-license"}, "globex")
+      {:ok, view, _html} = isolated(conn, [], %{"offer" => "dog-license"}, "globex")
 
       refute has_element?(view, start_button(acme))
+    end
+
+    test "the instance pages refuse an instance of a flow the page did not name", %{conn: conn} do
+      %{instance: cat_instance, form: only} = flow_of_one(nil, name: "Cat License")
+      {:ok, _dog} = Flows.create(%{name: "Dog License"})
+
+      pages = [
+        [cat_instance.id],
+        [cat_instance.id, "forms", only.id],
+        [cat_instance.id, "forms", only.id, "edit"]
+      ]
+
+      for segments <- pages do
+        {:ok, view, html} = isolated(conn, segments, %{"offer" => "dog-license"})
+        assert html =~ "This flow is not available here."
+        refute has_element?(view, "fieldset")
+      end
+
+      # The refused edit page started nothing
+      assert Instances.Flows.form_instances(cat_instance) == []
+
+      # Named, or nothing named in particular: the page renders
+      {:ok, _view, html} = isolated(conn, [cat_instance.id], %{"offer" => "cat-license"})
+      refute html =~ "not available here"
+
+      {:ok, _view, html} = isolated(conn, [cat_instance.id])
+      refute html =~ "not available here"
+    end
+
+    test "the flows a host names are also the flows the listing shows", %{conn: conn} do
+      {:ok, dog} = Flows.create(%{name: "Dog License"})
+      {:ok, cat} = Flows.create(%{name: "Cat License"})
+      {:ok, dog_instance} = Instances.Flows.create(%{flow_id: dog.id, user_id: "demo-user"})
+      {:ok, cat_instance} = Instances.Flows.create(%{flow_id: cat.id, user_id: "demo-user"})
+
+      # None named: the user's own instances of every flow
+      {:ok, _view, html} = isolated(conn, [])
+      assert html =~ dog_instance.id
+      assert html =~ cat_instance.id
+
+      # One named: the user's own instances of that flow
+      {:ok, _view, html} = isolated(conn, [], %{"offer" => "dog-license"})
+      assert html =~ dog_instance.id
+      refute html =~ cat_instance.id
+
+      # A host's own query is what it says, whatever the page offers to start
+      {:ok, _view, html} =
+        isolated(conn, [], %{"listing" => "everyone", "offer" => "dog-license"})
+
+      assert html =~ dog_instance.id
+      assert html =~ cat_instance.id
+    end
+  end
+
+  describe "Instances.Flows.list_query/1 narrows by flow" do
+    test "by struct, id, or slug, alone or in a list; [] matches nothing" do
+      {:ok, dog} = Flows.create(%{name: "Dog License"})
+      {:ok, cat} = Flows.create(%{name: "Cat License"})
+      {:ok, acme_dog} = Flows.create(%{name: "Dog License", tenant_id: "acme"})
+      {:ok, d} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
+      {:ok, c} = Instances.Flows.create(%{flow_id: cat.id, user_id: "u"})
+      {:ok, a} = Instances.Flows.create(%{flow_id: acme_dog.id, user_id: "u", tenant_id: "acme"})
+
+      ids = fn opts ->
+        opts |> Instances.Flows.list_query() |> FormFlowRepo.all() |> Enum.map(& &1.id) |> Enum.sort()
+      end
+
+      assert ids.(flow: dog) == [d.id]
+      assert ids.(flow: dog.id) == [d.id]
+      assert ids.(flow: [dog, "cat-license"]) == Enum.sort([d.id, c.id])
+      assert ids.(flow: []) == []
+      assert ids.(flow: nil) == Enum.sort([d.id, c.id, a.id])
+
+      # Slugs are per tenant: a slug alone matches it in every tenant
+      assert ids.(flow: "dog-license") == Enum.sort([d.id, a.id])
+      assert ids.(flow: "dog-license", tenant_id: "acme") == [a.id]
     end
   end
 
@@ -692,7 +768,7 @@ defmodule Demo.FormFlowInstancesTest do
     test "a refusal on edit renders the message alone and starts nothing", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
 
-      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+      {:ok, view, html} = isolated(conn, [instance.id, "forms", only.id, "edit"])
 
       assert html =~ "You may not see this flow."
       assert has_element?(view, "a[href='#{flow_path(instance)}']")
@@ -704,7 +780,7 @@ defmodule Demo.FormFlowInstancesTest do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Refused")
       complete(instance, [only.id], %{"name" => "Ada"})
 
-      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id])
+      {:ok, view, html} = isolated(conn, [instance.id, "forms", only.id])
 
       assert html =~ "You may not see this flow."
       refute html =~ "Ada"
@@ -715,17 +791,17 @@ defmodule Demo.FormFlowInstancesTest do
     test "a refusal on the flow instance's page renders the message alone", %{conn: conn} do
       %{instance: instance} = flow_of_one(nil, name: "Refused")
 
-      {:ok, view, html} = isolated(conn, ["flows", instance.id])
+      {:ok, view, html} = isolated(conn, [instance.id])
 
       assert html =~ "You may not see this flow."
       refute has_element?(view, "li")
-      assert has_element?(view, "a[href='/users/flows']")
+      assert has_element?(view, "a[href='/users']")
     end
 
     test "a redirect renders nothing, navigates, and starts nothing", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Elsewhere")
 
-      {:ok, view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+      {:ok, view, html} = isolated(conn, [instance.id, "forms", only.id, "edit"])
 
       # The first render, before the navigation lands, draws nothing of the page
       refute html =~ "Name"
@@ -733,7 +809,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert {"/users", _flash} = assert_redirect(view)
       refute instance_at(instance, [only.id])
 
-      {:ok, view, _html} = isolated(conn, ["flows", instance.id])
+      {:ok, view, _html} = isolated(conn, [instance.id])
       assert {"/users", _flash} = assert_redirect(view)
     end
 
@@ -741,25 +817,25 @@ defmodule Demo.FormFlowInstancesTest do
          %{conn: conn} do
       %{instance: instance} = flow_of_one()
 
-      {:ok, view, html} = isolated(conn, ["flows"], %{"listing" => "refused"})
+      {:ok, view, html} = isolated(conn, [], %{"listing" => "refused"})
 
       assert html =~ "No listing for you."
       refute html =~ instance.id
       refute has_element?(view, "button", "Start")
 
-      {:ok, view, _html} = isolated(conn, ["flows"], %{"listing" => "elsewhere"})
+      {:ok, view, _html} = isolated(conn, [], %{"listing" => "elsewhere"})
       assert {"/users", _flash} = assert_redirect(view)
     end
 
     test "an allowance merges its assigns into the page, after the start", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, name: "Decorated")
 
-      {:ok, _view, html} = isolated(conn, ["flows", instance.id, "forms", only.id, "edit"])
+      {:ok, _view, html} = isolated(conn, [instance.id, "forms", only.id, "edit"])
 
       assert html =~ "Renamed by the host"
       assert %{status: "in_progress"} = instance_at(instance, [only.id])
 
-      {:ok, _view, html} = isolated(conn, ["flows", instance.id])
+      {:ok, _view, html} = isolated(conn, [instance.id])
       assert html =~ "Renamed by the host"
     end
   end
@@ -1118,7 +1194,7 @@ defmodule Demo.FormFlowInstancesTest do
 
   # ── URLs ────────────────────────────────────────────────────────────────
 
-  defp flow_path(instance), do: "/users/flows/#{instance.id}"
+  defp flow_path(instance), do: "/users/#{instance.id}"
 
   defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"
 
@@ -1146,7 +1222,7 @@ defmodule Demo.FormFlowInstancesTest do
   defp as(conn, perspective, segments), do: isolated(conn, segments, %{}, nil, perspective)
 
   defp isolated_edit(conn, instance, path) do
-    isolated(conn, ["flows", instance.id, "forms"] ++ path ++ ["edit"])
+    isolated(conn, [instance.id, "forms"] ++ path ++ ["edit"])
   end
 
   # Submits the form's answers the way the user does; the completion runs

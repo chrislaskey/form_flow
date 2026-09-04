@@ -9,8 +9,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   showing what it reviewed — does so on this page too.
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Edit`, which is where
-  work happens: `/flows/:id/forms/*path` is this page,
-  `/flows/:id/forms/*path/edit` is that one. Both are addressed by position
+  work happens: `/:id/forms/*path` is this page,
+  `/:id/forms/*path/edit` is that one. Both are addressed by position
   and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
   difference is that this page never starts anything. With nothing filled in
   yet it says so and offers the link across to Edit, which does. Like Edit, it

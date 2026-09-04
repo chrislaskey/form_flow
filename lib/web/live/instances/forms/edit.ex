@@ -7,8 +7,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   host's type prefills).
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Show`, which renders
-  the same answers read-only: `/flows/:id/forms/*path/edit` is this page,
-  `/flows/:id/forms/*path` is that one. Both are addressed by position and
+  the same answers read-only: `/:id/forms/*path/edit` is this page,
+  `/:id/forms/*path` is that one. Both are addressed by position and
   resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`).
 
   What is only true here: **this is the page that starts a form.** A

@@ -40,13 +40,18 @@ defmodule FormFlow.Web.Router do
   The routes above serve `type="templates"` (the admin editor).
   `type="instances"` (the default) serves the user-facing side:
 
-  | Path                            | LiveComponent |
-  |---------------------------------|---------------|
-  | `/`                             | a landing linking Flows |
-  | `/flows`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
-  | `/flows/:id`                    | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
-  | `/flows/:id/forms/*path`        | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
-  | `/flows/:id/forms/*path/edit`   | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
+  | Path                       | LiveComponent |
+  |----------------------------|---------------|
+  | `/`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
+  | `/:id`                     | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
+  | `/:id/forms/*path`         | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
+  | `/:id/forms/*path/edit`    | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
+
+  The user-facing side has no landing page and no `/flows` segment: it has
+  one section, so the mount root is its index. `live "/users/*path", ...`
+  with `base="/users"` makes `/users` the listing and `/users/:id` an
+  instance. The template side keeps both because it has two sections, flows
+  and the reusable forms catalog, and needs a root that belongs to neither.
 
   Every instance component receives `user_id`, `tenant_id`, `perspectives`,
   `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
@@ -62,7 +67,7 @@ defmodule FormFlow.Web.Router do
 
   The two sides use the same nouns on purpose: the mount root already says
   which world you are in, so `/admin/flows/:id` is a flow *template* and
-  `/users/flows/:id` is a flow *instance* — the names
+  `/users/:id` is a flow *instance* — the names
   `FormFlow.Data.Templates.Flow` and `FormFlow.Data.Instances.Flow` already
   give themselves.
 
@@ -87,7 +92,9 @@ defmodule FormFlow.Web.Router do
   build working navigation links — `live "/admin/*path", ...` needs
   `base="/admin"`; the default suits a root-level catch-all.
 
-  Users can opt to directly call LiveComponents instead.
+  The usage guide (`guides/usage.md`) walks through the user-facing mount
+  and three pages a host typically builds with these attrs. Users can opt to
+  directly call LiveComponents instead.
   """
 
   attr(:type, :string, values: ["instances", "templates"], default: "instances")
@@ -167,19 +174,22 @@ defmodule FormFlow.Web.Router do
     doc:
       "the flow instances the listing shows, as a composable query over " <>
         "`FormFlow.Data.Instances.Flow` — `FormFlow.Data.Instances.Flows.list_query/1` " <>
-        "is the building block; `nil` lists the current user's own. The " <>
-        "router's `tenant_id` is applied on top. A listing convenience, not " <>
-        "access control: gate the page with `on_mount`. Ignored by the template pages"
+        "is the building block; `nil` lists the current user's own, of the " <>
+        "flows named by `flows` when it names some. The router's `tenant_id` " <>
+        "is applied on top. A listing convenience, not access control: gate " <>
+        "the page with `on_mount`. Ignored by the template pages"
   )
 
   attr(:flows, :any,
     default: nil,
     doc:
-      "the flow templates the listing offers to start, in display order — " <>
-        "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped; " <>
-        "`nil` offers every root flow of the tenant that has not been made " <>
-        "reusable. The router's `tenant_id` is applied on top, and the page " <>
-        "refuses to start a flow it did not offer. Ignored by the template pages"
+      "the flow templates the listing is about, in display order — " <>
+        "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped. " <>
+        "The page offers them to start and refuses to start any other, its " <>
+        "instance pages refuse an instance of any other, and when `instances` " <>
+        "is `nil` the listing shows the user's own instances of them alone. `nil` offers and lists every root flow of the tenant " <>
+        "(those not made reusable, for starting). The router's `tenant_id` is " <>
+        "applied on top. Ignored by the template pages"
   )
 
   attr(:uri, :string,
@@ -352,18 +362,9 @@ defmodule FormFlow.Web.Router do
             <%!-- not a /forms path --%>
         <% end %>
       <% else %>
-        <div :if={segments(@path) == []}>
-          <h2 class="mb-2 text-sm font-semibold">Instances</h2>
-          <ul class="space-y-1 text-sm">
-            <li>
-              <.link navigate={Instances.Paths.flows_path(@base)} class="text-cyan-600 hover:underline">
-                Flows
-              </.link>
-              <span class="text-xs text-zinc-500">— flows being filled out</span>
-            </li>
-          </ul>
-        </div>
-
+        <%!-- One section, so the mount root is its index: `live "/users/*path", ...`
+              with base="/users" makes /users the listing and /users/:id an
+              instance. --%>
         <%= case instances_route(@path) do %>
           <% :index -> %>
             <.live_component
@@ -448,9 +449,9 @@ defmodule FormFlow.Web.Router do
 
   defp instances_route(path) do
     case segments(path) do
-      ["flows"] -> :index
-      ["flows", id] -> {:flow, id}
-      ["flows", id, "forms" | rest] when rest != [] -> form_route(id, rest)
+      [] -> :index
+      [id] -> {:flow, id}
+      [id, "forms" | rest] when rest != [] -> form_route(id, rest)
       _other -> nil
     end
   end

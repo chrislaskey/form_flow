@@ -24,8 +24,9 @@ defmodule FormFlow.Web.Instances do
   don't decide.
 
   The namespaces mirror the data side (`FormFlow.Data.Instances.Flows` /
-  `.Forms`) and, page for page, the template side — same modules, same URL
-  nouns, because `/admin/flows/:id` and `/users/flows/:id` are the template
-  and the instance of the same thing.
+  `.Forms`) and, page for page, the template side — same modules, same
+  nouns, because `/admin/flows/:id` and `/users/:id` are the template and the
+  instance of the same thing. The user-facing side has one section, so its
+  mount root is the listing itself (`FormFlow.Web.Instances.Paths`).
   """
 end

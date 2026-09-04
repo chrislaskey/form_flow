@@ -29,12 +29,18 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   "The current user" means the router's `user_id` attr: by default the list
   is narrowed to instances that user created, and starting one stamps them as
   its creator. The host decides otherwise through the `instances` attr — a
-  reviewer's desk passes `Instances.Flows.list_query()` bare to list
-  everyone's — and which flows the page offers to start through the `flows`
-  attr, refusing to start any other. The router's `tenant_id` is applied on
-  top of both. This is a listing convenience, not access control: the page
-  asks the host's `on_mount` before it draws, like every other user-facing
-  page, and auth stays the host's job (see `FormFlow.Web.Router`).
+  reviewer's page passes `Instances.Flows.list_query()` bare to list
+  everyone's. Which flow templates the page is about is the `flows` attr:
+  the flows it offers to start, refusing to start any other, and — when the
+  host names some in particular and leaves `instances` to its default — the
+  flows whose instances the default listing shows, so a page for Dog License
+  lists the user's Dog License instances and not their renewals. `nil` is
+  every root flow of the tenant, offered and listed alike; a host that wants
+  to list one thing and start another passes `instances` itself. The
+  router's `tenant_id` is applied on top of both. This is a listing
+  convenience, not access control: the page asks the host's `on_mount`
+  before it draws, like every other user-facing page, and auth stays the
+  host's job (see `FormFlow.Web.Router`).
 
   Starting a new flow stays a plain list rather than a second table: Slab
   reads `sort` and `page` straight from the URL, so two Slab tables on one
@@ -47,7 +53,6 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
-  alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -85,53 +90,41 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   # The listing itself, built only once the host allowed the page: the
   # host's query and the host's flows to start — or the defaults, the user's
-  # own and every root of the tenant — each narrowed to the router's tenant
+  # own and every root of the tenant — each narrowed to the router's tenant.
+  # The resolved flows live under `:page_flows` so the host's `flows` stays
+  # what it said, render after render.
   defp load(socket) do
     %{user_id: user_id, tenant_id: tenant_id} = socket.assigns
 
-    query =
-      (socket.assigns.instances || Instances.Flows.list_query(user_id: user_id))
-      |> Instances.Flows.narrow_tenant(tenant_id)
+    page_flows = Shared.resolve_flows(socket.assigns.flows, tenant_id)
 
-    flows =
-      socket.assigns.flows
-      |> offered(tenant_id)
-      |> Enum.reject(&is_nil/1)
-      |> in_tenant(tenant_id)
+    query =
+      (socket.assigns.instances || own_query(user_id, socket.assigns.flows, page_flows))
+      |> Instances.Flows.narrow_tenant(tenant_id)
 
     socket
     |> assign(:query, query)
     |> assign(:empty?, not Repo.exists?(query))
-    |> assign(:flows, flows)
+    |> assign(:page_flows, page_flows)
     |> assign(:table_params, table_params(socket.assigns.params))
   end
+
+  # The default listing is the user's own: of every flow when the host named
+  # none in particular, of the page's flows when it did
+  defp own_query(user_id, nil, _page_flows), do: Instances.Flows.list_query(user_id: user_id)
+
+  defp own_query(user_id, _named, page_flows),
+    do: Instances.Flows.list_query(user_id: user_id, flow: page_flows)
 
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
   end
 
-  # The host's flows to offer — structs, or slugs resolved in the tenant —
-  # or, given none, every root flow of the tenant not made reusable
-  defp offered(nil, tenant_id) do
-    Templates.Flows.list(tenant_id: tenant_id) |> Enum.reject(& &1.made_reusable_at)
-  end
-
-  defp offered(flows, tenant_id) when is_list(flows) do
-    Enum.map(flows, fn
-      %Templates.Flow{} = flow -> flow
-      slug when is_binary(slug) -> Templates.Flows.get_by_slug(slug, tenant_id: tenant_id)
-      nil -> nil
-    end)
-  end
-
-  defp in_tenant(flows, nil), do: flows
-  defp in_tenant(flows, tenant_id), do: Enum.filter(flows, &(&1.tenant_id == tenant_id))
-
   # Only a flow the page offered can be started from it
   @impl true
   def handle_event("start", %{"flow-id" => flow_id}, socket) do
-    if Enum.any?(socket.assigns.flows, &(&1.id == flow_id)) do
+    if Enum.any?(socket.assigns.page_flows, &(&1.id == flow_id)) do
       start(socket, flow_id)
     else
       {:noreply, assign(socket, :error, "That flow is not available here.")}
@@ -235,11 +228,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       </Slab.table>
 
       <h3 class="mb-1 mt-6 text-sm font-semibold">Start a new flow</h3>
-      <p :if={@flows == []} class="text-sm text-zinc-500">
+      <p :if={@page_flows == []} class="text-sm text-zinc-500">
         No flows have been published yet.
       </p>
       <ul class="space-y-1 text-sm">
-        <li :for={flow <- @flows} class="flex items-center gap-3">
+        <li :for={flow <- @page_flows} class="flex items-center gap-3">
           <span>{flow.name || "Untitled flow"}</span>
           <button
             phx-click="start"

@@ -214,6 +214,43 @@ the flow type's to implement:
   the router, whether or not it reads them today, so a host rendering the
   components directly passes one set of attrs that never needs rewiring.
 
+### The user-facing mount root is the listing
+
+**Breaking: the user-facing URLs lost their `/flows` segment.** With
+`base="/users"`, the listing is `/users`, an instance is `/users/:id`, and a
+form inside it is `/users/:id/forms/*path` and `/users/:id/forms/*path/edit`.
+The landing page the mount root used to draw is gone with the segment. The
+user-facing side has one section, so its mount root is that section's
+index; the template side keeps its landing page and its `/flows` and
+`/forms` segments because it has two. `FormFlow.Web.Instances.Paths` builds
+the new shape, so every link and redirect the components make follows.
+Nothing redirects from the old URLs; a host with links to `/users/flows/…`
+updates them.
+
+### The flows a page names are the flows it lists
+
+**`flows` narrows the listing, not only the flows to start.** When the
+`instances` attr is left to its default, the listing shows the current
+user's own instances of the flows named by `flows` — so a page mounted
+for Dog License lists the user's Dog License instances and not their
+renewals. `flows` omitted (or `nil`) keeps today's behaviour, the user's
+own instances of every flow. A host's own `instances` query is never
+narrowed by what the page offers to start.
+
+- **The instance pages refuse an instance of a flow the page did not name.**
+  With `flows` set, `FormFlow.Web.Instances.Flows.Show`, `Forms.Show`, and
+  `Forms.Edit` render "This flow is not available here." for an instance of
+  any other flow, before the host's `on_mount` is asked and before `Edit`
+  starts anything — the counterpart of the listing refusing to start a flow
+  it did not offer. `flows` omitted accepts every instance, as before.
+  `FormFlow.Web.Instances.Forms.Shared.resolve_flows/2` resolves the attr —
+  structs, slugs in the tenant — for the listing and the pages alike.
+- **`FormFlow.Data.Instances.Flows.list_query/1` and `list/1` take
+  `flow:`** — a `FormFlow.Data.Templates.Flow`, an id, or a slug, or a list
+  of them; `[]` matches nothing. `narrow_flow/2` applies the same to any
+  query over instances, beside `narrow_tenant/2`. Slugs are per tenant, so
+  a slug alone matches in every tenant; pair it with `tenant_id:`.
+
 ## v0.12.0
 
 ### The config gates its pages: `handle_mount/2`

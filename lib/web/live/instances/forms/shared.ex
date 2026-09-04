@@ -41,8 +41,10 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:flow_name` / `:form_label` - what the breadcrumb needs
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
-  Then each page asks the host's `on_mount` whether it may render
-  (`on_mount/2`), and Edit — only Edit, and only when the host said yes —
+  Then each page asks whether it may render (`on_mount/2`): first whether
+  the instance is of a flow the page's `flows` attr names — a page about
+  Dog License does not show a Cat License instance — and then the host's
+  `on_mount`. Edit — only Edit, and only when the host said yes —
   makes the one write in here, `start/1`: a form with no instance yet is
   started when the flow's type allows it, which creates the instance and is
   the moment the form version is pinned. The order is the point: a refused
@@ -224,16 +226,67 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   end
 
   @doc """
-  Asks the host's `on_mount` whether the page may render, with the page's
-  `:context` and its `callback_data`, and applies the answer: `{:ok, assigns}`
-  runs `on_ok` (Edit's `start/1`) and then merges the assigns; `{:error,
-  message}` assigns `:mount_error`, which the page renders alone;
-  `{:redirect, to}` assigns `:navigate_to` and navigates, the page rendering
-  nothing meanwhile. The flow instance's page and the listing use this too.
-  No `on_mount` allows everything. Host code, deliberately not rescued: an
-  exception here fails closed rather than falling through to the page.
+  Whether the page may render. First the library's own check: an instance
+  page whose `flows` attr names flows in particular renders only an
+  instance of one of them (`resolve_flows/2`), and refuses the rest with
+  `:mount_error` — the counterpart of the listing refusing to start a flow it
+  did not offer. A host naming no flows accepts every instance, and the
+  listing has no instance in scope.
+
+  Then the host's `on_mount`, with the page's `:context` and its
+  `callback_data`, applying the answer: `{:ok, assigns}` runs `on_ok`
+  (Edit's `start/1`) and then merges the assigns; `{:error, message}`
+  assigns `:mount_error`, which the page renders alone; `{:redirect, to}`
+  assigns `:navigate_to` and navigates, the page rendering nothing meanwhile.
+  The flow instance's page and the listing use this too. No `on_mount`
+  allows everything. Host code, deliberately not rescued: an exception here
+  fails closed rather than falling through to the page.
   """
   def on_mount(socket, on_ok \\ & &1) do
+    if flow_in_scope?(socket.assigns) do
+      host_on_mount(socket, on_ok)
+    else
+      assign(socket, :mount_error, "This flow is not available here.")
+    end
+  end
+
+  # The page's `flows` attr is its scope: an instance is in it when its flow
+  # is one of the flows the attr names. No attr, or no instance in scope
+  # (the listing), and every instance is.
+  defp flow_in_scope?(%{flow_instance: %{flow_id: flow_id}, flows: flows} = assigns)
+       when is_list(flows) do
+    Enum.any?(resolve_flows(flows, Map.get(assigns, :tenant_id)), &(&1.id == flow_id))
+  end
+
+  defp flow_in_scope?(_assigns), do: true
+
+  @doc """
+  The page's `flows` attr resolved to `FormFlow.Data.Templates.Flow` structs:
+  structs pass through, slugs are looked up in the tenant, `nil` entries and
+  flows of another tenant are dropped. `nil` — the host named none in
+  particular — is every root flow of the tenant not made reusable. These are
+  the flows the page is about: what the listing offers to start, and the only
+  flows whose instances the instance pages render.
+  """
+  def resolve_flows(nil, tenant_id) do
+    Templates.Flows.list(tenant_id: tenant_id) |> Enum.reject(& &1.made_reusable_at)
+  end
+
+  def resolve_flows(flows, tenant_id) when is_list(flows) do
+    flows
+    |> Enum.map(fn
+      %Templates.Flow{} = flow -> flow
+      slug when is_binary(slug) -> Templates.Flows.get_by_slug(slug, tenant_id: tenant_id)
+      nil -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> in_tenant(tenant_id)
+  end
+
+  defp in_tenant(flows, nil), do: flows
+  defp in_tenant(flows, tenant_id), do: Enum.filter(flows, &(&1.tenant_id == tenant_id))
+
+  defp host_on_mount(socket, on_ok) do
     %{context: context, on_mount: gate, callback_data: callback_data} = socket.assigns
 
     case gate && gate.(context, callback_data) do
