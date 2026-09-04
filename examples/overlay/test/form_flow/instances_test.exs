@@ -108,12 +108,18 @@ defmodule Demo.FormFlowInstancesTest do
         ]
     end
 
+    # Every flow type is for applicants or reviewers — the vocabulary is the
+    # type's, and the config sets it on the library's wizards too
     @impl true
-    def enabled_perspectives(_context, _config_data) do
-      [
+    def enabled_flow_types(context, config_data) do
+      perspectives = [
         %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
         %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer"}
       ]
+
+      context
+      |> FormFlow.Config.Default.enabled_flow_types(config_data)
+      |> Enum.map(&%{&1 | perspectives: perspectives})
     end
   end
 

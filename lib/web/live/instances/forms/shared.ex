@@ -152,14 +152,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The `FormFlow.Config.Flows.Perspective` structs the context's `:subflow` is
-  for — its stored ids resolved through what the host's config enables for
-  that context. `[]` for a flow that names none, or names only ids the
-  config no longer has.
+  for — its stored ids resolved through the `:perspectives` its flow type
+  declares (`flow_type/2`, so an unset type resolves as everywhere else).
+  `[]` for a flow that names none, or names only ids the type no longer has.
   """
   def flow_perspectives(%Context{subflow: flow} = context, assigns) do
-    config = FormFlow.Config.config_module(assigns.config)
-
-    Perspective.for_flow(flow, config.enabled_perspectives(context, assigns.config_data))
+    Perspective.for_flow(flow, flow_type(context, assigns).perspectives)
   end
 
   @doc """

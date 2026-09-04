@@ -3,14 +3,21 @@ defmodule FormFlow.Config.Flows.Perspective do
   Perspective definition: one kind of user a "forms" flow is for — the
   applicant, the regional reviewer, the final approver.
 
-  `FormFlow.Config.enabled_perspectives/2` returns a list of these; the
-  struct is what the config describes — `:id`, `:name`, `:description`, and
-  whatever else the host wants to carry along in `:metadata` — and the admin
-  building a template picks from them, on the identity form of each "forms"
-  flow, which perspectives that flow is for. The picked ids are stored on the
-  flow under `properties["perspectives"]`; `for_flow/2` resolves them back to
-  the structs at run time, so a type's callbacks see everything the host
-  declared, not just the id.
+  A flow type declares them: `FormFlow.Config.Flows.Type`'s `:perspectives`
+  is a list of these, beside its `:properties`. The struct is what the
+  config describes — `:id`, `:name`, `:description`, and whatever else the
+  host wants to carry along in `:metadata` — and the admin building a
+  template picks from the chosen type's, on the identity form of each
+  "forms" flow, which perspectives that flow is for. The picked ids are
+  stored on the flow under `properties["perspectives"]`; `for_flow/2`
+  resolves them back to the structs at run time, through the flow's type, so
+  a type's callbacks see everything the host declared, not just the id.
+
+  Roles belong with the type that gives them meaning: a review type declares
+  its reviewers and approvers, and a plain wizard declares none — its flows
+  are for everyone. The host's config sets the list when it builds the type
+  structs in `FormFlow.Config.enabled_flow_types/2`, the library's built-in
+  wizards included, so the vocabulary is per type and per use at once.
 
   A perspective is set on a flow of forms, and only there: the forms inside
   read their flow's, and a "subflows" root has none of its own. When one
@@ -54,20 +61,21 @@ defmodule FormFlow.Config.Flows.Perspective do
   def ids(nil), do: []
 
   @doc """
-  The enabled perspectives a flow is for, as structs, in the enabled order.
-  A stored id no enabled perspective has is dropped here — `stale_ids/2`
-  is where the editor learns about it.
+  The perspectives a flow is for, as structs, in the order its type declares
+  them — `declared` being the type's `:perspectives`. A stored id the type
+  does not declare is dropped here — `stale_ids/2` is where the editor
+  learns about it.
   """
   @spec for_flow(Flow.t() | nil, [t()]) :: [t()]
-  def for_flow(flow, enabled) do
+  def for_flow(flow, declared) do
     stored = ids(flow)
-    Enum.filter(enabled, &(&1.id in stored))
+    Enum.filter(declared, &(&1.id in stored))
   end
 
-  @doc "The stored ids no enabled perspective has — a vocabulary the host changed under the template."
+  @doc "The stored ids the type does not declare — a vocabulary the host changed under the template."
   @spec stale_ids(Flow.t() | nil, [t()]) :: [String.t()]
-  def stale_ids(flow, enabled) do
-    known = MapSet.new(enabled, & &1.id)
+  def stale_ids(flow, declared) do
+    known = MapSet.new(declared, & &1.id)
     Enum.reject(ids(flow), &MapSet.member?(known, &1))
   end
 

@@ -24,16 +24,21 @@ defmodule FormFlow.ConfigTest do
     def handle_instance_mount(_context, _config_data), do: :whatever
   end
 
-  # A host that distinguishes two kinds of user
+  # A host that distinguishes two kinds of user: its flow types — the
+  # library's wizards, here — declare them
   defmodule WithPerspectives do
     use FormFlow.Config
 
     @impl true
-    def enabled_perspectives(_context, _config_data) do
-      [
+    def enabled_flow_types(context, config_data) do
+      perspectives = [
         %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
         %FormFlow.Config.Flows.Perspective{id: "reviewer", name: "Reviewer", metadata: %{desk: 1}}
       ]
+
+      context
+      |> FormFlow.Config.Default.enabled_flow_types(config_data)
+      |> Enum.map(&%{&1 | perspectives: perspectives})
     end
   end
 
@@ -68,16 +73,24 @@ defmodule FormFlow.ConfigTest do
     end
   end
 
-  describe "enabled_perspectives/2" do
-    test "the default offers none, and a custom config inherits that" do
-      assert FormFlow.Config.Default.enabled_perspectives(%Context{}, %{}) == []
-      assert Gated.enabled_perspectives(%Context{}, %{}) == []
+  describe "a flow type's perspectives" do
+    test "the library's types declare none" do
+      assert Enum.all?(
+               FormFlow.Config.Default.enabled_flow_types(
+                 %Context{subflow: %FormFlow.Data.Templates.Flow{label: "forms"}},
+                 %{}
+               ),
+               &(&1.perspectives == [])
+             )
     end
 
-    test "Shared.flow_perspectives/2 resolves a flow's stored ids to the config's structs" do
+    test "Shared.flow_perspectives/2 resolves a flow's stored ids through its type's structs" do
       flow = %FormFlow.Data.Templates.Flow{
         label: "forms",
-        properties: %{"perspectives" => ["reviewer", "gone"]}
+        properties: %{
+          "form_flow_type" => "wizard_in_order",
+          "perspectives" => ["reviewer", "gone"]
+        }
       }
 
       assigns = %{config: WithPerspectives, config_data: %{}}
@@ -85,6 +98,7 @@ defmodule FormFlow.ConfigTest do
       assert [%FormFlow.Config.Flows.Perspective{id: "reviewer", metadata: %{desk: 1}}] =
                Shared.flow_perspectives(%Context{subflow: flow}, assigns)
 
+      # A type that declares none resolves nothing, whatever the flow stores
       assert Shared.flow_perspectives(%Context{subflow: flow}, %{config: nil, config_data: %{}}) ==
                []
     end

@@ -83,7 +83,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
 
-  Four exceptions to the pure pass-through, all display projections
+  Five exceptions to the pure pass-through, all display projections
   `to_data/1` merges into a node's `data`:
 
     * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
@@ -99,6 +99,12 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     * `form_type` — the same for form nodes: the *collected form's*
       `properties["form_type"]` (requires `:form` preloaded), edited by the
       canvas dropdown and written through to the form lineage at save.
+    * `perspectives` — the *embedded flow's* `properties["perspectives"]`
+      (`FormFlow.Config.Flows.Perspective`), on subflow nodes, for the node
+      to name who the subflow is for. Display only: perspectives are set on
+      the subflow's own identity form, so this one does *not* flow back —
+      `FormFlow.Data.Templates.Flows` drops it from the node's properties at
+      save.
     * `label` — on nodes backed by a real entity, the entity's current `name`:
       the embedded flow's (`:subflow` preloaded) or the collected form's
       (`:form` preloaded). The canvas's inline rename edits it, and saves
@@ -186,6 +192,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     |> put_labels(node.labels)
     |> put_form_flow_type(node)
     |> put_form_type(node)
+    |> put_perspectives(node)
     |> put_entity_name(node)
   end
 
@@ -228,6 +235,24 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
           "data",
           %{"form_flow_type" => type},
           &Map.put(&1, "form_flow_type", type)
+        )
+
+      _other ->
+        properties
+    end
+  end
+
+  # The embedded flow's perspectives, projected into data so the node can
+  # name who the subflow is for. Read-only on the canvas: the save side drops
+  # the key rather than writing it through.
+  defp put_perspectives(properties, node) do
+    case node.subflow do
+      %{properties: %{"perspectives" => [_ | _] = ids}} ->
+        Map.update(
+          properties,
+          "data",
+          %{"perspectives" => ids},
+          &Map.put(&1, "perspectives", ids)
         )
 
       _other ->

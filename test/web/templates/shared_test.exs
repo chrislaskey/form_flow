@@ -3,22 +3,23 @@ defmodule FormFlow.Web.Templates.SharedTest do
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Config.Property
-  alias FormFlow.Context
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Web.Templates.Shared
 
-  defmodule PerspectiveConfig do
-    use FormFlow.Config
-
-    @impl true
-    def enabled_perspectives(_context, _config_data) do
-      [
-        %Perspective{id: "applicant", name: "Applicant"},
-        %Perspective{id: "reviewer", name: "Reviewer"}
-      ]
-    end
-  end
+  @perspectives [
+    %Perspective{id: "applicant", name: "Applicant"},
+    %Perspective{id: "reviewer", name: "Reviewer"}
+  ]
+  @flow_types [
+    %FormFlow.Config.Flows.Type{id: "wizard", module: __MODULE__, name: "Wizard"},
+    %FormFlow.Config.Flows.Type{
+      id: "review",
+      module: __MODULE__,
+      name: "Review",
+      perspectives: @perspectives
+    }
+  ]
 
   @name %Property{id: "name", name: "Name", required: true}
   @greeting %Property{id: "greeting", name: "Greeting", type: :comment, default_value: "Hello"}
@@ -165,26 +166,29 @@ defmodule FormFlow.Web.Templates.SharedTest do
   end
 
   describe "perspectives" do
-    test "offered for a forms flow when the config has some; never otherwise" do
-      forms = %Context{subflow: %Flow{label: "forms"}}
-      complex = %Context{subflow: %Flow{label: "subflows"}}
-      offering = %{config: PerspectiveConfig, config_data: %{}}
-      default = %{config: nil, config_data: %{}}
+    test "the chosen type's; none for no type or a type declaring none" do
+      assert Shared.perspectives(@flow_types, "review") == @perspectives
+      assert Shared.perspectives(@flow_types, "wizard") == []
+      assert Shared.perspectives(@flow_types, nil) == []
+      assert Shared.perspectives(@flow_types, "unknown") == []
+    end
 
-      assert [%Perspective{id: "applicant"}, %Perspective{id: "reviewer"}] =
-               Shared.perspectives(forms, offering)
+    test "all_perspectives/1 is every type's, once each" do
+      twice = [
+        %FormFlow.Config.Flows.Type{
+          id: "x",
+          module: __MODULE__,
+          name: "X",
+          perspectives: @perspectives
+        }
+      ]
 
-      assert Shared.perspectives(complex, offering) == []
-      assert Shared.perspectives(forms, default) == []
-      assert Shared.perspectives(%Context{subflow: nil}, offering) == []
+      assert Shared.all_perspectives(@flow_types ++ twice) == @perspectives
+      assert Shared.all_perspectives([]) == []
     end
 
     test "the field's options and help text, with a note for a stale stored id" do
-      perspectives =
-        Shared.perspectives(%Context{subflow: %Flow{label: "forms"}}, %{
-          config: PerspectiveConfig,
-          config_data: %{}
-        })
+      perspectives = Shared.perspectives(@flow_types, "review")
 
       assert Shared.perspective_options(perspectives) == [
                {"Applicant", "applicant"},

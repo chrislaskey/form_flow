@@ -195,18 +195,25 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
-  The perspectives the host's config offers for the flow at the context's
-  `:subflow` — a multi-select on the identity form of a "forms" flow, and
-  nothing at all for any other flow or when the config offers none
-  (`FormFlow.Config.enabled_perspectives/2`).
+  The perspectives the type with `id` declares (`FormFlow.Config.Flows.Type`'s
+  `:perspectives`) — the identity form's multi-select for a flow of that
+  type. None for no type, or a type that declares none.
   """
-  def perspectives(%FormFlow.Context{subflow: %{label: "forms"}} = context, assigns) do
-    config = FormFlow.Config.config_module(assigns.config)
-
-    config.enabled_perspectives(context, assigns.config_data)
+  def perspectives(types, id) do
+    case type(types, id) do
+      nil -> []
+      type -> type.perspectives
+    end
   end
 
-  def perspectives(_context, _assigns), do: []
+  @doc """
+  Every perspective any of `types` declares, once each by id — what a
+  canvas needs to name the perspectives of subflow nodes whose embedded
+  flows may be of different types.
+  """
+  def all_perspectives(types) do
+    types |> Enum.flat_map(& &1.perspectives) |> Enum.uniq_by(& &1.id)
+  end
 
   @doc "The perspectives as the checkbox field's `{label, id}` options."
   def perspective_options(perspectives), do: Enum.map(perspectives, &{&1.name, &1.id})
@@ -215,7 +222,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The perspectives field's help text — with a note when the flow stores an id
-  the config no longer offers: the field cannot show it, and the next save
+  the type no longer declares: the field cannot show it, and the next save
   drops it, so the admin should know.
   """
   def perspectives_description(flow, perspectives) do

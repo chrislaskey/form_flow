@@ -20,8 +20,8 @@ defmodule FormFlow.Context do
       `FormFlow.Config.Flows.Perspective` ids — or `[]`, a viewer with no
       perspective, who sees everything
     * `:flow_perspectives` - the `FormFlow.Config.Flows.Perspective` structs
-      the `:subflow` is for, resolved from its stored ids through the
-      config's `enabled_perspectives/2`; `[]` for a flow that is for everyone
+      the `:subflow` is for, resolved from its stored ids through its flow
+      type's `:perspectives`; `[]` for a flow that is for everyone
     * `:flow` - the root `FormFlow.Data.Templates.Flow` — the top-level
       ancestor, however deep the current view has drilled in
     * `:subflow` - the `FormFlow.Data.Templates.Flow` whose content is

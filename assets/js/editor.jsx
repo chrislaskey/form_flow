@@ -37,9 +37,33 @@ const EditorContext = createContext({
   editable: true,
   formFlowTypeOptions: [],
   formTypeOptions: [],
+  perspectiveOptions: [],
   focusId: null,
   clearFocus: null,
 });
+
+// Who a form subflow is for, named under its type. Read-only here: the
+// perspectives are set on the subflow's own page, and the ids ride in
+// node.data as a display projection the server drops at save.
+function NodePerspectives({ ids }) {
+  const { perspectiveOptions } = useContext(EditorContext);
+
+  if (!ids?.length) return null;
+
+  const names = ids.map(
+    (id) => perspectiveOptions.find((option) => option.value === id)?.label ?? id,
+  );
+
+  return (
+    <div className="ff-node__perspectives" title="Perspectives">
+      <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 0 0-11.215 0c-.22.578.254 1.139.872 1.139h9.47Z" />
+      </svg>
+      <span className="ff-node__perspectives-title">Perspectives</span>
+      <span>{names.join(", ")}</span>
+    </div>
+  );
+}
 
 // The node's name as an inline input (edit mode only) — renaming without the
 // drill-in to each node's dedicated page. The label lives in node.data like
@@ -298,6 +322,7 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
         ) : (
           data.form_flow_type && <div className="ff-node__type-label">{typeLabel}</div>
         ))}
+      {isFormSubflow && <NodePerspectives ids={data.perspectives} />}
       <button
         type="button"
         className="ff-node__open"
@@ -379,6 +404,7 @@ function FlowEditor({
   flowLabel = "forms",
   formFlowTypeOptions = [],
   formTypeOptions = [],
+  perspectiveOptions = [],
   onOpenSubflow,
   onOpenForm,
 }) {
@@ -549,6 +575,7 @@ function FlowEditor({
         editable,
         formFlowTypeOptions,
         formTypeOptions,
+        perspectiveOptions,
         focusId,
         clearFocus,
       }}
@@ -638,7 +665,9 @@ export function injectStyles(doc = document) {
  * form subflow node offers: a dropdown when editable, the stored value's
  * label when not. The chosen value lives in the node's data and rides the
  * ordinary onChange round-trip. `formTypeOptions` are the same for a form
- * step's form_type.
+ * step's form_type. `perspectiveOptions` ([{label, value}]) name the
+ * perspectives a form subflow node's data.perspectives ids refer to — shown
+ * read-only under the type, since they are set on the subflow's own page.
  *
  * Returns a handle with `setFlow/1` so the server can push a new flow in, and
  * `unmount/0` for teardown.
@@ -656,6 +685,7 @@ export function mount(el, opts = {}) {
           flowLabel={opts.flowLabel}
           formFlowTypeOptions={opts.formFlowTypeOptions}
           formTypeOptions={opts.formTypeOptions}
+          perspectiveOptions={opts.perspectiveOptions}
           onOpenSubflow={opts.onOpenSubflow}
           onOpenForm={opts.onOpenForm}
         />

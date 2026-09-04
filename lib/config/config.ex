@@ -37,33 +37,6 @@ defmodule FormFlow.Config do
   @callback enabled_form_types(Context.t(), map()) :: [FormFlow.Config.Forms.Type.t()]
 
   @doc """
-  The perspectives a "forms" flow may be for, in display order — the kinds of
-  user a host distinguishes (`FormFlow.Config.Flows.Perspective`). The
-  identity form of every "forms" flow offers them as a multi-select; the
-  picked ids are stored on the flow, and the flow type's `visible?/2` and
-  `editable?/2` read them for the viewer whose perspectives the router's
-  `perspectives` attr names. The default is none, which shows no field and
-  stores nothing:
-
-      def enabled_perspectives(_context, _config_data) do
-        [
-          %FormFlow.Config.Flows.Perspective{id: "applicant", name: "Applicant"},
-          %FormFlow.Config.Flows.Perspective{
-            id: "reviewer",
-            name: "Regional reviewer",
-            metadata: %{queue: :regional}
-          }
-        ]
-      end
-
-  Both sides read it: the template pages to offer and label the choices, the
-  instance pages to hand the flow's perspectives to the types as structs
-  (`FormFlow.Context.flow_perspectives`). The context is the flow's —
-  `:subflow` is the "forms" flow in question.
-  """
-  @callback enabled_perspectives(Context.t(), map()) :: [FormFlow.Config.Flows.Perspective.t()]
-
-  @doc """
   The flow instances the listing page shows, as a composable query over
   `FormFlow.Data.Instances.Flow` — `FormFlow.Data.Instances.Flows.list_query/1`
   is the building block. The default narrows to the current user's own:
@@ -141,10 +114,6 @@ defmodule FormFlow.Config do
         FormFlow.Config.Default.enabled_form_types(context, config_data)
       end
 
-      def enabled_perspectives(context, config_data) do
-        FormFlow.Config.Default.enabled_perspectives(context, config_data)
-      end
-
       def handle_instance_mount(context, config_data) do
         FormFlow.Config.Default.handle_instance_mount(context, config_data)
       end
@@ -159,7 +128,6 @@ defmodule FormFlow.Config do
 
       defoverridable enabled_flow_types: 2,
                      enabled_form_types: 2,
-                     enabled_perspectives: 2,
                      handle_instance_mount: 2,
                      flow_instances_query: 2,
                      enabled_instance_flows: 2

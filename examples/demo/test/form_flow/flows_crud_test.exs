@@ -169,19 +169,30 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(id).slug == "mine"
   end
 
-  test "a subflow's identity form offers the config's perspectives; Save stores them",
+  test "a subflow's identity form offers its type's perspectives; Save stores them",
        %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
+    # The field belongs to the chosen type, like its properties: none until
+    # a type is picked
     {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    refute html =~ "Perspectives"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_in_order"}})
+
+    html = render(view)
     assert html =~ "Perspectives"
     assert html =~ "Reviewer"
 
     view
     |> element("#flows-edit-flow-form-form")
-    |> render_change(%{"dynamic_form" => %{"perspectives" => ["reviewer"]}})
+    |> render_change(%{
+      "dynamic_form" => %{"form_flow_type" => "wizard_in_order", "perspectives" => ["reviewer"]}
+    })
 
     # Nothing persists until Save — a pending choice is an unsaved change
     refute Map.has_key?(Flows.get(node.subflow_id).properties, "perspectives")
@@ -194,6 +205,50 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # Show mode names them
     {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
     assert html =~ "For: Reviewer"
+
+    # The parent canvas names them on the subflow node: the ids ride in the
+    # node's data, the names in the editor's options
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    canvas = view |> element("#flows-show-editor") |> render()
+    assert canvas =~ ~s(perspectives&quot;:[&quot;reviewer&quot;])
+    assert canvas =~ "Reviewer"
+  end
+
+  test "the canvas's projected perspectives never save onto the node", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, _} =
+      Flows.update(Flows.get(node.subflow_id), %{properties: %{"perspectives" => ["reviewer"]}})
+
+    # The editor reports the node back with the projection still in its data
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        %{
+          "id" => node.id,
+          "type" => "subflow",
+          "subflow_id" => node.subflow_id,
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{
+            "label" => "Subflow 1",
+            "subflow_label" => "forms",
+            "perspectives" => ["reviewer"]
+          }
+        }
+      ],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    [saved] = Flows.get(root_id).nodes
+    refute Map.has_key?(saved.properties["data"], "perspectives")
+    assert Flows.get(node.subflow_id).properties["perspectives"] == ["reviewer"]
   end
 
   test "a complex flow has no perspectives of its own — its subflows do", %{conn: conn} do

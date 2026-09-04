@@ -122,19 +122,24 @@ never follows a rename; it changes only when an admin changes it.
 
 ### Perspectives: which kinds of user a flow is for
 
-**New: `enabled_perspectives/2` on `FormFlow.Config`**, returning
-`FormFlow.Config.Flows.Perspective` structs — the kinds of user a host
-distinguishes, each with an `id`, a `name`, a `description`, and whatever
-the host wants to carry in `metadata`. When a config offers some, the
-identity form of every "forms" flow — the drill-in page of a subflow, or a
-simple flow's own — gains a Perspectives multi-select, and the admin says
-which kinds of user that flow's forms are for: "this subflow is for
-applicants, this one for reviewers". The picked ids are stored on the flow
-under `properties["perspectives"]`; none means everyone. Perspective is set
-on a flow of forms and nowhere else — the forms inside read their flow's,
-and a flow whose forms belong to different perspectives is split into
-subflows. There are no per-form or per-node overrides, by design. The
-default offers nothing, which shows no field and stores nothing.
+**New: `perspectives` on `FormFlow.Config.Flows.Type`**, a list of
+`FormFlow.Config.Flows.Perspective` structs beside the type's `properties` —
+the kinds of user a flow of that type can be for, each with an `id`, a
+`name`, a `description`, and whatever the host wants to carry in
+`metadata`. Roles belong with the type that gives them meaning: a review
+type declares its reviewers and approvers, a plain wizard declares none. The
+host's config sets the list when it builds the type structs in
+`enabled_flow_types/2`, the library's built-in wizards included. When the
+chosen type declares some, the identity form of a "forms" flow — the
+drill-in page of a subflow, or a simple flow's own — gains a Perspectives
+multi-select under the type dropdown, and the admin says which kinds of
+user that flow's forms are for: "this subflow is for applicants, this one
+for reviewers". The picked ids are stored on the flow under
+`properties["perspectives"]`; none means everyone. Perspective is set on a
+flow of forms and nowhere else — the forms inside read their flow's, and a
+flow whose forms belong to different perspectives is split into subflows.
+There are no per-form or per-node overrides, by design. The library's
+types declare nothing, which shows no field and stores nothing.
 
 The property *states* which perspectives a flow is for; what that means is
 the flow type's to implement:
@@ -151,7 +156,7 @@ the flow type's to implement:
   `FormFlow.Web.router/1` and every instance LiveComponent — a string or a
   list of ids, `[]` by default — and reach every callback as
   `FormFlow.Context.perspectives`. `FormFlow.Context.flow_perspectives`
-  carries the structs the `:subflow` is for, resolved through the config,
+  carries the structs the `:subflow` is for, resolved through its type,
   so a type sees the host's metadata, not just the id.
 - **The instance pages consume it.** The flow instance's page lists only
   the forms for the viewer; a position for another perspective is refused
@@ -162,9 +167,12 @@ the flow type's to implement:
   completion is about the instance, visibility about the viewer.
 - **Perspective is routing and hiding, not authorization.** The gate is
   still `handle_instance_mount/2`.
-- The template Show page names a flow's perspectives beside its type. A
-  stored id the config no longer offers is flagged on the edit page and
-  dropped on the next save, as a stale related-form choice is.
+- The template Show page names a flow's perspectives beside its type, and
+  the canvas names them on each form subflow node, under a user icon —
+  read-only there, since they are set on the subflow's own page; the ids
+  ride the node's data as a display projection the save drops. A stored id
+  the type no longer declares is flagged on the edit page and dropped on
+  the next save, as a stale related-form choice is.
 - Every instance LiveComponent now also receives `uri` and `params` from
   the router, whether or not it reads them today, so a host rendering the
   components directly passes one set of attrs that never needs rewiring.

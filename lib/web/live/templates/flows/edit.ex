@@ -111,7 +111,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      socket
      |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
      |> assign(:pending_slug, Map.get(payload.data, :slug, socket.assigns.pending_slug))
-     |> assign(:pending_perspectives, pending_perspectives(payload, socket.assigns))
+     |> assign(:pending_perspectives, pending_perspectives(payload, pending_type, socket.assigns))
      |> assign(:pending_type, pending_type)
      |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
      |> reset_form_data_on_switch(pending_type)
@@ -133,12 +133,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     root = socket.assigns.node_id && Flows.get(socket.assigns.root_id)
     context = %Context{flow: root || flow, subflow: flow, subflow_node: subflow_node}
     types = flow_types(socket.assigns, context)
-    perspectives = Shared.perspectives(context, socket.assigns)
 
     {:ok,
      socket
-     |> assign(flow: flow, root: root, flow_types: types, perspectives: perspectives)
-     |> assign(form_data: form_data(flow, types))
+     |> assign(flow: flow, root: root, flow_types: types, form_data: form_data(flow, types))
      |> assign(pending(flow))
      |> assign(page(socket.assigns, flow, root))}
   end
@@ -155,27 +153,39 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     }
   end
 
-  # The perspectives the admin has checked. With no field on the page (the
-  # config offers none for this flow) the stored ids stay as they are.
-  defp pending_perspectives(_payload, %{perspectives: []} = assigns),
-    do: assigns.pending_perspectives
+  # The perspectives the admin has checked, among those the pending type
+  # declares: a type that declares none has no field and its flows are for
+  # everyone, and switching types keeps only the ids both types share.
+  defp pending_perspectives(payload, pending_type, assigns) do
+    offered = for %{id: id} <- Shared.perspectives(assigns.flow_types, pending_type), do: id
 
-  defp pending_perspectives(payload, _assigns), do: List.wrap(payload.data[:perspectives] || [])
+    payload.data[:perspectives]
+    |> List.wrap()
+    |> Enum.filter(&(&1 in offered))
+  end
 
   # The canvas and the dropdown options it offers its nodes
   defp page(_assigns, nil, _root) do
-    %{data: nil, current: nil, embedded_flow_type_options: nil, embedded_form_type_options: nil}
+    %{
+      data: nil,
+      current: nil,
+      embedded_flow_type_options: nil,
+      embedded_form_type_options: nil,
+      embedded_perspective_options: nil
+    }
   end
 
   defp page(assigns, flow, root) do
     data = ReactFlow.to_data(flow)
+    embedded = embedded_flow_context(flow, root)
 
     %{
       data: data,
       current: data,
-      embedded_flow_type_options:
-        type_select_options(flow_types(assigns, embedded_flow_context(flow, root))),
-      embedded_form_type_options: embedded_form_type_options(assigns, flow, root)
+      embedded_flow_type_options: type_select_options(flow_types(assigns, embedded)),
+      embedded_form_type_options: embedded_form_type_options(assigns, flow, root),
+      embedded_perspective_options:
+        Shared.perspective_options(Shared.all_perspectives(flow_types(assigns, embedded)))
     }
   end
 
@@ -692,22 +702,28 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             label="Slug"
             description="A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
           />
-          <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective)
-                — only when the config offers perspectives for it --%>
-          <:field
-            :if={@perspectives != []}
-            type="checkbox"
-            name="perspectives"
-            label="Perspectives"
-            description={Shared.perspectives_description(@flow, @perspectives)}
-            options={Shared.perspective_options(@perspectives)}
-          />
           <:field
             :if={@flow_types != []}
             type="dropdown"
             name="form_flow_type"
             label="Form flow type"
             options={type_select_options(@flow_types)}
+          />
+          <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective):
+                the pending type's, like its properties below — a type that
+                declares none has no field --%>
+          <:field
+            :if={Shared.perspectives(@flow_types, @pending_type) != []}
+            type="checkbox"
+            name="perspectives"
+            label="Perspectives"
+            description={
+              Shared.perspectives_description(
+                @flow,
+                Shared.perspectives(@flow_types, @pending_type)
+              )
+            }
+            options={Shared.perspective_options(Shared.perspectives(@flow_types, @pending_type))}
           />
           <%!-- The pending type's properties (FormFlow.Config.Property), one
                 field each; picking another type swaps them --%>
@@ -733,6 +749,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         flow_label={@flow.label}
         form_flow_type_options={@embedded_flow_type_options}
         form_type_options={@embedded_form_type_options}
+        perspective_options={@embedded_perspective_options}
       />
 
       <div

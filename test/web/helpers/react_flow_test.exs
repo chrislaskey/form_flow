@@ -237,6 +237,26 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert data["label"] == "Collect address"
     end
 
+    test "projects the embedded flow's perspectives into a subflow node's data" do
+      node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Review"}},
+        subflow: %FormFlow.Data.Templates.Flow{properties: %{"perspectives" => ["reviewer"]}}
+      }
+
+      flow = %FormFlow.Data.Templates.Flow{nodes: [node], relationships: []}
+
+      assert [%{"data" => data}] = ReactFlow.to_data(flow).nodes
+      assert data["perspectives"] == ["reviewer"]
+
+      # A subflow for everyone projects nothing
+      everyone = %{node | subflow: %FormFlow.Data.Templates.Flow{properties: %{}}}
+      flow = %FormFlow.Data.Templates.Flow{nodes: [everyone], relationships: []}
+
+      assert [%{"data" => data}] = ReactFlow.to_data(flow).nodes
+      refute Map.has_key?(data, "perspectives")
+    end
+
     test "projects the collected form's form_type into a form node's data" do
       node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),

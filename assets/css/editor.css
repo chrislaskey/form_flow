@@ -184,6 +184,25 @@
   color: #71717a;
 }
 
+.ff-node__perspectives {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #71717a;
+}
+
+.ff-node__perspectives svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.ff-node__perspectives-title {
+  font-weight: 600;
+}
+
 .ff-node__open {
   margin-top: 6px;
   padding: 2px 8px;

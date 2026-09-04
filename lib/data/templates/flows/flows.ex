@@ -564,6 +564,9 @@ defmodule FormFlow.Data.Templates.Flows do
     Enum.map_reduce(nodes_attrs, %{}, fn attrs, intents ->
       {flow_type, properties} = pop_data_key(node_properties(attrs), "form_flow_type")
       {form_type, properties} = pop_data_key(properties, "form_type")
+      # Projected for display only (FormFlow.Web.Helpers.ReactFlow); the
+      # subflow's identity form is where perspectives are set
+      {_perspectives, properties} = pop_data_key(properties, "perspectives")
 
       intent = %{
         form_flow_type: flow_type,

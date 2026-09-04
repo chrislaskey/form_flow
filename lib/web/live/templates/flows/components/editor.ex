@@ -63,11 +63,21 @@ defmodule FormFlow.Web.Components.Editor do
         "value's label when not"
   )
 
+  attr(:perspective_options, :list,
+    default: [],
+    doc:
+      "perspective names as {label, value} tuples (every perspective the " <>
+        "configured flow types declare, as name and id); a form subflow node names " <>
+        "the perspectives its embedded flow is for, read-only — they are set " <>
+        "on the subflow's own page"
+  )
+
   def editor(assigns) do
     assigns =
       assign(assigns,
         form_flow_type_options_json: options_json(assigns.form_flow_type_options),
-        form_type_options_json: options_json(assigns.form_type_options)
+        form_type_options_json: options_json(assigns.form_type_options),
+        perspective_options_json: options_json(assigns.perspective_options)
       )
 
     ~H"""
@@ -83,6 +93,7 @@ defmodule FormFlow.Web.Components.Editor do
       data-flow-label={@flow_label}
       data-form-flow-type-options={Phoenix.json_library().encode!(@form_flow_type_options_json)}
       data-form-type-options={Phoenix.json_library().encode!(@form_type_options_json)}
+      data-perspective-options={Phoenix.json_library().encode!(@perspective_options_json)}
       data-flow={ReactFlow.to_json(@data)}
       style="height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
@@ -104,6 +115,7 @@ defmodule FormFlow.Web.Components.Editor do
               flowLabel: this.el.dataset.flowLabel,
               formFlowTypeOptions: JSON.parse(this.el.dataset.formFlowTypeOptions),
               formTypeOptions: JSON.parse(this.el.dataset.formTypeOptions),
+              perspectiveOptions: JSON.parse(this.el.dataset.perspectiveOptions),
               onChange: (flow) => this.pushEventTo(this.el, "form_flow:flow_changed", flow),
               onOpenSubflow: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_subflow", {node_id: nodeId}),

@@ -66,7 +66,13 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        data: data,
        root: root,
        flow_types: flow && flow_types(socket.assigns, context),
-       perspectives: Shared.perspectives(context, socket.assigns),
+       embedded_perspective_options:
+         flow &&
+           Shared.perspective_options(
+             Shared.all_perspectives(
+               flow_types(socket.assigns, embedded_flow_context(flow, root))
+             )
+           ),
        embedded_flow_type_options:
          flow &&
            type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
@@ -254,6 +260,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         flow_label={@flow.label}
         form_flow_type_options={@embedded_flow_type_options}
         form_type_options={@embedded_form_type_options}
+        perspective_options={@embedded_perspective_options}
       />
     </div>
     """
@@ -271,10 +278,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   # The perspectives the flow is for, by name — the stored ids resolved
-  # through what the config offers; an id it no longer offers is not shown
+  # through its type's; an id the type no longer declares is not shown
   defp perspective_names(assigns) do
+    declared = Shared.perspectives(assigns.flow_types, assigns.flow.properties["form_flow_type"])
+
     assigns.flow
-    |> FormFlow.Config.Flows.Perspective.for_flow(assigns.perspectives)
+    |> FormFlow.Config.Flows.Perspective.for_flow(declared)
     |> Enum.map(& &1.name)
   end
 

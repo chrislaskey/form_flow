@@ -17,11 +17,14 @@ defmodule DemoWeb.FormFlowLive.Config do
 
   # The checklist joins the built-in types wherever they are offered; a flow
   # the defaults give no types (a "subflows" flow) gets none here either.
+  # Every type, the built-in wizards included, is for the demo's two kinds of
+  # user: a type's `perspectives` are the host's to set, and setting them on
+  # the library's structs is how the wizards learn the host's roles.
   @impl true
   def enabled_flow_types(context, config_data) do
     case FormFlow.Config.Default.enabled_flow_types(context, config_data) do
       [] -> []
-      types -> types ++ [checklist()]
+      types -> Enum.map(types ++ [checklist()], &%{&1 | perspectives: perspectives()})
     end
   end
 
@@ -35,8 +38,7 @@ defmodule DemoWeb.FormFlowLive.Config do
   # the users page then shows a viewer only the subflows for the
   # perspectives its `perspectives` attr names. The metadata is the host's
   # own — here, which desk a reviewer's work lands on.
-  @impl true
-  def enabled_perspectives(_context, _config_data) do
+  defp perspectives do
     [
       %FormFlow.Config.Flows.Perspective{
         id: "applicant",

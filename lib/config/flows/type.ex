@@ -8,6 +8,17 @@ defmodule FormFlow.Config.Flows.Type do
   is what the type does. `:id` is the value stored in the flow's
   `properties["form_flow_type"]`.
 
+  Two lists on the struct are what an admin sets per flow of the type.
+  `:properties` are the type's settings (`FormFlow.Config.Property`), one
+  field each on the identity form. `:perspectives` are the kinds of user a
+  flow of this type can be for (`FormFlow.Config.Flows.Perspective`) — a
+  review type declares its reviewers and approvers, a plain wizard declares
+  none and is for everyone. The identity form offers the picked type's as a
+  multi-select, and the picked ids are stored on the flow. A host's config
+  sets both lists when it builds the struct, the library's built-in types
+  included: `enabled_flow_types/2` can return the defaults with
+  `perspectives` filled in.
+
   Every callback takes the `FormFlow.Context` of one form in one flow
   instance — `:form_progress` is the form, `:flow_progress` its flow's forms
   in order — plus `config_data`. The defaults, `FormFlow.Config.Flows.Type.Default`,
@@ -28,14 +39,15 @@ defmodule FormFlow.Config.Flows.Type do
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates.Flow
 
-  defstruct [:id, :module, :name, :description, properties: []]
+  defstruct [:id, :module, :name, :description, properties: [], perspectives: []]
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
           module: module(),
           name: String.t(),
           description: String.t() | nil,
-          properties: [FormFlow.Config.Property.t()]
+          properties: [FormFlow.Config.Property.t()],
+          perspectives: [FormFlow.Config.Flows.Perspective.t()]
         }
 
   @doc """
