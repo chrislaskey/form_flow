@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.13.0
+## v0.18.0
 
 ### One router module for every route a host mounts
 
@@ -161,6 +161,8 @@ its left-centre rather than its top-centre. `assets/js/editor.jsx` changed;
   `min-width` stretch it wider than its read-only twin; every node is now the
   same width in both modes regardless of content.
 
+## v0.17.0
+
 ### `FormFlow.Web.CoreComponents`, and a `components` override attr
 
 **New: `FormFlow.Web.CoreComponents`**, a Phoenix 1.8-generated, Tailwind
@@ -194,6 +196,80 @@ back to the built-ins only for whatever a host's own module doesn't define.
   Continue) adopt `variant="primary"`'s daisyUI look instead.
 - Passing a host's `components` module into `<DynamicForm.form>` calls is
   still a follow-up, not done here.
+
+### The user-facing mount root is the listing
+
+**Breaking: the user-facing URLs lost their `/flows` segment.** With
+`base="/users"`, the listing is `/users`, an instance is `/users/:id`, and a
+form inside it is `/users/:id/forms/*path` and `/users/:id/forms/*path/edit`.
+The landing page the mount root used to draw is gone with the segment. The
+user-facing side has one section, so its mount root is that section's
+index; the template side keeps its landing page and its `/flows` and
+`/forms` segments because it has two. `FormFlow.Web.Instances.Paths` builds
+the new shape, so every link and redirect the components make follows.
+Nothing redirects from the old URLs; a host with links to `/users/flows/…`
+updates them.
+
+### The flows a page names are the flows it lists
+
+**`flows` narrows the listing, not only the flows to start.** When the
+`instances` attr is left to its default, the listing shows the current
+user's own instances of the flows named by `flows` — so a page mounted
+for Dog License lists the user's Dog License instances and not their
+renewals. `flows` omitted (or `nil`) keeps today's behaviour, the user's
+own instances of every flow. A host's own `instances` query is never
+narrowed by what the page offers to start.
+
+- **The instance pages refuse an instance of a flow the page did not name.**
+  With `flows` set, `FormFlow.Web.Instances.Flows.Show`, `Forms.Show`, and
+  `Forms.Edit` render "This flow is not available here." for an instance of
+  any other flow, before the host's `on_mount` is asked and before `Edit`
+  starts anything — the counterpart of the listing refusing to start a flow
+  it did not offer. `flows` omitted accepts every instance, as before.
+  `FormFlow.Web.Instances.Forms.Shared.resolve_flows/2` resolves the attr —
+  structs, slugs in the tenant — for the listing and the pages alike.
+- **`FormFlow.Data.Instances.Flows.list_query/1` and `list/1` take
+  `flow:`** — a `FormFlow.Data.Templates.Flow`, an id, or a slug, or a list
+  of them; `[]` matches nothing. `narrow_flow/2` applies the same to any
+  query over instances, beside `narrow_tenant/2`. Slugs are per tenant, so
+  a slug alone matches in every tenant; pair it with `tenant_id:`.
+
+## v0.16.0
+
+### Every entry point takes values: `FormFlow.Config` is gone
+
+**Removed: `FormFlow.Config`**, its behaviour, `use FormFlow.Config`,
+`FormFlow.Config.Default`, and the `config` and `config_data` attrs. Nothing
+in the library reaches back into a host module by convention any more:
+every way a host shapes a page is a value it passes to the router or the
+LiveComponents. The `FormFlow.Config.*` namespace stays for the structs and
+behaviours a host builds with — `Flows.Type`, `Forms.Type`, `Perspective`,
+`Property`.
+
+- **`flow_types` and `form_types` attrs** replace `enabled_flow_types/2`
+  and `enabled_form_types/2`: lists of the type structs, defaulting to
+  `FormFlow.Config.Flows.Type.defaults/0` and
+  `FormFlow.Config.Forms.Type.defaults/0`. They are the one thing that must
+  be the same value on the admin pages and on every instance page, since a
+  type chosen on one side acts on the other — a host keeps them in one
+  function of its own and passes it everywhere. The rule that flow types
+  apply to "forms" flows only is the pages' now, not each list's.
+- **`callback_data` replaces `config_data`**: the host's own map, passed
+  unmodified as the second argument of every callback FormFlow calls — the
+  types' and `on_mount` — beside the `FormFlow.Context`. Every type callback
+  keeps its arity; only the name changed.
+- **`on_mount` replaces `handle_instance_mount/2`**: a function of the
+  page's context and `callback_data` returning the same three answers, asked
+  on every user-facing page before anything is drawn. `nil` allows
+  everything. A host shares one gate across pages by pointing at the same
+  function.
+- **`instances` replaces `flow_instances_query/2`**: the listing's query,
+  `nil` for the user's own. **`flows` replaces `enabled_instance_flows/2`**:
+  the templates the listing offers to start, structs or slugs, `nil` for
+  every root of the tenant. The router's `tenant_id` is applied on top of
+  both, as before.
+
+## v0.15.0
 
 ### Templates and instances know their tenant; form instances know their user
 
@@ -317,39 +393,6 @@ never follows a rename; it changes only when an admin changes it.
   treat NULLs as distinct, which would let a host with no tenants reuse a
   slug. Drop and recreate any database migrated before this version.
 
-### Every entry point takes values: `FormFlow.Config` is gone
-
-**Removed: `FormFlow.Config`**, its behaviour, `use FormFlow.Config`,
-`FormFlow.Config.Default`, and the `config` and `config_data` attrs. Nothing
-in the library reaches back into a host module by convention any more:
-every way a host shapes a page is a value it passes to the router or the
-LiveComponents. The `FormFlow.Config.*` namespace stays for the structs and
-behaviours a host builds with — `Flows.Type`, `Forms.Type`, `Perspective`,
-`Property`.
-
-- **`flow_types` and `form_types` attrs** replace `enabled_flow_types/2`
-  and `enabled_form_types/2`: lists of the type structs, defaulting to
-  `FormFlow.Config.Flows.Type.defaults/0` and
-  `FormFlow.Config.Forms.Type.defaults/0`. They are the one thing that must
-  be the same value on the admin pages and on every instance page, since a
-  type chosen on one side acts on the other — a host keeps them in one
-  function of its own and passes it everywhere. The rule that flow types
-  apply to "forms" flows only is the pages' now, not each list's.
-- **`callback_data` replaces `config_data`**: the host's own map, passed
-  unmodified as the second argument of every callback FormFlow calls — the
-  types' and `on_mount` — beside the `FormFlow.Context`. Every type callback
-  keeps its arity; only the name changed.
-- **`on_mount` replaces `handle_instance_mount/2`**: a function of the
-  page's context and `callback_data` returning the same three answers, asked
-  on every user-facing page before anything is drawn. `nil` allows
-  everything. A host shares one gate across pages by pointing at the same
-  function.
-- **`instances` replaces `flow_instances_query/2`**: the listing's query,
-  `nil` for the user's own. **`flows` replaces `enabled_instance_flows/2`**:
-  the templates the listing offers to start, structs or slugs, `nil` for
-  every root of the tenant. The router's `tenant_id` is applied on top of
-  both, as before.
-
 ### Perspectives: which kinds of user a flow is for
 
 **New: `perspectives` on `FormFlow.Config.Flows.Type`**, a list of
@@ -407,42 +450,25 @@ the flow type's to implement:
   the router, whether or not it reads them today, so a host rendering the
   components directly passes one set of attrs that never needs rewiring.
 
-### The user-facing mount root is the listing
+## v0.14.0
 
-**Breaking: the user-facing URLs lost their `/flows` segment.** With
-`base="/users"`, the listing is `/users`, an instance is `/users/:id`, and a
-form inside it is `/users/:id/forms/*path` and `/users/:id/forms/*path/edit`.
-The landing page the mount root used to draw is gone with the segment. The
-user-facing side has one section, so its mount root is that section's
-index; the template side keeps its landing page and its `/flows` and
-`/forms` segments because it has two. `FormFlow.Web.Instances.Paths` builds
-the new shape, so every link and redirect the components make follows.
-Nothing redirects from the old URLs; a host with links to `/users/flows/…`
-updates them.
+Not released — the version went from v0.13.0 straight to v0.15.0.
 
-### The flows a page names are the flows it lists
+## v0.13.0
 
-**`flows` narrows the listing, not only the flows to start.** When the
-`instances` attr is left to its default, the listing shows the current
-user's own instances of the flows named by `flows` — so a page mounted
-for Dog License lists the user's Dog License instances and not their
-renewals. `flows` omitted (or `nil`) keeps today's behaviour, the user's
-own instances of every flow. A host's own `instances` query is never
-narrowed by what the page offers to start.
+Both instance schemas gained the host identities they carry today:
+`FormFlow.Data.Instances.Form` gained `user_id`, and it and
+`FormFlow.Data.Instances.Flow` both gained `tenant_id` — opaque host values,
+stamped at creation and immutable afterwards, that FormFlow enforces nothing
+with. `tenant_id` became an optional attr on `FormFlow.Web.router/1` and the
+instance LiveComponents, and `FormFlow.Data.Instances.Flows.list_query/1`
+narrows by both. The templates got the same treatment in v0.15.0, which is
+where the whole of it is written up.
 
-- **The instance pages refuse an instance of a flow the page did not name.**
-  With `flows` set, `FormFlow.Web.Instances.Flows.Show`, `Forms.Show`, and
-  `Forms.Edit` render "This flow is not available here." for an instance of
-  any other flow, before the host's `on_mount` is asked and before `Edit`
-  starts anything — the counterpart of the listing refusing to start a flow
-  it did not offer. `flows` omitted accepts every instance, as before.
-  `FormFlow.Web.Instances.Forms.Shared.resolve_flows/2` resolves the attr —
-  structs, slugs in the tenant — for the listing and the pages alike.
-- **`FormFlow.Data.Instances.Flows.list_query/1` and `list/1` take
-  `flow:`** — a `FormFlow.Data.Templates.Flow`, an id, or a slug, or a list
-  of them; `[]` matches nothing. `narrow_flow/2` applies the same to any
-  query over instances, beside `narrow_tenant/2`. Slugs are per tenant, so
-  a slug alone matches in every tenant; pair it with `tenant_id:`.
+**Breaking: the v01 migration changed** — `form_flow_instance_flows` gained
+`tenant_id`, `form_flow_instance_forms` gained `user_id` and `tenant_id`, and
+both gained indexes on them. Drop and recreate any database migrated before
+this version.
 
 ## v0.12.0
 
@@ -1007,6 +1033,27 @@ page are in *flow order*, which sorting would destroy, and are derived
 `FormFlow.Data.Instances.FormProgress` structs rather than rows; the version
 sidebar on a form's page is navigation, not data.
 
+## v0.9.0
+
+Flow types blocked out: a flow carries a type, `FormFlow.Config` grew the
+override format that describes one, and the flow pages and the canvas act on
+it. The editor gained a vertical node menu, and the flow edit and show pages
+a round of refinements.
+
+## v0.8.0
+
+The first user-facing UI: `FormFlow.Web.Instances.Flows.Show` and
+`Instances.Forms.Show`, and the routes that reach them, so a user could see a
+flow instance and the answers inside it rather than only the admin's side of
+it. The config module moved to its own file.
+
+## v0.7.0
+
+The first pass at instance data: `FormFlow.Data.Instances.Flow` and
+`Instances.Form`, and the progress derived over them — where a user is in a
+flow and which forms are done. No UI yet; that arrived in v0.8.0. The module
+config pattern was wired up alongside.
+
 ## v0.6.0
 
 ### Breaking: Renamed Graph to Flow
@@ -1052,3 +1099,30 @@ The committed editor bundle was rebuilt.
 `Node` and `Relationship` keep their Neo4j property-graph names, and the
 Neo4j mapping (`guides/neo4j.md`) now targets `:Flow` nodes instead of
 `:Graph`. Routes are unchanged — the web layer already spoke `/flows`.
+
+## v0.5.0
+
+Form preview, so an admin could see a draft the way a user will, and delete
+draft alongside publish. The index pages became `Slab.table`s.
+
+## v0.4.0
+
+Subflows and reusable flows: a flow can embed another, in the data and on the
+canvas. Forms arrived beside them — form versioning, form CRUD, forms
+connected to flow nodes, and the form template UX rendered with
+`DynamicForm`. The editor learned to warn about unsaved changes on every way
+out of the page: an Elixir navigation, a browser back/forward, and closing
+the tab.
+
+## v0.3.0
+
+The shape of the library: the module structure, the migration pattern hosts
+run inside their own migrations, the pattern for a LiveComponent shipping its
+own JavaScript, and the ReactFlow integration. Graph data got its migrations
+and schemas, and `examples/demo` was added — a real Phoenix app to exercise
+all of it against.
+
+## v0.2.0
+
+The initial library skeleton, packaged: mix metadata, a licence, ex_doc, and
+the guides scaffolding.
