@@ -4,9 +4,13 @@
    cannot collide with its classes. */
 
 .ff-node {
-  /* The anchor for the ⋮ menu's absolute positioning */
+  /* The anchor for the ⋮ menu's absolute positioning. A fixed width (not
+     min-width) so every node is the same size regardless of its content —
+     editable nodes hold a <select> the read-only ones don't, which a
+     shrink-to-fit min-width lets stretch the node wider than its read-only
+     twin. */
   position: relative;
-  min-width: 160px;
+  width: 180px;
   padding: 10px 12px;
   border: 1px solid #d4d4d8;
   border-left: 3px solid #71717a;

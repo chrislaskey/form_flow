@@ -238,7 +238,7 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
       <NodeMenu items={menuItems} />
       {data.kind !== "start" && (
-        <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
+        <Handle type="target" position={Position.Left} isConnectable={isConnectable} />
       )}
       <div className="ff-node__title">
         {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
@@ -273,7 +273,7 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
         </button>
       )}
       {data.kind !== "end" && (
-        <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
+        <Handle type="source" position={Position.Right} isConnectable={isConnectable} />
       )}
     </div>
   );
@@ -297,7 +297,7 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
   return (
     <div className={`ff-node ff-node--subflow ${selected ? "is-selected" : ""}`}>
       <NodeMenu items={menuItems} />
-      <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
+      <Handle type="target" position={Position.Left} isConnectable={isConnectable} />
       <div className="ff-node__title">
         <span aria-hidden="true">⧉</span>
         {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
@@ -333,7 +333,7 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
       >
         Open →
       </button>
-      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
+      <Handle type="source" position={Position.Right} isConnectable={isConnectable} />
     </div>
   );
 }
@@ -347,9 +347,9 @@ const nodeTypes = { step: StepNode, subflow: SubflowNode };
 // it is deliberately empty rather than a second, competing definition of a flow.
 const EMPTY_FLOW = { nodes: [], edges: [] };
 
-// Nodes are positioned by their top centre, so a node dropped at the cursor
-// lands under it rather than to its right
-const NODE_ORIGIN = [0.5, 0];
+// Nodes are positioned by their left centre, so a node dropped at the cursor
+// lands beside it rather than below it — flows build left to right
+const NODE_ORIGIN = [0, 0.5];
 
 // Ids stay in the same simple numeric style the server sends, without colliding
 // with the ids already in play

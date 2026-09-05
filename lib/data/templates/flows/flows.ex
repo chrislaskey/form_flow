@@ -234,6 +234,12 @@ defmodule FormFlow.Data.Templates.Flows do
   The node attributes every flow starts from: a pinned `Start` and `End`,
   nothing else — the user connects the dots. One universal seed for both
   flavors, used for new flows and for subflow children created at save.
+
+  Laid out left to right, matching the editor's horizontal orientation, with
+  `End` listed (and so inserted) first — `FormFlow.Data.Templates.Flows.get/1`
+  loads a flow's nodes in insertion order, and the editor's add actions place
+  a new node to the right of the *last* one, so `Start` inserted last is what
+  puts the first node someone adds to the right of `Start` rather than `End`.
   """
   def starter_nodes do
     [
@@ -241,18 +247,18 @@ defmodule FormFlow.Data.Templates.Flows do
         labels: [],
         properties: %{
           "type" => "step",
-          "position" => %{"x" => 240, "y" => 0},
+          "position" => %{"x" => 900, "y" => 0},
           "deletable" => false,
-          "data" => %{"label" => "Start", "kind" => "start"}
+          "data" => %{"label" => "End", "kind" => "end"}
         }
       },
       %{
         labels: [],
         properties: %{
           "type" => "step",
-          "position" => %{"x" => 240, "y" => 260},
+          "position" => %{"x" => 0, "y" => 0},
           "deletable" => false,
-          "data" => %{"label" => "End", "kind" => "end"}
+          "data" => %{"label" => "Start", "kind" => "start"}
         }
       }
     ]

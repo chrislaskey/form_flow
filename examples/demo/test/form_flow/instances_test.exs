@@ -974,13 +974,17 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
       assert html =~ "Intake was submitted again on"
-      assert html =~ ~r/<td[^>]*>\s*Name\s*<\/td>\s*<td[^>]*>Ada<\/td>\s*<td[^>]*>Grace<\/td>/
+      assert html =~
+               ~r/<td[^>]*>\s*Name\s*<\/td>\s*<td[^>]*><span[^>]*>Ada<\/span><\/td>\s*<td[^>]*><span[^>]*>Grace<\/span><\/td>/
+
       refute html =~ "structure also changed"
 
       {:ok, _reopened} = Instances.Forms.update_status(instance, [review.id], :in_progress)
       {:ok, view, html} = live(conn, edit_path(instance, [review.id]))
       assert html =~ "Intake was submitted again on"
-      assert html =~ ~r/Name\s*<\/td>\s*<td[^>]*>Ada<\/td>\s*<td[^>]*>Grace/
+
+      assert html =~
+               ~r/Name\s*<\/td>\s*<td[^>]*><span[^>]*>Ada<\/span><\/td>\s*<td[^>]*><span[^>]*>Grace/
       # Still editable: resubmitting is how the review becomes current again
       assert has_element?(view, "button[type='submit']")
     end

@@ -637,15 +637,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <Core.button
-            :if={unsaved_changes?(assigns)}
-            components={@components}
-            phx-click="request_discard"
-            phx-target={@myself}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:border-red-400"
-          >
-            Discard changes
-          </Core.button>
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would
                 desync from reality when unsaved changes turn this click into
@@ -661,22 +652,25 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             class="flex items-center gap-1.5 text-xs"
           >
             <span class="text-zinc-500">Show</span>
-            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
-              <span class="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow transition-transform" />
+            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
+              <span class="inline-block h-5 w-5 translate-x-5 rounded-full bg-white shadow transition-transform" />
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </button>
           <Core.button
+            :if={unsaved_changes?(assigns)}
+            components={@components}
+            phx-click="request_discard"
+            phx-target={@myself}
+            class="btn btn-error btn-soft"
+          >
+            Discard changes
+          </Core.button>
+          <Core.button
             components={@components}
             phx-click="save"
             phx-target={@myself}
-            class={[
-              "rounded-md border px-2 py-1 text-xs",
-              if(unsaved_changes?(assigns),
-                do: "border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700",
-                else: "border-zinc-300 text-zinc-700 hover:border-zinc-400"
-              )
-            ]}
+            variant={if(unsaved_changes?(assigns), do: "primary")}
           >
             Save
           </Core.button>
@@ -684,9 +678,19 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
-      <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
+      <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
 
-      <%!-- The flow's own fields, beside the canvas. Edits here are pending
+      <Editor.editor
+        id={"#{@id}-editor"}
+        data={@data}
+        target={@myself}
+        flow_label={@flow.label}
+        form_flow_type_options={@embedded_flow_type_options}
+        form_type_options={@embedded_form_type_options}
+        perspective_options={@embedded_perspective_options}
+      />
+
+      <%!-- The flow's own fields, below the canvas. Edits here are pending
             like canvas edits: nothing persists until the header's Save, which
             writes both — on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
@@ -694,7 +698,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             The type dropdown exists only when the page's flow_types apply
             to this flow — how the forms are presented belongs to the flow
             of forms itself, so that is "forms" flows only. --%>
-      <div class="mb-3 max-w-md">
+      <div class="mt-3 max-w-md">
         <DynamicForm.form
           id={"#{@id}-flow-form"}
           data={@form_data}
@@ -750,16 +754,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         </DynamicForm.form>
       </div>
 
-      <Editor.editor
-        id={"#{@id}-editor"}
-        data={@data}
-        target={@myself}
-        flow_label={@flow.label}
-        form_flow_type_options={@embedded_flow_type_options}
-        form_type_options={@embedded_form_type_options}
-        perspective_options={@embedded_perspective_options}
-      />
-
       <div
         :if={@pending_navigation}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -773,7 +767,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
               components={@components}
               phx-click="cancel_navigation"
               phx-target={@myself}
-              class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+              class="btn"
             >
               Keep editing
             </Core.button>
@@ -802,7 +796,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
               components={@components}
               phx-click="cancel_discard"
               phx-target={@myself}
-              class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+              class="btn"
             >
               Keep editing
             </Core.button>
@@ -810,7 +804,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
               components={@components}
               phx-click="confirm_discard"
               phx-target={@myself}
-              class="rounded-md border border-red-600 bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+              class="btn btn-error"
             >
               Discard changes
             </Core.button>

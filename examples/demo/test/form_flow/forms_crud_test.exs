@@ -364,22 +364,22 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute has_element?(view, ~s(#forms-edit-form-form button[type="submit"]))
     assert render(view) =~ ~r/Save draft\s*<\/button>.*Publish/s
 
-    # Quiet while clean, primary once the form differs from what's persisted —
-    # matching the flows editor's Save
-    refute has_element?(view, ~s(button[form="forms-edit-form-form"].bg-cyan-600))
+    # Quiet (btn-soft) while clean, primary (no btn-soft) once the form
+    # differs from what's persisted — matching the flows editor's Save
+    assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
 
     view
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
-    assert has_element?(view, ~s(button[form="forms-edit-form-form"].bg-cyan-600))
+    refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
 
     view
     |> element("#forms-edit-form-form")
     |> render_submit(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
     assert render(view) =~ "Saved."
-    refute has_element?(view, ~s(button[form="forms-edit-form-form"].bg-cyan-600))
+    assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
   end
 
   test "opening a form node from the edit canvas stays in edit mode", %{conn: conn} do
@@ -545,8 +545,8 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
 
-    # Delete draft sits left of the Show/Edit toggle, which sits left of Publish
-    assert html =~ ~r/Delete draft.*Switch to Edit.*Publish/s
+    # The Show/Edit toggle sits left of Delete draft, which sits left of Publish
+    assert html =~ ~r/Switch to Edit.*Delete draft.*Publish/s
 
     view |> element("button", "Delete draft") |> render_click()
 
@@ -565,7 +565,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
-    assert html =~ ~r/Delete draft.*Switch to Show.*Save.*Publish/s
+    assert html =~ ~r/Switch to Show.*Delete draft.*Save.*Publish/s
 
     view |> element("button", "Delete draft") |> render_click()
 

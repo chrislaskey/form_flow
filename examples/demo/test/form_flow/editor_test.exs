@@ -73,10 +73,12 @@ defmodule Demo.FormFlowEditorTest do
         |> Jason.decode!()
 
       # The universal seed: a pinned Start and End, no middle node, no edges —
-      # the user connects the dots
+      # the user connects the dots. End is inserted first (see
+      # Flows.starter_nodes/0) so a node someone adds lands to the right of
+      # Start rather than End.
       assert Enum.map(data["nodes"], &{&1["data"]["label"], &1["deletable"]}) == [
-               {"Start", false},
-               {"End", false}
+               {"End", false},
+               {"Start", false}
              ]
 
       assert data["edges"] == []

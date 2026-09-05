@@ -2,6 +2,47 @@
 
 ## v0.13.0
 
+### The flow editor builds left to right
+
+**The canvas is horizontal now**, matching how a flow reads: `Start`'s
+connection handle is on its right, every other node's target handle is on
+its left and source handle on its right, and a dropped node's `position` is
+its left-centre rather than its top-centre. `assets/js/editor.jsx` changed;
+`priv/static/form_flow_editor.mjs` is rebuilt from it (`assets/build.sh`).
+
+- **`Flows.starter_nodes/0`'s seed is laid out left to right** — `Start` at
+  `x: 0`, `End` at `x: 900` — and, since `Flows.get/1` loads a flow's nodes
+  in insertion order and the editor's add actions place a new node to the
+  right of the *last* one, `End` is listed (and so inserted) first so that
+  `Start` — inserted last — is what a freshly seeded flow's first added node
+  lands beside, not `End`.
+- **The flow edit page's layout is breadcrumbs/actions, then the canvas,
+  then the flow's own Name/Slug/type fields** — the canvas used to sit below
+  that details form; now the diagram people are here to build is the first
+  thing they see.
+- **Every header and modal button on the flow and form template pages is
+  sized like `FormFlow.Web.CoreComponents.button/1`** now, not just the
+  primary ones — Save and Save draft (soft while clean, solid once there's
+  something to save, via `variant`), Publish (`variant="primary"`), Discard
+  changes, Delete, and Delete draft (`btn btn-error btn-soft`), the discard
+  modal's confirm (`btn btn-error`), and Refresh, Archive, New draft from
+  this version, and the modals' Keep editing (plain `btn`). The custom
+  Tailwind classes these all used are gone.
+- **The Show/Edit toggle sits before the action buttons, not after them** —
+  Discard changes and Save on the flow edit page, Delete draft and Save
+  draft/Publish on the form edit page, Delete draft and Publish on the form
+  show page — so every CTA reads to the toggle's right.
+- **The Show/Edit and Auto-refresh toggles are a size up** (`h-6 w-11`
+  track, `h-5 w-5` knob, was `h-5 w-9`/`h-4 w-4`) to match the now-larger
+  buttons beside them.
+- **A page notice (e.g. "Saved.") is a full-width banner** —
+  `bg-green-50 p-6 rounded-lg w-full my-3 text-sm` — instead of a small
+  line of green text.
+- **`.ff-node` is a fixed width (`180px`), not a `min-width`** — an editable
+  node holds a `<select>` a read-only one doesn't, which let the shrink-to-fit
+  `min-width` stretch it wider than its read-only twin; every node is now the
+  same width in both modes regardless of content.
+
 ### `FormFlow.Web.CoreComponents`, and a `components` override attr
 
 **New: `FormFlow.Web.CoreComponents`**, a Phoenix 1.8-generated, Tailwind

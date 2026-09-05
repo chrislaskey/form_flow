@@ -517,15 +517,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <span class="ml-1 text-xs font-normal text-zinc-500">draft</span>
         </div>
         <div class="flex items-center gap-2">
-          <Core.button
-            components={@components}
-            phx-click="delete_draft"
-            phx-target={@myself}
-            data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-          >
-            Delete draft
-          </Core.button>
           <.link
             navigate={version_show_path(assigns, @version)}
             role="switch"
@@ -534,11 +525,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             class="flex items-center gap-1.5 text-xs"
           >
             <span class="text-zinc-500">Show</span>
-            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
-              <span class="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow transition-transform" />
+            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
+              <span class="inline-block h-5 w-5 translate-x-5 rounded-full bg-white shadow transition-transform" />
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </.link>
+          <Core.button
+            components={@components}
+            phx-click="delete_draft"
+            phx-target={@myself}
+            data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
+            class="btn btn-error btn-soft"
+          >
+            Delete draft
+          </Core.button>
           <%!-- The remote submit: an HTML form= reference into the
                 DynamicForm below, so Save draft lives in the header like
                 every other page's primary action, and says "draft" because
@@ -548,11 +548,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             components={@components}
             form={"#{@id}-form-form"}
             class={[
-              "phx-submit-loading:opacity-75 rounded-md border px-2 py-1 text-xs",
-              if(@dirty?,
-                do: "border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700",
-                else: "border-zinc-300 text-zinc-700 hover:border-zinc-400"
-              )
+              "btn phx-submit-loading:opacity-75",
+              if(@dirty?, do: "btn-primary", else: "btn-primary btn-soft")
             ]}
           >
             Save draft
@@ -561,7 +558,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             components={@components}
             phx-click="open_publish"
             phx-target={@myself}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+            variant="primary"
           >
             Publish
           </Core.button>
@@ -569,7 +566,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
-      <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
+      <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
 
       <p
         :if={Forms.stale_draft?(@version)}
@@ -684,12 +681,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                   Auto-refresh
                 </span>
                 <span class={[
-                  "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                  "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
                   if(@auto_update?, do: "bg-cyan-600", else: "bg-zinc-300")
                 ]}>
                   <span class={[
-                    "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
-                    if(@auto_update?, do: "translate-x-4", else: "translate-x-0.5")
+                    "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+                    if(@auto_update?, do: "translate-x-5", else: "translate-x-0.5")
                   ]} />
                 </span>
               </button>
@@ -698,7 +695,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 components={@components}
                 phx-click="update_preview"
                 phx-target={@myself}
-                class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+                class="btn"
               >
                 Refresh
               </Core.button>

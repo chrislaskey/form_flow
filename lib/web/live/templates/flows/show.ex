@@ -224,8 +224,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             class="flex items-center gap-1.5 text-xs"
           >
             <span class="font-semibold text-zinc-900">Show</span>
-            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
-              <span class="inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
+            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
+              <span class="inline-block h-5 w-5 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
@@ -239,7 +239,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
                   "Delete this subflow? It is removed from the parent flow, and its own steps and subflows go with it.",
                 else: "Delete this flow? Its steps, connections, and subflows go with it."
             }
-            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+            class="btn btn-error btn-soft"
           >
             Delete
           </Core.button>

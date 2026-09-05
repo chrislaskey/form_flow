@@ -289,16 +289,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           </span>
         </div>
         <div :if={@version} class="flex items-center gap-2">
-          <Core.button
-            :if={@version.status == "draft"}
-            components={@components}
-            phx-click="delete_draft"
-            phx-target={@myself}
-            data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-          >
-            Delete draft
-          </Core.button>
           <.link
             :if={@version.status == "draft"}
             navigate={edit_path(assigns, @version)}
@@ -308,11 +298,21 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             class="flex items-center gap-1.5 text-xs"
           >
             <span class="font-semibold text-zinc-900">Show</span>
-            <span class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
-              <span class="inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
+            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
+              <span class="inline-block h-5 w-5 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
+          <Core.button
+            :if={@version.status == "draft"}
+            components={@components}
+            phx-click="delete_draft"
+            phx-target={@myself}
+            data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
+            class="btn btn-error btn-soft"
+          >
+            Delete draft
+          </Core.button>
           <Core.button
             :if={@version.status == "draft"}
             components={@components}
@@ -327,7 +327,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             components={@components}
             phx-click="create_draft"
             phx-target={@myself}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+            class="btn"
           >
             New draft from this version
           </Core.button>
@@ -337,7 +337,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="archive"
             phx-target={@myself}
             data-confirm="Archive this version? It stops being the latest; users pinned to it are unaffected."
-            class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
+            class="btn"
           >
             Archive
           </Core.button>
@@ -347,7 +347,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="delete"
             phx-target={@myself}
             data-confirm="Delete this form and all of its versions?"
-            class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+            class="btn btn-error btn-soft"
           >
             Delete
           </Core.button>
