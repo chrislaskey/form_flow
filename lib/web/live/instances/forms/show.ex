@@ -31,6 +31,27 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   changes state, so it stays an explicit button rather than a mode of a URL,
   and it belongs beside the answers it reopens. It lands on Edit, where those
   answers can then be changed.
+
+  ## The states it draws
+
+  Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
+  its own `render/1` clause, and nothing else — there is no catch-all, so a
+  state nobody accounted for raises rather than drawing the page to whoever
+  reached it:
+
+    * `:flow_not_found` — "This flow no longer exists."
+    * `:redirecting` — nothing, while the host's `on_mount` navigates away
+    * `:refused` — the host's message alone
+    * `:not_visible` — "This form is not part of your work here."
+    * `:not_started` — why there is nothing to show, and the way onward
+    * `:broken_definition` — the parse error, inline
+    * `:ready` and `:completed` — the answers, and what may be done with them
+
+  Both actions guard on that same state, on `:ready` or `:completed`: the
+  answers of a submitted form are as reopenable and as downloadable as those
+  of one still in progress. A LiveComponent's events are reachable whenever
+  it is mounted, and this one is mounted in every state above, so which
+  buttons were drawn gates nothing.
   """
 
   use Phoenix.LiveComponent
@@ -65,32 +86,23 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
-    {:ok, socket |> load() |> assign_workable()}
+    {:ok, socket |> load() |> assign_page_state()}
   end
 
-  # What the gate decided, as one answer, computed where the gate ran. The
-  # render clause that draws the page's actions reads it and so does every
-  # handle_event, because a LiveComponent's events are reachable whenever it
-  # is mounted — which it is even when the page drew a refusal instead. A
-  # button that was never rendered is not a check.
-  defp assign_workable(socket) do
-    assigns = socket.assigns
-
-    assign(
-      socket,
-      :workable?,
-      is_nil(assigns[:mount_error]) and is_nil(assigns[:navigate_to]) and
-        assigns[:visible?] == true and not is_nil(assigns[:flow_instance]) and
-        not is_nil(assigns[:form_instance]) and is_nil(assigns[:parse_error])
-    )
+  # The state the page is in, computed once where the loading and the gate
+  # ran. Every render clause matches on it and every event guards on it,
+  # because a LiveComponent's events are reachable whenever it is mounted —
+  # which it is even when the page drew a refusal instead. A button that was
+  # never rendered is not a check.
+  defp assign_page_state(socket) do
+    assign(socket, :page_state, FormFlow.Web.Instances.Shared.form_page_state(socket.assigns))
   end
 
+  # Both actions are the answers': a submitted form's Reopen and Download
+  # work here the way they always have.
   @impl true
-  def handle_event("form_flow:download", _params, socket) when not socket.assigns.workable? do
-    {:noreply, socket}
-  end
-
-  def handle_event("form_flow:download", params, socket) do
+  def handle_event("form_flow:download", params, socket)
+      when socket.assigns.page_state in [:ready, :completed] do
     %{flow_instance: flow_instance, path: path} = socket.assigns
 
     token =
@@ -106,11 +118,10 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     {:reply, %{url: Downloads.form_path(socket.assigns.download_path, token)}, socket}
   end
 
-  def handle_event("reopen", _params, socket) when not socket.assigns.workable? do
-    {:noreply, socket}
-  end
+  def handle_event("form_flow:download", _params, socket), do: {:noreply, socket}
 
-  def handle_event("reopen", _params, socket) do
+  def handle_event("reopen", _params, socket)
+      when socket.assigns.page_state in [:ready, :completed] do
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
     case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
@@ -125,6 +136,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         {:noreply, assign(socket, :error, "Could not reopen the form.")}
     end
   end
+
+  # A refused event is silent: the client was not driving a rendered
+  # control, and a message would describe the gate to whoever was probing
+  # it. An *unknown* event still raises — there is no blanket clause.
+  def handle_event("reopen", _params, socket), do: {:noreply, socket}
 
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
     case Instances.Flows.get(flow_instance_id) do
@@ -144,21 +160,21 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   end
 
   @impl true
-  def render(%{flow_instance: nil} = assigns) do
+  def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
     """
   end
 
   # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
-  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+  def render(%{page_state: :redirecting} = assigns) do
     ~H"""
     <div></div>
     """
   end
 
   # The host's on_mount refused the page; its message is all there is to draw
-  def render(%{mount_error: message} = assigns) when is_binary(message) do
+  def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -182,7 +198,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   # The flow's type says this form is not for the viewer — another
   # perspective's work. Nothing of it is shown, started or not.
-  def render(%{visible?: false, form: %{path: _path}} = assigns) do
+  def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -206,7 +222,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   # Nothing filled in here yet, so there are no answers to show — only why,
   # and the way onward when there is one.
-  def render(%{form_instance: nil} = assigns) do
+  def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -235,7 +251,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  def render(%{parse_error: error} = assigns) when is_binary(error) do
+  def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
     <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
       <p class="font-medium">This form can't be rendered.</p>
@@ -244,7 +260,10 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  def render(assigns) do
+  # The answers, and what may be done with them. There is no catch-all
+  # clause: a state nobody accounted for raises here rather than drawing the
+  # whole page to whoever reached it.
+  def render(%{page_state: state} = assigns) when state in [:ready, :completed] do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -273,7 +292,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
             drawn, is what lets a tab left open for days still print: the
             token is always seconds old, whatever the page is. --%>
       <div
-        :if={@download_path && @workable?}
+        :if={@download_path}
         id={"#{@id}-downloads"}
         phx-hook=".Downloads"
         phx-target={@myself}

@@ -189,6 +189,26 @@ defmodule Demo.FormFlowInstancesTest do
       assert has_element?(view, "a[href='#{form_path(instance, [name.id])}']")
       refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
     end
+
+    test "reopen refuses a position the page never drew", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two("wizard_any_order")
+      complete(instance, [name.id])
+
+      # A form node of an unrelated flow, published and so startable
+      %{form: elsewhere} = flow_of_one(nil, name: "Somewhere else")
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+
+      view
+      |> element("button[phx-value-path='#{name.id}']")
+      |> render_click(%{"path" => elsewhere.id})
+
+      # Unguarded this is not a reopen at all: the write falls through to the
+      # create, which would start a form at a position this page never
+      # offered, pinned to a version of another flow's form
+      refute instance_at(instance, [elsewhere.id])
+      assert %{status: "completed"} = instance_at(instance, [name.id])
+    end
   end
 
   describe "an instance's host identities" do
@@ -481,6 +501,80 @@ defmodule Demo.FormFlowInstancesTest do
       assert {path, _flash} = assert_redirect(view)
       assert path == edit_path(instance, [name.id])
       assert %{status: "in_progress"} = instance_at(instance, [name.id])
+    end
+  end
+
+  describe "what a form page draws when there are no answers to draw" do
+    test "a position the flow no longer has says so", %{conn: conn} do
+      %{instance: instance, forms: [_name, address]} = flow_of_two()
+      {:ok, _node} = Flows.delete_node(address)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [address.id]))
+      assert html =~ "This form is not part of this flow."
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [address.id]))
+      assert html =~ "This form is not part of this flow."
+      refute instance_at(instance, [address.id])
+    end
+
+    test "a stranded position that was filled in still shows its answers", %{conn: conn} do
+      %{instance: instance, forms: [_name, address]} = flow_of_two()
+      complete(instance, [address.id], %{"name" => "Ada"})
+      {:ok, _node} = Flows.delete_node(address)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [address.id]))
+
+      assert html =~ "Ada"
+      refute html =~ "This form is not part of this flow."
+    end
+
+    test "a form that comes later in the flow says so, on show as on edit", %{conn: conn} do
+      %{instance: instance, forms: [_name, address]} = flow_of_two("wizard_in_order")
+
+      {:ok, _view, html} = live(conn, form_path(instance, [address.id]))
+
+      assert html =~ "isn&#39;t available yet"
+      refute instance_at(instance, [address.id])
+    end
+
+    test "edit says why it could not start the form", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one_unpublished()
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
+
+      assert html =~ "has no published version yet"
+      refute instance_at(instance, [only.id])
+    end
+
+    test "a definition that will not parse is an inline error, not a crash", %{conn: conn} do
+      # A question with no name: the parser raises on it, which is what a
+      # malformed stored definition looks like from the page's side
+      %{instance: instance, form: only} =
+        flow_of_one(nil, definition: %{"elements" => [%{"type" => "text"}]})
+
+      {:ok, _started} = Instances.Forms.update_status(instance, [only.id], :in_progress)
+
+      {:ok, _view, html} = live(conn, form_path(instance, [only.id]))
+      assert html =~ "This form can&#39;t be rendered."
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
+      assert html =~ "This form can&#39;t be rendered."
+    end
+
+    test "a submitted form with a broken definition says so, not that it was submitted",
+         %{conn: conn} do
+      # The parse error outranks "already submitted" on edit: there is
+      # nothing to edit either way, and this is the more informative of the
+      # two. Show has said the parse error all along.
+      %{instance: instance, form: only} =
+        flow_of_one(nil, definition: %{"elements" => [%{"type" => "text"}]})
+
+      complete(instance, [only.id])
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
+
+      assert html =~ "This form can&#39;t be rendered."
+      refute html =~ "already been submitted"
     end
   end
 
@@ -1268,6 +1362,21 @@ defmodule Demo.FormFlowInstancesTest do
     %{flow: flow, instance: start_flow(flow), form: only}
   end
 
+  # The same, with the form left in draft: the position exists and the flow's
+  # type allows work there, but there is no version to pin
+  defp flow_of_one_unpublished do
+    {:ok, flow} = Flows.create(%{name: "Unpublished"})
+
+    {:ok, form} = Forms.create(%{name: "Draft #{System.unique_integer([:positive])}"})
+
+    first_node = build_node(flow, ["Start"], "Start")
+    only = build_node(flow, ["Form"], "Only", %{form_id: form.id})
+
+    edge(flow, first_node, only)
+
+    %{flow: flow, instance: start_flow(flow), form: only}
+  end
+
   # One subflow node wrapping a two-form child flow, so its positions are two
   # segments deep
   defp nested_flow do
@@ -1418,7 +1527,9 @@ defmodule Demo.FormFlowInstancesTest do
 
   # A published form with one text question, "name"; `form_type:` picks a
   # form type for it and `property_values:` its property values — for the
-  # demo's prefill type, "Demo User" as the name to prefill unless given
+  # demo's prefill type, "Demo User" as the name to prefill unless given.
+  # `definition:` replaces the question outright, which is how a stored
+  # definition that will not parse is published.
   defp published_form(name, opts) do
     properties =
       case opts[:form_type] do
@@ -1442,7 +1553,11 @@ defmodule Demo.FormFlowInstancesTest do
 
     [draft] = form.versions
 
-    definition = %{"elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]}
+    definition =
+      Keyword.get(opts, :definition, %{
+        "elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]
+      })
+
     {:ok, draft} = Forms.update_draft(draft, %{definition: definition})
     {:ok, _published} = Forms.update_status(draft, :published)
 

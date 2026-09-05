@@ -200,7 +200,8 @@ Firefox and Safari; the header is all a server can say about it.
 
 The gate is not asked twice. `FormFlow.Web.Instances.Forms.Show` already ran
 your `on_mount`, the flow type's `visible?`, and the page's `flows` scope in
-order to draw itself; when the user clicks Download or Print it mints a
+order to decide what to draw, and Download and Print are drawn wherever the
+answers are; when the user clicks either it mints a
 short-lived encrypted token — 60 seconds by default,
 `config :form_flow, download_token_max_age:` — and the request carries that
 instead of an argument. The endpoint reads the token and ignores every other

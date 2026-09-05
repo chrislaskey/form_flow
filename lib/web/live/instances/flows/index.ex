@@ -45,6 +45,24 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   Starting a new flow stays a plain list rather than a second table: Slab
   reads `sort` and `page` straight from the URL, so two Slab tables on one
   page would share — and fight over — the same params.
+
+  ## The states it draws
+
+  No instance is in scope here, so the page asks the narrower
+  `FormFlow.Web.Instances.Shared.page_state/1` and draws three states, each
+  in its own `render/1` clause and with no catch-all:
+
+    * `:redirecting` — nothing, while the host's `on_mount` navigates away
+    * `:refused` — the host's message alone
+    * `:ready` — the listing, and the flows it offers to start
+
+  Start needs both rules: the state, and then that the flow is one the page
+  offered. The state is not redundant. A refused viewer has no
+  `:page_flows` at all — the listing is built inside the gate's `on_ok`, so
+  it is never assigned — and the second rule alone would crash on the
+  missing assign. It also covers the case where assigns outlive their
+  decision: they persist across `update/2`, so a gate that allows on mount
+  and refuses later would otherwise leave the earlier listing standing.
   """
 
   use Phoenix.LiveComponent
@@ -88,7 +106,18 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:ok,
      socket
      |> assign(context: context, mount_error: nil, navigate_to: nil)
-     |> Shared.on_mount(&load/1)}
+     |> Shared.on_mount(&load/1)
+     |> assign_page_state()}
+  end
+
+  # The state the page is in, computed once the gate has answered. Unlike
+  # the other three pages this one does not load *then* ask: its load is the
+  # gate's `on_ok`, so a refused viewer never has a listing built for them
+  # at all. Making this page "look like the others" would undo that —
+  # `:page_flows` would be assigned before the refusal, and Start's second
+  # rule would be checking a list the viewer was refused.
+  defp assign_page_state(socket) do
+    assign(socket, :page_state, FormFlow.Web.Instances.Shared.page_state(socket.assigns))
   end
 
   # The listing itself, built only once the host allowed the page: the
@@ -124,15 +153,24 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:noreply, push_navigate(socket, to: to)}
   end
 
-  # Only a flow the page offered can be started from it
+  # Both rules. The state says whether the page may act at all — and a
+  # refused viewer has no `:page_flows` to check, since the listing is built
+  # inside the gate's `on_ok` — and then only a flow the page offered can be
+  # started from it.
   @impl true
-  def handle_event("start", %{"flow-id" => flow_id}, socket) do
+  def handle_event("start", %{"flow-id" => flow_id}, socket)
+      when socket.assigns.page_state == :ready do
     if Enum.any?(socket.assigns.page_flows, &(&1.id == flow_id)) do
       start(socket, flow_id)
     else
       {:noreply, assign(socket, :error, "That flow is not available here.")}
     end
   end
+
+  # A refused event is silent: the client was not driving a rendered
+  # control, and a message would describe the gate to whoever was probing
+  # it. An *unknown* event still raises — there is no blanket clause.
+  def handle_event("start", _params, socket), do: {:noreply, socket}
 
   defp start(socket, flow_id) do
     attrs = %{
@@ -162,14 +200,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
   @impl true
-  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+  def render(%{page_state: :redirecting} = assigns) do
     ~H"""
     <div></div>
     """
   end
 
   # The host's on_mount refused the page; its message is all there is to draw
-  def render(%{mount_error: message} = assigns) when is_binary(message) do
+  def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">
@@ -181,7 +219,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     """
   end
 
-  def render(assigns) do
+  # The listing, and the flows it offers to start. There is no catch-all
+  # clause: a state nobody accounted for raises here rather than drawing the
+  # page to whoever reached it.
+  def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">

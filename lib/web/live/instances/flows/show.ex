@@ -25,6 +25,34 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   the form page itself (see `FormFlow.Web.Instances.Forms.Show`). Reopen is
   the exception, since it changes state: it is a button, and it lives beside
   the answers it reopens.
+
+  ## The states it draws
+
+  There is no form in scope here, so the page asks the narrower
+  `FormFlow.Web.Instances.Shared.page_state/1` and draws four states, each
+  in its own `render/1` clause and with no catch-all:
+
+    * `:flow_not_found` — "This flow no longer exists."
+    * `:redirecting` — nothing, while the host's `on_mount` navigates away
+    * `:refused` — the host's message alone
+    * `:ready` — the forms and their state
+
+  Reopen needs both rules. The state says whether the page may act at all;
+  it cannot say whether it may act on *this* position, and the position
+  arrives from the client. So the event also finds the row it names among
+  the ones the page drew — rows are only forms the flow's type calls
+  visible, and Reopen is only drawn on a completed row that has an instance.
+  Without that second rule the event is not a reopen at all: an unstarted
+  position falls through to `FormFlow.Data.Instances.Forms.update_status/4`'s
+  create, which would start a form here, past the gate Edit is built around.
+
+  That rule closes it for this page, not for the library. The create
+  resolves a position's node with a bare lookup — no tenant, no flow
+  narrowing — so **any** caller handing
+  `FormFlow.Data.Instances.Forms.update_status/4` a client-supplied path has
+  the same hole. Narrowing the lookup to the journey's own tree is the
+  follow-up; it touches the data layer and needs its own audit of what would
+  change.
   """
 
   use Phoenix.LiveComponent
@@ -59,18 +87,43 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
-    {:ok, load(socket)}
+    {:ok, socket |> load() |> assign_page_state()}
   end
 
+  # The state the page is in, computed once where the loading and the gate
+  # ran. Every render clause matches on it and the one event guards on it,
+  # because a LiveComponent's events are reachable whenever it is mounted —
+  # which it is even when the page drew a refusal instead.
+  defp assign_page_state(socket) do
+    assign(socket, :page_state, FormFlow.Web.Instances.Shared.page_state(socket.assigns))
+  end
+
+  # Reopening a position the page did not offer is not something the page
+  # can do, so the row it names has to be one it drew: visible to the
+  # viewer, completed, and holding an instance — the same three things the
+  # Reopen button is drawn for.
   @impl true
-  def handle_event("reopen", %{"path" => joined}, socket) do
+  def handle_event("reopen", %{"path" => joined}, socket)
+      when socket.assigns.page_state == :ready do
     path = String.split(joined, ",")
 
+    case Enum.find(socket.assigns.rows, &(&1.form.path == path)) do
+      %{form: %{status: :completed, instance: %Instances.Form{}}} -> reopen(socket, path)
+      _other -> {:noreply, socket}
+    end
+  end
+
+  # A refused event is silent: the client was not driving a rendered
+  # control, and a message would describe the gate to whoever was probing
+  # it. An *unknown* event still raises — there is no blanket clause.
+  def handle_event("reopen", _params, socket), do: {:noreply, socket}
+
+  defp reopen(socket, path) do
     case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
            user_id: socket.assigns.user_id,
            tenant_id: socket.assigns.tenant_id
          ) do
-      {:ok, _reopened} -> {:noreply, load(socket)}
+      {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
       {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
     end
   end
@@ -159,21 +212,21 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   end
 
   @impl true
-  def render(%{flow_instance: nil} = assigns) do
+  def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
     """
   end
 
   # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
-  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+  def render(%{page_state: :redirecting} = assigns) do
     ~H"""
     <div></div>
     """
   end
 
   # The host's on_mount refused the page; its message is all there is to draw
-  def render(%{mount_error: message} = assigns) when is_binary(message) do
+  def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">
@@ -191,7 +244,10 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     """
   end
 
-  def render(assigns) do
+  # The forms and their state. There is no catch-all clause: a state nobody
+  # accounted for raises here rather than drawing the page to whoever
+  # reached it.
+  def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
       <div class="mb-2 text-sm font-semibold">

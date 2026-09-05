@@ -45,6 +45,33 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   `handle_info/2` — the host's process, not ours — so `on_success` routes the
   payload back into this component via `send_update`, and the redirect happens
   in `handle_async` (redirects are forbidden inside `update/2`).
+
+  ## The states it draws
+
+  Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
+  its own `render/1` clause, and nothing else — there is no catch-all, so a
+  state nobody accounted for raises rather than drawing an editable form to
+  whoever reached it:
+
+    * `:flow_not_found` — "This flow no longer exists."
+    * `:redirecting` — nothing, while the host's `on_mount` navigates away
+    * `:refused` — the host's message alone
+    * `:not_visible` — "This form is not part of your work here."
+    * `:not_started` — why it could not be started, and the way back
+    * `:broken_definition` — the parse error, inline
+    * `:completed` — "This form has already been submitted.", and the link
+      to its answers
+    * `:ready` — the form
+
+  The submit guards on `:ready` alone. It arrives through `update/2` rather
+  than `handle_event/3`, so that is where the guard sits; excluding
+  `:completed` makes a second submit a no-op here rather than a write that
+  leans on the data layer being idempotent.
+
+  `:broken_definition` outranking `:completed` is a deliberate ordering: a
+  submitted form whose stored definition no longer parses says so, rather
+  than saying it was already submitted. There is nothing to edit either way,
+  and the parse error is the more informative of the two.
   """
 
   use Phoenix.LiveComponent
@@ -61,8 +88,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
+  # The submit arrives here rather than through `handle_event/3`, so this is
+  # where it is guarded — on `:ready` alone. A page the gate would refuse
+  # cannot write, and a second submit of an already-completed form is a
+  # no-op at the page rather than a write leaning on the data layer being
+  # idempotent.
   @impl true
-  def update(%{event: "submitted", payload: payload}, socket) do
+  def update(%{event: "submitted", payload: payload}, socket)
+      when socket.assigns.page_state == :ready do
     %{
       flow_instance: flow_instance,
       form_instance: form_instance,
@@ -88,6 +121,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     end
   end
 
+  # A refused submit is silent: the client was not driving a rendered form,
+  # and a message would describe the gate to whoever was probing it.
+  def update(%{event: "submitted"}, socket), do: {:ok, socket}
+
   def update(assigns, socket) do
     socket =
       socket
@@ -107,7 +144,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
-    {:ok, load(socket)}
+    {:ok, socket |> load() |> assign_page_state()}
+  end
+
+  # The state the page is in, computed once where the loading, the gate, and
+  # the start all ran. Every render clause matches on it and the submit
+  # guards on it.
+  defp assign_page_state(socket) do
+    assign(socket, :page_state, FormFlow.Web.Instances.Shared.form_page_state(socket.assigns))
   end
 
   @impl true
@@ -201,21 +245,21 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   end
 
   @impl true
-  def render(%{flow_instance: nil} = assigns) do
+  def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <p class="text-sm text-zinc-500">This flow no longer exists.</p>
     """
   end
 
   # The host's on_mount is sending the user elsewhere: nothing to draw meanwhile
-  def render(%{navigate_to: to} = assigns) when is_binary(to) do
+  def render(%{page_state: :redirecting} = assigns) do
     ~H"""
     <div></div>
     """
   end
 
   # The host's on_mount refused the page; its message is all there is to draw
-  def render(%{mount_error: message} = assigns) when is_binary(message) do
+  def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -239,7 +283,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # The flow's type says this form is not for the viewer — another
   # perspective's work. Nothing of it is shown, started or not.
-  def render(%{visible?: false, form: %{path: _path}} = assigns) do
+  def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -263,7 +307,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # Nothing to fill in: either the form could not be started, or the flow's
   # type does not allow editing here.
-  def render(%{form_instance: nil} = assigns) do
+  def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -285,9 +329,18 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
+  def render(%{page_state: :broken_definition} = assigns) do
+    ~H"""
+    <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <p class="font-medium">This form can't be rendered.</p>
+      <p class="mt-1 font-mono">{@parse_error}</p>
+    </div>
+    """
+  end
+
   # Already submitted, so there is nothing to edit until it is reopened —
   # which happens beside the answers, on Show.
-  def render(%{form_instance: %{status: "completed"}} = assigns) do
+  def render(%{page_state: :completed} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb
@@ -309,16 +362,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  def render(%{parse_error: error} = assigns) when is_binary(error) do
-    ~H"""
-    <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-      <p class="font-medium">This form can't be rendered.</p>
-      <p class="mt-1 font-mono">{@parse_error}</p>
-    </div>
-    """
-  end
-
-  def render(assigns) do
+  # The form itself. There is no catch-all clause: a state nobody accounted
+  # for raises here rather than drawing an editable form to whoever reached
+  # it.
+  def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
       <Components.FormPage.breadcrumb

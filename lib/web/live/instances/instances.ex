@@ -23,6 +23,13 @@ defmodule FormFlow.Web.Instances do
   (`FormFlow.Web.Instances.Forms.Shared.flow_type/2`) — the pages ask, they
   don't decide.
 
+  What each page decided, it names once:
+  `FormFlow.Web.Instances.Shared.page_state/1` and `form_page_state/1` turn
+  a page's assigns into the one state it is in, which every `render/1`
+  clause matches on and every event guards on. That module is the sibling of
+  `FormFlow.Web.Templates.Shared`; `FormFlow.Web.Instances.Forms.Shared` is
+  narrower, and is what the two *form* pages have in common.
+
   The namespaces mirror the data side (`FormFlow.Data.Instances.Flows` /
   `.Forms`) and, page for page, the template side — same modules, same
   nouns, because `/admin/flows/:id` and `/users/:id` are the template and the

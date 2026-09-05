@@ -6,8 +6,9 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
   mounted, and this one is mounted even when the page drew a refusal — the
   host's `on_mount` said no, or the flow's type says this form is another
   perspective's work. Which buttons were rendered gates nothing, so the
-  events are tested against the gate's verdict rather than against the
-  markup.
+  events are tested against the page's state
+  (`FormFlow.Web.Instances.Shared.form_page_state/1`) rather than against
+  the markup.
   """
 
   use ExUnit.Case, async: true
@@ -23,13 +24,21 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
 
   defp socket(assigns) do
     %Phoenix.LiveView.Socket{
-      assigns: Map.merge(%{__changed__: %{}, workable?: false}, assigns)
+      assigns: Map.merge(%{__changed__: %{}, page_state: :refused}, assigns)
     }
   end
 
   describe "reopen" do
     test "does nothing when the gate refused the page" do
-      socket = socket(%{workable?: false})
+      socket = socket(%{page_state: :refused})
+
+      assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
+    end
+
+    test "does nothing when the page has no state at all" do
+      # The guard is positive, so a missing assign fails it and falls to the
+      # refusal rather than reaching the write
+      socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
 
       assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
     end
@@ -39,7 +48,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
       # would raise rather than return, which is what makes this meaningful
       socket =
         socket(%{
-          workable?: false,
+          page_state: :not_visible,
           flow_instance: %Instances.Flow{id: "flow-1"},
           form_instance: %Instances.Form{id: "form-1", path: ["a"]},
           user_id: "user-1",
@@ -50,11 +59,11 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
       assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
     end
 
-    test "the verdict is what decides it, not the assigns the write would use" do
-      # Same assigns, workable? flipped: now it gets as far as the repo, which
+    test "the state is what decides it, not the assigns the write would use" do
+      # Same assigns, the state flipped: now it gets as far as the repo, which
       # is absent here. That the two differ is the guard doing its job.
       assigns = %{
-        workable?: true,
+        page_state: :completed,
         flow_instance: %Instances.Flow{id: "flow-1"},
         form_instance: %Instances.Form{id: "form-1", path: ["a"]},
         user_id: "user-1",
@@ -76,7 +85,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
         socket(
           Map.merge(
             %{
-              workable?: true,
+              page_state: :ready,
               download_path: "/form-flow/downloads",
               user_id: "user-1",
               tenant_id: "acme",
@@ -92,9 +101,33 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
     end
 
     test "refuses when the gate refused the page, however the event arrived" do
-      socket = minting_socket(%{workable?: false})
+      socket = minting_socket(%{page_state: :refused})
 
       assert {:noreply, ^socket} = Show.handle_event("form_flow:download", %{}, socket)
+    end
+
+    test "a submitted form's answers are as downloadable as one still in progress" do
+      assert {:reply, %{url: _url}, _socket} =
+               Show.handle_event(
+                 "form_flow:download",
+                 %{},
+                 minting_socket(%{page_state: :completed})
+               )
+    end
+
+    test "refuses in every state that is not the page drawing its answers" do
+      for state <- [
+            :flow_not_found,
+            :redirecting,
+            :refused,
+            :not_visible,
+            :not_started,
+            :broken_definition
+          ] do
+        socket = minting_socket(%{page_state: state})
+
+        assert {:noreply, ^socket} = Show.handle_event("form_flow:download", %{}, socket)
+      end
     end
 
     test "replies with a URL carrying everything the request is" do

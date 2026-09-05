@@ -2,6 +2,57 @@
 
 ## v0.18.0
 
+### Each user-facing page names the state it is in
+
+**New: `FormFlow.Web.Instances.Shared`**, holding `page_state/1` and
+`form_page_state/1`. Each user-facing page computes its state once, where
+the loading and the host's `on_mount` ran, and assigns it as `:page_state`.
+Every `render/1` clause matches on it and every event guards on it.
+
+A LiveComponent's `handle_event/3` is reachable whenever the component is
+mounted, and these pages are mounted even when they drew a refusal instead
+of themselves — so which buttons were rendered gated nothing. Four
+user-visible consequences:
+
+- **Breaking (security): `FormFlow.Web.Instances.Flows.Show` no longer
+  reopens a position it did not offer.** Its Reopen event took the position
+  from the client and was not checked against the rows the page drew, and
+  the write it made was not a reopen: an unstarted position fell through to
+  `FormFlow.Data.Instances.Forms.update_status/4`'s create, which resolves
+  the node with a bare lookup — no tenant, no flow narrowing. A legitimate
+  viewer of their own journey could insert a row into it pinned to **another
+  tenant's** form version. The event now requires the page to be drawing its
+  rows *and* the position to be a completed row it drew that has an
+  instance. The data-layer half is unchanged and is the follow-up:
+  `create_at/3` still accepts any node id, so any caller passing a
+  client-supplied path has the same hole.
+- **`FormFlow.Web.Instances.Flows.Index` no longer crashes on `start` after
+  a refusal.** Its listing is built inside the gate's `on_ok`, so a refused
+  viewer had no `page_flows` and the event raised `KeyError`. It now refuses
+  silently. This was a crash, not an unauthorized write.
+- **`FormFlow.Web.Instances.Forms.Edit` refuses a submit the gate would
+  refuse**, and a second submit of an already-completed form is now a no-op
+  at the page rather than a write relying on the data layer's idempotence.
+- **A submitted form whose stored definition will not parse now says so on
+  Edit**, instead of "This form has already been submitted." There is
+  nothing to edit either way, and the parse error is the more informative of
+  the two. Show already said the parse error.
+
+Two smaller changes follow from computing the state once:
+
+- **Download PDF and Print are drawn wherever the answers are.** They were
+  additionally gated on the flow type's `visible?`, which is false for a
+  *stranded* position — one the flow no longer has. Such a position still
+  shows its answers, so it now offers to download them too: what is printed
+  is what is shown.
+- **A state no page accounted for now raises at render** rather than
+  falling through to a catch-all clause and drawing the whole page. None of
+  the pages has a `def render(assigns)` catch-all any more.
+
+For a host, the pages behave as before in every state they already drew;
+only the four bullets above change. `:page_state` is a page assign, not part
+of any callback's arguments.
+
 ### One router module for every route a host mounts
 
 **New: `FormFlow.Router`**, the single place the route macros live. A host
