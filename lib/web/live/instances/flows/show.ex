@@ -115,8 +115,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
-  # it. An *unknown* event still raises — there is no blanket clause.
-  def handle_event("reopen", _params, socket), do: {:noreply, socket}
+  # it. Only a well-formed one, though — the params are matched here too, so
+  # a "reopen" carrying no position is as much a `FunctionClauseError` as an
+  # event name nothing answers to. Silence is for a refusal, not for a
+  # message this page does not understand.
+  def handle_event("reopen", %{"path" => _path}, socket), do: {:noreply, socket}
 
   defp reopen(socket, path) do
     case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,

@@ -31,8 +31,10 @@ user-visible consequences:
   viewer had no `page_flows` and the event raised `KeyError`. It now refuses
   silently. This was a crash, not an unauthorized write.
 - **`FormFlow.Web.Instances.Forms.Edit` refuses a submit the gate would
-  refuse**, and a second submit of an already-completed form is now a no-op
-  at the page rather than a write relying on the data layer's idempotence.
+  refuse**, and refuses a stale one — a submit landing after the page has
+  already re-rendered as submitted. (A rapid double submit is unchanged: it
+  arrives before the page re-renders, and stays as safe as it was, on
+  `FormFlow.Data.Instances.Forms.update_status/4` being idempotent.)
 - **A submitted form whose stored definition will not parse now says so on
   Edit**, instead of "This form has already been submitted." There is
   nothing to edit either way, and the parse error is the more informative of
@@ -40,11 +42,15 @@ user-visible consequences:
 
 Two smaller changes follow from computing the state once:
 
-- **Download PDF and Print are drawn wherever the answers are.** They were
-  additionally gated on the flow type's `visible?`, which is false for a
-  *stranded* position — one the flow no longer has. Such a position still
-  shows its answers, so it now offers to download them too: what is printed
-  is what is shown.
+- **A *stranded* position — one the flow no longer has — can now be
+  downloaded and reopened from its own page.** Both were additionally gated
+  on the flow type's `visible?`, which is false for every stranded position,
+  while the page itself still drew the answers. So Download and Print were
+  absent, and Reopen was **drawn but silently did nothing** when clicked.
+  Both now work: what is printed is what is shown, and a button the page
+  draws is a button that acts. Nothing else about stranded positions moved —
+  Edit already worked one reached by URL, and the flow instance's page still
+  lists none of them, still pointing the user at an administrator.
 - **A state no page accounted for now raises at render** rather than
   falling through to a catch-all clause and drawing the whole page. None of
   the pages has a `def render(assigns)` catch-all any more.

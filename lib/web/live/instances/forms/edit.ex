@@ -64,9 +64,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     * `:ready` — the form
 
   The submit guards on `:ready` alone. It arrives through `update/2` rather
-  than `handle_event/3`, so that is where the guard sits; excluding
-  `:completed` makes a second submit a no-op here rather than a write that
-  leans on the data layer being idempotent.
+  than `handle_event/3`, so that is where the guard sits. Excluding
+  `:completed` refuses a *stale* submit — one that lands after the page has
+  already re-rendered as submitted. It is not what makes a double submit
+  safe: the submit clause does not recompute the state, so a second submit
+  arriving before the navigation still reads `:ready` and still leans on
+  `FormFlow.Data.Instances.Forms.update_status/4` being idempotent, which it
+  is. Refusing it silently is right for the same reason the events are
+  silent — the page it lands on is already saying the form was submitted, so
+  there is nothing left to tell the user.
 
   `:broken_definition` outranking `:completed` is a deliberate ordering: a
   submitted form whose stored definition no longer parses says so, rather
@@ -89,10 +95,13 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Web.Instances.Paths
 
   # The submit arrives here rather than through `handle_event/3`, so this is
-  # where it is guarded — on `:ready` alone. A page the gate would refuse
-  # cannot write, and a second submit of an already-completed form is a
-  # no-op at the page rather than a write leaning on the data layer being
-  # idempotent.
+  # where it is guarded — on `:ready` alone, so a page the gate would refuse
+  # cannot write. `:completed` is excluded because a submit arriving at a
+  # page that has already re-rendered as submitted is stale: the state and
+  # the render are assigned together, so such a page is showing the notice,
+  # not a form. It is not what stops a double submit — a submit does not
+  # recompute the state, so a second one arriving before the navigation is
+  # still `:ready`, and still relies on `apply_status/5` being idempotent.
   @impl true
   def update(%{event: "submitted", payload: payload}, socket)
       when socket.assigns.page_state == :ready do

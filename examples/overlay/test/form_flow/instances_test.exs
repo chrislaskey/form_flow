@@ -522,10 +522,30 @@ defmodule Demo.FormFlowInstancesTest do
       complete(instance, [address.id], %{"name" => "Ada"})
       {:ok, _node} = Flows.delete_node(address)
 
-      {:ok, _view, html} = live(conn, form_path(instance, [address.id]))
+      {:ok, view, html} = live(conn, form_path(instance, [address.id]))
 
       assert html =~ "Ada"
       refute html =~ "This form is not part of this flow."
+
+      # Everything the page draws here works: a button that does nothing
+      # when clicked is the thing the page's state is there to prevent
+      assert has_element?(view, "button", "Download PDF")
+
+      view |> element("button", "Reopen") |> render_click()
+      assert %{status: "in_progress"} = instance_at(instance, [address.id])
+    end
+
+    test "the flow instance's page lists no stranded position, and offers none", %{conn: conn} do
+      %{instance: instance, forms: [_name, address]} = flow_of_two()
+      complete(instance, [address.id], %{"name" => "Ada"})
+      {:ok, _node} = Flows.delete_node(address)
+
+      {:ok, view, html} = live(conn, flow_path(instance))
+
+      # Reopening a stranded position is reachable from its own page, not
+      # from here: this page counts them and sends the user to an admin
+      refute has_element?(view, "button", "Reopen")
+      assert html =~ "positions this flow no longer has"
     end
 
     test "a form that comes later in the flow says so, on show as on edit", %{conn: conn} do

@@ -169,8 +169,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
-  # it. An *unknown* event still raises — there is no blanket clause.
-  def handle_event("start", _params, socket), do: {:noreply, socket}
+  # it. Only a well-formed one, though — the params are matched here too, so
+  # a "start" carrying no flow is as much a `FunctionClauseError` as an
+  # event name nothing answers to. Silence is for a refusal, not for a
+  # message this page does not understand.
+  def handle_event("start", %{"flow-id" => _flow_id}, socket), do: {:noreply, socket}
 
   defp start(socket, flow_id) do
     attrs = %{
