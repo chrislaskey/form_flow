@@ -14,7 +14,10 @@ defmodule DemoWeb.FormFlowLive.Users do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :page_title, "Users")}
+    {:ok,
+     socket
+     |> assign(:page_title, "Users")
+     |> assign(:current_nav, :users)}
   end
 
   @impl true
@@ -29,7 +32,7 @@ defmodule DemoWeb.FormFlowLive.Users do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_nav={@current_nav}>
       <div class="space-y-6">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Users</h1>
@@ -39,7 +42,7 @@ defmodule DemoWeb.FormFlowLive.Users do
           </p>
         </header>
 
-        <div id="users-pages" class="rounded-lg border border-base-300 p-4">
+        <div id="users-pages">
           <FormFlow.Web.router
             user_id="demo-user"
             uri={@uri}

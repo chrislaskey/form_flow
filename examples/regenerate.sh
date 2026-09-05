@@ -68,7 +68,7 @@ perl -pi -e 's{\{:phoenix_live_view, "~> 1\.1\.0"\}}{{:phoenix_live_view, "~> 1.
 echo "==> Replacing the default route with the demo LiveViews"
 # The catch-all comes last: FormFlow.Web.Router dispatches on the path segments
 # it is handed, so anything not matched by an earlier route falls through to it.
-perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallCheckLive\n    live "/admin/*path", FormFlowLive.Admin\n    live "/users/*path", FormFlowLive.Users\n    live "/*path", ReadmeLive}' demo/lib/demo_web/router.ex
+perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallCheckLive\n    live "/branding", BrandingLive\n    live "/admin/*path", FormFlowLive.Admin\n    live "/users/*path", FormFlowLive.Users\n    live "/*path", ReadmeLive}' demo/lib/demo_web/router.ex
 
 # The generated home page test asserts the default Phoenix marketing copy,
 # but the route above replaced that page with the demo index
@@ -85,6 +85,12 @@ echo "==> Pointing Tailwind at FormFlow's classes"
 # daisyUI component classes DynamicForm uses), so each needs a @source line or
 # its classes never make it into the generated stylesheet.
 perl -pi -e 's{\@source "\.\./\.\./lib/demo_web";}{$&\n/* FormFlow is a path dependency here, so point Tailwind at its source\n   directly. Apps installing form_flow from Hex use\n   "../../deps/form_flow/lib" instead. FormFlow renders components from\n   these libraries too, so their classes need to be scanned as well. */\n\@source "../../../../lib";\n\@source "../../deps/slab/lib";\n\@source "../../deps/dynamic_form/lib";\n\@source "../../deps/phoenix_select/lib";}' demo/assets/css/app.css
+
+echo "==> Setting the demo's default font to Plus Jakarta Sans"
+# The Google Fonts <link> tags live in root.html.heex, copied in from overlay/
+# below; only the Tailwind side (which font "font-sans" resolves to) has to be
+# added here since app.css itself isn't part of the overlay.
+perl -pi -e 's{(/\* Add variants based on LiveView classes \*/)}{\@theme {\n  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;\n}\n\n$1}' demo/assets/css/app.css
 
 echo "==> Registering colocated JavaScript hooks"
 # form_flow, slab, and phoenix_select ship their JS as colocated hooks, which
