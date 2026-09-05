@@ -22,13 +22,14 @@ defmodule Demo.FormFlowDownloadsTest do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Controllers.Downloads
+  alias FormFlow.Web.Downloads.Token
 
   describe "the download route" do
     test "sends the answers as a PDF the browser saves", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      conn = get(conn, Downloads.download_path(instance.id, [form.id]))
+      conn = get(conn, download_url(instance.id, [form.id]))
 
       assert response_content_type(conn, :pdf) =~ "application/pdf"
       assert [disposition] = get_resp_header(conn, "content-disposition")
@@ -41,7 +42,7 @@ defmodule Demo.FormFlowDownloadsTest do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      conn = get(conn, Downloads.download_path(instance.id, [form.id]))
+      conn = get(conn, download_url(instance.id, [form.id]))
 
       assert conn.resp_body =~ "(Name) Tj"
       assert conn.resp_body =~ "(Ada Lovelace) Tj"
@@ -53,7 +54,7 @@ defmodule Demo.FormFlowDownloadsTest do
       %{instance: instance, form: form} = flow_of_one()
       {:ok, _started} = Instances.Forms.update_status(instance, [form.id], :in_progress)
 
-      conn = get(conn, Downloads.download_path(instance.id, [form.id]))
+      conn = get(conn, download_url(instance.id, [form.id]))
 
       assert conn.status == 200
       assert conn.resp_body =~ "(Status: In progress) Tj"
@@ -65,8 +66,8 @@ defmodule Demo.FormFlowDownloadsTest do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      downloaded = get(conn, Downloads.download_path(instance.id, [form.id]))
-      printed = get(conn, Downloads.print_path(instance.id, [form.id]))
+      downloaded = get(conn, download_url(instance.id, [form.id]))
+      printed = get(conn, print_url(instance.id, [form.id]))
 
       assert [disposition] = get_resp_header(printed, "content-disposition")
       assert disposition =~ "inline"
@@ -80,7 +81,7 @@ defmodule Demo.FormFlowDownloadsTest do
 
   describe "what a download refuses" do
     test "a flow instance that does not exist", %{conn: conn} do
-      conn = get(conn, Downloads.download_path(Ecto.UUID.generate(), [Ecto.UUID.generate()]))
+      conn = get(conn, download_url(Ecto.UUID.generate(), [Ecto.UUID.generate()]))
 
       assert conn.status == 404
       assert conn.resp_body =~ "This flow no longer exists."
@@ -89,7 +90,7 @@ defmodule Demo.FormFlowDownloadsTest do
     test "a position nobody has opened — there are no answers to print", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
 
-      conn = get(conn, Downloads.download_path(instance.id, [form.id]))
+      conn = get(conn, download_url(instance.id, [form.id]))
 
       assert conn.status == 404
       assert conn.resp_body =~ "hasn't been started yet"
@@ -98,32 +99,102 @@ defmodule Demo.FormFlowDownloadsTest do
     test "a position the flow does not have", %{conn: conn} do
       %{instance: instance} = flow_of_one()
 
-      conn = get(conn, Downloads.download_path(instance.id, [Ecto.UUID.generate()]))
+      conn = get(conn, download_url(instance.id, [Ecto.UUID.generate()]))
 
       assert conn.status == 404
     end
   end
 
-  describe "the link on the form's page" do
-    test "the Show page points at both routes, so the file is one click away", %{conn: conn} do
+  describe "a page with nothing to take away" do
+    test "offers neither button, since there is no document to make", %{conn: conn} do
+      %{instance: instance, form: form} = flow_of_one()
+
+      {:ok, view, _html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+
+      refute has_element?(view, "button[data-disposition]")
+    end
+  end
+
+  describe "what the page offers" do
+    test "two buttons wired to the hook that mints on click", %{conn: conn} do
+      %{instance: instance, form: form} = flow_of_one()
+      complete(instance, [form.id], %{"name" => "Ada Lovelace"})
+
+      {:ok, view, _html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+
+      assert has_element?(view, "button[data-disposition='download']", "Download PDF")
+      assert has_element?(view, "button[data-disposition='print']", "Print")
+
+      # The colocated hook is what turns those clicks into a minted URL
+      assert has_element?(view, "[phx-hook$='.Downloads'] button[data-disposition='download']")
+    end
+
+    test "no static link, so a URL cannot outlive the page it was drawn on", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
       {:ok, _view, html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
 
-      assert html =~ ~s(href="#{Downloads.download_path(instance.id, [form.id])}")
-      assert html =~ ~s(href="#{Downloads.print_path(instance.id, [form.id])}")
+      refute html =~ Downloads.path() <> "?token="
     end
 
-    test "a page with nothing filled in offers neither — there is nothing to take away", %{
-      conn: conn
-    } do
+    test "nothing at all when the application has not said it serves downloads", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
+      complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+      configured = Application.get_env(:form_flow, :download_path)
+      Application.delete_env(:form_flow, :download_path)
+      on_exit(fn -> Application.put_env(:form_flow, :download_path, configured) end)
 
-      refute html =~ Downloads.download_path(instance.id, [form.id])
+      {:ok, view, html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+
+      assert html =~ "Ada Lovelace"
+      refute has_element?(view, "button[data-disposition]")
+      refute html =~ "Download PDF"
     end
+  end
+
+  describe "the token's lifetime" do
+    test "an expired token is refused, and says the fix is to click again", %{conn: conn} do
+      %{instance: instance, form: form} = flow_of_one()
+      complete(instance, [form.id], %{"name" => "Ada Lovelace"})
+
+      url = download_url(instance.id, [form.id])
+      Application.put_env(:form_flow, :download_token_max_age, -1)
+      on_exit(fn -> Application.delete_env(:form_flow, :download_token_max_age) end)
+
+      conn = get(conn, url)
+
+      assert conn.status == 403
+      assert conn.resp_body =~ "expired"
+    end
+
+    test "the identity the page had reaches the document's context", %{conn: conn} do
+      %{instance: instance, form: form} = flow_of_one()
+      complete(instance, [form.id], %{"name" => "Ada Lovelace"})
+
+      assert get(conn, download_url(instance.id, [form.id])).status == 200
+    end
+  end
+
+  # The URL the page's mint would produce, built the same way: the token is
+  # the whole request, so a test that wants to fetch a download has to mint
+  # one exactly as the click does.
+  defp download_url(flow_instance_id, path), do: token_url(flow_instance_id, path, :download)
+  defp print_url(flow_instance_id, path), do: token_url(flow_instance_id, path, :print)
+
+  defp token_url(flow_instance_id, path, disposition) do
+    token =
+      Token.encode(DemoWeb.Endpoint, %{
+        user_id: "demo-user",
+        tenant_id: nil,
+        perspectives: [],
+        flow_instance_id: flow_instance_id,
+        path: path,
+        disposition: disposition
+      })
+
+    Downloads.form_path(Downloads.path(), token)
   end
 
   # ── fixtures ────────────────────────────────────────────────────────────

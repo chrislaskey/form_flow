@@ -187,7 +187,7 @@ authenticates:
     end
 
 That is the whole of it. `FormFlow.Web.Instances.Forms.Show` draws Download
-PDF and Print once a form has been started, and the routes resolve the
+PDF and Print once a form has been started, and the route resolves the
 position the same way that page does
 (`FormFlow.Web.Instances.Forms.Shared.resolve/1`), so what is printed is what
 is shown. The two differ by one header: Download sends `attachment`, which
@@ -196,10 +196,39 @@ browser's own viewer, where the user reads it, prints it, and saves it if
 they want to. Exactly how each browser honours that differs between Chrome,
 Firefox and Safari; the header is all a server can say about it.
 
-**These routes are not authorized yet.** Anyone who can reach the URL and
-knows a flow instance id can read that form's answers. Putting them behind an
-authenticating pipeline, as above, is what a host can do today; the
-`on_mount` gate the instance pages ask is not asked here yet.
+### How a download is authorized
+
+The gate is not asked twice. `FormFlow.Web.Instances.Forms.Show` already ran
+your `on_mount`, the flow type's `visible?`, and the page's `flows` scope in
+order to draw itself; when the user clicks Download or Print it mints a
+short-lived encrypted token — 60 seconds by default,
+`config :form_flow, download_token_max_age:` — and the request carries that
+instead of an argument. The endpoint reads the token and ignores every other
+query param, so a token cannot be pointed at a form it was not minted for.
+
+Minting happens on the click rather than when the page was drawn, which is
+what lets a tab left open for days still print: the token is always seconds
+old, whatever the page is.
+
+Two things follow that are worth knowing:
+
+  * **Anyone holding the URL can redeem it until it expires.** FormFlow
+    cannot bind a token to a session without knowing your current user, which
+    is the thing the token exists to avoid. Mount the route inside a pipeline
+    that authenticates — an anonymous holder is then turned away before
+    FormFlow sees the token — and layer any further checks you want in front
+    of it. A user who can mint a link can already save the PDF and send that
+    instead, so the link is a briefer version of a capability they had.
+  * **Your own endpoint gets the same token.** `FormFlow.decode_token/3`
+    reads it back:
+
+        def show(conn, %{"token" => token}) do
+          case FormFlow.decode_token(conn, token) do
+            {:ok, %{user_id: user_id, flow_instance_id: id, path: path}} -> ...
+            {:error, :expired} -> ...
+            {:error, :invalid} -> ...
+          end
+        end
 
 ### Choosing what the file looks like
 
@@ -224,10 +253,37 @@ A renderer receives the document, the page's `FormFlow.Context`, and the
 host's `callback_data`, and returns bytes and a content type. See
 `FormFlow.Web.Downloads.Renderer`.
 
-Mounting somewhere other than `/form-flow/downloads`? Configure it once, and
-the routes and the links the page builds both follow:
+### Where the links point
 
-    config :form_flow, download_path: "/files/form-flow"
+One route answers both Download and Print, and the path carries nothing —
+the form, the position, and which of the two was clicked all ride in the
+query string:
+
+    <download_path>?disposition=download&flow_instance_id=…&path[]=…
+
+So the mount can go anywhere. **Saying where is also what turns downloads
+on**: until an application configures a path, the form pages draw no Download
+or Print link, which is the right default for an app that does not offer
+them. One line sets both the route and the links:
+
+    config :form_flow, download_path: "/form-flow/downloads"
+
+`FormFlow.Web.router/1`'s **`download_path`** attr overrides that for one
+mount, which is how a page points somewhere the library does not serve at
+all:
+
+    <FormFlow.Web.router
+      user_id={@current_user.id}
+      path={@path}
+      base="/users"
+      download_path={~p"/exports/forms"}
+    />
+
+Point it at an endpoint of your own and FormFlow declares no route in it:
+your controller reads `flow_instance_id`, `path[]` (repeated, one segment per
+node, so it arrives as a list) and `disposition` off the query string, and
+generates the document however it likes — its own template, its own engine,
+its own authorization. The page stops caring what happens after the click.
 
 ## Rendering the LiveComponents directly
 

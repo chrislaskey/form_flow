@@ -18,11 +18,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   message, or nothing while redirecting, when not.
 
   It is also where the answers are taken away from: Download PDF and Print
-  are plain links out to `FormFlow.Web.Controllers.Downloads`, because a
-  LiveView holds a websocket and cannot send a file. Both send the same
-  document — the disposition header is the only difference — and both
-  resolve the position the way this page does, so what is printed is what is
-  shown.
+  are plain links out to a download endpoint, because a LiveView holds a
+  websocket and cannot send a file. Both send the same document — the
+  disposition header is the only difference — and both resolve the position
+  the way this page does, so what is printed is what is shown. They are
+  drawn only when the page knows where downloads live: the `download_path`
+  attr, or `config :form_flow, download_path:` behind it. An application
+  that configures neither is one that does not offer downloads, and this
+  page says nothing about them.
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
@@ -32,9 +35,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Data.Instances
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Controllers.Downloads
+  alias FormFlow.Web.Downloads.Token
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -54,14 +59,57 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:download_path, fn -> nil end)
+      |> then(&assign(&1, :download_path, &1.assigns.download_path || Downloads.path()))
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
 
-    {:ok, load(socket)}
+    {:ok, socket |> load() |> assign_workable()}
+  end
+
+  # What the gate decided, as one answer, computed where the gate ran. The
+  # render clause that draws the page's actions reads it and so does every
+  # handle_event, because a LiveComponent's events are reachable whenever it
+  # is mounted — which it is even when the page drew a refusal instead. A
+  # button that was never rendered is not a check.
+  defp assign_workable(socket) do
+    assigns = socket.assigns
+
+    assign(
+      socket,
+      :workable?,
+      is_nil(assigns[:mount_error]) and is_nil(assigns[:navigate_to]) and
+        assigns[:visible?] == true and not is_nil(assigns[:flow_instance]) and
+        not is_nil(assigns[:form_instance]) and is_nil(assigns[:parse_error])
+    )
   end
 
   @impl true
+  def handle_event("form_flow:download", _params, socket) when not socket.assigns.workable? do
+    {:noreply, socket}
+  end
+
+  def handle_event("form_flow:download", params, socket) do
+    %{flow_instance: flow_instance, path: path} = socket.assigns
+
+    token =
+      Token.encode(socket, %{
+        user_id: socket.assigns.user_id,
+        tenant_id: socket.assigns.tenant_id,
+        perspectives: Perspective.normalize(socket.assigns.perspectives),
+        flow_instance_id: flow_instance.id,
+        path: path,
+        disposition: disposition(params)
+      })
+
+    {:reply, %{url: Downloads.form_path(socket.assigns.download_path, token)}, socket}
+  end
+
+  def handle_event("reopen", _params, socket) when not socket.assigns.workable? do
+    {:noreply, socket}
+  end
+
   def handle_event("reopen", _params, socket) do
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
@@ -220,21 +268,56 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <%!-- A LiveView holds a websocket, not a response, so taking the answers
-            away is a link out to the download controller's own routes. Print
-            opens in a tab because it lands on a document, not a page. --%>
-      <div class="mb-3 flex items-center gap-4 text-xs">
-        <a href={Downloads.download_path(@flow_instance.id, @path)} class="text-cyan-600 hover:underline">
+            away is a request of its own, authorized by a token this page
+            mints on the click. Minting then, rather than when the page was
+            drawn, is what lets a tab left open for days still print: the
+            token is always seconds old, whatever the page is. --%>
+      <div
+        :if={@download_path && @workable?}
+        id={"#{@id}-downloads"}
+        phx-hook=".Downloads"
+        phx-target={@myself}
+        class="mb-3 flex items-center gap-4 text-xs"
+      >
+        <button type="button" data-disposition="download" class="text-cyan-600 hover:underline">
           Download PDF
-        </a>
-        <a
-          href={Downloads.print_path(@flow_instance.id, @path)}
-          target="_blank"
-          rel="noopener"
-          class="text-cyan-600 hover:underline"
-        >
+        </button>
+        <button type="button" data-disposition="print" class="text-cyan-600 hover:underline">
           Print
-        </a>
+        </button>
       </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".Downloads">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", (event) => {
+              const trigger = event.target.closest("[data-disposition]")
+              if (!trigger) return
+              event.preventDefault()
+
+              // Opened now, while the click is still the user's gesture: a
+              // window.open after the round trip below is what popup blockers
+              // are for. Download needs no tab — an attachment does not
+              // navigate the page it was asked from.
+              const disposition = trigger.dataset.disposition
+              const tab = disposition === "print" ? window.open("", "_blank") : null
+
+              this.pushEventTo(this.el, "form_flow:download", {disposition}, (reply) => {
+                if (!reply || !reply.url) {
+                  if (tab) tab.close()
+                  return
+                }
+
+                if (tab) {
+                  tab.location = reply.url
+                } else {
+                  window.location = reply.url
+                }
+              })
+            })
+          }
+        }
+      </script>
 
       <div
         :if={@form_instance.status == "completed"}
@@ -273,6 +356,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     </div>
     """
   end
+
+  # Anything but an explicit print is a download: it never navigates the user
+  # away from the page they were on
+  defp disposition(%{"disposition" => "print"}), do: :print
+  defp disposition(_params), do: :download
 
   defp unstarted_message(%{form: nil}), do: "This form is not part of this flow."
   defp unstarted_message(%{editable?: true}), do: "You haven't started this form yet."

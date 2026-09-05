@@ -54,6 +54,11 @@ config :phoenix, :json_library, Jason
 # FormFlow.Data.Repo wraps the parent app's repo
 config :form_flow, repo: Demo.Repo
 
+# Where downloads are served from. Saying so is what turns them on: without
+# this the form pages draw no Download or Print link. The route mounted in
+# the router answers here.
+config :form_flow, download_path: "/form-flow/downloads"
+
 # Slab query mode uses this repo unless a table passes one explicitly
 config :slab, repo: Demo.Repo
 

@@ -73,6 +73,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:download_path, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)

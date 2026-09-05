@@ -211,8 +211,12 @@ scope "/" do
 end
 ```
 
-That is all: the user-facing form page grows Download PDF and Print links, and
-the PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
+One route answers both. Clicking either mints a short-lived encrypted token
+carrying who is asking, which form, and which of the two — and that token is
+the entire request, so the path carries nothing and can be mounted anywhere.
+The page mints only what its own auth checks already allowed it to draw, so
+the gate is never written twice. That is all: the user-facing form page grows Download PDF and Print
+links, and the PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
 install alongside your app. The built-in renderer is deliberately plain. A host
 that wants its own typography implements `FormFlow.Web.Downloads.Renderer` around a
 real HTML-to-PDF engine and mounts that instead:
@@ -221,12 +225,20 @@ real HTML-to-PDF engine and mounts that instead:
 form_flow_router_download_routes(renderer: MyApp.FormFlowRenderer)
 ```
 
-Mounting somewhere other than `/form-flow/downloads`? Configure it once, the way
-the asset path is configured:
+**Downloads are opt-in.** Until you say where they are served from, the form
+pages draw no Download or Print link at all — an app that does not want them
+gets no trace of them. One line turns them on, and both the route and the links
+follow it:
 
 ```elixir
-config :form_flow, download_path: "/files/form-flow"
+config :form_flow, download_path: "/form-flow/downloads"
 ```
+
+Or point one page somewhere else with `FormFlow.Web.router/1`'s `download_path`
+attr, which overrides the config for that mount. Point it at an endpoint of your
+own and FormFlow declares no route at all — your controller reads
+`flow_instance_id`, `path[]`, and `disposition` off the query string and
+generates the document however it likes.
 
 ### Optional: file uploads
 

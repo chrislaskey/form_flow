@@ -80,7 +80,7 @@ echo "==> Declaring the route that serves FormFlow's editor bundle"
 # catch-all route above, which would otherwise swallow the asset path.
 perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  import FormFlow.Router\n\n  scope "/" do\n    form_flow_router_asset_routes()\n  end\n\n$1}' demo/lib/demo_web/router.ex
 
-echo "==> Declaring the routes a user's downloads are served from"
+echo "==> Declaring the route a user's downloads are served from"
 # Saving or printing a form's answers is a plain GET, because a LiveView holds a
 # websocket and cannot send a file. Like the editor bundle above, these must come
 # before the catch-all route, which would otherwise swallow them. A real app puts
@@ -121,10 +121,12 @@ echo "==> Pointing the dev server at port 4001 (avoids clashing with other 4000 
 # the dev server's port.
 grep -rl '4000' demo | while IFS= read -r file; do perl -pi -e 's/4000/4001/g' "$file"; done
 
-echo "==> Configuring the repos"
+echo "==> Configuring the repos and the download path"
 # FormFlow.Data.Repo wraps the parent app's repo, and Slab's query mode uses
-# its own configured repo unless a table passes one explicitly.
-perl -0777 -pi -e 's/(# Import environment specific config)/# FormFlow.Data.Repo wraps the parent app\x27s repo\nconfig :form_flow, repo: Demo.Repo\n\n# Slab query mode uses this repo unless a table passes one explicitly\nconfig :slab, repo: Demo.Repo\n\n$1/' demo/config/config.exs
+# its own configured repo unless a table passes one explicitly. The download
+# path is what turns Download and Print on: unset, the form pages offer
+# neither, which is the right default for an app that does not want them.
+perl -0777 -pi -e 's/(# Import environment specific config)/# FormFlow.Data.Repo wraps the parent app\x27s repo\nconfig :form_flow, repo: Demo.Repo\n\n# Where downloads are served from. Saying so is what turns them on: without\n# this the form pages draw no Download or Print link. The route mounted in\n# the router answers here.\nconfig :form_flow, download_path: "\/form-flow\/downloads"\n\n# Slab query mode uses this repo unless a table passes one explicitly\nconfig :slab, repo: Demo.Repo\n\n$1/' demo/config/config.exs
 
 echo "==> Making library changes reload without restarting the server"
 # FormFlow is a path dependency here, so the demo has to opt into reloading it.

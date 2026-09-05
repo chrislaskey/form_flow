@@ -34,8 +34,8 @@ catch-all route.
 
 ### A form's answers can be downloaded and printed
 
-**New: `FormFlow.Web.Controllers.Downloads`**, a pair of ordinary `GET` routes
-that send one form instance's answers as a file. A LiveView holds a websocket and
+**New: `FormFlow.Web.Controllers.Downloads`**, an ordinary `GET` route that
+sends one form instance's answers as a file. A LiveView holds a websocket and
 cannot send a response, so taking answers away is a link out of the page:
 `FormFlow.Web.Instances.Forms.Show` now draws **Download PDF** and **Print**
 once a form has been started. The two send the same document and differ by one
@@ -55,15 +55,28 @@ scope "/" do
 end
 ```
 
-- **The URLs address a position, not a row**, exactly as the user-facing pages
-  do: `<mount>/download/instances/:flow_instance_id/forms/*path`, and the same
-  under `/print`. The verb leads because Phoenix's catch-all must be the last
-  segment and a form's address ends in one; `instances` says which world the
-  resource is from, so a template download later is a sibling route rather
-  than a second mount. `<mount>` defaults to `/form-flow/downloads` and is
-  configurable as `config :form_flow, download_path: "..."`, the way
-  `asset_path` is — the routes and the links the page builds both derive from
-  `FormFlow.Web.Controllers.Downloads.mount_path/0`, so they cannot drift.
+- **One route, and the request in the query string**:
+  `<download_path>?disposition=download|print&flow_instance_id=…&path[]=…`.
+  The path carries nothing, so a host can mount it anywhere, however deeply
+  nested. `path[]` repeated is the position — the chain of node ids, as the
+  user-facing pages address it — so it arrives as the list it is rather than a
+  string with a separator to know. `disposition` is the only difference
+  between Download and Print; anything but `print` is a download.
+- **Downloads are opt-in.** `config :form_flow, download_path: "..."` is what
+  turns them on: until an application names a path, the form pages draw no
+  Download or Print link at all, so a host that does not want the feature
+  carries no trace of it.
+  `FormFlow.Web.Controllers.Downloads.path/0` is that value, `nil` by default;
+  `mount_path/0` is where the route macro mounts, falling back to
+  `/form-flow/downloads` since a declared route has to answer somewhere.
+- **New `download_path` attr on `FormFlow.Web.router/1`** and the instance
+  LiveComponents: where the two links point, per mount, overriding the
+  config. It is how an
+  application points the links at an endpoint of its own and generates the
+  document itself: read `flow_instance_id`, `path[]`, and `disposition` off
+  the query string and FormFlow's route need not be mounted at all. The base
+  resolves when the link is drawn, so the config is read live rather than
+  baked into an attr default.
 - **The PDF is written by FormFlow, with no dependency** —
   `FormFlow.Web.Downloads.Renderer.PDF` and its
   `FormFlow.Web.Downloads.Renderer.PDF.Writer`, a small text-and-pagination layer
@@ -104,7 +117,7 @@ end
   browser.
 - **New: `FormFlow.Web.Instances.Forms.Shared.resolve/1`**, the loading that
   was inside `assigns/1`, now over a plain map of attrs rather than a socket.
-  The download routes resolve a position through it, which is what makes a
+  The download route resolves a position through it, which is what makes a
   printed form and the page it was printed from the same answers rather than
   two readings that can drift. `assigns/1` calls it and is otherwise
   unchanged.
@@ -113,12 +126,48 @@ end
   calls `Phoenix.Controller.send_download/3` directly, so the library now says
   so.
   No resolution changes for an existing host.
-- **These routes are not authorized yet.** Anyone who can reach the URL and
-  knows a flow instance id can read that form's answers; mounting them inside
-  an authenticating pipeline is the whole of what a host can do today. The
-  request resolves with no user, so no callback reading `:user_id` sees one.
-  Asking the `on_mount` gate here, with the request's `user_id` and
-  `tenant_id`, is the next piece of this work.
+- **A download is authorized by a short-lived token, not by re-deciding.**
+  The page already ran the host's `on_mount`, the flow type's `visible?`, and
+  the `flows` scope in order to render; when the user clicks, it mints a
+  token saying *this user may take this form away*, and the request carries
+  that. Re-deciding in the controller would mean handing the host's gate to a
+  route as well as a page — and a route has neither `callback_data` nor the
+  page's `flows` attr, so the two would answer differently the first time one
+  changed.
+  **New: `FormFlow.Web.Downloads.Token`**, encrypted (not merely signed, so
+  the ids stay out of logs and history) and good for 60 seconds
+  (`config :form_flow, download_token_max_age:`). **New:
+  `FormFlow.decode_token/3`**, the stable public name for reading one back —
+  what a host serving downloads from its own endpoint calls to find out who
+  asked for what.
+- **The token is the whole request.** `?token=…` and nothing else: the
+  endpoint reads the payload and ignores the rest of the query string, so
+  swapping a `path` param cannot widen what a token was minted for. The
+  identity the page had — `user_id`, `tenant_id`, `perspectives` — now
+  reaches the document's `FormFlow.Context`, where before the request
+  resolved with none.
+- **Minted on the click, not on the render**, by a colocated hook, so a tab
+  left open for days prints as readily as a fresh one: the token is always
+  seconds old whatever the page is. The hook opens the print tab
+  synchronously with the click and fills it when the URL arrives — a
+  `window.open` after the round trip is what popup blockers exist for.
+  Download and Print are buttons now rather than `<a href>`, so they need
+  JavaScript, as every other interaction on the page already does.
+- **Known and accepted: a minted link works for whoever holds it until it
+  expires.** FormFlow cannot bind it to a session without knowing the host's
+  current user, which is the thing tokens exist here to avoid. The route sits
+  inside the host's own pipeline, so an anonymous holder is turned away
+  before FormFlow sees the token; and a user who can mint a link can already
+  save the file and send that instead. A host wanting more layers its own
+  checks in front of the route.
+- **`handle_event` is now guarded by the gate's verdict.** A LiveComponent's
+  events are reachable whenever it is mounted — which
+  `FormFlow.Web.Instances.Forms.Show` is even when the page drew a refusal —
+  so which buttons were rendered gates nothing. The gate's answer is computed
+  once, where the gate ran, and both the markup and every event read it.
+  **This closes a hole in Reopen**: a viewer looking at "This form is not part
+  of your work here" could push `reopen` at the component and flip a form
+  they could not see back to in progress.
 
 ### The flow editor builds left to right
 

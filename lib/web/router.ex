@@ -55,8 +55,8 @@ defmodule FormFlow.Web.Router do
 
   Every instance component receives `user_id`, `tenant_id`, `perspectives`,
   `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
-  `flows`, `uri`, `params`, and `components`, whether or not it reads them
-  today — a host calling the components directly should pass the same, so a
+  `flows`, `download_path`, `uri`, `params`, and `components`, whether or not
+  it reads them today — a host calling the components directly should pass the same, so a
   later feature that needs one never means rewiring.
 
   `components` reaches every LiveComponent on both sides, including the
@@ -206,6 +206,20 @@ defmodule FormFlow.Web.Router do
         "is `nil` the listing shows the user's own instances of them alone. `nil` offers and lists every root flow of the tenant " <>
         "(those not made reusable, for starting). The router's `tenant_id` is " <>
         "applied on top. Ignored by the template pages"
+  )
+
+  attr(:download_path, :string,
+    default: nil,
+    doc:
+      "the path the Download PDF and Print links point at. The resource and " <>
+        "which of the two was clicked ride in the query string, so this can " <>
+        "be any path, however deeply nested — including an endpoint of the " <>
+        "host's own, which is how an application generates the document " <>
+        "itself instead of using FormFlow's renderer. `nil`, the default, " <>
+        "falls back to `config :form_flow, download_path:` " <>
+        "(`FormFlow.Web.Controllers.Downloads.path/0`), and where that is " <>
+        "unset too the pages draw no download links at all — offering them " <>
+        "is something an application opts into. Ignored by the template pages"
   )
 
   attr(:uri, :string,
@@ -409,6 +423,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              download_path={@download_path}
               uri={@uri}
               params={@params}
             />
@@ -428,6 +443,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              download_path={@download_path}
               uri={@uri}
               params={@params}
             />
@@ -448,6 +464,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              download_path={@download_path}
               uri={@uri}
               params={@params}
             />
@@ -468,6 +485,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              download_path={@download_path}
               uri={@uri}
               params={@params}
             />
