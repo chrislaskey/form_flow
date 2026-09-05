@@ -21,7 +21,7 @@ defmodule Demo.FormFlowDownloadsTest do
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
-  alias FormFlow.Web.Downloads
+  alias FormFlow.Web.Controllers.Downloads
 
   describe "the download route" do
     test "sends the answers as a PDF the browser saves", %{conn: conn} do

@@ -1,8 +1,8 @@
-defmodule FormFlow.Downloads.DocumentTest do
+defmodule FormFlow.Web.Downloads.DocumentTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Downloads.Document
-  alias FormFlow.Downloads.Document.Section
+  alias FormFlow.Web.Downloads.Document
+  alias FormFlow.Web.Downloads.Document.Section
 
   describe "any_content?/1" do
     test "is false for a document with no sections at all" do

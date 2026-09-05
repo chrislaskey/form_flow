@@ -15,9 +15,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   `resolve/1` is the loading itself, over a plain map of attrs: the position
   looked up into a template tree, a journey's progress, the live instance
-  there, and the `FormFlow.Context` around them. `FormFlow.Web.Downloads`
-  calls it too, which is what makes a printed form and the page it was
-  printed from the same answers.
+  there, and the `FormFlow.Context` around them.
+  `FormFlow.Web.Controllers.Downloads` calls it too, which is what makes a
+  printed form and the page it was printed from the same answers.
 
   `assigns/1` reads the page's `flow_instance`, `path`, and the host's attrs
   (the type lists, `callback_data`) from the socket, resolves them, and
@@ -126,9 +126,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   callback are given.
 
   It takes assigns rather than a socket because it is read from outside
-  LiveView too: `FormFlow.Web.Downloads` resolves a download's position
-  through this, so a printed form and the page it was printed from can
-  never disagree about what the answers are.
+  LiveView too: `FormFlow.Web.Controllers.Downloads` resolves a download's
+  position through this, so a printed form and the page it was printed from
+  can never disagree about what the answers are.
   """
   def resolve(assigns) do
     %{flow_instance: flow_instance, path: path} = assigns

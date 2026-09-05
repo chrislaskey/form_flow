@@ -1,24 +1,24 @@
-defmodule FormFlow.Downloads.Renderer.HTML do
+defmodule FormFlow.Web.Downloads.Renderer.HTML do
   @moduledoc """
-  A `FormFlow.Downloads.Renderer` that writes a printable HTML page rather
+  A `FormFlow.Web.Downloads.Renderer` that writes a printable HTML page rather
   than a PDF: one self-contained file, its styles inline, with a `@page` rule
   so a browser's own Print gives sensible margins.
 
-  It is not the default — `FormFlow.Downloads.Renderer.PDF` is — but it is
+  It is not the default — `FormFlow.Web.Downloads.Renderer.PDF` is — but it is
   the renderer to mount when the host would rather print through the
   browser than through the library, and it is the worked example of the
   behaviour having more than one implementation:
 
-      form_flow_downloads(renderer: FormFlow.Downloads.Renderer.HTML)
+      form_flow_router_download_routes(renderer: FormFlow.Web.Downloads.Renderer.HTML)
 
   It also makes a useful target while building a document: the same
-  `FormFlow.Downloads.Document` the PDF renderer draws, in a form that can be
+  `FormFlow.Web.Downloads.Document` the PDF renderer draws, in a form that can be
   read in a browser's inspector.
   """
 
-  @behaviour FormFlow.Downloads.Renderer
+  @behaviour FormFlow.Web.Downloads.Renderer
 
-  alias FormFlow.Downloads.Document
+  alias FormFlow.Web.Downloads.Document
 
   @impl true
   def extension, do: "html"
@@ -114,8 +114,9 @@ defmodule FormFlow.Downloads.Renderer.HTML do
   defp entry({:text, text}), do: ~s(<p class="text">#{escape(text)}</p>)
 
   defp entry({:group, title, entries}) do
-    ~s(<div class="group"><div class="title">#{escape(title)}</div>) <>
-      Enum.map_join(entries, "\n", &entry/1) <> "</div>"
+    heading = if title, do: ~s(<div class="title">#{escape(title)}</div>), else: ""
+
+    ~s(<div class="group">#{heading}) <> Enum.map_join(entries, "\n", &entry/1) <> "</div>"
   end
 
   defp blank(value) when value in ["", nil], do: "—"

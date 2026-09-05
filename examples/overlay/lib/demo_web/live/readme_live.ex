@@ -97,7 +97,7 @@ defmodule DemoWeb.ReadmeLive do
             — serves a
             landing plus the flows and forms CRUD LiveComponents at <code>/admin/flows</code>
             and <code>/admin/forms</code>. The
-            ReactFlow editor's ~390 KB bundle is fetched from the <code>form_flow_assets()</code>
+            ReactFlow editor's ~390 KB bundle is fetched from the <code>form_flow_router_asset_routes()</code>
             route on those pages only — it is not
             in <code>app.js</code>.
           </p>

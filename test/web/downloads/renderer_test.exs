@@ -1,11 +1,12 @@
-defmodule FormFlow.Downloads.RendererTest do
+defmodule FormFlow.Web.Downloads.RendererTest do
   use ExUnit.Case, async: true
 
   alias FormFlow.Context
-  alias FormFlow.Downloads
-  alias FormFlow.Downloads.Document
-  alias FormFlow.Downloads.Document.Section
-  alias FormFlow.Downloads.Renderer
+  alias FormFlow.Web.Downloads
+  alias FormFlow.Web.Downloads.Document
+  alias FormFlow.Web.Downloads.Document.Section
+  alias FormFlow.Web.Downloads.Renderer
+  alias FormFlow.Web.Downloads.Renderer.PDF.Writer
 
   defmodule Refusing do
     @behaviour Renderer
@@ -114,6 +115,102 @@ defmodule FormFlow.Downloads.RendererTest do
 
       assert html =~ "@page"
       refute html =~ "<link"
+    end
+  end
+
+  describe "nested groups" do
+    @nested %Document{
+      title: "Directory",
+      filename: "directory",
+      sections: [
+        %Section{
+          title: "Registered Users",
+          entries: [
+            {:group, "User #1",
+             [
+               {:field, "Full Name", "one"},
+               {:group, "Email Addresses",
+                [
+                  {:group, "Email Slot #1", [{:field, "Email Address", "hello@world.com"}]}
+                ]}
+             ]}
+          ]
+        }
+      ]
+    }
+
+    test "both renderers draw every level, not just the first" do
+      {:ok, pdf, _type} = Renderer.PDF.render(@nested, %Context{}, %{})
+      {:ok, html, _type} = Renderer.HTML.render(@nested, %Context{}, %{})
+
+      for body <- [pdf, html],
+          text <- ["User #1", "Full Name", "Email Addresses", "Email Slot #1", "hello@world.com"] do
+        assert body =~ text
+      end
+    end
+
+    test "a group the definition heads with nothing draws no heading, in either renderer" do
+      document = %Document{
+        title: "Licence",
+        filename: "licence",
+        sections: [
+          %Section{
+            title: "Dogs",
+            entries: [
+              {:group, nil, [{:field, "Name", "Rex"}]},
+              {:group, nil, [{:field, "Name", "Byte"}]}
+            ]
+          }
+        ]
+      }
+
+      {:ok, pdf, _type} = Renderer.PDF.render(document, %Context{}, %{})
+      {:ok, html, _type} = Renderer.HTML.render(document, %Context{}, %{})
+
+      for body <- [pdf, html], text <- ["Rex", "Byte", "Dogs"], do: assert(body =~ text)
+
+      refute html =~ ~s(<div class="title">)
+      refute pdf =~ "() Tj"
+    end
+
+    test "the PDF indents each level, so the nesting is visible on paper" do
+      {:ok, pdf, _type} = Renderer.PDF.render(@nested, %Context{}, %{})
+
+      # Every drawn line carries its x in the text matrix; deeper labels sit further right
+      x = fn text ->
+        [x] =
+          Regex.run(~r/1 0 0 1 ([\d.]+) [\d.]+ Tm\n\(#{Regex.escape(text)}\)/, pdf,
+            capture: :all_but_first
+          )
+
+        String.to_float(x <> ".0")
+      end
+
+      assert x.("User #1") < x.("Email Addresses")
+      assert x.("Email Addresses") < x.("Email Slot #1")
+    end
+
+    test "the indent stops growing, so a deep form keeps a readable column" do
+      deep =
+        Enum.reduce(10..1//-1, [{:field, "Leaf", "value"}], fn level, entries ->
+          [{:group, "Level #{level}", entries}]
+        end)
+
+      document = %Document{
+        title: "Deep",
+        filename: "deep",
+        sections: [%Section{entries: deep}]
+      }
+
+      {:ok, pdf, _type} = Renderer.PDF.render(document, %Context{}, %{})
+
+      indents =
+        Regex.scan(~r/1 0 0 1 ([\d.]+) [\d.]+ Tm/, pdf, capture: :all_but_first)
+        |> Enum.map(fn [x] -> String.to_float(x <> ".0") end)
+
+      assert Enum.max(indents) < Writer.content_width()
+      assert pdf =~ "(Leaf)"
+      assert pdf =~ "(value)"
     end
   end
 

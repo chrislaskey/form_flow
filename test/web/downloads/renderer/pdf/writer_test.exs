@@ -1,7 +1,7 @@
-defmodule FormFlow.Downloads.Renderer.PDF.WriterTest do
+defmodule FormFlow.Web.Downloads.Renderer.PDF.WriterTest do
   use ExUnit.Case, async: true
 
-  alias FormFlow.Downloads.Renderer.PDF.Writer
+  alias FormFlow.Web.Downloads.Renderer.PDF.Writer
 
   defp pdf(writer), do: Writer.to_binary(writer)
 

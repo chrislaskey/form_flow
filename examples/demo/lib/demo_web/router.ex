@@ -14,20 +14,18 @@ defmodule DemoWeb.Router do
     plug :accepts, ["json"]
   end
 
-  import FormFlow.Web.Assets.Router
+  import FormFlow.Router
 
   scope "/" do
-    form_flow_assets()
+    form_flow_router_asset_routes()
   end
-
-  import FormFlow.Web.Downloads.Router
 
   # A user saving or printing their answers. Inside :browser, and in a real app
   # inside whatever authenticates too — FormFlow does not authorize these yet.
   scope "/" do
     pipe_through :browser
 
-    form_flow_downloads()
+    form_flow_router_download_routes()
   end
 
   scope "/", DemoWeb do

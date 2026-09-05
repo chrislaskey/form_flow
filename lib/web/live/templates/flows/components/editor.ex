@@ -131,7 +131,7 @@ defmodule FormFlow.Web.Components.Editor do
 
             this.el.textContent =
               "The flow editor failed to load from " + this.el.dataset.src +
-              ". Is form_flow_assets() declared in the router?"
+              ". Is form_flow_router_asset_routes() declared in the router?"
           }
         },
 

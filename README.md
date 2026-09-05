@@ -175,10 +175,10 @@ so only pages that actually render the builder download it. Declare the route it
 is served from, outside any pipeline and **before any catch-all route**:
 
 ```elixir
-import FormFlow.Web.Assets.Router
+import FormFlow.Router
 
 scope "/" do
-  form_flow_assets()
+  form_flow_router_asset_routes()
 end
 ```
 
@@ -202,23 +202,23 @@ authenticates — the routes send a form's answers, and FormFlow does not yet
 authorize them itself:
 
 ```elixir
-import FormFlow.Web.Downloads.Router
+import FormFlow.Router
 
 scope "/" do
   pipe_through [:browser, :require_authenticated_user]
 
-  form_flow_downloads()
+  form_flow_router_download_routes()
 end
 ```
 
 That is all: the user-facing form page grows Download PDF and Print links, and
 the PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
 install alongside your app. The built-in renderer is deliberately plain. A host
-that wants its own typography implements `FormFlow.Downloads.Renderer` around a
+that wants its own typography implements `FormFlow.Web.Downloads.Renderer` around a
 real HTML-to-PDF engine and mounts that instead:
 
 ```elixir
-form_flow_downloads(renderer: MyApp.FormFlowRenderer)
+form_flow_router_download_routes(renderer: MyApp.FormFlowRenderer)
 ```
 
 Mounting somewhere other than `/form-flow/downloads`? Configure it once, the way

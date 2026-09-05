@@ -78,14 +78,14 @@ echo "==> Declaring the route that serves FormFlow's editor bundle"
 # The editor is ~390 KB of React + ReactFlow, fetched at runtime by FormFlow's
 # colocated hook instead of being bundled into app.js. This must come before the
 # catch-all route above, which would otherwise swallow the asset path.
-perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  import FormFlow.Web.Assets.Router\n\n  scope "/" do\n    form_flow_assets()\n  end\n\n$1}' demo/lib/demo_web/router.ex
+perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  import FormFlow.Router\n\n  scope "/" do\n    form_flow_router_asset_routes()\n  end\n\n$1}' demo/lib/demo_web/router.ex
 
 echo "==> Declaring the routes a user's downloads are served from"
 # Saving or printing a form's answers is a plain GET, because a LiveView holds a
 # websocket and cannot send a file. Like the editor bundle above, these must come
 # before the catch-all route, which would otherwise swallow them. A real app puts
 # them behind whatever authenticates it: FormFlow does not authorize them yet.
-perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  import FormFlow.Web.Downloads.Router\n\n  # A user saving or printing their answers. Inside :browser, and in a real app\n  # inside whatever authenticates too — FormFlow does not authorize these yet.\n  scope "/" do\n    pipe_through :browser\n\n    form_flow_downloads()\n  end\n\n$1}' demo/lib/demo_web/router.ex
+perl -0777 -pi -e 's{(  scope "/", DemoWeb do)}{  # A user saving or printing their answers. Inside :browser, and in a real app\n  # inside whatever authenticates too — FormFlow does not authorize these yet.\n  scope "/" do\n    pipe_through :browser\n\n    form_flow_router_download_routes()\n  end\n\n$1}' demo/lib/demo_web/router.ex
 
 echo "==> Pointing Tailwind at FormFlow's classes"
 # All four libraries render server-side markup styled with Tailwind (plus the

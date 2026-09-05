@@ -2,10 +2,40 @@
 
 ## v0.13.0
 
+### One router module for every route a host mounts
+
+**New: `FormFlow.Router`**, the single place the route macros live. A host
+imports it once and calls the groups it wants, all of them before any
+catch-all route.
+
+- **Breaking: `FormFlow.Web.Assets.Router` is gone, and `form_flow_assets/1`
+  with it.** The editor bundle's route is now
+  `FormFlow.Router.form_flow_router_asset_routes/1`, same options and same
+  behaviour:
+
+  ```elixir
+  # before
+  import FormFlow.Web.Assets.Router
+
+  scope "/" do
+    form_flow_assets()
+  end
+
+  # after
+  import FormFlow.Router
+
+  scope "/" do
+    form_flow_router_asset_routes()
+  end
+  ```
+
+- `FormFlow.Router.form_flow_router_download_routes/1` joins it there — see
+  below.
+
 ### A form's answers can be downloaded and printed
 
-**New: `FormFlow.Web.Downloads`**, a pair of ordinary `GET` routes that send
-one form instance's answers as a file. A LiveView holds a websocket and
+**New: `FormFlow.Web.Controllers.Downloads`**, a pair of ordinary `GET` routes
+that send one form instance's answers as a file. A LiveView holds a websocket and
 cannot send a response, so taking answers away is a link out of the page:
 `FormFlow.Web.Instances.Forms.Show` now draws **Download PDF** and **Print**
 once a form has been started. The two send the same document and differ by one
@@ -13,16 +43,15 @@ header — `attachment` saves a file, `inline` opens it in the browser's own
 viewer to read and print.
 
 **Mount them once, before any catch-all**, with the new
-`FormFlow.Web.Downloads.Router.form_flow_downloads/1`, the sibling of
-`form_flow_assets/0`:
+`FormFlow.Router.form_flow_router_download_routes/1`:
 
 ```elixir
-import FormFlow.Web.Downloads.Router
+import FormFlow.Router
 
 scope "/" do
   pipe_through [:browser, :require_authenticated_user]
 
-  form_flow_downloads()
+  form_flow_router_download_routes()
 end
 ```
 
@@ -34,29 +63,43 @@ end
   than a second mount. `<mount>` defaults to `/form-flow/downloads` and is
   configurable as `config :form_flow, download_path: "..."`, the way
   `asset_path` is — the routes and the links the page builds both derive from
-  `FormFlow.Web.Downloads.mount_path/0`, so they cannot drift.
+  `FormFlow.Web.Controllers.Downloads.mount_path/0`, so they cannot drift.
 - **The PDF is written by FormFlow, with no dependency** —
-  `FormFlow.Downloads.Renderer.PDF` and its
-  `FormFlow.Downloads.Renderer.PDF.Writer`, a small text-and-pagination layer
+  `FormFlow.Web.Downloads.Renderer.PDF` and its
+  `FormFlow.Web.Downloads.Renderer.PDF.Writer`, a small text-and-pagination layer
   over the PDF format. No Chrome, no wkhtmltopdf, nothing to install beside
   the application. Helvetica and Helvetica-Bold with their real metrics, so
   wrapping is measured; WinAnsi text, so Latin-1 and the typographic
   characters that keep appearing in pasted answers come through and anything
   outside them becomes `?`.
-- **New: `FormFlow.Downloads.Document`**, what a resource becomes before a
+- **New: `FormFlow.Web.Downloads.Document`**, what a resource becomes before a
   format is chosen — a title, the details about the resource itself, and
   sections of `{:field, label, value}`, `{:text, text}`, and `{:group, title,
-  entries}` entries. Builders turn resources into it, renderers turn it into
-  bytes, and the two never multiply.
-  `FormFlow.Downloads.Instances.Form` is the first builder: a static panel
-  becomes a section, a repeating question a section of one group per entry, a
-  hidden question is left out, an unanswered one is kept, and values render
-  for reading — a choice prints its text, a boolean Yes or No.
-- **New: `FormFlow.Downloads.Renderer`**, the behaviour a host implements to
+  entries}` entries. Parsers turn resources into it, renderers turn it into
+  bytes, and the two never multiply. Parsers sit beside the components that
+  draw the same resource on screen, and
+  `FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance` is the first
+  of them: a static panel becomes a section, a repeating question a section
+  of one group per entry, a hidden question is left out, an unanswered one is
+  kept, and values render for reading — a choice prints its text, a boolean
+  Yes or No.
+- **Nesting is followed all the way down.** A panel inside a repeating
+  question's template becomes a group inside that entry's group, and a
+  repeating question inside one — users, each with their email addresses — a
+  group of groups, as deep as the form goes. Visibility inside an entry is
+  judged the way `DynamicForm` judges it, against the entry's own values over
+  the form's plus the `panel.`-prefixed copies a `{panel.field}` condition
+  resolves through, while the answers come from the entry alone. An entry is
+  headed the way the page heads it — the template's `templateTitle` with
+  `{panelIndex}` filled in, and no heading where the template sets none — so
+  the paper never says more than the screen. The PDF indents each level and
+  stops widening the indent past four, so a deep form keeps a readable
+  column.
+- **New: `FormFlow.Web.Downloads.Renderer`**, the behaviour a host implements to
   draw the document its own way — `render/3` over the document, the page's
   `FormFlow.Context`, and `callback_data`, plus `extension/0`. Mounted per
-  route: `form_flow_downloads(renderer: MyApp.FormFlowRenderer)`.
-  `FormFlow.Downloads.Renderer.HTML`, a self-contained printable page, ships
+  route: `form_flow_router_download_routes(renderer: MyApp.FormFlowRenderer)`.
+  `FormFlow.Web.Downloads.Renderer.HTML`, a self-contained printable page, ships
   alongside the PDF renderer for hosts that would rather print through the
   browser.
 - **New: `FormFlow.Web.Instances.Forms.Shared.resolve/1`**, the loading that
@@ -66,8 +109,9 @@ end
   two readings that can drift. `assigns/1` calls it and is otherwise
   unchanged.
 - **`:phoenix` is now a declared dependency.** It was always there —
-  `phoenix_live_view` requires it — but `FormFlow.Web.Downloads` calls
-  `Phoenix.Controller.send_download/3` directly, so the library now says so.
+  `phoenix_live_view` requires it — but `FormFlow.Web.Controllers.Downloads`
+  calls `Phoenix.Controller.send_download/3` directly, so the library now says
+  so.
   No resolution changes for an existing host.
 - **These routes are not authorized yet.** Anyone who can reach the URL and
   knows a flow instance id can read that form's answers; mounting them inside

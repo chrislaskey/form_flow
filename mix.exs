@@ -35,7 +35,7 @@ defmodule FormFlow.MixProject do
     [
       {:phoenix_live_view, ">= 1.1.0"},
       # phoenix_live_view already brings this along; declared because
-      # FormFlow.Web.Downloads calls Phoenix.Controller.send_download/3 directly
+      # FormFlow.Web.Controllers.Downloads calls Phoenix.Controller.send_download/3 directly
       {:phoenix, ">= 1.7.0"},
       {:phoenix_html, ">= 4.0.0"},
       {:plug, ">= 1.0.0"},

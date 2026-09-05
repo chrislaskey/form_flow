@@ -1,11 +1,11 @@
-defmodule FormFlow.Web.DownloadsTest do
+defmodule FormFlow.Web.Controllers.DownloadsTest do
   use ExUnit.Case, async: false
 
   import Plug.Conn
   import Plug.Test
 
-  alias FormFlow.Downloads.Renderer
-  alias FormFlow.Web.Downloads
+  alias FormFlow.Web.Controllers.Downloads
+  alias FormFlow.Web.Downloads.Renderer
 
   setup do
     on_exit(fn -> Application.delete_env(:form_flow, :download_path) end)

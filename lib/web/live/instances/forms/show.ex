@@ -18,10 +18,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   message, or nothing while redirecting, when not.
 
   It is also where the answers are taken away from: Download PDF and Print
-  are plain links out to `FormFlow.Web.Downloads`, because a LiveView holds a
-  websocket and cannot send a file. Both send the same document — the
-  disposition header is the only difference — and both resolve the position
-  the way this page does, so what is printed is what is shown.
+  are plain links out to `FormFlow.Web.Controllers.Downloads`, because a
+  LiveView holds a websocket and cannot send a file. Both send the same
+  document — the disposition header is the only difference — and both
+  resolve the position the way this page does, so what is printed is what is
+  shown.
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
@@ -33,7 +34,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   alias FormFlow.Data.Instances
   alias FormFlow.Web.Components.Core
-  alias FormFlow.Web.Downloads
+  alias FormFlow.Web.Controllers.Downloads
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -219,7 +220,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <%!-- A LiveView holds a websocket, not a response, so taking the answers
-            away is a link out to FormFlow.Web.Downloads' own routes. Print
+            away is a link out to the download controller's own routes. Print
             opens in a tab because it lands on a document, not a page. --%>
       <div class="mb-3 flex items-center gap-4 text-xs">
         <a href={Downloads.download_path(@flow_instance.id, @path)} class="text-cyan-600 hover:underline">

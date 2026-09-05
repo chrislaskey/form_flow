@@ -1,28 +1,29 @@
-defmodule FormFlow.Downloads do
+defmodule FormFlow.Web.Downloads do
   @moduledoc """
-  `FormFlow.Downloads` is the half of a download that has nothing to do with
-  the web: a resource becomes a `FormFlow.Downloads.Document`, a
-  `FormFlow.Downloads.Renderer` turns that into bytes, and this module joins
-  the two.
+  `FormFlow.Web.Downloads` is the half of a download that never touches a
+  connection: a resource becomes a `FormFlow.Web.Downloads.Document`, a
+  `FormFlow.Web.Downloads.Renderer` turns that into bytes, and this module
+  joins the two.
 
-  `FormFlow.Web.Downloads` is the other half — the route, the request, and
-  the response — and it is the only caller. Keeping them apart is what lets
-  a download be produced without a connection: a scheduled job that files
+  `FormFlow.Web.Controllers.Downloads` is the other half — the request and
+  the response — and it is the only caller today. Keeping them apart is what
+  lets a download be produced without one: a scheduled job that files
   submitted forms somewhere calls `render/4` with the same context a request
   would have built.
 
-  The library ships `FormFlow.Downloads.Renderer.PDF` and
-  `FormFlow.Downloads.Renderer.HTML`, and a host mounts a renderer of its
+  The library ships `FormFlow.Web.Downloads.Renderer.PDF` and
+  `FormFlow.Web.Downloads.Renderer.HTML`, and a host mounts a renderer of its
   own when it wants more than either draws.
   """
 
   alias FormFlow.Context
-  alias FormFlow.Downloads.Document
+  alias FormFlow.Web.Downloads.Document
 
-  @default_renderer FormFlow.Downloads.Renderer.PDF
+  @default_renderer FormFlow.Web.Downloads.Renderer.PDF
 
   @doc """
-  The renderer used when a mount names none: `FormFlow.Downloads.Renderer.PDF`.
+  The renderer used when a mount names none —
+  `FormFlow.Web.Downloads.Renderer.PDF`.
   """
   @spec default_renderer() :: module()
   def default_renderer, do: @default_renderer

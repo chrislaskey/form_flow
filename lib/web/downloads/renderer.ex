@@ -1,11 +1,11 @@
-defmodule FormFlow.Downloads.Renderer do
+defmodule FormFlow.Web.Downloads.Renderer do
   @moduledoc """
-  The behaviour a module implements to turn a `FormFlow.Downloads.Document`
+  The behaviour a module implements to turn a `FormFlow.Web.Downloads.Document`
   into the bytes a browser receives.
 
-  FormFlow ships two: `FormFlow.Downloads.Renderer.PDF`, the default, which
+  FormFlow ships two: `FormFlow.Web.Downloads.Renderer.PDF`, the default, which
   writes a PDF with no dependency of any kind, and
-  `FormFlow.Downloads.Renderer.HTML`, a printable HTML page. Both take the
+  `FormFlow.Web.Downloads.Renderer.HTML`, a printable HTML page. Both take the
   same document, so which one a host mounts changes the file and nothing
   about what it says.
 
@@ -15,7 +15,7 @@ defmodule FormFlow.Downloads.Renderer do
   handing the document's parts to a real HTML-to-PDF engine:
 
       defmodule MyApp.FormFlowRenderer do
-        @behaviour FormFlow.Downloads.Renderer
+        @behaviour FormFlow.Web.Downloads.Renderer
 
         @impl true
         def extension, do: "pdf"
@@ -30,12 +30,12 @@ defmodule FormFlow.Downloads.Renderer do
 
   and mounting it:
 
-      form_flow_downloads(renderer: MyApp.FormFlowRenderer)
+      form_flow_router_download_routes(renderer: MyApp.FormFlowRenderer)
 
   ## Why a document and a context
 
   `render/3` gets both because they answer different questions. The
-  `FormFlow.Downloads.Document` is the resource already flattened into
+  `FormFlow.Web.Downloads.Document` is the resource already flattened into
   headings, fields, and values — everything a renderer needs to print
   something correct without knowing what a flow instance is. The
   `FormFlow.Context` is the request FormFlow answered, the same struct every
@@ -49,7 +49,7 @@ defmodule FormFlow.Downloads.Renderer do
   """
 
   alias FormFlow.Context
-  alias FormFlow.Downloads.Document
+  alias FormFlow.Web.Downloads.Document
 
   @doc """
   The bytes to send, and the content type to send them as.

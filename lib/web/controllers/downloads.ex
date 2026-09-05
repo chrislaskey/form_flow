@@ -1,7 +1,8 @@
-defmodule FormFlow.Web.Downloads do
+defmodule FormFlow.Web.Controllers.Downloads do
   @moduledoc """
-  `FormFlow.Web.Downloads` is the controller behind FormFlow's download and
-  print routes, and the module that builds the URLs pointing at them.
+  `FormFlow.Web.Controllers.Downloads` is the controller behind FormFlow's
+  download and print routes, and the module that builds the URLs pointing at
+  them.
 
   A LiveView cannot send a file: it holds a websocket, not a response. So a
   download is an ordinary link out of the page to an ordinary `GET`, which
@@ -49,7 +50,7 @@ defmodule FormFlow.Web.Downloads do
 
       scope "/" do
         pipe_through [:browser, :require_authenticated_user]
-        form_flow_downloads()
+        form_flow_router_download_routes()
       end
 
   Per-resource authorization — the `on_mount` gate the instance pages ask
@@ -63,7 +64,8 @@ defmodule FormFlow.Web.Downloads do
   import Plug.Conn
 
   alias FormFlow.Data.Instances
-  alias FormFlow.Downloads
+  alias FormFlow.Web.Components.Forms.Downloads.Parsers
+  alias FormFlow.Web.Downloads
   alias FormFlow.Web.Instances.Forms.Shared
 
   @default_mount_path "/form-flow/downloads"
@@ -108,7 +110,7 @@ defmodule FormFlow.Web.Downloads do
 
   @doc false
   # Phoenix calls this once, at compile time, with whatever the route was
-  # declared with; `FormFlow.Web.Downloads.Router` is what declares them.
+  # declared with; `FormFlow.Router` is what declares them.
   def init(opts) do
     %{
       disposition: Keyword.fetch!(opts, :disposition),
@@ -178,7 +180,7 @@ defmodule FormFlow.Web.Downloads do
   defp document(_params), do: {:error, 404, "Not found."}
 
   defp build(context) do
-    case Downloads.Instances.Form.document(context) do
+    case Parsers.FormInstance.document(context) do
       {:ok, document} -> {:ok, document, context}
       {:error, :not_started} -> {:error, 404, "This form hasn't been started yet."}
       {:error, :no_definition} -> {:error, 422, "This form can't be rendered."}

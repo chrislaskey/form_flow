@@ -178,12 +178,12 @@ websocket and cannot send a file, so they need a pair of ordinary routes
 mounted once — before any catch-all, and inside a pipeline that
 authenticates:
 
-    import FormFlow.Web.Downloads.Router
+    import FormFlow.Router
 
     scope "/" do
       pipe_through [:browser, :require_authenticated_user]
 
-      form_flow_downloads()
+      form_flow_router_download_routes()
     end
 
 That is the whole of it. `FormFlow.Web.Instances.Forms.Show` draws Download
@@ -206,23 +206,23 @@ authenticating pipeline, as above, is what a host can do today; the
 The PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
 install — and is deliberately plain: a heading, the details, and each
 question's answer under its label. Everything about how it is drawn is in
-`FormFlow.Downloads.Renderer.PDF.Writer`, which is also where the format's
+`FormFlow.Web.Downloads.Renderer.PDF.Writer`, which is also where the format's
 limits are written down.
 
 Wanting more than that is a renderer, not a setting. FormFlow flattens the
-resource into a `FormFlow.Downloads.Document` — headings, fields, values, no
-format — and hands it to a `FormFlow.Downloads.Renderer`. Mount a different
+resource into a `FormFlow.Web.Downloads.Document` — headings, fields, values, no
+format — and hands it to a `FormFlow.Web.Downloads.Renderer`. Mount a different
 one and the same document comes out the other way:
 
     # a printable HTML page instead, printed through the browser
-    form_flow_downloads(renderer: FormFlow.Downloads.Renderer.HTML)
+    form_flow_router_download_routes(renderer: FormFlow.Web.Downloads.Renderer.HTML)
 
     # or the host's own, usually a real HTML-to-PDF engine
-    form_flow_downloads(renderer: MyApp.FormFlowRenderer)
+    form_flow_router_download_routes(renderer: MyApp.FormFlowRenderer)
 
 A renderer receives the document, the page's `FormFlow.Context`, and the
 host's `callback_data`, and returns bytes and a content type. See
-`FormFlow.Downloads.Renderer`.
+`FormFlow.Web.Downloads.Renderer`.
 
 Mounting somewhere other than `/form-flow/downloads`? Configure it once, and
 the routes and the links the page builds both follow:

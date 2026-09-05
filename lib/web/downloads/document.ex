@@ -1,17 +1,17 @@
-defmodule FormFlow.Downloads.Document do
+defmodule FormFlow.Web.Downloads.Document do
   @moduledoc """
-  `FormFlow.Downloads.Document` is what FormFlow hands a
-  `FormFlow.Downloads.Renderer`: one resource, flattened into the parts a
+  `FormFlow.Web.Downloads.Document` is what FormFlow hands a
+  `FormFlow.Web.Downloads.Renderer`: one resource, flattened into the parts a
   printable page is made of, with nothing of the format it will be printed
   in.
 
   It sits between the two halves of a download on purpose. On one side, a
-  builder turns a resource into this — `FormFlow.Downloads.Instances.Form`
-  turns a form instance into it today, and the other entry points the
-  library grows will each turn theirs into the same struct. On the other,
-  a renderer turns this into bytes. Neither half knows the other, so a new
-  resource is a new builder and a new format is a new renderer, and the two
-  never multiply.
+  parser turns a resource into this — the parsers live beside the components
+  that draw the same resource on screen, and
+  `FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance` is the one
+  that reads a form instance today. On the other, a renderer turns this into
+  bytes. Neither half knows the other, so a new resource is a new parser and
+  a new format is a new renderer, and the two never multiply.
 
   ## Fields
 
@@ -37,22 +37,27 @@ defmodule FormFlow.Downloads.Document do
       answered as much as what was
     * `{:text, text}` - prose that is not a field, from a definition's
       static content
-    * `{:group, title, entries}` - a titled run inside a section, which is
-      what one entry of a repeating question becomes. Groups do not nest
+    * `{:group, title, entries}` - a run inside a section: one entry of a
+      repeating question, or a panel inside one. `title` is `nil` for a run
+      the definition heads with nothing, which is still its own group —
+      where the entries begin and end is the point, and a heading is not the
+      only thing that says so. Groups nest, and hold the same three shapes,
+      because the forms they come from nest: a repeating question inside a
+      repeating question is a group of groups
 
   Every value is a string by the time it reaches here. Formatting a stored
-  answer — a list, a choice's stored value, a boolean — is the builder's
+  answer — a list, a choice's stored value, a boolean — is the parser's
   job, so that every renderer prints the same words.
   """
 
-  alias FormFlow.Downloads.Document.Section
+  alias FormFlow.Web.Downloads.Document.Section
 
   defstruct [:title, :subtitle, :filename, details: [], sections: []]
 
   @type entry ::
           {:field, String.t(), String.t()}
           | {:text, String.t()}
-          | {:group, String.t(), [{:field, String.t(), String.t()} | {:text, String.t()}]}
+          | {:group, String.t() | nil, [entry()]}
 
   @type section :: Section.t()
 
@@ -66,7 +71,7 @@ defmodule FormFlow.Downloads.Document do
 
   defmodule Section do
     @moduledoc """
-    One titled run of a `FormFlow.Downloads.Document`'s content.
+    One titled run of a `FormFlow.Web.Downloads.Document`'s content.
 
     `:title` is `nil` for the run before the first heading — a form's
     top-level questions, drawn with no heading of their own.
@@ -76,7 +81,7 @@ defmodule FormFlow.Downloads.Document do
 
     @type t :: %__MODULE__{
             title: String.t() | nil,
-            entries: [FormFlow.Downloads.Document.entry()]
+            entries: [FormFlow.Web.Downloads.Document.entry()]
           }
   end
 

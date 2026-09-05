@@ -1,9 +1,9 @@
-defmodule FormFlow.Downloads.Renderer.PDF.Writer do
+defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   @moduledoc """
   A small PDF writer: enough of the format to lay text down a page, break to
   the next one when it runs out, and assemble the result into a valid file.
 
-  It exists so that `FormFlow.Downloads.Renderer.PDF` can produce a real PDF
+  It exists so that `FormFlow.Web.Downloads.Renderer.PDF` can produce a real PDF
   with no dependency — no Chrome, no wkhtmltopdf, nothing to install
   alongside the application. That buys downloads that work the moment the
   library is mounted, and costs everything a browser engine would have given:
@@ -41,7 +41,7 @@ defmodule FormFlow.Downloads.Renderer.PDF.Writer do
   dashes, the ellipsis and bullet) are mapped to their WinAnsi bytes, and
   anything else — anything outside Latin-1, so every non-Latin script —
   becomes `?`. A host serving those needs a renderer with a real font
-  engine behind it, which is what `FormFlow.Downloads.Renderer` is for.
+  engine behind it, which is what `FormFlow.Web.Downloads.Renderer` is for.
   """
 
   @page_width 612

@@ -17,11 +17,11 @@ defmodule FormFlow.Web.Assets do
   Declare the route once, outside any pipeline:
 
       # lib/my_app_web/router.ex
-      import FormFlow.Web.Assets.Router
+      import FormFlow.Router
 
-      form_flow_assets()
+      form_flow_router_asset_routes()
 
-  See `FormFlow.Web.Assets.Router.form_flow_assets/1`.
+  See `FormFlow.Router.form_flow_router_asset_routes/1`.
   """
 
   import Plug.Conn
