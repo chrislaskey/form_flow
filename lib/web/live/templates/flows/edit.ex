@@ -15,6 +15,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   (`form_flow:set_flow`), so editor-temporary node ids become the real UUIDs
   — which is what makes Open work on a just-saved subflow node.
 
+  Stickiness ends at a form node's Open, on purpose: it lands on the form's
+  *show* page, same as it does from the read-only canvas
+  (`FormFlow.Web.Templates.Flows.Show`). A canvas and a form are different
+  workspaces with different save models — the canvas edits in place with its
+  own Save, a form's answer is a new draft version with its own publish
+  lifecycle — so crossing into one from the other is the ordinary boundary,
+  not a continuation of it. Reaching a form's *edit* page from here is a
+  second, deliberate click, same as it would be from anywhere else.
+
   Two addressing modes, matching the router:
 
     * `flow_id` — a flow edited directly, `/flows/:id/edit`
@@ -82,16 +91,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   use Phoenix.LiveComponent
 
-  import FormFlow.Web.Helpers.Paths
-
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
-  alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -417,44 +424,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/edit"
   end
 
-  # Edit mode is sticky, like opening a subflow from this canvas: opening a
-  # form node lands on a draft's *editor* — the newest existing draft, or a
-  # fresh one forked from the latest published version. The show page is
-  # where mode isn't sticky: its Open lands on the form's show page.
+  # Unlike a subflow's Open, this is not sticky: a form node's answer is
+  # someone else's workspace, with its own edit page reached by its own
+  # click — landing here is the same as landing here from the read-only
+  # canvas (`FormFlow.Web.Templates.Flows.Show`). `mode=edit` is the one
+  # thing that does cross the boundary: it tells the form pages' own
+  # breadcrumb (`FormFlow.Web.Templates.Components.Breadcrumb`) that Root
+  # and Parent should route back to their editors, not their show pages,
+  # since that's where this click came from.
   defp form_node_path(assigns, node_id) do
     root_id = assigns.root_id || assigns.flow.id
-    show_path = "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
-
-    with %{form_id: form_id} when is_binary(form_id) <- Flows.get_node(node_id),
-         %{id: draft_id} <- find_or_create_draft(form_id) do
-      "#{show_path}/versions/#{draft_id}/edit"
-    else
-      _other -> show_path
-    end
-  end
-
-  defp find_or_create_draft(form_id) do
-    newest_draft =
-      form_id
-      |> Forms.list_versions()
-      |> Enum.find(&(&1.status == "draft"))
-
-    case newest_draft do
-      %{} = draft ->
-        draft
-
-      nil ->
-        opts =
-          case Forms.get_latest_version(form_id) do
-            nil -> []
-            published -> [based_on: published.id]
-          end
-
-        case Forms.create_draft(form_id, opts) do
-          {:ok, draft} -> draft
-          {:error, _reason} -> nil
-        end
-    end
+    "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form?mode=edit"
   end
 
   # A plain path was already the destination; a pending node needs its
@@ -595,47 +575,24 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         }
       </script>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <div class="flex items-center gap-2 text-sm font-semibold">
-          <%!-- Breadcrumbs stay in edit mode: backing out of a subflow lands
-                on the parent's editor, not its show page. They navigate
-                through the "navigate" event rather than a bare <.link>, so
-                unsaved changes get the same save-first prompt as Open. --%>
-          <Core.button
-            components={@components}
-            phx-click="navigate"
-            phx-value-to={templates_path(@base)}
-            phx-target={@myself}
-            class="hover:underline"
-          >
-            Templates
-          </Core.button>
-          <span class="text-zinc-400">/</span>
-          <Core.button
-            components={@components}
-            phx-click="navigate"
-            phx-value-to={"#{@base}/flows"}
-            phx-target={@myself}
-            class="hover:underline"
-          >
-            Flows
-          </Core.button>
-          <span class="text-zinc-400">/</span>
-          <Core.button
-            :if={@root}
-            components={@components}
-            phx-click="navigate"
-            phx-value-to={"#{@base}/flows/#{@root.id}/edit"}
-            phx-target={@myself}
-            class="hover:underline"
-          >
-            {@root.name || "Untitled"}
-          </Core.button>
-          <span :if={@root} class="text-zinc-400">/</span>
+        <%!-- Breadcrumbs stay in edit mode: backing out of a subflow lands
+              on the parent's editor, not its show page (`mode="edit"`).
+              They navigate through the "navigate" event rather than a bare
+              <.link> (`target={@myself}`), so unsaved changes get the same
+              save-first prompt as Open. --%>
+        <Breadcrumb.breadcrumb
+          base={@base}
+          section="flows"
+          root={@root}
+          mode="edit"
+          target={@myself}
+          components={@components}
+        >
           <span>{@flow.name || "Untitled"}</span>
           <span class="text-xs font-normal text-zinc-500">
             {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
           </span>
-        </div>
+        </Breadcrumb.breadcrumb>
         <div class="flex items-center gap-2">
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would

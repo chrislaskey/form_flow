@@ -29,14 +29,13 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   use Phoenix.LiveComponent
 
-  import FormFlow.Web.Helpers.Paths
-
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -183,15 +182,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     ~H"""
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <div class="text-sm font-semibold">
-          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
-          <span class="text-zinc-400">/</span>
-          <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
-          <span class="text-zinc-400">/</span>
-          <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">
-            {@root.name || "Untitled"}
-          </.link>
-          <span :if={@root} class="text-zinc-400">/</span>
+        <Breadcrumb.breadcrumb base={@base} section="flows" root={@root} components={@components}>
           {@flow.name || "Untitled"}
           <span class="ml-1 text-xs font-normal text-zinc-500">
             {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
@@ -210,7 +201,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <span :if={perspective_names(assigns) != []} class="text-xs font-normal text-zinc-500">
             · For: {Enum.join(perspective_names(assigns), ", ")}
           </span>
-        </div>
+        </Breadcrumb.breadcrumb>
         <div class="flex items-center gap-2">
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)

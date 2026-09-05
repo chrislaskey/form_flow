@@ -27,6 +27,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
@@ -69,6 +70,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
       |> assign_new(:components, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
 
     {:ok, load(socket)}
   end
@@ -207,7 +209,10 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       {:ok, _draft} ->
         # Back to the form's default view: latest published, or the newest
         # remaining draft, or the no-versions state
-        {:noreply, push_navigate(socket, to: form_base_path(socket.assigns))}
+        to =
+          preserve_query_params(form_base_path(socket.assigns), socket.assigns.params, ["mode"])
+
+        {:noreply, push_navigate(socket, to: to)}
 
       {:error, :has_instances} ->
         {:noreply, assign(socket, :error, "This draft can't be deleted: it has instances.")}
@@ -252,28 +257,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     ~H"""
     <div>
       <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <div class="text-sm font-semibold">
-          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
-          <span class="text-zinc-400">/</span>
-          <%= if @node do %>
-            <.link navigate={"#{@base}/flows"} class="hover:underline">Flows</.link>
-            <span class="text-zinc-400">/</span>
-            <.link :if={@root} navigate={"#{@base}/flows/#{@root.id}"} class="hover:underline">
-              {@root.name || "Untitled"}
-            </.link>
-            <span :if={@root} class="text-zinc-400">/</span>
-            <.link
-              :if={@parent_node}
-              navigate={"#{@base}/flows/#{@root.id}/nodes/#{@parent_node.id}"}
-              class="hover:underline"
-            >
-              {get_in(@parent_node.properties, ["data", "label"]) || "Subflow"}
-            </.link>
-            <span :if={@parent_node} class="text-zinc-400">/</span>
-          <% else %>
-            <.link navigate={"#{@base}/forms"} class="hover:underline">Forms</.link>
-            <span class="text-zinc-400">/</span>
-          <% end %>
+        <Breadcrumb.breadcrumb
+          base={@base}
+          section="forms"
+          root={@root}
+          parent_node={@parent_node}
+          mode={@params["mode"]}
+          components={@components}
+        >
           {@form.name}
           <span :if={@version} class="ml-1 text-xs font-normal text-zinc-500">
             {version_badge(@version)}
@@ -287,22 +278,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           >
             · {property.name}: {Shared.display_value(property, value)}
           </span>
-        </div>
+        </Breadcrumb.breadcrumb>
         <div :if={@version} class="flex items-center gap-2">
-          <.link
-            :if={@version.status == "draft"}
-            navigate={edit_path(assigns, @version)}
-            role="switch"
-            aria-checked="false"
-            aria-label="Switch to Edit"
-            class="flex items-center gap-1.5 text-xs"
-          >
-            <span class="font-semibold text-zinc-900">Show</span>
-            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
-              <span class="inline-block h-5 w-5 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
-            </span>
-            <span class="text-zinc-500">Edit</span>
-          </.link>
           <Core.button
             :if={@version.status == "draft"}
             components={@components}
@@ -312,6 +289,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             class="btn btn-error btn-soft"
           >
             Delete draft
+          </Core.button>
+          <Core.button
+            :if={@version.status == "draft"}
+            components={@components}
+            navigate={edit_path(assigns, @version)}
+            class="btn"
+          >
+            Edit draft
           </Core.button>
           <Core.button
             :if={@version.status == "draft"}
@@ -339,7 +324,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             data-confirm="Archive this version? It stops being the latest; users pinned to it are unaffected."
             class="btn"
           >
-            Archive
+            Archive version
           </Core.button>
           <Core.button
             :if={@form.owner_flow_id == nil and @node == nil}
@@ -445,7 +430,19 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}/form"
   end
 
-  defp version_path(assigns, version), do: "#{form_base_path(assigns)}/versions/#{version.id}"
+  defp version_path(assigns, version) do
+    preserve_query_params(
+      "#{form_base_path(assigns)}/versions/#{version.id}",
+      assigns.params,
+      ["mode"]
+    )
+  end
 
-  defp edit_path(assigns, version), do: "#{version_path(assigns, version)}/edit"
+  defp edit_path(assigns, version) do
+    preserve_query_params(
+      "#{form_base_path(assigns)}/versions/#{version.id}/edit",
+      assigns.params,
+      ["mode"]
+    )
+  end
 end

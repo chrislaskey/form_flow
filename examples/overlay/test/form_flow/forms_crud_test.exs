@@ -381,9 +381,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
   end
 
-  test "opening a form node from the edit canvas stays in edit mode", %{conn: conn} do
+  test "opening a form node from the edit canvas lands on its show page, like the read-only canvas",
+       %{conn: conn} do
     {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
-    [draft] = Forms.list_versions(node.form_id)
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/edit")
 
@@ -391,27 +391,14 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
-    assert_redirect(
-      view,
-      "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit"
-    )
+    # `mode=edit` is the one thing that does cross this boundary — it tells
+    # the form page's own breadcrumb to route Root and Parent back to their
+    # editors, since that's where this click came from
+    assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{node.id}/form?mode=edit")
 
-    # With only a published version, a fresh draft is forked from it
-    {:ok, _v1} = Forms.update_status(draft, :published)
-
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/edit")
-
-    view
-    |> element("#flows-edit-editor")
-    |> render_hook("form_flow:open_form", %{"node_id" => node.id})
-
-    {path, _flash} = assert_redirect(view)
-    assert path =~ ~r{/form/versions/(.+)/edit$}
-
-    [_, new_draft_id] = Regex.run(~r{/versions/([^/]+)/edit$}, path)
-    new_draft = Forms.get_version(new_draft_id)
-    assert new_draft.status == "draft"
-    assert new_draft.based_on_version_id == draft.id
+    # Stickiness ends at this boundary otherwise: Open is a read, not a
+    # continuation of the canvas's own edit session, so it creates nothing
+    assert length(Forms.list_versions(node.form_id)) == 1
   end
 
   test "the edit page publishes too — directly the first time, dialog after",
@@ -529,7 +516,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
     assert render(view) =~ "v2 · published"
 
-    view |> element("button", "Archive") |> render_click()
+    view |> element("button", "Archive version") |> render_click()
     assert_redirect(view, "/admin/forms/#{form.id}/versions/#{v2.id}")
 
     # The bare URL resolves latest published — v1 again
@@ -544,8 +531,8 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
 
-    # The Show/Edit toggle sits left of Delete draft, which sits left of Publish
-    assert html =~ ~r/Switch to Edit.*Delete draft.*Publish/s
+    # Delete draft sits left of Edit draft, which sits left of Publish
+    assert html =~ ~r/Delete draft.*Edit draft.*Publish/s
 
     view |> element("button", "Delete draft") |> render_click()
 
@@ -564,7 +551,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
-    assert html =~ ~r/Switch to Show.*Delete draft.*Save.*Publish/s
+    assert html =~ ~r/Delete draft.*Save.*Publish/s
 
     view |> element("button", "Delete draft") |> render_click()
 
@@ -595,39 +582,61 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   test "drill-in edit shows the same full breadcrumb as show", %{conn: conn} do
     # The nested case: root flow → subflow → form node, reached by drill-in
-    {:ok, root} = Flows.create(%{name: "Taxes 2026", label: "subflows"})
-
-    subflow_attrs = %{
-      properties: %{
-        "type" => "subflow",
-        "data" => %{"label" => "Wages", "subflow_label" => "forms"}
-      }
-    }
-
-    {:ok, _} = Flows.update(root, %{nodes: [subflow_attrs]})
-    [subflow_node] = Flows.get(root.id).nodes
-
-    child = Flows.get(subflow_node.subflow_id)
-
-    form_attrs = %{
-      properties: %{"type" => "step", "data" => %{"label" => "W-2 Details", "kind" => "form"}}
-    }
-
-    {:ok, _} = Flows.update(child, %{nodes: [form_attrs]})
-    [form_node] = Flows.get(child.id).nodes
+    {root, _subflow_node, form_node} = nested_flow_with_form_node()
     [draft] = Forms.list_versions(form_node.form_id)
 
     show_path = "/admin/flows/#{root.id}/nodes/#{form_node.id}/form"
     edit_path = "#{show_path}/versions/#{draft.id}/edit"
 
     for path <- [show_path, edit_path] do
-      {:ok, _view, html} = live(conn, path)
+      {:ok, view, html} = live(conn, path)
 
       # Flows / Taxes 2026 / Wages / W-2 Details — the full trail on both pages
       assert html =~ "Taxes 2026", "missing root crumb on #{path}"
       assert html =~ "Wages", "missing subflow crumb on #{path}"
       assert html =~ "W-2 Details", "missing form name on #{path}"
+
+      # Reached with no `mode`, Root is the ordinary show link
+      assert has_element?(view, "a[href='/admin/flows/#{root.id}']", "Taxes 2026")
     end
+  end
+
+  test "opening a form node from a subflow's edit canvas points its breadcrumb back at both editors",
+       %{conn: conn} do
+    {root, subflow_node, form_node} = nested_flow_with_form_node()
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_form", %{"node_id" => form_node.id})
+
+    {show_path, _flash} = assert_redirect(view)
+    assert show_path =~ "?mode=edit"
+
+    {:ok, view, _html} = live(conn, show_path)
+    assert has_element?(view, "a[href='/admin/flows/#{root.id}/edit']", "Taxes 2026")
+
+    assert has_element?(
+             view,
+             "a[href='/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit']",
+             "Wages"
+           )
+
+    # Edit draft carries the same query forward, so the editor's own
+    # breadcrumb stays pointed at both editors too
+    view |> element("a", "Edit draft") |> render_click()
+    {edit_path, _flash} = assert_redirect(view)
+    assert edit_path =~ "?mode=edit"
+
+    {:ok, view, _html} = live(conn, edit_path)
+    assert has_element?(view, "a[href='/admin/flows/#{root.id}/edit']", "Taxes 2026")
+
+    assert has_element?(
+             view,
+             "a[href='/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit']",
+             "Wages"
+           )
   end
 
   test "a form node's Open button navigates to the drill-in URL", %{conn: conn} do
@@ -687,5 +696,31 @@ defmodule Demo.FormFlowFormsCrudTest do
     [node] = Flows.get(flow.id).nodes
 
     {Flows.get(flow.id), node}
+  end
+
+  # Root flow → subflow ("Wages") → form node ("W-2 Details"), reached by
+  # drill-in — the nested case a breadcrumb has to walk back through
+  defp nested_flow_with_form_node do
+    {:ok, root} = Flows.create(%{name: "Taxes 2026", label: "subflows"})
+
+    subflow_attrs = %{
+      properties: %{
+        "type" => "subflow",
+        "data" => %{"label" => "Wages", "subflow_label" => "forms"}
+      }
+    }
+
+    {:ok, _} = Flows.update(root, %{nodes: [subflow_attrs]})
+    [subflow_node] = Flows.get(root.id).nodes
+    child = Flows.get(subflow_node.subflow_id)
+
+    form_attrs = %{
+      properties: %{"type" => "step", "data" => %{"label" => "W-2 Details", "kind" => "form"}}
+    }
+
+    {:ok, _} = Flows.update(child, %{nodes: [form_attrs]})
+    [form_node] = Flows.get(child.id).nodes
+
+    {root, subflow_node, form_node}
   end
 end

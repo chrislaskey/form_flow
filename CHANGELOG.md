@@ -45,6 +45,54 @@ Flows and Forms at the mount root) got the same treatment.
   "Definition" panel** showing the version's raw JSON. Versions now comes
   first, ahead of Preview, in the space it left.
 
+### Opening a form node from the flow editor lands on Show, not a draft
+
+**Breaking: `FormFlow.Web.Templates.Flows.Edit`'s "Open" on a form node no
+longer lands on the form's edit page.** It lands on the form's *show* page,
+the same place Open takes you from the read-only canvas
+(`FormFlow.Web.Templates.Flows.Show`). The flow canvas's own edit mode is
+still sticky — Save stays here, and opening a *subflow* node still lands on
+its edit canvas — but a form is a different workspace with its own save
+model, and crossing into one is the ordinary boundary now, not a
+continuation of the canvas's.
+
+This also removes a side effect: Open used to silently create a fresh draft
+version for a form that had none, purely so there would be something to
+land the edit page on. It creates nothing now.
+
+### The Show/Edit toggle is gone from the form template pages
+
+**Breaking: `FormFlow.Web.Templates.Forms.Show` and `.Edit` no longer draw a
+Show/Edit toggle switch in the header.** Edit already links back to Show
+(the form name in its breadcrumb); Show gains a plain **Edit draft** button
+next to Delete draft and Publish, in that order, so a draft stays reachable
+without the switch. Archive is now labeled **Archive version**.
+
+### A form's breadcrumb remembers you were editing its flow
+
+**New: `FormFlow.Web.Templates.Components.Breadcrumb`**, the shared
+Templates / Flows|Forms / Root / Parent trail all four templates pages
+(`Flows.Show`, `Flows.Edit`, `Forms.Show`, `Forms.Edit`) now render through,
+replacing four near-identical copies of the same markup. Each page supplies
+only its own trailing crumb through `inner_block`.
+
+The point of unifying it: opening a form node from a flow's *edit* canvas
+now carries a `mode=edit` query param onto the form page it lands on (see
+"Opening a form node..." above), and the breadcrumb reads it — Root and any
+Parent subflow crumb target their `/edit` pages instead of their show pages,
+so backing out of a form you reached while editing its flow lands you back
+in the editor, not a read-only view. Reached any other way (a bookmark, the
+read-only canvas), the crumbs are the plain show links they always were.
+
+- **New: `FormFlow.Web.Helpers.Paths.preserve_query_params/3`** forwards a
+  whitelisted set of query params from `params` onto a path a page builds
+  for its own internal navigation — how `mode` survives Show ↔ Edit and the
+  Publish/Archive/Delete-draft redirects on the form pages, rather than
+  evaporating at the first click that isn't the breadcrumb itself.
+- `FormFlow.Web.Templates.Forms.Show` and `.Edit` now assign `:params`
+  (`FormFlow.Web.Router` forwards it to both, and to `Flows.Show`/`.Edit`
+  too, for symmetry) — previously only the two Index pages received it.
+
 ### Each user-facing page names the state it is in
 
 **New: `FormFlow.Web.Instances.Shared`**, holding `page_state/1` and

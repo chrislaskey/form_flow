@@ -41,7 +41,7 @@ defmodule DemoWeb.Layouts do
     ~H"""
     <div class="flex min-h-screen flex-col bg-white">
       <header class="w-full bg-white shadow-sm">
-        <div class="h-1 w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600" />
+        <div class="h-1 w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 opacity-50" />
         <div class="flex items-center justify-between p-5">
           <.link
             navigate="/"

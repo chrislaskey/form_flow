@@ -361,6 +361,7 @@ defmodule FormFlow.Web.Router do
               form_types={@form_types}
               callback_data={@callback_data}
               components={@components}
+              params={@params}
             />
           <% {:edit, form_id, version_id} -> %>
             <.live_component
@@ -373,6 +374,7 @@ defmodule FormFlow.Web.Router do
               form_types={@form_types}
               callback_data={@callback_data}
               components={@components}
+              params={@params}
             />
           <% {:node_show, root_id, node_id, version_id} -> %>
             <.live_component
@@ -386,6 +388,7 @@ defmodule FormFlow.Web.Router do
               form_types={@form_types}
               callback_data={@callback_data}
               components={@components}
+              params={@params}
             />
           <% {:node_edit, root_id, node_id, version_id} -> %>
             <.live_component
@@ -399,6 +402,7 @@ defmodule FormFlow.Web.Router do
               form_types={@form_types}
               callback_data={@callback_data}
               components={@components}
+              params={@params}
             />
           <% nil -> %>
             <%!-- not a /forms path --%>
