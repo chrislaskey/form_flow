@@ -40,6 +40,7 @@ executable version of it:
 | `config :slab, repo:` | `config/config.exs` | Slab's query mode |
 | A generated migration | `priv/repo/migrations/` | FormFlow's tables |
 | `form_flow_assets()` route | `lib/demo_web/router.ex` | FormFlow's flow editor bundle |
+| `form_flow_downloads()` routes | `lib/demo_web/router.ex` | saving and printing a form's answers |
 | Stub `GoogleStorage` uploader | `assets/js/app.js` | dynamic_form's file fields |
 
 The demo points Tailwind at `../../../../lib` rather than
@@ -48,6 +49,12 @@ installing from Hex use the `deps/` path.
 
 The uploader is a stub: it reports instant success instead of talking to a
 bucket, which is enough to exercise the wiring without cloud credentials.
+
+The `form_flow_downloads()` routes are what the Download PDF and Print links on
+a form's page point at — a LiveView holds a websocket and cannot send a file, so
+both are ordinary `GET`s. The demo mounts them inside `:browser` and nothing
+else; a real app puts them behind whatever authenticates it, since FormFlow does
+not authorize them yet.
 
 The flow editor's ~390 KB of React and ReactFlow never enters `app.js`: the
 `form_flow_assets()` route serves the prebuilt bundle from FormFlow's own

@@ -170,6 +170,65 @@ between them but the type lists — the one value that must be the same on
 every page, the admin pages included, because a type chosen on one side
 acts on the other.
 
+## Taking the answers away
+
+A user looking at a form they have filled in can save it as a PDF or open it
+to print. Both are links out of the LiveView, because a LiveView holds a
+websocket and cannot send a file, so they need a pair of ordinary routes
+mounted once — before any catch-all, and inside a pipeline that
+authenticates:
+
+    import FormFlow.Web.Downloads.Router
+
+    scope "/" do
+      pipe_through [:browser, :require_authenticated_user]
+
+      form_flow_downloads()
+    end
+
+That is the whole of it. `FormFlow.Web.Instances.Forms.Show` draws Download
+PDF and Print once a form has been started, and the routes resolve the
+position the same way that page does
+(`FormFlow.Web.Instances.Forms.Shared.resolve/1`), so what is printed is what
+is shown. The two differ by one header: Download sends `attachment`, which
+saves a file, and Print sends `inline`, which opens the document in the
+browser's own viewer, where the user reads it, prints it, and saves it if
+they want to. Exactly how each browser honours that differs between Chrome,
+Firefox and Safari; the header is all a server can say about it.
+
+**These routes are not authorized yet.** Anyone who can reach the URL and
+knows a flow instance id can read that form's answers. Putting them behind an
+authenticating pipeline, as above, is what a host can do today; the
+`on_mount` gate the instance pages ask is not asked here yet.
+
+### Choosing what the file looks like
+
+The PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
+install — and is deliberately plain: a heading, the details, and each
+question's answer under its label. Everything about how it is drawn is in
+`FormFlow.Downloads.Renderer.PDF.Writer`, which is also where the format's
+limits are written down.
+
+Wanting more than that is a renderer, not a setting. FormFlow flattens the
+resource into a `FormFlow.Downloads.Document` — headings, fields, values, no
+format — and hands it to a `FormFlow.Downloads.Renderer`. Mount a different
+one and the same document comes out the other way:
+
+    # a printable HTML page instead, printed through the browser
+    form_flow_downloads(renderer: FormFlow.Downloads.Renderer.HTML)
+
+    # or the host's own, usually a real HTML-to-PDF engine
+    form_flow_downloads(renderer: MyApp.FormFlowRenderer)
+
+A renderer receives the document, the page's `FormFlow.Context`, and the
+host's `callback_data`, and returns bytes and a content type. See
+`FormFlow.Downloads.Renderer`.
+
+Mounting somewhere other than `/form-flow/downloads`? Configure it once, and
+the routes and the links the page builds both follow:
+
+    config :form_flow, download_path: "/files/form-flow"
+
 ## Rendering the LiveComponents directly
 
 A host that would rather own its routing can render

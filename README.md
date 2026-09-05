@@ -194,6 +194,40 @@ URL the hook fetches both derive from this, so they cannot drift:
 config :form_flow, asset_path: "/assets/form-flow"
 ```
 
+**Serving downloads and printable documents.** A user reading their answers can
+save them as a PDF or open them to print. A LiveView holds a websocket and
+cannot send a file, so both are plain links out to a pair of ordinary `GET`
+routes. Declare them **before any catch-all route**, inside a pipeline that
+authenticates — the routes send a form's answers, and FormFlow does not yet
+authorize them itself:
+
+```elixir
+import FormFlow.Web.Downloads.Router
+
+scope "/" do
+  pipe_through [:browser, :require_authenticated_user]
+
+  form_flow_downloads()
+end
+```
+
+That is all: the user-facing form page grows Download PDF and Print links, and
+the PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
+install alongside your app. The built-in renderer is deliberately plain. A host
+that wants its own typography implements `FormFlow.Downloads.Renderer` around a
+real HTML-to-PDF engine and mounts that instead:
+
+```elixir
+form_flow_downloads(renderer: MyApp.FormFlowRenderer)
+```
+
+Mounting somewhere other than `/form-flow/downloads`? Configure it once, the way
+the asset path is configured:
+
+```elixir
+config :form_flow, download_path: "/files/form-flow"
+```
+
 ### Optional: file uploads
 
 DynamicForm's `type="file"` questions upload directly to cloud storage using

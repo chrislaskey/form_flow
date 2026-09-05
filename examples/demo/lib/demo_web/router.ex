@@ -20,6 +20,16 @@ defmodule DemoWeb.Router do
     form_flow_assets()
   end
 
+  import FormFlow.Web.Downloads.Router
+
+  # A user saving or printing their answers. Inside :browser, and in a real app
+  # inside whatever authenticates too — FormFlow does not authorize these yet.
+  scope "/" do
+    pipe_through :browser
+
+    form_flow_downloads()
+  end
+
   scope "/", DemoWeb do
     pipe_through :browser
 

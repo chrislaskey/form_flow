@@ -2,6 +2,80 @@
 
 ## v0.13.0
 
+### A form's answers can be downloaded and printed
+
+**New: `FormFlow.Web.Downloads`**, a pair of ordinary `GET` routes that send
+one form instance's answers as a file. A LiveView holds a websocket and
+cannot send a response, so taking answers away is a link out of the page:
+`FormFlow.Web.Instances.Forms.Show` now draws **Download PDF** and **Print**
+once a form has been started. The two send the same document and differ by one
+header — `attachment` saves a file, `inline` opens it in the browser's own
+viewer to read and print.
+
+**Mount them once, before any catch-all**, with the new
+`FormFlow.Web.Downloads.Router.form_flow_downloads/1`, the sibling of
+`form_flow_assets/0`:
+
+```elixir
+import FormFlow.Web.Downloads.Router
+
+scope "/" do
+  pipe_through [:browser, :require_authenticated_user]
+
+  form_flow_downloads()
+end
+```
+
+- **The URLs address a position, not a row**, exactly as the user-facing pages
+  do: `<mount>/download/instances/:flow_instance_id/forms/*path`, and the same
+  under `/print`. The verb leads because Phoenix's catch-all must be the last
+  segment and a form's address ends in one; `instances` says which world the
+  resource is from, so a template download later is a sibling route rather
+  than a second mount. `<mount>` defaults to `/form-flow/downloads` and is
+  configurable as `config :form_flow, download_path: "..."`, the way
+  `asset_path` is — the routes and the links the page builds both derive from
+  `FormFlow.Web.Downloads.mount_path/0`, so they cannot drift.
+- **The PDF is written by FormFlow, with no dependency** —
+  `FormFlow.Downloads.Renderer.PDF` and its
+  `FormFlow.Downloads.Renderer.PDF.Writer`, a small text-and-pagination layer
+  over the PDF format. No Chrome, no wkhtmltopdf, nothing to install beside
+  the application. Helvetica and Helvetica-Bold with their real metrics, so
+  wrapping is measured; WinAnsi text, so Latin-1 and the typographic
+  characters that keep appearing in pasted answers come through and anything
+  outside them becomes `?`.
+- **New: `FormFlow.Downloads.Document`**, what a resource becomes before a
+  format is chosen — a title, the details about the resource itself, and
+  sections of `{:field, label, value}`, `{:text, text}`, and `{:group, title,
+  entries}` entries. Builders turn resources into it, renderers turn it into
+  bytes, and the two never multiply.
+  `FormFlow.Downloads.Instances.Form` is the first builder: a static panel
+  becomes a section, a repeating question a section of one group per entry, a
+  hidden question is left out, an unanswered one is kept, and values render
+  for reading — a choice prints its text, a boolean Yes or No.
+- **New: `FormFlow.Downloads.Renderer`**, the behaviour a host implements to
+  draw the document its own way — `render/3` over the document, the page's
+  `FormFlow.Context`, and `callback_data`, plus `extension/0`. Mounted per
+  route: `form_flow_downloads(renderer: MyApp.FormFlowRenderer)`.
+  `FormFlow.Downloads.Renderer.HTML`, a self-contained printable page, ships
+  alongside the PDF renderer for hosts that would rather print through the
+  browser.
+- **New: `FormFlow.Web.Instances.Forms.Shared.resolve/1`**, the loading that
+  was inside `assigns/1`, now over a plain map of attrs rather than a socket.
+  The download routes resolve a position through it, which is what makes a
+  printed form and the page it was printed from the same answers rather than
+  two readings that can drift. `assigns/1` calls it and is otherwise
+  unchanged.
+- **`:phoenix` is now a declared dependency.** It was always there —
+  `phoenix_live_view` requires it — but `FormFlow.Web.Downloads` calls
+  `Phoenix.Controller.send_download/3` directly, so the library now says so.
+  No resolution changes for an existing host.
+- **These routes are not authorized yet.** Anyone who can reach the URL and
+  knows a flow instance id can read that form's answers; mounting them inside
+  an authenticating pipeline is the whole of what a host can do today. The
+  request resolves with no user, so no callback reading `:user_id` sees one.
+  Asking the `on_mount` gate here, with the request's `user_id` and
+  `tenant_id`, is the next piece of this work.
+
 ### The flow editor builds left to right
 
 **The canvas is horizontal now**, matching how a flow reads: `Start`'s

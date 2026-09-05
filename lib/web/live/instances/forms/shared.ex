@@ -13,9 +13,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   rather than in either of them, where two copies of one gate could drift
   apart.
 
+  `resolve/1` is the loading itself, over a plain map of attrs: the position
+  looked up into a template tree, a journey's progress, the live instance
+  there, and the `FormFlow.Context` around them. `FormFlow.Web.Downloads`
+  calls it too, which is what makes a printed form and the page it was
+  printed from the same answers.
+
   `assigns/1` reads the page's `flow_instance`, `path`, and the host's attrs
-  (the type lists, `callback_data`) from the socket and assigns the lot back
-  onto it, writing nothing:
+  (the type lists, `callback_data`) from the socket, resolves them, and
+  assigns the lot back onto it, writing nothing:
 
     * `:form` - the `FormFlow.Data.Instances.FormProgress` at this path, or
       nil when the flow no longer has the position
@@ -77,29 +83,11 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   }
 
   def assigns(socket) do
-    %{flow_instance: flow_instance, path: path} = socket.assigns
-    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
-    context = context(socket.assigns, tree, forms)
+    %{context: context, tree: tree, version: version, form_instance: form_instance} =
+      resolve(socket.assigns)
+
     type = flow_type(context, socket.assigns)
     {visible?, editable?} = access(type, context, socket.assigns)
-
-    # An instance already at the position is simply used — including a
-    # stranded one, whose position the tree no longer has
-    form_instance = Instances.Forms.get_at(flow_instance, path)
-
-    version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
-
-    form = version && Templates.Forms.get(version.template_form_id)
-
-    context = %Context{
-      context(socket.assigns, tree, forms)
-      | form: form,
-        form_version: version,
-        form_type_property_values: FormFlow.Config.Forms.Type.property_values(form),
-        form_instance: form_instance
-    }
-
     form_type = form_type(context, socket.assigns)
 
     socket
@@ -123,6 +111,47 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
         (context.form_progress && FlowProgress.qualified_label(context.form_progress)) || "Form"
     )
     |> parse(version)
+  end
+
+  @doc """
+  Everything a page or a request addressing one position needs loaded, from
+  a plain map of the same attrs `assigns/1` reads off a socket:
+  `:flow_instance`, `:path`, `:user_id`, `:tenant_id`, `:perspectives`, and
+  `:flow_types`.
+
+  Returns `%{tree: …, forms: …, form_instance: …, version: …, context: …}` —
+  the resolved template tree, the whole journey's progress, the live
+  instance at the position (`nil` until it is started), the version it is
+  pinned to, and the `FormFlow.Context` the two form pages and every
+  callback are given.
+
+  It takes assigns rather than a socket because it is read from outside
+  LiveView too: `FormFlow.Web.Downloads` resolves a download's position
+  through this, so a printed form and the page it was printed from can
+  never disagree about what the answers are.
+  """
+  def resolve(assigns) do
+    %{flow_instance: flow_instance, path: path} = assigns
+    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+
+    # An instance already at the position is simply used — including a
+    # stranded one, whose position the tree no longer has
+    form_instance = Instances.Forms.get_at(flow_instance, path)
+
+    version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
+
+    form = version && Templates.Forms.get(version.template_form_id)
+
+    context = %Context{
+      context(assigns, tree, forms)
+      | form: form,
+        form_version: version,
+        form_type_property_values: FormFlow.Config.Forms.Type.property_values(form),
+        form_instance: form_instance
+    }
+
+    %{tree: tree, forms: forms, form_instance: form_instance, version: version, context: context}
   end
 
   @doc """

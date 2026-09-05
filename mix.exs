@@ -1,7 +1,7 @@
 defmodule FormFlow.MixProject do
   use Mix.Project
 
-  @version "0.17.0"
+  @version "0.18.0"
   @source_url "https://github.com/chrislaskey/form_flow"
 
   def project do
@@ -34,6 +34,9 @@ defmodule FormFlow.MixProject do
   defp deps do
     [
       {:phoenix_live_view, ">= 1.1.0"},
+      # phoenix_live_view already brings this along; declared because
+      # FormFlow.Web.Downloads calls Phoenix.Controller.send_download/3 directly
+      {:phoenix, ">= 1.7.0"},
       {:phoenix_html, ">= 4.0.0"},
       {:plug, ">= 1.0.0"},
       {:ecto, ">= 3.0.0"},

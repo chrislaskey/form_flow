@@ -20,7 +20,8 @@ defmodule DemoWeb.ReadmeLive do
   @requirements [
     %{
       library: "form_flow",
-      needs: "Colocated hooks, Tailwind @source, a repo, a migration, an asset route",
+      needs:
+        "Colocated hooks, Tailwind @source, a repo, a migration, an asset route, download routes",
       where:
         "assets/js/app.js, assets/css/app.css, config/config.exs, priv/repo/migrations, router.ex"
     },
