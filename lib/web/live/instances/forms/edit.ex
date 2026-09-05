@@ -256,7 +256,9 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   @impl true
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
-    <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    <div>
+      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+    </div>
     """
   end
 
@@ -278,14 +280,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message={@mount_error}>
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+      <Core.alert components={@components}>
+        <span>{@mount_error}</span>
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -302,14 +302,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message="This form is not part of your work here.">
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+      <Core.alert components={@components}>
+        <span>This form is not part of your work here.</span>
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -326,23 +324,25 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message={blocked_message(assigns)}>
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+      <Core.alert components={@components}>
+        <span>{blocked_message(assigns)}</span>
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
 
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
-    <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-      <p class="font-medium">This form can't be rendered.</p>
-      <p class="mt-1 font-mono">{@parse_error}</p>
+    <div>
+      <Core.alert kind={:warning} components={@components}>
+        <div>
+          <p class="font-medium">This form can't be rendered.</p>
+          <p class="mt-1 font-mono text-sm">{@parse_error}</p>
+        </div>
+      </Core.alert>
     </div>
     """
   end
@@ -359,14 +359,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message="This form has already been submitted.">
+      <Core.alert components={@components}>
+        <span>This form has already been submitted.</span>
         <.link
           navigate={Paths.form_path(@base, @flow_instance.id, @path)}
-          class="text-cyan-600 hover:underline"
+          class="link link-primary"
         >
           View or reopen your answers →
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -392,7 +393,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         current_path: @path,
         clickable: @clickable,
         context: @context,
-        callback_data: @callback_data
+        callback_data: @callback_data,
+        components: @components
       })}
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>

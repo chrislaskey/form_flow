@@ -20,11 +20,12 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   refused, only its message is drawn; redirected, nothing is until the
   navigation lands.
 
-  Every action here is an ordinary link, because a form's URL addresses its
-  *position* and so exists before its instance row does — starting happens on
-  the form page itself (see `FormFlow.Web.Instances.Forms.Show`). Reopen is
-  the exception, since it changes state: it is a button, and it lives beside
-  the answers it reopens.
+  Every action here navigates, because a form's URL addresses its *position*
+  and so exists before its instance row does — starting happens on the form
+  page itself (see `FormFlow.Web.Instances.Forms.Show`). Start, Continue and
+  View are links wearing a button's clothes for that reason. Reopen is the
+  exception: it changes state, so it posts an event, and it lives beside the
+  answers it reopens.
 
   ## The states it draws
 
@@ -217,7 +218,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   @impl true
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
-    <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    <div>
+      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+    </div>
     """
   end
 
@@ -232,17 +235,18 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <div class="mb-2 text-sm font-semibold">
+      <div class="mb-4 flex min-h-12 flex-wrap items-center gap-2 text-base font-semibold">
         <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
-        <span class="text-zinc-400">/</span>
+        <span class="text-base-content/40">/</span>
         {@flow_name}
       </div>
 
-      <Components.FormPage.notice message={@mount_error}>
-        <.link navigate={Paths.flows_path(@base)} class="text-cyan-600 hover:underline">
+      <Core.alert components={@components}>
+        <span>{@mount_error}</span>
+        <.link navigate={Paths.flows_path(@base)} class="link link-primary">
           Back to flows
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -253,35 +257,33 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <div class="mb-2 text-sm font-semibold">
+      <div class="mb-4 flex min-h-12 flex-wrap items-center gap-2 text-base font-semibold">
         <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
-        <span class="text-zinc-400">/</span>
+        <span class="text-base-content/40">/</span>
         {@flow_name}
-        <span
+        <Core.badge
           :if={@flow_instance.status == "completed"}
-          class="ml-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+          components={@components}
+          kind={:success}
         >
           Completed
-        </span>
+        </Core.badge>
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-      <p :if={@rows == []} class="mb-4 text-sm text-zinc-500">
+      <Core.alert :if={@rows == []} components={@components} class="mb-4">
         Nothing in this flow is for you to fill out.
-      </p>
+      </Core.alert>
 
-      <div
-        :if={@part_done?}
-        class="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
-      >
+      <Core.alert :if={@part_done?} kind={:success} components={@components} class="mb-4">
         Your part is done. The rest of this flow is being worked on by others.
-      </div>
+      </Core.alert>
 
-      <ul class="space-y-1.5 text-sm">
-        <li :for={row <- @rows} class="flex items-center gap-3">
-          <% {text, classes} = Components.Flows.Progress.badge(row.form.status) %>
-          <span class={"rounded-full border px-2 py-0.5 text-xs #{classes}"}>{text}</span>
+      <ul class="divide-y divide-base-300 text-base">
+        <li :for={row <- @rows} class="flex flex-wrap items-center gap-3 py-3">
+          <% {text, kind} = Components.Flows.Progress.badge(row.form.status) %>
+          <Core.badge components={@components} kind={kind}>{text}</Core.badge>
           <span>{FlowProgress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
             <%!-- Start is the offer to begin work here — an any-order wizard
@@ -292,31 +294,33 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               :if={row.editable? && is_nil(row.form.instance)}
               components={@components}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-              class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
+              variant="primary"
             >
               Start
             </Core.button>
-            <.link
+            <Core.button
               :if={row.form.status == :in_progress && row.form.instance}
+              components={@components}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-              class="text-cyan-600 hover:underline"
+              variant="primary"
             >
               Continue →
-            </.link>
-            <.link
+            </Core.button>
+            <Core.button
               :if={row.form.status == :completed && row.form.instance}
+              components={@components}
               navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
-              class="text-cyan-600 hover:underline"
+              class="btn"
             >
               View →
-            </.link>
+            </Core.button>
             <Core.button
               :if={row.form.status == :completed && row.form.instance}
               components={@components}
               phx-click="reopen"
               phx-value-path={Enum.join(row.form.path, ",")}
               phx-target={@myself}
-              class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
+              class="btn btn-soft"
             >
               Reopen
             </Core.button>
@@ -324,13 +328,10 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         </li>
       </ul>
 
-      <div
-        :if={@stranded != []}
-        class="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800"
-      >
+      <Core.alert :if={@stranded != []} kind={:warning} components={@components} class="mt-6">
         {length(@stranded)} answer set(s) were filled at positions this flow no longer has.
         An administrator can resolve them.
-      </div>
+      </Core.alert>
     </div>
     """
   end

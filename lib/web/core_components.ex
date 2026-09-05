@@ -71,7 +71,7 @@ defmodule FormFlow.Web.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr(:rest, :global, include: ~w(href navigate patch method download name value disabled))
+  attr(:rest, :global, include: ~w(href navigate patch method download name type value disabled))
   attr(:class, :any)
   attr(:variant, :string, values: ~w(primary))
   slot(:inner_block, required: true)
@@ -296,6 +296,95 @@ defmodule FormFlow.Web.CoreComponents do
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
+    """
+  end
+
+  @doc """
+  Renders a status message: what a page says about the state of what it is
+  showing, rather than about a field the user is filling in.
+
+  Not part of the Phoenix-generated `CoreComponents` set — see
+  `FormFlow.Web.ComponentResolver` — but resolved the same way, so a host
+  that wants FormFlow's messages to look like its own can define `alert/1`
+  too.
+
+  `kind` picks the palette and nothing else: `:neutral` for a message that is
+  only informative ("You haven't started this form yet."), `:success` for one
+  that reports something finished, `:warning` for one that reports something
+  the reader has to act on, `:info` and `:error` for the daisyUI colors of
+  the same names.
+
+  The body is a slot rather than a message attr because most of these
+  messages carry a way onward — a link back to the flow, a Reopen button —
+  and daisyUI lays those out beside the text on its own.
+
+  ## Examples
+
+      <.alert>You haven't started this form yet.</.alert>
+
+      <.alert kind={:success}>
+        <span>Submitted 2026-09-05 14:00 UTC.</span>
+        <.button phx-click="reopen">Reopen</.button>
+      </.alert>
+  """
+  attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def alert(assigns) do
+    kinds = %{
+      neutral: nil,
+      info: "alert-info",
+      success: "alert-success",
+      warning: "alert-warning",
+      error: "alert-error"
+    }
+
+    assigns = assign(assigns, :kind_class, Map.fetch!(kinds, assigns.kind))
+
+    ~H"""
+    <div role="alert" class={["alert alert-soft", @kind_class, @class]} {@rest}>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a badge: one word or two about the state of the thing it sits
+  beside, in that state's color.
+
+  Not part of the Phoenix-generated `CoreComponents` set — see
+  `FormFlow.Web.ComponentResolver` — but resolved the same way.
+
+  `kind` picks the palette; `class` takes the daisyUI size and style
+  modifiers (`badge-lg`, `badge-outline`) a caller wants on top.
+
+  ## Examples
+
+      <.badge kind={:success}>Done</.badge>
+      <.badge kind={:warning} class="badge-lg">In progress</.badge>
+  """
+  attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def badge(assigns) do
+    kinds = %{
+      neutral: nil,
+      info: "badge-info",
+      success: "badge-success",
+      warning: "badge-warning",
+      error: "badge-error"
+    }
+
+    assigns = assign(assigns, :kind_class, Map.fetch!(kinds, assigns.kind))
+
+    ~H"""
+    <span class={["badge badge-soft", @kind_class, @class]} {@rest}>
+      {render_slot(@inner_block)}
+    </span>
     """
   end
 

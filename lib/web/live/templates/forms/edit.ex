@@ -468,10 +468,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def render(%{form: nil} = assigns) do
     ~H"""
     <div>
-      <p class="text-sm text-zinc-500">
-        Form not found.
-        <.link navigate={"#{@base}/forms"} class="underline">Back to forms</.link>
-      </p>
+      <Core.alert components={@components}>
+        <span>Form not found.</span>
+        <.link navigate={"#{@base}/forms"} class="link link-primary">Back to forms</.link>
+      </Core.alert>
     </div>
     """
   end
@@ -479,10 +479,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def render(%{version: version} = assigns) when version == nil or version.status != "draft" do
     ~H"""
     <div>
-      <p class="text-sm text-zinc-500">
-        Only drafts can be edited.
-        <.link navigate={show_path(assigns)} class="underline">Back to the form</.link>
-      </p>
+      <Core.alert components={@components}>
+        <span>Only drafts can be edited.</span>
+        <.link navigate={show_path(assigns)} class="link link-primary">Back to the form</.link>
+      </Core.alert>
     </div>
     """
   end
@@ -566,14 +566,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
-      <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
+      <Core.alert :if={@notice} kind={:success} components={@components} class="my-3">
+        {@notice}
+      </Core.alert>
 
-      <p
-        :if={Forms.stale_draft?(@version)}
-        class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800"
-      >
+      <Core.alert :if={Forms.stale_draft?(@version)} kind={:warning} components={@components} class="mb-3">
         This draft was based on a version that is no longer the latest — review before publishing.
-      </p>
+      </Core.alert>
 
       <div class="flex flex-wrap gap-6">
         <div class="min-w-0 flex-1">

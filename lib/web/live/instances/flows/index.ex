@@ -72,7 +72,6 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Web.Components.Core
-  alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -192,6 +191,12 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     end
   end
 
+  # The listing's status column, as `{text, kind}` — the wording the flow
+  # instance pages use for the same two states, in the same palette as a
+  # form's own badge (`FormFlow.Web.Instances.Components.Flows.Progress.badge/1`).
+  defp status_badge("completed"), do: {"Completed", :success}
+  defp status_badge(_in_progress), do: {"In progress", :warning}
+
   # Newest first by default. Only injected when the URL carries no sort of its
   # own, so clicking any header still starts ascending like every other
   # column — a bare `sort_direction` default would flip that.
@@ -213,11 +218,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <div class="mb-2 text-sm font-semibold">
+      <div class="mb-4 flex min-h-12 items-center text-base font-semibold">
         Flows
       </div>
 
-      <Components.FormPage.notice message={@mount_error} />
+      <Core.alert components={@components}>{@mount_error}</Core.alert>
     </div>
     """
   end
@@ -228,15 +233,15 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <div class="mb-2 text-sm font-semibold">
+      <div class="mb-4 flex min-h-12 items-center text-base font-semibold">
         Flows
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-      <p :if={@empty?} class="mb-4 text-sm text-zinc-500">
+      <Core.alert :if={@empty?} components={@components} class="mb-4">
         Nothing started yet — start a flow below.
-      </p>
+      </Core.alert>
 
       <Slab.table
         :if={!@empty?}
@@ -256,37 +261,40 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           </.link>
         </:column>
         <:column :let={flow_instance} field={:status} sortable>
-          <span class="text-xs text-zinc-500">{flow_instance.status}</span>
+          <% {text, kind} = status_badge(flow_instance.status) %>
+          <Core.badge components={@components} kind={kind}>{text}</Core.badge>
         </:column>
         <:column :let={flow_instance} field={:inserted_at} label="Started" sortable>
-          <span class="text-xs text-zinc-500">
+          <span class="text-base-content/60">
             {Calendar.strftime(flow_instance.inserted_at, "%Y-%m-%d %H:%M")}
           </span>
         </:column>
         <:column :let={flow_instance} label="Actions">
-          <.link
+          <Core.button
+            components={@components}
             navigate={Paths.flow_path(@base, flow_instance.id)}
-            class="text-cyan-600 hover:underline"
+            variant="primary"
           >
             {if flow_instance.status == "completed", do: "View →", else: "Continue →"}
-          </.link>
+          </Core.button>
         </:column>
         <:pagination per_page={10} />
       </Slab.table>
 
-      <h3 class="mb-1 mt-6 text-sm font-semibold">Start a new flow</h3>
-      <p :if={@page_flows == []} class="text-sm text-zinc-500">
+      <h3 class="mb-2 mt-8 text-base font-semibold">Start a new flow</h3>
+      <Core.alert :if={@page_flows == []} components={@components}>
         No flows have been published yet.
-      </p>
-      <ul class="space-y-1 text-sm">
-        <li :for={flow <- @page_flows} class="flex items-center gap-3">
+      </Core.alert>
+      <ul class="divide-y divide-base-300 text-base">
+        <li :for={flow <- @page_flows} class="flex flex-wrap items-center gap-3 py-3">
           <span>{flow.name || "Untitled flow"}</span>
           <Core.button
             components={@components}
             phx-click="start"
             phx-value-flow-id={flow.id}
             phx-target={@myself}
-            class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
+            variant="primary"
+            class="ml-auto"
           >
             Start
           </Core.button>

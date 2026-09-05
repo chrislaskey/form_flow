@@ -171,10 +171,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   def render(%{flow: nil} = assigns) do
     ~H"""
     <div>
-      <p class="text-sm text-zinc-500">
-        Flow not found.
-        <.link navigate={"#{@base}/flows"} class="underline">Back to flows</.link>
-      </p>
+      <Core.alert components={@components}>
+        <span>Flow not found.</span>
+        <.link navigate={"#{@base}/flows"} class="link link-primary">Back to flows</.link>
+      </Core.alert>
     </div>
     """
   end

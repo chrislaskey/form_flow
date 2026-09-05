@@ -18,7 +18,11 @@ defmodule FormFlow.Web.Components.Core do
   alias FormFlow.Web.ComponentResolver
 
   attr(:components, :atom, default: nil)
-  attr(:rest, :global, include: ~w(href navigate patch method download name value disabled form))
+
+  attr(:rest, :global,
+    include: ~w(href navigate patch method download name type value disabled form)
+  )
+
   attr(:class, :any)
   attr(:variant, :string, values: ~w(primary))
   slot(:inner_block, required: true)
@@ -32,6 +36,26 @@ defmodule FormFlow.Web.Components.Core do
 
   def error(assigns) do
     ComponentResolver.render(assigns.components, :error, Map.delete(assigns, :components))
+  end
+
+  attr(:components, :atom, default: nil)
+  attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def alert(assigns) do
+    ComponentResolver.render(assigns.components, :alert, Map.delete(assigns, :components))
+  end
+
+  attr(:components, :atom, default: nil)
+  attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def badge(assigns) do
+    ComponentResolver.render(assigns.components, :badge, Map.delete(assigns, :components))
   end
 
   attr(:components, :atom, default: nil)

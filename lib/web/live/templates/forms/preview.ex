@@ -39,6 +39,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   use Phoenix.LiveView
 
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Components.Core
 
   @impl true
   def mount(:not_mounted_at_router, session, socket) do
@@ -85,28 +86,27 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   @impl true
   def render(%{missing?: true} = assigns) do
     ~H"""
-    <p class="text-sm text-zinc-500">This version no longer exists.</p>
+    <Core.alert>This version no longer exists.</Core.alert>
     """
   end
 
   def render(%{parse_error: error} = assigns) when is_binary(error) do
     ~H"""
-    <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-      <p class="font-medium">This definition can't be rendered as a form.</p>
-      <p class="mt-1 font-mono">{@parse_error}</p>
-    </div>
+    <Core.alert kind={:warning}>
+      <div>
+        <p class="font-medium">This definition can't be rendered as a form.</p>
+        <p class="mt-1 font-mono text-sm">{@parse_error}</p>
+      </div>
+    </Core.alert>
     """
   end
 
   def render(assigns) do
     ~H"""
     <div>
-      <p
-        :if={@submitted?}
-        class="mb-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
-      >
+      <Core.alert :if={@submitted?} kind={:success} class="mb-3">
         Valid submission — this is a preview, nothing was saved.
-      </p>
+      </Core.alert>
       <DynamicForm.form id={"#{@id}-form"} instance={@instance} />
     </div>
     """

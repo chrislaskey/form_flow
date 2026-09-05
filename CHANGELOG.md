@@ -2,6 +2,44 @@
 
 ## v0.18.0
 
+### Status messages and badges are components, and daisyUI ones
+
+**New: `alert/1` and `badge/1` on `FormFlow.Web.CoreComponents`**, resolved
+through the `components` attr like every other component FormFlow renders —
+so a host that wants FormFlow's messages and badges to look like the rest of
+its application defines them and owns them. Neither is part of the
+Phoenix-generated `CoreComponents` set, so a host that defines neither gets
+FormFlow's own, the way any undefined function already falls back.
+
+Every status message on both the templates and the user-facing pages now
+draws through `alert/1` instead of its own hand-rolled box, so the two sides
+say the same kind of thing the same way: a form that was not found, a page
+the host refused, a form not started yet, a draft based on a stale version,
+answers stranded at a position the flow no longer has. Every state pill —
+Available / In progress / Done / Pending, a flow instance's status in the
+listing, a form's step in the progress row — draws through `badge/1`.
+
+- **Breaking: `FormFlow.Web.Instances.Components.FormPage.notice/1` is
+  gone.** Each page writes its message as `FormFlow.Web.Components.Core.alert/1`
+  at its own `render/1` clause. `breadcrumb/1` is unchanged and is all the
+  module holds now.
+- **Breaking: `FormFlow.Web.Instances.Components.Flows.Progress.badge/1`
+  returns `{text, kind}`** — the `alert/1`/`badge/1` palette atom — where it
+  returned `{text, classes}`, a string of Tailwind colors.
+- **The assigns handed to a flow type's `progress_component/1` now carry
+  `:components`**, so the badges it draws resolve through the host's module
+  too. A type that passes its assigns straight to `flow_progress/1` (as the
+  built-in types do) needs no change.
+- Download PDF and Print on `FormFlow.Web.Instances.Forms.Show` are buttons
+  rather than bare links, as are Start, Continue, View and Reopen on the
+  flow instance's page. Start, Continue and View are still links underneath:
+  a form's URL addresses its *position*, so navigating to one is the whole
+  action.
+
+The user-facing pages were also sized up: body text at `text-base` rather
+than `text-xs`, page headings at `text-base`, list rows separated rather
+than crowded.
+
 ### Each user-facing page names the state it is in
 
 **New: `FormFlow.Web.Instances.Shared`**, holding `page_state/1` and

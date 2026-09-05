@@ -240,10 +240,10 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   def render(%{form: nil} = assigns) do
     ~H"""
     <div>
-      <p class="text-sm text-zinc-500">
-        Form not found.
-        <.link navigate={"#{@base}/forms"} class="underline">Back to forms</.link>
-      </p>
+      <Core.alert components={@components}>
+        <span>Form not found.</span>
+        <.link navigate={"#{@base}/forms"} class="link link-primary">Back to forms</.link>
+      </Core.alert>
     </div>
     """
   end
@@ -357,12 +357,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@form.description} class="mb-3 text-sm text-zinc-600">{@form.description}</p>
 
-      <p
+      <Core.alert
         :if={@version && @version.status == "draft" && Forms.stale_draft?(@version)}
-        class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+        kind={:warning}
+        components={@components}
+        class="mb-3"
       >
         This draft was based on a version that is no longer the latest — review before publishing.
-      </p>
+      </Core.alert>
 
       <div class="flex flex-wrap gap-6">
         <div :if={@version} class="min-w-0 flex-1">
@@ -381,7 +383,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             :if={@version}
             class="overflow-x-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs"
           >{definition_json(@version)}</pre>
-          <p :if={@version == nil} class="text-sm text-zinc-500">This form has no versions.</p>
+          <Core.alert :if={@version == nil} components={@components}>
+            This form has no versions.
+          </Core.alert>
         </div>
 
         <div class="w-64 shrink-0">

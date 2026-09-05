@@ -26,6 +26,13 @@ defmodule FormFlow.Web.ComponentResolver do
   set: `flash/1`, `button/1`, `input/1`, `error/1`, `header/1`, `table/1`,
   `list/1`, `icon/1`, `translate_error/1`, `translate_errors/2`.
 
+  Two components FormFlow renders are not in that generated set:
+  `alert/1`, the status message a page draws about the state of what it is
+  showing, and `badge/1`, the state of one row or step. A host's
+  `CoreComponents` will not define them, so they fall back to FormFlow's own
+  the way any other undefined function does — and a host that wants them to
+  match the rest of its application can define them and own them too.
+
   `error/1` is the one function Phoenix 1.8's own generated `CoreComponents`
   keeps private (it has nothing to delegate to when a host doesn't override
   it), so `FormFlow.Web.CoreComponents.error/1` is public — a host overriding

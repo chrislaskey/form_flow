@@ -67,9 +67,9 @@ defmodule FormFlow.Web.Templates.Forms.Index do
         </Core.button>
       </div>
 
-      <p :if={@empty?} class="text-sm text-zinc-500">
+      <Core.alert :if={@empty?} components={@components}>
         No forms yet — create the first one.
-      </p>
+      </Core.alert>
 
       <Slab.table
         :if={!@empty?}

@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   message, or nothing while redirecting, when not.
 
   It is also where the answers are taken away from: Download PDF and Print
-  are plain links out to a download endpoint, because a LiveView holds a
+  send the browser out to a download endpoint, because a LiveView holds a
   websocket and cannot send a file. Both send the same document — the
   disposition header is the only difference — and both resolve the position
   the way this page does, so what is printed is what is shown. They are
@@ -162,7 +162,9 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   @impl true
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
-    <p class="text-sm text-zinc-500">This flow no longer exists.</p>
+    <div>
+      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+    </div>
     """
   end
 
@@ -184,14 +186,12 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message={@mount_error}>
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+      <Core.alert components={@components}>
+        <span>{@mount_error}</span>
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -208,14 +208,12 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message="This form is not part of your work here.">
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+      <Core.alert components={@components}>
+        <span>This form is not part of your work here.</span>
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
@@ -232,30 +230,32 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         label={@form_label}
       />
 
-      <Components.FormPage.notice message={unstarted_message(assigns)}>
+      <Core.alert components={@components}>
+        <span>{unstarted_message(assigns)}</span>
         <.link
           :if={@editable?}
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
-          class="text-cyan-600 hover:underline"
+          class="link link-primary"
         >
           Start this form →
         </.link>
-        <.link
-          navigate={Paths.flow_path(@base, @flow_instance.id)}
-          class="text-cyan-600 hover:underline"
-        >
+        <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
         </.link>
-      </Components.FormPage.notice>
+      </Core.alert>
     </div>
     """
   end
 
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
-    <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-      <p class="font-medium">This form can't be rendered.</p>
-      <p class="mt-1 font-mono">{@parse_error}</p>
+    <div>
+      <Core.alert kind={:warning} components={@components}>
+        <div>
+          <p class="font-medium">This form can't be rendered.</p>
+          <p class="mt-1 font-mono text-sm">{@parse_error}</p>
+        </div>
+      </Core.alert>
     </div>
     """
   end
@@ -281,7 +281,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         current_path: @path,
         clickable: @clickable,
         context: @context,
-        callback_data: @callback_data
+        callback_data: @callback_data,
+        components: @components
       })}
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
@@ -296,14 +297,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         id={"#{@id}-downloads"}
         phx-hook=".Downloads"
         phx-target={@myself}
-        class="mb-3 flex items-center gap-4 text-xs"
+        class="mb-4 flex flex-wrap items-center gap-3"
       >
-        <button type="button" data-disposition="download" class="text-cyan-600 hover:underline">
+        <Core.button components={@components} type="button" data-disposition="download" class="btn">
           Download PDF
-        </button>
-        <button type="button" data-disposition="print" class="text-cyan-600 hover:underline">
+        </Core.button>
+        <Core.button components={@components} type="button" data-disposition="print" class="btn">
           Print
-        </button>
+        </Core.button>
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Downloads">
@@ -338,9 +339,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         }
       </script>
 
-      <div
+      <Core.alert
         :if={@form_instance.status == "completed"}
-        class="mb-3 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+        kind={:success}
+        components={@components}
+        class="mb-4"
       >
         <span>
           Submitted {Calendar.strftime(@form_instance.completed_at, "%Y-%m-%d %H:%M")} UTC.
@@ -349,16 +352,16 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           components={@components}
           phx-click="reopen"
           phx-target={@myself}
-          class="rounded-md border border-emerald-300 px-2 py-0.5 hover:border-emerald-400"
+          class="btn btn-sm btn-success btn-soft"
         >
           Reopen
         </Core.button>
-      </div>
+      </Core.alert>
 
-      <p :if={@form_instance.status != "completed"} class="mb-2 text-xs">
+      <p :if={@form_instance.status != "completed"} class="mb-4">
         <.link
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
-          class="text-cyan-600 hover:underline"
+          class="link link-primary"
         >
           Continue filling this out →
         </.link>
