@@ -69,12 +69,11 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   test "show resolves the newest draft before anything is published", %{conn: conn} do
-    {:ok, form} = Forms.create(%{name: "Unpublished", definition: %{"wip" => true}})
+    {:ok, form} = Forms.create(%{name: "Unpublished"})
 
     {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
 
     assert html =~ "draft"
-    assert html =~ "wip"
   end
 
   test "editing a draft saves JSON and rejects bad syntax", %{conn: conn} do

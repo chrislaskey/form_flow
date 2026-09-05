@@ -38,7 +38,12 @@ listing, a form's step in the progress row — draws through `badge/1`.
 
 The user-facing pages were also sized up: body text at `text-base` rather
 than `text-xs`, page headings at `text-base`, list rows separated rather
-than crowded.
+than crowded. `FormFlow.Web.Router`'s own admin landing (the page linking
+Flows and Forms at the mount root) got the same treatment.
+
+- **Breaking: `FormFlow.Web.Templates.Forms.Show` no longer has a
+  "Definition" panel** showing the version's raw JSON. Versions now comes
+  first, ahead of Preview, in the space it left.
 
 ### Each user-facing page names the state it is in
 

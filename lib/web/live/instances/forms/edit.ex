@@ -365,7 +365,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
           navigate={Paths.form_path(@base, @flow_instance.id, @path)}
           class="link link-primary"
         >
-          View or reopen your answers →
+          View or reopen your answers
         </.link>
       </Core.alert>
     </div>

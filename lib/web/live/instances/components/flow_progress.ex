@@ -41,7 +41,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
     ~H"""
     <ol id={@id} class="mb-6 flex flex-wrap items-center gap-2">
       <li :for={{form, index} <- Enum.with_index(@forms, 1)} class="flex items-center gap-2">
-        <span :if={index > 1} aria-hidden="true" class="text-base-content/30">→</span>
+        <span :if={index > 1} aria-hidden="true" class="text-base-content/30 text-sm">→</span>
         <.link
           :if={clickable?(@clickable, form)}
           navigate={Paths.form_edit_path(@base, @flow_instance_id, form.path)}

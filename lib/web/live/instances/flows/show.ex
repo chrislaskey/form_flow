@@ -302,9 +302,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               :if={row.form.status == :in_progress && row.form.instance}
               components={@components}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-              variant="primary"
             >
-              Continue →
+              Continue
             </Core.button>
             <Core.button
               :if={row.form.status == :completed && row.form.instance}
@@ -312,7 +311,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
               class="btn"
             >
-              View →
+              View
             </Core.button>
             <Core.button
               :if={row.form.status == :completed && row.form.instance}

@@ -244,20 +244,20 @@ defmodule FormFlow.Web.Router do
               links to both. `live "/admin/*path", ...` with base="/admin"
               makes /admin this landing, /admin/flows and /admin/forms the
               indexes. --%>
-        <div :if={segments(@path) == []}>
-          <h2 class="mb-2 text-sm font-semibold">Templates</h2>
-          <ul class="space-y-1 text-sm">
-            <li>
-              <.link navigate={"#{@base}/flows"} class="text-cyan-600 hover:underline">
+        <div :if={segments(@path) == []} class="mb-6">
+          <h2 class="mb-2 text-base font-semibold">Templates</h2>
+          <ul class="divide-y divide-base-300 text-base">
+            <li class="py-3">
+              <.link navigate={"#{@base}/flows"} class="link link-primary font-medium">
                 Flows
               </.link>
-              <span class="text-xs text-zinc-500">— graph-based user flows</span>
+              <p class="text-base-content/60">Graph-based user flows.</p>
             </li>
-            <li>
-              <.link navigate={"#{@base}/forms"} class="text-cyan-600 hover:underline">
+            <li class="py-3">
+              <.link navigate={"#{@base}/forms"} class="link link-primary font-medium">
                 Forms
               </.link>
-              <span class="text-xs text-zinc-500">— the reusable form catalog</span>
+              <p class="text-base-content/60">The reusable form catalog.</p>
             </li>
           </ul>
         </div>

@@ -275,7 +275,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             navigate={Paths.flow_path(@base, flow_instance.id)}
             variant="primary"
           >
-            {if flow_instance.status == "completed", do: "View →", else: "Continue →"}
+            {if flow_instance.status == "completed", do: "View", else: "Continue"}
           </Core.button>
         </:column>
         <:pagination per_page={10} />
@@ -286,7 +286,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         No flows have been published yet.
       </Core.alert>
       <ul class="divide-y divide-base-300 text-base">
-        <li :for={flow <- @page_flows} class="flex flex-wrap items-center gap-3 py-3">
+        <li :for={flow <- @page_flows} class="flex flex-wrap items-center justify-between gap-3 py-3">
           <span>{flow.name || "Untitled flow"}</span>
           <Core.button
             components={@components}
@@ -294,7 +294,6 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             phx-value-flow-id={flow.id}
             phx-target={@myself}
             variant="primary"
-            class="ml-auto"
           >
             Start
           </Core.button>

@@ -237,7 +237,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
           class="link link-primary"
         >
-          Start this form →
+          Start this form
         </.link>
         <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="link link-primary">
           Back to the flow
@@ -363,7 +363,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
           class="link link-primary"
         >
-          Continue filling this out →
+          Continue filling this out
         </.link>
       </p>
 

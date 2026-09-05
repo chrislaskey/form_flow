@@ -367,27 +367,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       </Core.alert>
 
       <div class="flex flex-wrap gap-6">
-        <div :if={@version} class="min-w-0 flex-1">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
-          <div class="rounded-md border border-zinc-200 p-4">
-            {live_render(@socket, Preview,
-              id: "form-preview-#{@version.id}",
-              session: %{"id" => "form-preview-#{@version.id}", "version_id" => @version.id}
-            )}
-          </div>
-        </div>
-
-        <div class="min-w-0 flex-1">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Definition</h3>
-          <pre
-            :if={@version}
-            class="overflow-x-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs"
-          >{definition_json(@version)}</pre>
-          <Core.alert :if={@version == nil} components={@components}>
-            This form has no versions.
-          </Core.alert>
-        </div>
-
         <div class="w-64 shrink-0">
           <h3 class="mb-1 text-xs font-medium text-zinc-500">Versions</h3>
           <ul class="space-y-1 text-sm">
@@ -407,6 +386,20 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             </li>
           </ul>
         </div>
+
+        <div :if={@version} class="min-w-0 flex-1">
+          <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
+          <div class="rounded-md border border-zinc-200 p-4">
+            {live_render(@socket, Preview,
+              id: "form-preview-#{@version.id}",
+              session: %{"id" => "form-preview-#{@version.id}", "version_id" => @version.id}
+            )}
+          </div>
+        </div>
+
+        <Core.alert :if={@version == nil} components={@components}>
+          This form has no versions.
+        </Core.alert>
       </div>
 
       <PublishDialog.publish_dialog
@@ -445,10 +438,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   defp version_badge(%{status: "draft"}), do: "draft"
   defp version_badge(%{status: "published"} = v), do: "v#{v.version} · published"
   defp version_badge(%{status: "archived"} = v), do: "v#{v.version} · archived"
-
-  defp definition_json(version) do
-    Phoenix.json_library().encode!(version.definition, pretty: true)
-  end
 
   defp form_base_path(%{node: nil} = assigns), do: "#{assigns.base}/forms/#{assigns.form.id}"
 

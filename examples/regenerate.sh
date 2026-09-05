@@ -99,6 +99,16 @@ echo "==> Setting the demo's default font to Plus Jakarta Sans"
 # added here since app.css itself isn't part of the overlay.
 perl -pi -e 's{(/\* Add variants based on LiveView classes \*/)}{\@theme {\n  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;\n}\n\n$1}' demo/assets/css/app.css
 
+echo "==> Matching the daisyUI brand color to the header's indigo"
+# phx.new's generated light theme ships Phoenix's stock orange as
+# --color-primary, which clashes with the indigo/violet/fuchsia gradient the
+# demo's own header and logo use (layouts.ex, copied in from overlay/ below).
+# The dark theme already carries that same indigo as its primary — Elixir's
+# color, not Phoenix's — so light borrows its exact swatch rather than
+# picking a second one.
+perl -pi -e 's{--color-primary: oklch\(70% 0\.213 47\.604\);}{--color-primary: oklch(58% 0.233 277.117);}' demo/assets/css/app.css
+perl -pi -e 's{--color-primary-content: oklch\(98% 0\.016 73\.684\);}{--color-primary-content: oklch(96% 0.018 272.314);}' demo/assets/css/app.css
+
 echo "==> Registering colocated JavaScript hooks"
 # form_flow, slab, and phoenix_select ship their JS as colocated hooks, which
 # the LiveView 1.1+ compiler extracts to phoenix-colocated/<app>. Nothing to
