@@ -26,6 +26,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
@@ -67,6 +68,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
 
     {:ok, load(socket)}
   end
@@ -287,16 +289,16 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           </span>
         </div>
         <div :if={@version} class="flex items-center gap-2">
-          <button
+          <Core.button
             :if={@version.status == "draft"}
-            type="button"
+            components={@components}
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
             class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Delete draft
-          </button>
+          </Core.button>
           <.link
             :if={@version.status == "draft"}
             navigate={edit_path(assigns, @version)}
@@ -311,48 +313,48 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
-          <button
+          <Core.button
             :if={@version.status == "draft"}
-            type="button"
+            components={@components}
             phx-click="open_publish"
             phx-target={@myself}
-            class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+            variant="primary"
           >
             Publish
-          </button>
-          <button
+          </Core.button>
+          <Core.button
             :if={@version.status == "published"}
-            type="button"
+            components={@components}
             phx-click="create_draft"
             phx-target={@myself}
             class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
           >
             New draft from this version
-          </button>
-          <button
+          </Core.button>
+          <Core.button
             :if={@version.status == "published"}
-            type="button"
+            components={@components}
             phx-click="archive"
             phx-target={@myself}
             data-confirm="Archive this version? It stops being the latest; users pinned to it are unaffected."
             class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
           >
             Archive
-          </button>
-          <button
+          </Core.button>
+          <Core.button
             :if={@form.owner_flow_id == nil and @node == nil}
-            type="button"
+            components={@components}
             phx-click="delete"
             phx-target={@myself}
             data-confirm="Delete this form and all of its versions?"
             class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Delete
-          </button>
+          </Core.button>
         </div>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@form.description} class="mb-3 text-sm text-zinc-600">{@form.description}</p>
 
       <p
@@ -409,6 +411,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         counts={@counts}
         target={@myself}
         on_success={&publish(&1, @id)}
+        components={@components}
       />
     </div>
     """

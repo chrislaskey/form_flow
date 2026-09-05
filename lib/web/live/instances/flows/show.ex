@@ -34,6 +34,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -49,6 +50,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
@@ -203,7 +205,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         </span>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <p :if={@rows == []} class="mb-4 text-sm text-zinc-500">
         Nothing in this flow is for you to fill out.
@@ -226,13 +228,14 @@ defmodule FormFlow.Web.Instances.Flows.Show do
                   makes it on forms an in-order one keeps closed. A form
                   already started continues instead; both land on the same
                   page, which is the one that starts the form. --%>
-            <.link
+            <Core.button
               :if={row.editable? && is_nil(row.form.instance)}
+              components={@components}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >
               Start
-            </.link>
+            </Core.button>
             <.link
               :if={row.form.status == :in_progress && row.form.instance}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
@@ -247,15 +250,16 @@ defmodule FormFlow.Web.Instances.Flows.Show do
             >
               View →
             </.link>
-            <button
+            <Core.button
               :if={row.form.status == :completed && row.form.instance}
+              components={@components}
               phx-click="reopen"
               phx-value-path={Enum.join(row.form.path, ",")}
               phx-target={@myself}
               class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
             >
               Reopen
-            </button>
+            </Core.button>
           </span>
         </li>
       </ul>

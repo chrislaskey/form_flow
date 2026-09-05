@@ -30,6 +30,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
 
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Components.Core
 
   @impl true
   def update(assigns, socket) do
@@ -38,6 +39,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
+      |> assign_new(:components, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
@@ -60,12 +62,9 @@ defmodule FormFlow.Web.Templates.Forms.Index do
           <span class="text-zinc-400">/</span>
           Forms
         </div>
-        <.link
-          navigate={"#{@base}/forms/new"}
-          class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
-        >
+        <Core.button components={@components} navigate={"#{@base}/forms/new"} variant="primary">
           New form
-        </.link>
+        </Core.button>
       </div>
 
       <p :if={@empty?} class="text-sm text-zinc-500">

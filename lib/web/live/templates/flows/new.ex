@@ -19,6 +19,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates
 
   @impl true
@@ -32,7 +33,8 @@ defmodule FormFlow.Web.Templates.Flows.New do
      socket
      |> assign(assigns)
      |> assign_new(:base, fn -> "" end)
-     |> assign_new(:tenant_id, fn -> nil end)}
+     |> assign_new(:tenant_id, fn -> nil end)
+     |> assign_new(:components, fn -> nil end)}
   end
 
   @impl true
@@ -72,40 +74,39 @@ defmodule FormFlow.Web.Templates.Flows.New do
           <span class="text-zinc-400">/</span>
           New flow
         </div>
-        <.link
+        <Core.button
+          components={@components}
           navigate={"#{@base}/flows"}
           class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
         >
           Cancel
-        </.link>
+        </Core.button>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <form phx-submit="create" phx-target={@myself} class="max-w-md space-y-4">
-        <label class="block">
-          <span class="text-xs font-medium text-zinc-600">Name</span>
-          <input
-            type="text"
-            name="name"
-            value="Untitled flow"
-            required
-            class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
-          />
-        </label>
+        <Core.input
+          components={@components}
+          type="text"
+          name="name"
+          label="Name"
+          value="Untitled flow"
+          required
+        />
 
-        <label class="block">
-          <span class="text-xs font-medium text-zinc-600">Slug</span>
-          <input
+        <div>
+          <Core.input
+            components={@components}
             type="text"
             name="slug"
+            label="Slug"
             placeholder="Generated from the name when left blank"
-            class="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
           />
           <span class="mt-1 block text-xs text-zinc-500">
             A stable name for looking this flow up in code — lowercase letters, numbers, _ and -.
           </span>
-        </label>
+        </div>
 
         <fieldset class="space-y-2">
           <legend class="text-xs font-medium text-zinc-600">What kind of flow?</legend>
@@ -131,12 +132,9 @@ defmodule FormFlow.Web.Templates.Flows.New do
           </label>
         </fieldset>
 
-        <button
-          type="submit"
-          class="rounded-md border border-cyan-600 bg-cyan-600 px-3 py-1.5 text-xs text-white hover:bg-cyan-700"
-        >
+        <Core.button components={@components} variant="primary">
           Create flow
-        </button>
+        </Core.button>
       </form>
     </div>
     """

@@ -13,10 +13,13 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
 
   use Phoenix.Component
 
+  alias FormFlow.Web.Components.Core
+
   attr(:id, :string, required: true, doc: "the DynamicForm component id")
   attr(:counts, :map, required: true, doc: "instance counts by status, for the blast radius")
   attr(:target, :any, required: true, doc: "the LiveComponent receiving cancel_publish")
   attr(:on_success, :any, required: true, doc: "1-arity payload callback performing the publish")
+  attr(:components, :atom, default: nil)
 
   attr(:saved_note, :boolean,
     default: false,
@@ -57,14 +60,14 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
         </DynamicForm.form>
 
         <div class="mt-2 flex justify-end">
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="cancel_publish"
             phx-target={@target}
             class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
           >
             Cancel
-          </button>
+          </Core.button>
         </div>
       </div>
     </div>

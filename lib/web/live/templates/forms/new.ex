@@ -21,6 +21,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates
 
   @impl true
@@ -63,7 +64,8 @@ defmodule FormFlow.Web.Templates.Forms.New do
      socket
      |> assign(assigns)
      |> assign_new(:base, fn -> "" end)
-     |> assign_new(:tenant_id, fn -> nil end)}
+     |> assign_new(:tenant_id, fn -> nil end)
+     |> assign_new(:components, fn -> nil end)}
   end
 
   @impl true
@@ -83,15 +85,16 @@ defmodule FormFlow.Web.Templates.Forms.New do
           <span class="text-zinc-400">/</span>
           New form
         </div>
-        <.link
+        <Core.button
+          components={@components}
           navigate={"#{@base}/forms"}
           class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
         >
           Cancel
-        </.link>
+        </Core.button>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <div class="max-w-md">
         <DynamicForm.form

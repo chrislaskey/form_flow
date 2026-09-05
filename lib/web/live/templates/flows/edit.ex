@@ -89,6 +89,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Shared
@@ -129,6 +130,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -598,36 +600,36 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
                 on the parent's editor, not its show page. They navigate
                 through the "navigate" event rather than a bare <.link>, so
                 unsaved changes get the same save-first prompt as Open. --%>
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="navigate"
             phx-value-to={templates_path(@base)}
             phx-target={@myself}
             class="hover:underline"
           >
             Templates
-          </button>
+          </Core.button>
           <span class="text-zinc-400">/</span>
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="navigate"
             phx-value-to={"#{@base}/flows"}
             phx-target={@myself}
             class="hover:underline"
           >
             Flows
-          </button>
+          </Core.button>
           <span class="text-zinc-400">/</span>
-          <button
+          <Core.button
             :if={@root}
-            type="button"
+            components={@components}
             phx-click="navigate"
             phx-value-to={"#{@base}/flows/#{@root.id}/edit"}
             phx-target={@myself}
             class="hover:underline"
           >
             {@root.name || "Untitled"}
-          </button>
+          </Core.button>
           <span :if={@root} class="text-zinc-400">/</span>
           <span>{@flow.name || "Untitled"}</span>
           <span class="text-xs font-normal text-zinc-500">
@@ -635,15 +637,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button
+          <Core.button
             :if={unsaved_changes?(assigns)}
-            type="button"
+            components={@components}
             phx-click="request_discard"
             phx-target={@myself}
             class="rounded-md border border-zinc-300 px-2 py-1 text-xs text-red-600 hover:border-red-400"
           >
             Discard changes
-          </button>
+          </Core.button>
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would
                 desync from reality when unsaved changes turn this click into
@@ -664,8 +666,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </button>
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="save"
             phx-target={@myself}
             class={[
@@ -677,11 +679,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             ]}
           >
             Save
-          </button>
+          </Core.button>
         </div>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
 
       <%!-- The flow's own fields, beside the canvas. Edits here are pending
@@ -767,22 +769,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             This flow has unsaved changes. Save before continuing?
           </p>
           <div class="flex justify-end gap-2">
-            <button
-              type="button"
+            <Core.button
+              components={@components}
               phx-click="cancel_navigation"
               phx-target={@myself}
               class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
             >
               Keep editing
-            </button>
-            <button
-              type="button"
+            </Core.button>
+            <Core.button
+              components={@components}
               phx-click="save_and_continue"
               phx-target={@myself}
-              class="rounded-md border border-cyan-600 bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-700"
+              variant="primary"
             >
               Save &amp; Continue
-            </button>
+            </Core.button>
           </div>
         </div>
       </div>
@@ -796,22 +798,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             Discard changes? This can't be undone.
           </p>
           <div class="flex justify-end gap-2">
-            <button
-              type="button"
+            <Core.button
+              components={@components}
               phx-click="cancel_discard"
               phx-target={@myself}
               class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
             >
               Keep editing
-            </button>
-            <button
-              type="button"
+            </Core.button>
+            <Core.button
+              components={@components}
               phx-click="confirm_discard"
               phx-target={@myself}
               class="rounded-md border border-red-600 bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
             >
               Discard changes
-            </button>
+            </Core.button>
           </div>
         </div>
       </div>

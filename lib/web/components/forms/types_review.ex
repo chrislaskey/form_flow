@@ -55,6 +55,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   use Phoenix.Component
 
   alias FormFlow.Config.Forms.Type
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Config.Property
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -107,7 +108,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
     assigns = Map.merge(assigns, review_assigns(assigns))
 
     ~H"""
-    <.panes id={@id} review={@review}>
+    <.panes id={@id} review={@review} components={@components}>
       {Type.Default.edit_component(assigns)}
     </.panes>
     """
@@ -118,7 +119,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
     assigns = Map.merge(assigns, review_assigns(assigns))
 
     ~H"""
-    <.panes id={@id} review={@review}>
+    <.panes id={@id} review={@review} components={@components}>
       {Type.Default.show_component(assigns)}
     </.panes>
     """
@@ -323,6 +324,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   attr(:id, :string, required: true)
   attr(:review, :map, required: true, doc: "what review_assigns/1 loaded")
+  attr(:components, :atom, default: nil)
   slot(:inner_block, required: true)
 
   defp panes(assigns) do
@@ -334,13 +336,13 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
         <h3 class="mb-2 text-xs font-medium text-zinc-500">
           Reviewing{if @source, do: ": #{FlowProgress.qualified_label(@source)}"}
         </h3>
-        <p :if={is_nil(@source)} class="text-sm text-red-600">
+        <Core.error :if={is_nil(@source)} components={@components}>
           The form to review is missing — an administrator needs to choose it on this form's settings.
-        </p>
+        </Core.error>
         <p :if={@source && is_nil(@source.instance)} class="text-sm text-zinc-500">
           {FlowProgress.qualified_label(@source)} hasn't been started yet, so there is nothing to review.
         </p>
-        <.notice :if={@source} id={"#{@id}-review-notice"} review={@review} />
+        <.notice :if={@source} id={"#{@id}-review-notice"} review={@review} components={@components} />
         <%!-- Read-only the way the Show page does it: a disabled fieldset
               around the form, its submit button hidden --%>
         <fieldset :if={@review.source_parsed} disabled class="max-w-md">
@@ -361,6 +363,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   attr(:id, :string, required: true)
   attr(:review, :map, required: true)
+  attr(:components, :atom, default: nil)
 
   defp notice(%{review: %{staleness: :never_reviewed}} = assigns) do
     ~H""
@@ -417,14 +420,22 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
       </p>
       <.changes
         :if={@cause in [:resubmitted, :migrated, :replaced]}
+        id={"#{@id}-changes"}
         changes={changed_answers(@review, @structure_changed?)}
+        components={@components}
       />
-      <.reviewed_answers :if={@cause == :deleted} snapshot={@review.snapshot} />
+      <.reviewed_answers
+        :if={@cause == :deleted}
+        snapshot={@review.snapshot}
+        components={@components}
+      />
     </div>
     """
   end
 
+  attr(:id, :string, required: true)
   attr(:changes, :list, required: true)
+  attr(:components, :atom, default: nil)
 
   defp changes(%{changes: []} = assigns) do
     ~H"""
@@ -434,29 +445,23 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   defp changes(assigns) do
     ~H"""
-    <table class="mt-2 w-full text-left">
-      <thead>
-        <tr class="text-amber-700">
-          <th class="pr-3 font-medium">Question</th>
-          <th class="pr-3 font-medium">Reviewed</th>
-          <th class="font-medium">Now</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr :for={{old_title, new_title, old, new} <- @changes} class="align-top">
-          <td class="pr-3">
-            {new_title}<span :if={old_title != new_title} class="text-amber-600">
-              (was {old_title})</span>
-          </td>
-          <td class="pr-3 font-mono">{old}</td>
-          <td class="font-mono">{new}</td>
-        </tr>
-      </tbody>
-    </table>
+    <Core.table id={@id} rows={@changes} components={@components}>
+      <:col :let={{old_title, new_title, _old, _new}} label="Question">
+        {new_title}<span :if={old_title != new_title} class="text-amber-600">
+          (was {old_title})</span>
+      </:col>
+      <:col :let={{_old_title, _new_title, old, _new}} label="Reviewed">
+        <span class="font-mono">{old}</span>
+      </:col>
+      <:col :let={{_old_title, _new_title, _old, new}} label="Now">
+        <span class="font-mono">{new}</span>
+      </:col>
+    </Core.table>
     """
   end
 
   attr(:snapshot, :map, required: true)
+  attr(:components, :atom, default: nil)
 
   defp reviewed_answers(assigns) do
     titles = assigns.snapshot["version_id"] |> load_definition() |> titles()
@@ -474,12 +479,11 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
     ~H"""
     <p class="mt-1">The answers as reviewed:</p>
-    <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3">
-      <%= for {title, value} <- @answers do %>
-        <dt class="font-medium">{title}</dt>
-        <dd class="font-mono">{value}</dd>
-      <% end %>
-    </dl>
+    <Core.list components={@components}>
+      <:item :for={{title, value} <- @answers} title={title}>
+        <span class="font-mono">{value}</span>
+      </:item>
+    </Core.list>
     """
   end
 

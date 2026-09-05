@@ -34,6 +34,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Shared
@@ -54,6 +55,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -227,8 +229,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="delete"
             phx-target={@myself}
             data-confirm={
@@ -240,11 +242,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Delete
-          </button>
+          </Core.button>
         </div>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <Editor.editor
         id={"#{@id}-editor"}

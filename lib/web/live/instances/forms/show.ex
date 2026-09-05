@@ -26,6 +26,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   use Phoenix.LiveComponent
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -41,6 +42,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
@@ -207,7 +209,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         callback_data: @callback_data
       })}
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <div
         :if={@form_instance.status == "completed"}
@@ -216,13 +218,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         <span>
           Submitted {Calendar.strftime(@form_instance.completed_at, "%Y-%m-%d %H:%M")} UTC.
         </span>
-        <button
+        <Core.button
+          components={@components}
           phx-click="reopen"
           phx-target={@myself}
           class="rounded-md border border-emerald-300 px-2 py-0.5 hover:border-emerald-400"
         >
           Reopen
-        </button>
+        </Core.button>
       </div>
 
       <p :if={@form_instance.status != "completed"} class="mb-2 text-xs">
@@ -239,7 +242,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         instance: @parsed,
         data: @form_instance.data,
         context: @context,
-        callback_data: @callback_data
+        callback_data: @callback_data,
+        components: @components
       })}
     </div>
     """

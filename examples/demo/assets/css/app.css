@@ -99,6 +99,10 @@
   --noise: 0;
 }
 
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);

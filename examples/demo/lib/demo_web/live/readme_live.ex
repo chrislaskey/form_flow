@@ -47,6 +47,7 @@ defmodule DemoWeb.ReadmeLive do
     {:ok,
      socket
      |> assign(:page_title, "FormFlow demo")
+     |> assign(:current_nav, :home)
      |> assign(:version, to_string(Application.spec(:form_flow, :vsn)))
      |> assign(:modules, Enum.map(@modules, fn {mod, doc} -> {inspect(mod), doc} end))
      |> assign(:requirements, @requirements)
@@ -56,7 +57,7 @@ defmodule DemoWeb.ReadmeLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_nav={@current_nav}>
       <div class="space-y-10">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">FormFlow demo</h1>
@@ -85,7 +86,7 @@ defmodule DemoWeb.ReadmeLive do
             <.link navigate="/forms">Forms Index</.link>
             <.link navigate="/forms/new">Forms New</.link>
           </div>
-          <div id="form-flow-router" class="rounded-lg border border-base-300 p-4">
+          <div id="form-flow-router">
             <FormFlow.Web.router type="templates" user_id="demo-admin" path={@path} />
           </div>
           <p class="text-sm text-base-content/70">

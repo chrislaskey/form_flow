@@ -2,6 +2,40 @@
 
 ## v0.13.0
 
+### `FormFlow.Web.CoreComponents`, and a `components` override attr
+
+**New: `FormFlow.Web.CoreComponents`**, a Phoenix 1.8-generated, Tailwind
+and daisyUI-styled components module (ported from `examples/demo`'s),
+FormFlow's own UI renders through by default. **New:
+`FormFlow.Web.ComponentResolver`**, mirroring `DynamicForm`'s
+`ComponentResolver` (`deps/dynamic_form`): dispatches per function, falling
+back to the built-ins only for whatever a host's own module doesn't define.
+
+- **New `components` attr** on `FormFlow.Web.router/1`, reaching every
+  LiveComponent on both sides — including the template Index/New pages,
+  which skip `flow_types`/`form_types`/`callback_data` since a styling
+  override is not a type callback. `nil` (the default) renders everything
+  with the built-ins.
+- Unlike `DynamicForm.ComponentResolver`, there is no `Application.get_env`
+  fallback — consistent with `FormFlow.Config` having been removed in
+  v0.16.0 in favor of everything being an explicit attr, `components` is
+  attribute-only.
+- **New `FormFlow.Web.Components.Core`**, thin HEEx wrappers
+  (`<Core.button>`, `<Core.error>`, `<Core.input>`, `<Core.table>`,
+  `<Core.list>`) around `FormFlow.Web.ComponentResolver.render/3`, so
+  FormFlow's own templates dispatch through a host's `components` module the
+  same way a raw `<.button>` would. Every admin (templates) and user-facing
+  (instances) LiveComponent's buttons, inline error messages, the flow
+  creation form's Name/Slug inputs, and the review type's changed-answers
+  table and reviewed-answers list now render through it — a role="switch"
+  toggle and Slab's own listing tables are left as they were, since neither
+  has a `CoreComponents` equivalent. Most buttons keep their exact prior
+  Tailwind classes via `Core.button`'s `class` override; a handful of
+  primary calls to action (New flow, New form, Create flow, Publish, Save &
+  Continue) adopt `variant="primary"`'s daisyUI look instead.
+- Passing a host's `components` module into `<DynamicForm.form>` calls is
+  still a follow-up, not done here.
+
 ### Templates and instances know their tenant; form instances know their user
 
 **New: `tenant_id`, everywhere a host's data lands.** `FormFlow.Data.Templates.Flow`,

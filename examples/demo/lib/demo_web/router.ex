@@ -24,6 +24,7 @@ defmodule DemoWeb.Router do
     pipe_through :browser
 
     live "/install-check", InstallCheckLive
+    live "/branding", BrandingLive
     live "/admin/*path", FormFlowLive.Admin
     live "/users/*path", FormFlowLive.Users
     live "/*path", ReadmeLive

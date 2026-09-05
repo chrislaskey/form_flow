@@ -55,9 +55,15 @@ defmodule FormFlow.Web.Router do
 
   Every instance component receives `user_id`, `tenant_id`, `perspectives`,
   `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
-  `flows`, `uri`, and `params`, whether or not it reads them today — a host
-  calling the components directly should pass the same, so a later feature
-  that needs one never means rewiring.
+  `flows`, `uri`, `params`, and `components`, whether or not it reads them
+  today — a host calling the components directly should pass the same, so a
+  later feature that needs one never means rewiring.
+
+  `components` reaches every LiveComponent on both sides, including the
+  template Index/New pages that skip `flow_types`/`form_types`/
+  `callback_data` — a styling override belongs everywhere a page draws
+  markup, not only where a type callback runs. See
+  `FormFlow.Web.ComponentResolver`.
 
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
@@ -157,6 +163,16 @@ defmodule FormFlow.Web.Router do
         "reviewer's region, a prefill source"
   )
 
+  attr(:components, :atom,
+    default: nil,
+    doc:
+      "a module overriding FormFlow's own UI components — typically the " <>
+        "host's Phoenix-generated `CoreComponents` — dispatched per function " <>
+        "with `FormFlow.Web.CoreComponents` filling in whatever the module " <>
+        "doesn't define. Reaches every LiveComponent on both sides. `nil` " <>
+        "renders everything with the built-ins. See `FormFlow.Web.ComponentResolver`"
+  )
+
   attr(:on_mount, :any,
     default: nil,
     doc:
@@ -239,6 +255,7 @@ defmodule FormFlow.Web.Router do
               id="flows-index"
               base={@base}
               tenant_id={@tenant_id}
+              components={@components}
               uri={@uri}
               params={@params}
             />
@@ -248,6 +265,7 @@ defmodule FormFlow.Web.Router do
               id="flows-new"
               base={@base}
               tenant_id={@tenant_id}
+              components={@components}
             />
           <% {:show, id} -> %>
             <.live_component
@@ -258,6 +276,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:edit, id} -> %>
             <.live_component
@@ -268,6 +287,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
@@ -279,6 +299,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:node_edit, root_id, node_id} -> %>
             <.live_component
@@ -290,6 +311,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% nil -> %>
             <%!-- not a /flows path --%>
@@ -302,6 +324,7 @@ defmodule FormFlow.Web.Router do
               id="forms-index"
               base={@base}
               tenant_id={@tenant_id}
+              components={@components}
               uri={@uri}
               params={@params}
             />
@@ -311,6 +334,7 @@ defmodule FormFlow.Web.Router do
               id="forms-new"
               base={@base}
               tenant_id={@tenant_id}
+              components={@components}
             />
           <% {:show, form_id, version_id} -> %>
             <.live_component
@@ -322,6 +346,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:edit, form_id, version_id} -> %>
             <.live_component
@@ -333,6 +358,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:node_show, root_id, node_id, version_id} -> %>
             <.live_component
@@ -345,6 +371,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% {:node_edit, root_id, node_id, version_id} -> %>
             <.live_component
@@ -357,6 +384,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
             />
           <% nil -> %>
             <%!-- not a /forms path --%>
@@ -377,6 +405,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
@@ -395,6 +424,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
@@ -414,6 +444,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
@@ -433,6 +464,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              components={@components}
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}

@@ -13,7 +13,10 @@ defmodule DemoWeb.FormFlowLive.Admin do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :page_title, "Admin")}
+    {:ok,
+     socket
+     |> assign(:page_title, "Admin")
+     |> assign(:current_nav, :admin)}
   end
 
   @impl true
@@ -28,7 +31,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_nav={@current_nav}>
       <div class="space-y-6">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Admin</h1>
@@ -38,7 +41,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
           </p>
         </header>
 
-        <div id="admin-pages" class="rounded-lg border border-base-300 p-4">
+        <div id="admin-pages">
           <FormFlow.Web.router
             type="templates"
             user_id="demo-admin"

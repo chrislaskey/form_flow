@@ -24,6 +24,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Preview
@@ -135,6 +136,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
 
     {:ok, load(socket)}
   end
@@ -515,15 +517,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <span class="ml-1 text-xs font-normal text-zinc-500">draft</span>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
             class="rounded-md border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Delete draft
-          </button>
+          </Core.button>
           <.link
             navigate={version_show_path(assigns, @version)}
             role="switch"
@@ -542,8 +544,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 every other page's primary action, and says "draft" because
                 Publish sits right beside it. Styled like the flows editor's
                 Save — quiet until changes exist, primary once they do. --%>
-          <button
-            type="submit"
+          <Core.button
+            components={@components}
             form={"#{@id}-form-form"}
             class={[
               "phx-submit-loading:opacity-75 rounded-md border px-2 py-1 text-xs",
@@ -554,19 +556,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             ]}
           >
             Save draft
-          </button>
-          <button
-            type="button"
+          </Core.button>
+          <Core.button
+            components={@components}
             phx-click="open_publish"
             phx-target={@myself}
             class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
           >
             Publish
-          </button>
+          </Core.button>
         </div>
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="mb-2 text-xs text-green-700">{@notice}</p>
 
       <p
@@ -691,15 +693,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                   ]} />
                 </span>
               </button>
-              <button
+              <Core.button
                 :if={!@auto_update?}
-                type="button"
+                components={@components}
                 phx-click="update_preview"
                 phx-target={@myself}
                 class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
               >
                 Refresh
-              </button>
+              </Core.button>
             </div>
           </div>
           <div class="rounded-md border border-zinc-200 p-4">
@@ -717,6 +719,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         counts={@counts}
         target={@myself}
         on_success={&publish(&1, @id)}
+        components={@components}
         saved_note
       />
     </div>

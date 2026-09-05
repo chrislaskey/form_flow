@@ -53,6 +53,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -68,6 +69,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
@@ -185,7 +187,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         Flows
       </div>
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <p :if={@empty?} class="mb-4 text-sm text-zinc-500">
         Nothing started yet — start a flow below.
@@ -234,14 +236,15 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       <ul class="space-y-1 text-sm">
         <li :for={flow <- @page_flows} class="flex items-center gap-3">
           <span>{flow.name || "Untitled flow"}</span>
-          <button
+          <Core.button
+            components={@components}
             phx-click="start"
             phx-value-flow-id={flow.id}
             phx-target={@myself}
             class="rounded-md border border-zinc-300 px-2 py-0.5 text-xs hover:border-zinc-400"
           >
             Start
-          </button>
+          </Core.button>
         </li>
       </ul>
     </div>

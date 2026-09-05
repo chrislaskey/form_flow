@@ -56,6 +56,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -97,6 +98,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:components, fn -> nil end)
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
@@ -336,7 +338,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         callback_data: @callback_data
       })}
 
-      <p :if={@error} class="mb-2 text-xs text-red-600">{@error}</p>
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <%!-- The form itself is the form type's to draw (edit_component/1) —
             the default is the DynamicForm form alone; a review draws an
@@ -347,7 +349,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         data: @initial_data,
         on_success: &submitted(&1, @id),
         context: @context,
-        callback_data: @callback_data
+        callback_data: @callback_data,
+        components: @components
       })}
     </div>
     """

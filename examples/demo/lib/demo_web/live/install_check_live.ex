@@ -30,6 +30,7 @@ defmodule DemoWeb.InstallCheckLive do
     {:ok,
      socket
      |> assign(:page_title, "Install check")
+     |> assign(:current_nav, :install_check)
      |> assign(:flows, @flows)
      |> assign(:status_options, @status_options)
      |> assign(:form, to_form(%{"status" => "published"}, as: :install_check))}
@@ -54,7 +55,7 @@ defmodule DemoWeb.InstallCheckLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_nav={@current_nav}>
       <div class="space-y-10">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Install check</h1>
