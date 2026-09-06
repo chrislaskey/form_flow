@@ -1255,7 +1255,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </div>
         </div>
 
-        <div class="min-w-0 flex-1">
+        <%!-- Sticky beside a long editor: the preview stays in view while
+              the admin scrolls the fields, and scrolls on its own when it is
+              the taller of the two. Only once the columns sit side by side —
+              stacked, sticky would pin it over the editor. --%>
+        <div class="min-w-0 flex-1 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           <div class="mb-1 flex items-center justify-between gap-2">
             <h3 class="text-xs font-medium text-zinc-500">Preview</h3>
             <div class="flex items-center gap-2">
