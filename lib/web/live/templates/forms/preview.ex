@@ -67,10 +67,17 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
     end
   end
 
+  # Building the changeset here as well as parsing: a definition can parse
+  # and still be unrenderable — a question with no name, say — and that
+  # error would otherwise surface inside DynamicForm's component at render,
+  # where nothing catches it
   defp parse(socket, definition) do
+    instance = DynamicForm.Parser.FromData.parse!(definition)
+    _changeset = DynamicForm.Changeset.create_changeset(instance)
+
     socket
     |> assign(missing?: false)
-    |> assign(instance: DynamicForm.Parser.FromData.parse!(definition), parse_error: nil)
+    |> assign(instance: instance, parse_error: nil)
   rescue
     error -> assign(socket, instance: nil, parse_error: Exception.message(error))
   end

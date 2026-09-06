@@ -2,6 +2,35 @@
 
 ## v0.18.0
 
+### The definition can be built as a form, not only typed as JSON
+
+**New Definition radio on `FormFlow.Web.Templates.Forms.Edit`: Form builder
+or JSON.** The JSON textarea is the second choice now. The first is a
+`DynamicForm` nested form with one entry per element — type and name, then
+the fields that apply to that type: label, input type, choices (one per
+line, `value | Label` to store one thing and show another), rating bounds,
+HTML, placeholder, help text, default value, Required, and Visible if. Entry
+fields are named after the SurveyJS properties they set. Element names must
+be unique, as the definition needs them to be.
+
+Both editors sit in the one form, so there is still one Save; whichever is
+hidden keeps its content and stops being required. Content crosses between
+them when the radio changes: the JSON decodes into entries, or the entries
+are written back as the JSON's `elements` — every other top-level key is
+kept. A definition the builder has no control for (`readOnly`, validators, a
+`file` question, ...) or JSON that does not parse **refuses the switch** and
+says why, rather than losing what it cannot show. The builder opens by
+default whenever it can show the saved definition, so a blank draft starts
+there. Copy definition belongs to the JSON editor and hides with it.
+
+**Changed:** `FormFlow.Web.Templates.Forms.Preview` now catches a
+definition that parses but cannot build a form (a question with no name)
+and shows it inline, where before the error surfaced inside DynamicForm's
+component at render time. Dirtiness compares the definition as the map that is saved,
+not as its text — re-indenting JSON is no longer a change. Tests that
+submit raw JSON to the edit form now pass `definition_editor: "json"`, since
+a blank draft no longer opens on the JSON field.
+
 ### A blank, never-published draft asks Custom form or Copy form first
 
 **New chooser on `FormFlow.Web.Templates.Forms.Edit`**, shown only for a

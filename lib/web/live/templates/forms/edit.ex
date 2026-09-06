@@ -3,14 +3,27 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   `FormFlow.Web.Templates.Forms.Edit` LiveComponent edits one draft.
 
   Drafts only — published and archived definitions are immutable, and this
-  page refuses to render them editable. The definition editor starts minimal
-  (the JSON, in a `DynamicForm.form` comment field); the versioning chrome
-  around it is the point: the optimistic-lock "changed under you" conflict,
+  page refuses to render them editable. The versioning chrome around the
+  definition is the point: the optimistic-lock "changed under you" conflict,
   the stale-draft warning, and the picker between coexisting drafts.
 
-  DynamicForm runs the validation lifecycle: `on_submit` is the JSON-syntax
-  gate (parse errors render inline on the field, the parsed map rides the
-  payload's `extra`), and `on_success` routes the valid payload back to this
+  The definition is edited one of two ways, picked by the **Definition**
+  radio (`definition_editor`): as **JSON** in a comment field, or in the
+  **Form builder**, a `DynamicForm` nested form with one entry per element
+  (`FormFlow.Web.Templates.Forms.Builder` converts between the two). Both sit
+  in the one form under `visible_if`, so whichever is hidden keeps its
+  content and stops being required. Content moves between them only when
+  the radio changes — the `%{event: "change"}` clause decodes the JSON into
+  entries, or writes the entries back into the JSON — never per keystroke.
+  A definition the builder cannot show (a property it has no control for,
+  JSON that does not parse) refuses the switch and says why, rather than
+  dropping what it cannot show. The builder opens by default whenever it can
+  show the saved definition.
+
+  DynamicForm runs the validation lifecycle: `on_submit` is the definition
+  gate (the JSON-syntax check in JSON mode, the entries written into the
+  document in form mode; either way the definition map rides the payload's
+  `extra`), and `on_success` routes the valid payload back to this
   LiveComponent through `send_update/2` — the `%{event: "save"}` clause of
   `update/2` performs the actual `update_draft/2`.
 
@@ -41,6 +54,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Builder
   alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
 
@@ -50,6 +64,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
      assign(socket,
        error: nil,
        notice: nil,
+       editor_error: nil,
        publishing?: false,
        auto_update?: true,
        preview_rev: 0,
@@ -79,15 +94,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
+  # The payload's content came from whichever editor was showing before this
+  # change, so the definition — for dirtiness and the preview — is read by
+  # that editor, and only then is a change of editor applied
   def update(%{event: "change", payload: payload}, socket) do
     pending_type = pending_type(payload, socket.assigns.pending_type)
     properties = Shared.properties(socket.assigns.form_types, pending_type)
-    dirty? = values_from(payload.data, pending_type, properties) != socket.assigns.saved_values
+    definition = current_definition(payload, socket.assigns.definition_editor)
+
+    dirty? =
+      values_from(payload.data, pending_type, properties, definition) !=
+        socket.assigns.saved_values
 
     socket =
       socket
-      |> assign(dirty?: dirty?, notice: nil, pending_type: pending_type)
-      |> assign(:latest_json, to_string(payload.data[:definition] || ""))
+      |> assign(dirty?: dirty?, notice: nil, editor_error: nil, pending_type: pending_type)
+      |> assign(:latest_json, definition_json(preview_definition(payload, socket, definition)))
+      |> switch_editor(payload, definition)
       |> reset_form_data_on_switch(pending_type, payload)
 
     {:ok, maybe_refresh_preview(socket)}
@@ -117,7 +140,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          form: form,
          version: version,
          versions: Forms.list_versions(form.id),
-         saved_values: values_from(payload.data, type_id, properties),
+         saved_values: values_from(payload.data, type_id, properties, payload.extra[:definition]),
          dirty?: false,
          error: nil,
          notice: "Saved."
@@ -187,9 +210,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> assign_new(:definition_json, fn ->
       version && Phoenix.json_library().encode!(version.definition, pretty: true)
     end)
+    # Kept across reloads once set, so a parent re-render leaves the admin's
+    # choice alone; Copy clears it so it is derived again
+    |> assign(:definition_editor, socket.assigns[:definition_editor] || initial_editor(version))
     |> then(fn socket ->
       socket
-      |> assign(:saved_values, saved_values(form, socket.assigns.definition_json))
+      |> assign(:saved_values, saved_values(form, version))
       |> assign(:form_data, form_data(form, socket.assigns))
       |> assign(:dirty?, false)
       # What the preview currently shows, and the editor's latest content —
@@ -246,29 +272,144 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # What the last save wrote, in the shape DynamicForm reports — the baseline
   # `dirty?` compares against, so the Save button can go primary exactly when
-  # the form differs from what's persisted (matching the flows editor)
-  defp saved_values(nil, _definition_json), do: nil
+  # the form differs from what's persisted (matching the flows editor). The
+  # definition is compared as the map that is persisted, the one shape both
+  # editors produce — so re-indenting the JSON is not a change, and neither
+  # is opening the builder.
+  defp saved_values(nil, _version), do: nil
 
-  defp saved_values(form, definition_json) do
+  defp saved_values(form, version) do
     %{
       name: to_string(form.name),
       description: to_string(form.description),
       slug: to_string(form.slug),
       form_type: to_string(form.properties["form_type"]),
       property_values: FormFlow.Config.Forms.Type.property_values(form),
-      definition: to_string(definition_json)
+      definition: version && version.definition
     }
   end
 
-  defp values_from(payload_data, pending_type, properties) do
+  defp values_from(payload_data, pending_type, properties, definition) do
     %{
       name: to_string(payload_data[:name] || ""),
       description: to_string(payload_data[:description] || ""),
       slug: to_string(payload_data[:slug] || ""),
       form_type: to_string(pending_type),
       property_values: Shared.payload_property_values(payload_data, properties),
-      definition: to_string(payload_data[:definition] || "")
+      definition: definition
     }
+  end
+
+  # The definition a payload describes, read by the editor it came from. JSON
+  # mode: the text, decoded when it parses so it compares to the saved map,
+  # the raw text otherwise (which never compares equal, so bad JSON is dirty).
+  # Form mode: the entries written into the document the JSON field still
+  # holds — the builder edits `elements` and leaves every other key alone.
+  defp current_definition(payload, "form") do
+    Builder.definition(
+      decoded_definition(payload.data[:definition]),
+      payload.data[:elements] || []
+    )
+  end
+
+  defp current_definition(payload, _json) do
+    text = to_string(payload.data[:definition] || "")
+
+    case Phoenix.json_library().decode(text) do
+      {:ok, definition} when is_map(definition) -> definition
+      _other -> text
+    end
+  end
+
+  # What the preview shows: in form mode, the elements that are complete —
+  # a row without a type or a name yet is not an element, and the preview
+  # would otherwise fail on it with every keystroke of a new one
+  defp preview_definition(payload, %{assigns: %{definition_editor: "form"}}, _definition) do
+    Builder.definition(
+      decoded_definition(payload.data[:definition]),
+      Builder.complete_entries(payload.data[:elements] || [])
+    )
+  end
+
+  defp preview_definition(_payload, _socket, definition), do: definition
+
+  defp decoded_definition(text) do
+    case Phoenix.json_library().decode(to_string(text || "")) do
+      {:ok, definition} when is_map(definition) -> definition
+      _other -> %{}
+    end
+  end
+
+  defp definition_json(definition) when is_map(definition),
+    do: Phoenix.json_library().encode!(definition, pretty: true)
+
+  defp definition_json(text), do: to_string(text)
+
+  # The builder opens by default when it can show the saved definition
+  defp initial_editor(nil), do: "json"
+
+  defp initial_editor(version) do
+    if Builder.unsupported(version.definition) == [], do: "form", else: "json"
+  end
+
+  # The radio changed editor: move the content across by assigning new form
+  # data (DynamicForm rebuilds from it, the way a form-type switch already
+  # does), or refuse and snap the radio back. Refusing beats dropping: a
+  # property the builder has no control for would be gone the moment the
+  # admin switched back to JSON. `definition` is what the payload held, read
+  # by the editor the admin is leaving.
+  defp switch_editor(socket, payload, definition) do
+    from = socket.assigns.definition_editor
+    to = payload.data[:definition_editor]
+
+    cond do
+      to not in ["form", "json"] or to == from ->
+        socket
+
+      to == "json" ->
+        form_data =
+          payload.data
+          |> Map.put(:definition_editor, "json")
+          |> Map.put(:definition, definition_json(definition))
+          # Entries stay validated while hidden, and a half-filled one left
+          # behind would block Save with an error nobody could see
+          |> Map.delete(:elements)
+
+        assign(socket, definition_editor: "json", form_data: form_data)
+
+      not is_map(definition) ->
+        refuse_switch(
+          socket,
+          payload,
+          "Fix the JSON syntax before switching to the form builder."
+        )
+
+      Builder.unsupported(definition) != [] ->
+        refuse_switch(
+          socket,
+          payload,
+          "The form builder can't show this definition, so it stays as JSON. " <>
+            Enum.join(Builder.unsupported(definition), " ") <>
+            " Remove those properties to edit it in the form builder."
+        )
+
+      true ->
+        form_data =
+          payload.data
+          |> Map.put(:definition_editor, "form")
+          |> Map.put(:elements, Builder.entries(definition))
+
+        assign(socket, definition_editor: "form", form_data: form_data)
+    end
+  end
+
+  defp refuse_switch(socket, payload, message) do
+    form_data =
+      payload.data
+      |> Map.put(:definition_editor, "json")
+      |> Map.delete(:elements)
+
+    assign(socket, definition_editor: "json", form_data: form_data, editor_error: message)
   end
 
   # The raw param, not the applied changeset data: picking the prompt again
@@ -335,10 +476,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       description: form.description,
       slug: form.slug,
       form_type: type_id,
-      definition: assigns.definition_json
+      definition: assigns.definition_json,
+      definition_editor: assigns.definition_editor
     }
     |> Map.merge(Shared.field_data(Shared.properties(assigns.form_types, type_id), values))
+    |> put_elements(assigns)
   end
+
+  # The builder's entries, seeded from the saved definition when it opens in
+  # the builder; absent in JSON mode, so nothing hidden is validated
+  defp put_elements(form_data, %{definition_editor: "form", version: %{} = version}) do
+    Map.put(form_data, :elements, Builder.entries(version.definition))
+  end
+
+  defp put_elements(form_data, _assigns), do: form_data
 
   defp reset_form_data_on_switch(socket, pending_type, payload) do
     if pending_type == socket.assigns.form_data[:form_type] do
@@ -353,7 +504,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
       form_data =
         payload.data
-        |> Map.take([:name, :description, :slug, :definition])
+        |> Map.take([:name, :description, :slug, :definition, :definition_editor, :elements])
         |> Map.put(:form_type, pending_type)
         |> Map.merge(Shared.field_data(Shared.properties(types, pending_type), values))
 
@@ -522,7 +673,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:ok, json} ->
         {:noreply,
          socket
-         |> assign(definition_json: json, latest_json: json)
+         |> assign(definition_json: json, latest_json: json, definition_editor: nil)
          |> load()
          |> force_refresh_preview()}
 
@@ -550,7 +701,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:ok, json} ->
         {:noreply,
          socket
-         |> assign(definition_json: json, latest_json: json)
+         |> assign(definition_json: json, latest_json: json, definition_editor: nil)
          |> load()
          |> force_refresh_preview()}
 
@@ -611,9 +762,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     assign(socket, root: root, parent_node: parent_node)
   end
 
-  # The JSON-syntax gate, run by DynamicForm on every submit: a parse error
-  # renders inline on the field like any built-in validation, and a parsed
-  # definition rides the payload's extra into the "save" event above
+  # The definition gate, run by DynamicForm on every submit. In form mode the
+  # entries are written into the document; in JSON mode a parse error renders
+  # inline on the field like any built-in validation. Either way the
+  # definition map rides the payload's extra into the "save" event above.
+  defp validate_definition(%{data: %{definition_editor: "form"}} = payload) do
+    DynamicForm.Payload.put_extra(payload, :definition, current_definition(payload, "form"))
+  end
+
+  defp validate_definition(payload), do: validate_json(payload)
+
   defp validate_json(payload) do
     case Phoenix.json_library().decode(payload.data[:definition] || "") do
       {:ok, definition} when is_map(definition) ->
@@ -818,6 +976,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       <Core.alert :if={@notice} kind={:success} components={@components} class="my-3">
         {@notice}
       </Core.alert>
+      <Core.alert :if={@editor_error} kind={:warning} components={@components} class="my-3">
+        {@editor_error}
+      </Core.alert>
 
       <Core.alert :if={Forms.stale_draft?(@version)} kind={:warning} components={@components} class="mb-3">
         This draft was based on a version that is no longer the latest — review before publishing.
@@ -839,7 +1000,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             data={@form_data}
             hide_submit
             on_change={&changed(&1, @id)}
-            on_submit={&validate_json/1}
+            on_submit={&validate_definition/1}
             on_success={&saved(&1, @id)}
             change_debounce_in_ms={if(@auto_update?, do: 500)}
             components={@components || CoreComponents}
@@ -907,10 +1068,166 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             </.link>
           </div>
         </:field>
-        <:field type="comment" name="definition" label="Definition (JSON)" required />
+        <%!-- Two editors for one definition, under one radio. Each hides
+              with visible_if — hidden, it keeps its content and stops being
+              required — and content crosses between them only when the
+              radio changes (switch_editor/3). --%>
+        <:field
+          type="radiogroup"
+          name="definition_editor"
+          label="Definition"
+          options={[{"Form builder", "form"}, {"JSON", "json"}]}
+          metadata={%{"style" => "horizontal"}}
+        />
+        <:field
+          type="comment"
+          name="definition"
+          label="Definition (JSON)"
+          required
+          visible_if="{definition_editor} = 'json'"
+        />
+        <%!-- The form builder: one entry per element, its fields named after
+              the SurveyJS properties they set. Which fields show for a type,
+              and which the entry writes back, come from one table in
+              Builder — a hidden field keeps its held value, and that value
+              must not reach the JSON. --%>
+        <:nested
+          name="elements"
+          title="Elements"
+          description="The form's questions and content blocks, in order. An element's name is the key its answer is stored under."
+          entry_title="Element {panelIndex}"
+          add_text="Add element"
+          remove_text="Remove element"
+          no_entries_text="No elements yet — add one to start building the form."
+          key="name"
+          key_error="is already used by another element"
+          generate_ids={false}
+          visible_if="{definition_editor} = 'form'"
+        />
+        <:group name="element_type_and_name" nested="elements" type="horizontal" />
+        <:field
+          nested="elements"
+          group="element_type_and_name"
+          type="dropdown"
+          name="type"
+          label="Type"
+          options={Builder.type_options()}
+          required
+        />
+        <:field
+          nested="elements"
+          group="element_type_and_name"
+          type="text"
+          name="name"
+          label="Name"
+          description="Letters, numbers, _ and -."
+          pattern="^[A-Za-z0-9_-]+$"
+          required
+        />
+        <:field
+          nested="elements"
+          type="text"
+          name="title"
+          label="Label"
+          visible_if={Builder.visible_if("title")}
+        />
+        <:field
+          nested="elements"
+          type="dropdown"
+          name="inputType"
+          label="Input type"
+          options={Builder.input_type_options()}
+          visible_if={Builder.visible_if("inputType")}
+        />
+        <:field
+          nested="elements"
+          type="comment"
+          name="choices"
+          label="Choices"
+          description="One per line. Write value | Label to store a value different from the label shown."
+          visible_if={Builder.visible_if("choices")}
+          required_if={Builder.visible_if("choices")}
+        />
+        <:group
+          name="element_rating"
+          nested="elements"
+          type="horizontal"
+          visible_if={Builder.visible_if("rateMin")}
+        />
+        <:field
+          nested="elements"
+          group="element_rating"
+          type="text"
+          input_type="number"
+          name="rateMin"
+          label="Minimum"
+        />
+        <:field
+          nested="elements"
+          group="element_rating"
+          type="text"
+          input_type="number"
+          name="rateMax"
+          label="Maximum"
+        />
+        <:field
+          nested="elements"
+          group="element_rating"
+          type="text"
+          input_type="number"
+          name="rateStep"
+          label="Step"
+        />
+        <:field
+          nested="elements"
+          type="comment"
+          name="html"
+          label="HTML"
+          visible_if={Builder.visible_if("html")}
+          required_if={Builder.visible_if("html")}
+        />
+        <:field
+          nested="elements"
+          type="text"
+          name="placeholder"
+          label="Placeholder"
+          visible_if={Builder.visible_if("placeholder")}
+        />
+        <:field
+          nested="elements"
+          type="text"
+          name="description"
+          label="Help text"
+          visible_if={Builder.visible_if("description")}
+        />
+        <:field
+          nested="elements"
+          type="text"
+          name="defaultValue"
+          label="Default value"
+          visible_if={Builder.visible_if("defaultValue")}
+        />
+        <:field
+          nested="elements"
+          type="boolean"
+          name="isRequired"
+          label="Required"
+          visible_if={Builder.visible_if("isRequired")}
+        />
+        <:field
+          nested="elements"
+          type="text"
+          name="visibleIf"
+          label="Visible if"
+          placeholder="{other_element} = 'value'"
+          description="A SurveyJS expression over the other elements' names — {subject} = 'support', or {email} notempty. Leave blank to always show it."
+          visible_if={Builder.visible_if("visibleIf")}
+        />
           </DynamicForm.form>
 
-          <div class="mt-2 flex items-center gap-2">
+          <%!-- Copy definition belongs to the JSON editor: it writes JSON,
+                and the builder is re-seeded from the saved draft anyway --%>
+          <div :if={@definition_editor == "json"} class="mt-2 flex items-center gap-2">
             <form
               id={"#{@id}-definition-copy"}
               phx-change="definition_copy_pick_source"

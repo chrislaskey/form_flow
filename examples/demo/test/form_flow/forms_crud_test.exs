@@ -81,15 +81,21 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     # Past the never-published-and-blank chooser, straight to the form
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
-    assert html =~ "Definition (JSON)"
+    # A blank draft opens in the form builder; the JSON field is the radio's
+    # other choice, and a submit that names it is a submit as JSON
+    assert has_element?(view, ~s(input[name="dynamic_form[definition_editor]"][value="json"]))
+    assert html =~ "Add element"
+    refute html =~ "Definition (JSON)"
 
     view
     |> element("#forms-edit-form-form")
     |> render_submit(%{
       "dynamic_form" => %{
         "name" => "Editable",
+        "definition_editor" => "json",
         "definition" => ~s({"fields": [{"name": "ssn"}]})
       }
     })
@@ -99,9 +105,171 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     view
     |> element("#forms-edit-form-form")
-    |> render_submit(%{"dynamic_form" => %{"name" => "Editable", "definition" => "{nope"}})
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Editable",
+        "definition_editor" => "json",
+        "definition" => "{nope"
+      }
+    })
 
     assert render(view) =~ "is not valid JSON"
+  end
+
+  test "the form builder saves its entries as the definition's elements", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Built"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+    # Entries arrive as the browser sends a nested form: indexed, with the
+    # entry fields named after the SurveyJS properties they set. Choices are
+    # one per line; a property that doesn't apply to the type (a text
+    # element's choices) is left out of the JSON.
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Built",
+        "definition_editor" => "form",
+        "elements" => %{
+          "0" => %{
+            "type" => "text",
+            "name" => "email",
+            "title" => "Email",
+            "inputType" => "email",
+            "isRequired" => "true",
+            "choices" => "left over"
+          },
+          "1" => %{
+            "type" => "dropdown",
+            "name" => "subject",
+            "choices" => "Sales\nsupport | Support"
+          }
+        }
+      }
+    })
+
+    assert render(view) =~ "Saved."
+
+    assert Forms.get_version(draft.id).definition == %{
+             "elements" => [
+               %{
+                 "type" => "text",
+                 "name" => "email",
+                 "title" => "Email",
+                 "inputType" => "email",
+                 "isRequired" => true
+               },
+               %{
+                 "type" => "dropdown",
+                 "name" => "subject",
+                 "choices" => ["Sales", %{"value" => "support", "text" => "Support"}]
+               }
+             ]
+           }
+
+    # Two elements can't share a name — the nested form's key — and every
+    # element needs a type and a name. The preview follows the builder as
+    # faithfully as it follows the JSON, duplicate names included, and two
+    # fields with one name are two inputs with one id — fine in a browser,
+    # an error to LiveViewTest — so it is left out of this step.
+    view |> element(~s(button[phx-click="toggle_auto_update"])) |> render_click()
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Built",
+        "definition_editor" => "form",
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "email"},
+          "1" => %{"type" => "text", "name" => "email"},
+          "2" => %{"type" => "", "name" => ""}
+        }
+      }
+    })
+
+    html = render(view)
+    assert html =~ "is already used by another element"
+    assert html =~ "can&#39;t be blank"
+    refute html =~ "Saved."
+  end
+
+  test "switching editors moves the definition across, and refuses what the builder can't show",
+       %{conn: conn} do
+    {:ok, form} =
+      Forms.create(%{
+        name: "Hand-written",
+        definition: %{"elements" => [%{"type" => "text", "name" => "ssn", "readOnly" => true}]}
+      })
+
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    # readOnly has no control in the builder, so this one opens as JSON
+    assert html =~ "Definition (JSON)"
+    refute html =~ "Add element"
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="json"][checked])
+           )
+
+    # Asking for the builder is refused, by name, and the radio snaps back.
+    # Auto-refresh defaults on, so the change pass is debounced.
+    switch = fn params ->
+      view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
+      Process.sleep(520)
+      render(view)
+    end
+
+    html = switch.(%{"definition_editor" => "form"})
+    assert html =~ ~s(Element &quot;ssn&quot; uses &quot;readOnly&quot;)
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="json"][checked])
+           )
+
+    html = switch.(%{"definition_editor" => "form", "definition" => "{nope"})
+    assert html =~ "Fix the JSON syntax before switching to the form builder."
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="json"][checked])
+           )
+
+    # Once the JSON is something the builder can show, the switch decodes it
+    # into one entry per element
+    _html =
+      switch.(%{
+        "definition_editor" => "form",
+        "definition" =>
+          ~s({"title": "Kept", "elements": [{"type": "text", "name": "ssn", "isRequired": true}]})
+      })
+
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][0][name]"][value="ssn"]))
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][0][isRequired]"][checked]))
+    refute render(view) =~ "Definition (JSON)"
+
+    # And switching back writes the entries into the JSON — the rest of the
+    # document, its title here, untouched
+    html =
+      switch.(%{
+        "definition_editor" => "json",
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "ssn"},
+          "1" => %{"type" => "boolean", "name" => "consent", "title" => "I agree"}
+        }
+      })
+
+    assert html =~ "Definition (JSON)"
+    assert html =~ ~s(&quot;title&quot;: &quot;Kept&quot;)
+    assert html =~ ~s(&quot;name&quot;: &quot;consent&quot;)
+    refute html =~ "Add element"
   end
 
   test "the new page generates a slug, or keeps the one typed", %{conn: conn} do
@@ -131,7 +299,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Mine"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
     assert html =~ "mine"
 
     # The save lands through send_update after the submit, so render the
@@ -158,7 +328,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Before", description: "Old"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     view
     |> element("#forms-edit-form-form")
@@ -166,6 +337,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       "dynamic_form" => %{
         "name" => "After",
         "description" => "New description",
+        "definition_editor" => "json",
         "definition" => ~s({"fields": []})
       }
     })
@@ -182,7 +354,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Typed"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # The dropdown carries what the demo's Config enables — proof the
     # router's config attr reaches the form pages. No type picked, so none
@@ -298,7 +471,8 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     refute html =~ "Start this form from"
     assert has_element?(view, "#forms-edit-form-form")
@@ -371,9 +545,17 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     # Already published, so the main chooser doesn't offer itself — Copy
-    # definition isn't gated by that at all
+    # definition isn't gated by that at all. It belongs to the JSON editor,
+    # though: the blank draft opens in the form builder, where it is hidden
     refute html =~ "Start this form from"
-    assert html =~ "Copy definition from existing form"
+    refute html =~ "Copy definition from existing form"
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"definition_editor" => "json"}})
+
+    Process.sleep(520)
+    assert render(view) =~ "Copy definition from existing form"
 
     view
     |> element("#forms-edit-definition-copy")
@@ -497,7 +679,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Remote"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # The header button submits the DynamicForm below through its form= id;
     # the form itself renders no built-in submit. Publish sits to its right,
@@ -577,7 +760,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Publishable"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     view |> element("button", "Publish") |> render_click()
 
@@ -806,7 +990,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     # shortcut straight to the editor
     assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{form_node.id}/form?mode=edit")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{form_node.id}/form?mode=edit")
+    {:ok, view, _html} =
+      live(conn, "/admin/flows/#{root.id}/nodes/#{form_node.id}/form?mode=edit")
+
     assert has_element?(view, "a[href='/admin/flows/#{root.id}/edit']", "Taxes 2026")
 
     assert has_element?(
