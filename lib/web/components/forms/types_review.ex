@@ -56,6 +56,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   alias FormFlow.Config.Forms.Type
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
   alias FormFlow.Config.Property
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -351,6 +352,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
             instance={@review.source_parsed}
             data={@source.instance.data}
             hide_submit
+            components={@components || CoreComponents}
           />
         </fieldset>
       </section>

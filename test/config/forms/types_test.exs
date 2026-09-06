@@ -51,7 +51,8 @@ defmodule FormFlow.Config.Forms.TypesTest do
           instance: parsed,
           data: %{"name" => "Grace"},
           context: %Context{},
-          callback_data: %{}
+          callback_data: %{},
+          components: nil
         )
 
       assert html =~ ~r/<fieldset[^>]*disabled/

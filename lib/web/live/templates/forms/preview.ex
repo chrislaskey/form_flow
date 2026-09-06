@@ -40,6 +40,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
 
   @impl true
   def mount(:not_mounted_at_router, session, socket) do
@@ -107,7 +108,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
       <Core.alert :if={@submitted?} kind={:success} class="mb-3">
         Valid submission — this is a preview, nothing was saved.
       </Core.alert>
-      <DynamicForm.form id={"#{@id}-form"} instance={@instance} />
+      <DynamicForm.form id={"#{@id}-form"} instance={@instance} components={CoreComponents} />
     </div>
     """
   end

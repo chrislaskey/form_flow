@@ -37,6 +37,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
@@ -841,6 +842,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             on_submit={&validate_json/1}
             on_success={&saved(&1, @id)}
             change_debounce_in_ms={if(@auto_update?, do: 500)}
+            components={@components || CoreComponents}
           >
         <:field type="text" name="name" label="Name" required />
         <:field

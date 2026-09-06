@@ -14,6 +14,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   use Phoenix.Component
 
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
 
   attr(:id, :string, required: true, doc: "the DynamicForm component id")
   attr(:counts, :map, required: true, doc: "instance counts by status, for the blast radius")
@@ -40,7 +41,12 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
           Save first.
         </p>
 
-        <DynamicForm.form id={@id} submit_text="Publish" on_success={@on_success}>
+        <DynamicForm.form
+          id={@id}
+          submit_text="Publish"
+          on_success={@on_success}
+          components={@components || CoreComponents}
+        >
           <:field
             type="radiogroup"
             name="preset"

@@ -22,6 +22,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
 
   @impl true
@@ -101,6 +102,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
           id={"#{@id}-form"}
           submit_text="Create form"
           on_success={&created(&1, @id)}
+          components={@components || CoreComponents}
         >
           <:field type="text" name="name" label="Name" default="Untitled form" required />
           <:field

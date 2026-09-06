@@ -99,6 +99,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Breadcrumb
@@ -683,6 +684,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           data={@form_data}
           hide_submit
           on_change={&changed(&1, @id)}
+          components={@components || CoreComponents}
         >
           <:field type="text" name="name" label="Name" />
           <:field

@@ -11,6 +11,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   use Phoenix.Component
 
   alias FormFlow.Context
+  alias FormFlow.Web.CoreComponents
 
   @impl true
   def initial_data(%Context{form_instance: %{data: data}}, _callback_data), do: data
@@ -20,7 +21,13 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   def edit_component(assigns) do
     ~H"""
     <div class="max-w-md">
-      <DynamicForm.form id={@id} instance={@instance} data={@data} on_success={@on_success} />
+      <DynamicForm.form
+        id={@id}
+        instance={@instance}
+        data={@data}
+        on_success={@on_success}
+        components={@components || CoreComponents}
+      />
     </div>
     """
   end
@@ -33,7 +40,13 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
           hidden. DynamicForm's render_only is NOT this — it is a
           parent-owns-the-form mode requiring a Phoenix.HTML.Form. --%>
     <fieldset disabled class="max-w-md">
-      <DynamicForm.form id={@id} instance={@instance} data={@data} hide_submit />
+      <DynamicForm.form
+        id={@id}
+        instance={@instance}
+        data={@data}
+        hide_submit
+        components={@components || CoreComponents}
+      />
     </fieldset>
     """
   end
