@@ -20,6 +20,11 @@ Then open [http://localhost:4001](http://localhost:4001):
   canvas. Drag a step, connect two, or click "Add step" and the step and
   connection counts above the canvas update from the server — that round trip is
   the point of the page
+- The header's user switcher — the demo is viewed as one of four hardcoded
+  users (`Demo.Users`: docs reader, pet license reviewer, dog owner, cat
+  owner) with no sign-in. Choosing one posts to `/switch-user/:user_id`, which
+  stores the id in the session and reloads the page; `DemoWeb.UserHook`
+  assigns it as `current_user` on every LiveView
 - `/install-check` — one component from each library FormFlow depends on:
   `PhoenixSelect.select`, `DynamicForm.form`, and `Slab.table`. A missing
   colocated hook, Tailwind `@source`, or absent daisyUI shows up here first

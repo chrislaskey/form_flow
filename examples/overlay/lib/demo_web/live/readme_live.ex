@@ -9,6 +9,8 @@ defmodule DemoWeb.ReadmeLive do
 
   use DemoWeb, :live_view
 
+  alias DemoWeb.UserSwitcher
+
   @modules [
     {FormFlow, "Top-level module and shared documentation"},
     {FormFlow.Data, "Backend and data code: templates and instances"},
@@ -58,7 +60,7 @@ defmodule DemoWeb.ReadmeLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_nav={@current_nav}>
+    <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-10">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">FormFlow demo</h1>
@@ -71,6 +73,20 @@ defmodule DemoWeb.ReadmeLive do
             Compiled version: <span id="form-flow-version" class="font-mono">{@version}</span>
           </p>
         </header>
+
+        <section
+          id="perspective"
+          class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/60 px-6 py-5"
+        >
+          <div class="space-y-1">
+            <h2 class="font-semibold text-gray-900">Pick a perspective</h2>
+            <p class="text-sm text-base-content/70">
+              The demo is viewed as one of four hardcoded users, with no sign-in.
+              Switch here or in the header; the page reloads as that user.
+            </p>
+          </div>
+          <UserSwitcher.user_switcher id="perspective-user-switcher" current_user={@current_user} />
+        </section>
 
         <section class="space-y-3">
           <h2 class="text-lg font-semibold">Router</h2>

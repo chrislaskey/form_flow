@@ -68,7 +68,10 @@ perl -pi -e 's{\{:phoenix_live_view, "~> 1\.1\.0"\}}{{:phoenix_live_view, "~> 1.
 echo "==> Replacing the default route with the demo LiveViews"
 # The catch-all comes last: FormFlow.Web.Router dispatches on the path segments
 # it is handed, so anything not matched by an earlier route falls through to it.
-perl -pi -e 's{get "/", PageController, :home}{live "/install-check", InstallCheckLive\n    live "/branding", BrandingLive\n    live "/admin/*path", FormFlowLive.Admin\n    live "/users/*path", FormFlowLive.Users\n    live "/*path", ReadmeLive}' demo/lib/demo_web/router.ex
+# The live_session's on_mount hook assigns the demo's current user (one of
+# Demo.Users, chosen with the header's user switcher) to every LiveView; the
+# POST route is what the switcher's rows hit to change it.
+perl -pi -e 's{get "/", PageController, :home}{post "/switch-user/:user_id", UserSwitchController, :create\n\n    live_session :default, on_mount: DemoWeb.UserHook do\n      live "/install-check", InstallCheckLive\n      live "/branding", BrandingLive\n      live "/admin/*path", FormFlowLive.Admin\n      live "/users/*path", FormFlowLive.Users\n      live "/*path", ReadmeLive\n    end}' demo/lib/demo_web/router.ex
 
 # The generated home page test asserts the default Phoenix marketing copy,
 # but the route above replaced that page with the demo index
