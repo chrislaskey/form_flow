@@ -1,7 +1,7 @@
 defmodule FormFlow.MixProject do
   use Mix.Project
 
-  @version "0.18.0"
+  @version "0.19.0"
   @source_url "https://github.com/chrislaskey/form_flow"
 
   def project do

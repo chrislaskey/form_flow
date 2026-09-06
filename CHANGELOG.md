@@ -1,17 +1,20 @@
 # Changelog
 
-## v0.18.0
+## v0.19.0
 
 ### The definition can be built as a form, not only typed as JSON
 
-**New Definition radio on `FormFlow.Web.Templates.Forms.Edit`: Form builder
-or JSON.** The JSON textarea is the second choice now. The first is a
-`DynamicForm` nested form with one entry per element — type and name, then
-the fields that apply to that type: label, input type, choices (one per
-line, `value | Label` to store one thing and show another), rating bounds,
-HTML, placeholder, help text, default value, Required, and Visible if. Entry
-fields are named after the SurveyJS properties they set. Element names must
-be unique, as the definition needs them to be.
+**New radio on `FormFlow.Web.Templates.Forms.Edit` — "Edit form version
+using:" Form builder or JSON.** The JSON textarea is the second choice now.
+The first is a `DynamicForm` nested form with one entry per element — type
+and name, then the fields that apply to that type: label, input type,
+choices (one per line, `value | Label` to store one thing and show
+another), rating bounds, HTML, placeholder, help text, default value,
+Required, and Visible if. Entry fields are named after the SurveyJS
+properties they set, and input types read "Input - Text", "Input - Rating"
+and so on, so the two container types below stand apart. Element names
+must be unique, as the definition needs them to be; Type and Name carry the
+required mark so a half-made element is never a mystery in the preview.
 
 Both editors sit in the one form, so there is still one Save; whichever is
 hidden keeps its content and stops being required. Content crosses between
@@ -21,7 +24,8 @@ kept. A definition the builder has no control for (`readOnly`, validators, a
 `file` question, ...) or JSON that does not parse **refuses the switch** and
 says why, rather than losing what it cannot show. The builder opens by
 default whenever it can show the saved definition, so a blank draft starts
-there. Copy definition belongs to the JSON editor and hides with it.
+there. Copy definition belongs to the JSON editor: it is a field of the form
+now, hidden with the textarea.
 
 **Groups and nested forms.** Two more element types: a **group** (`panel`)
 and a **nested form** (`paneldynamic`, repeating entries). Either holds
@@ -34,30 +38,70 @@ layout; a nested form its entry title, fewest and most entries, and add
 button text.
 
 **Move up and down.** Every element carries arrows. They set a hidden
-`move` field and fire the form's change on the client, so the request
-arrives with every other value as the admin left it, and the page hands the
-reordered entries back as the form's data.
+`move` field, fire the form's change on the client, and clear it again, so
+the request arrives with every other value as the admin left it — in that
+one change and no other — and the page hands the reordered entries back as
+the form's data.
 
-**The preview stays in view** while the editor scrolls, once the two
-columns sit side by side, and scrolls on its own when it is the taller.
+### The edit page is two parts: the form, then this version beside its preview
 
-**Fixed:** `FormFlow.Web.CoreComponents.button/1` declares `type` and
-`disabled` as attributes rather than globals. DynamicForm renders its
-add-entry buttons through it with `type: "button"` beside an explicit
-`rest`, and Phoenix folds undeclared assigns into `rest` only when none is
-given — so the type was dropped, the button was a submit button, and Add
-element silently saved the draft.
+**Form details** runs the full width: Name and Slug on one row, then Form
+type, then Description. **Form version** — the draft strip, the editor
+radio, and the builder or the JSON under its own "Form version JSON"
+heading — sits in a left column with the **Preview** on the right, which
+stays in view while the editor scrolls. Each part has a heading and a line
+saying what belongs there; the slug's and the element name's guidance moved
+into their placeholders.
 
-**Changed:** the edit page no longer debounces DynamicForm's change pass;
-it debounces the preview refresh alone (500ms of quiet, while auto-refresh
-is on), so the dirty flag, an editor switch, and every other consequence of
-a change happen at once. `FormFlow.Web.Templates.Forms.Preview` now catches a
-definition that parses but cannot build a form (a question with no name)
-and shows it inline, where before the error surfaced inside DynamicForm's
-component at render time. Dirtiness compares the definition as the map that is saved,
-not as its text — re-indenting JSON is no longer a change. Tests that
-submit raw JSON to the edit form now pass `definition_editor: "json"`, since
-a blank draft no longer opens on the JSON field.
+The layout reaches the form's groups by the name DynamicForm 1.1.0 stamps on
+them (`data-dynamic-form-group`), so **the page needs `dynamic_form` 1.1.0
+or later** — `mix.lock` points at it; on an older version everything
+renders full width.
+
+**Form type is required** and shows the first type the page offers when
+none is saved — the type the form was governed by anyway, since the instance
+pages fall back the same way — so a form that never picked one saves what it
+was already getting, explicitly. The dropdown offers no blank.
+
+### Required fields show their mark
+
+`FormFlow.Web.CoreComponents.input/1` renders the mark DynamicForm asks for
+beside a required field's label — `*` by default, another string if the
+definition sets one, none if it blanks the mark while staying required —
+for text, select, textarea, and checkbox inputs. Before, the request landed
+as a stray attribute on the control. This shows on every required field
+FormFlow renders through its own components, including questions on the
+instance pages. A required select that already holds a value offers no
+blank option, since it could never be submitted.
+
+### Fixed
+
+- `FormFlow.Web.CoreComponents.button/1` declares `type` and `disabled` as
+  attributes rather than globals. DynamicForm renders its add-entry and
+  submit buttons through it with `type:` beside an explicit `rest`, and
+  Phoenix folds undeclared assigns into `rest` only when none is given — so
+  the type was dropped: Add element was a submit button that silently saved
+  the draft, and the Save buttons on instance pages carried no type.
+- `FormFlow.Web.Templates.Forms.Preview` catches a definition that parses
+  but cannot build a form (a question with no name) and shows it inline,
+  where before the error surfaced inside DynamicForm's component at render
+  time and the preview crashed.
+
+### Changed
+
+- The edit page no longer debounces DynamicForm's change pass; it debounces
+  the preview refresh alone (500ms of quiet, while auto-refresh is on), so
+  the dirty flag, an editor switch, a moved element, and every other
+  consequence of a change happen at once.
+- Dirtiness compares the definition as the map that is saved, not as its
+  text — re-indenting JSON is no longer a change.
+- A blank `form_type` param keeps the current type rather than clearing it,
+  so the required error stays on screen; tests that submitted `""` to unset
+  the type now see it refused. Tests that submit raw JSON to the edit form
+  pass `definition_editor: "json"`, since a blank draft no longer opens on
+  the JSON field.
+
+## v0.18.0
 
 ### A blank, never-published draft asks Custom form or Copy form first
 
