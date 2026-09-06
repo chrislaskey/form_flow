@@ -217,7 +217,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       based_on: based_on_version(versions, version),
       counts: form && Forms.instance_counts(form.id),
       form_types: form_types(assigns, form, version, node),
-      pending_type: saved_type(form),
+      pending_type: effective_type(form, assigns.form_types),
       show_chooser?: show_chooser?,
       awaiting_start?: awaiting_start?(show_chooser?, assigns.params),
       catalog_forms: catalog_forms(form)
@@ -464,11 +464,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     assign(socket, definition_editor: "json", form_data: form_data, editor_error: message)
   end
 
-  # The raw param, not the applied changeset data: picking the prompt again
-  # ("") must clear the pending type, and Ecto's cast treats "" as a missing
-  # param rather than a change to nil — payload.data would keep the old value
-  defp pending_type(%{changeset: %{params: %{"form_type" => value}}}, _current) do
-    presence(value)
+  # The raw param, not the applied changeset data: a type the admin just
+  # picked is a change to act on before the changeset has cast it. A blank
+  # is not a type: the dropdown is required and offers no blank once it holds
+  # a value, so one arrives only from a submission built by hand — it keeps
+  # the current type, and so the form's definition, which is what lets the
+  # "can't be blank" error stay on screen (a changed definition rebuilds the
+  # form from its data, errors and all).
+  defp pending_type(%{changeset: %{params: %{"form_type" => value}}}, current) do
+    presence(value) || current
   end
 
   defp pending_type(_payload, current), do: current
@@ -514,13 +518,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # from its data — so at that moment the data becomes the pending values
   # (reset_form_data_on_switch/3), and what the admin was typing survives.
   # Otherwise it holds still, which is what keeps in-progress input alive.
-  defp saved_type(nil), do: nil
-  defp saved_type(form), do: form.properties["form_type"]
+  # The type the form is governed by: the saved one, else the first the page
+  # offers — the same fallback the instance pages make when they render the
+  # form (`FormFlow.Web.Instances.Forms.Shared.form_type/2`). The dropdown
+  # shows it selected from the start, so a form that never picked one saves
+  # what it was already getting, explicitly.
+  defp effective_type(nil, _form_types), do: nil
+
+  defp effective_type(form, form_types) do
+    form.properties["form_type"] || default_type_id(form_types)
+  end
+
+  defp default_type_id([]), do: nil
+  defp default_type_id([first | _rest]), do: first.id
 
   defp form_data(nil, _assigns), do: nil
 
   defp form_data(form, assigns) do
-    type_id = form.properties["form_type"]
+    type_id = effective_type(form, assigns.form_types)
     values = FormFlow.Config.Forms.Type.property_values(form)
 
     %{
@@ -1058,16 +1073,27 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         the version — the draft strip and the definition editors, collected
         in the "version" group — shares a row with the preview. The
         component's root and its <form> are display: contents, so the
-        field wrappers and the group are the flex items themselves: a field
-        wrapper (the library's div.mb-4) takes a full line, and the group
-        (the one child without that class) and the preview split the last,
-        side by side from lg up and stacked below. --%>
+        field wrappers and the groups are the flex items themselves: each
+        takes a full line, except the version group, which the preview
+        joins on the last — side by side from lg up, stacked below. Groups
+        are reached by the name the library stamps on them
+        (data-dynamic-form-group, DynamicForm 1.1.0). --%>
       <div class={[
         "flex flex-wrap gap-x-6",
         "[&>:first-child]:contents [&>:first-child>form]:contents",
-        "[&_form>.mb-4]:basis-full",
-        "[&_form>div:not(.mb-4)]:min-w-0 [&_form>div:not(.mb-4)]:basis-full",
-        "lg:[&_form>div:not(.mb-4)]:grow lg:[&_form>div:not(.mb-4)]:basis-0"
+        "[&_form>*]:basis-full",
+        "[&_[data-dynamic-form-group=version]]:min-w-0",
+        "lg:[&_[data-dynamic-form-group=version]]:grow lg:[&_[data-dynamic-form-group=version]]:basis-0",
+        # The Name and Slug row, whose members share the width instead of
+        # sizing to their content as a horizontal group's members do. The
+        # underscores are escaped — Tailwind reads a bare one as a space —
+        # and the sigil keeps the source text Tailwind scans identical to the
+        # class the page renders.
+        ~S"[&_[data-dynamic-form-group=name\_and\_slug]>div>*]:grow",
+        ~S"[&_[data-dynamic-form-group=name\_and\_slug]>div>*]:min-w-0",
+        # The library's nested-form headings (Elements, Elements inside) at
+        # the size of this page's own section headings
+        "[&_h3.text-xl]:text-lg"
       ]}>
           <DynamicForm.form
             id={"#{@id}-form"}
@@ -1078,21 +1104,33 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             on_success={&saved(&1, @id)}
             components={@components || CoreComponents}
           >
-        <:field type="text" name="name" label="Name" required />
+        <%!-- Three headings mark the page's parts: the form itself, this
+              version of it, and the preview. The first two are html fields so
+              they travel with the fields they head; the third sits in the
+              preview column. --%>
+        <:field type="html" name="form_details_heading">
+          <.section_heading title="Form details">
+            What every version of this form shares: its name, slug, description, and type.
+          </.section_heading>
+        </:field>
+        <:group name="name_and_slug" type="horizontal" title={false} />
+        <:field group="name_and_slug" type="text" name="name" label="Name" required />
         <:field
+          group="name_and_slug"
           type="text"
           name="slug"
           label="Slug"
-          description="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+          placeholder="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
         />
-        <:field type="comment" name="description" label="Description" />
         <:field
           :if={@form_types != []}
           type="dropdown"
           name="form_type"
           label="Form type"
           options={Enum.map(@form_types, &{&1.name, &1.id})}
+          required
         />
+        <:field type="comment" name="description" label="Description" />
         <%!-- The pending type's properties (FormFlow.Config.Property), one
               field each; picking another type swaps them --%>
         <:field
@@ -1108,6 +1146,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           default={property.default_value}
         />
         <:group name="version" type="vertical" title={false} />
+        <:field group="version" type="html" name="form_version_heading">
+          <.section_heading title="Form version">
+            This draft's definition: the elements a user fills in. Published versions never change — a fix is a new draft.
+          </.section_heading>
+        </:field>
         <:field group="version" type="html" name="draft_info">
           <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
             Editing <span class="font-medium">draft</span>,
@@ -1150,10 +1193,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           group="version"
           type="radiogroup"
           name="definition_editor"
-          label="Definition"
+          label="Edit form version using:"
           options={[{"Form builder", "form"}, {"JSON", "json"}]}
           metadata={%{"style" => "horizontal"}}
         />
+        <:field
+          group="version"
+          type="html"
+          name="json_heading"
+          visible_if="{definition_editor} = 'json'"
+        >
+          <.section_heading title="Form version JSON">
+            Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax.
+          </.section_heading>
+        </:field>
         <:field
           group="version"
           type="comment"
@@ -1210,7 +1263,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:nested
           name="elements"
           group="version"
-          title="Elements"
+          title="Form version elements"
           description="The form's questions and content blocks, in order. An element's name is the key its answer is stored under."
           entry_title="Element {panelIndex}"
           add_text="Add element"
@@ -1312,9 +1365,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               the taller of the two. Only once the columns sit side by side —
               stacked, sticky would pin it over the editor. --%>
         <div class="min-w-0 basis-full lg:grow lg:basis-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <div class="mb-1 flex items-center justify-between gap-2">
-            <h3 class="text-xs font-medium text-zinc-500">Preview</h3>
-            <div class="flex items-center gap-2">
+          <div class="mb-4 flex items-start justify-between gap-3">
+            <.section_heading title="Preview">
+              The form as a user will see it, following the definition as you edit.
+            </.section_heading>
+            <div class="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 phx-click="toggle_auto_update"
@@ -1396,7 +1451,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         name: "name",
         type: "text",
         label: "Name",
-        description: "Letters, numbers, _ and -.",
+        placeholder: "Letters, numbers, _ and -.",
         pattern: "^[A-Za-z0-9_-]+$",
         required: true,
         group: "type_and_name"
@@ -1493,6 +1548,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     JS.set_attribute({"value", direction}, to: "##{field.id}")
     |> JS.dispatch("input", to: "##{field.id}")
     |> JS.set_attribute({"value", ""}, to: "##{field.id}")
+  end
+
+  # A part of the page: its title and one line saying what belongs there,
+  # styled like the library's own nested-form heading so the three read as
+  # one family with Elements
+  defp section_heading(assigns) do
+    ~H"""
+    <div class="min-w-0">
+      <h3 class="text-lg font-bold">{@title}</h3>
+      <div class="text-gray-500">{render_slot(@inner_block)}</div>
+    </div>
+    """
   end
 
   defp move_arrows(assigns) do

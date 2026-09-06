@@ -518,10 +518,18 @@ defmodule Demo.FormFlowFormsCrudTest do
       live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # The dropdown carries what the demo's Config enables — proof the
-    # router's config attr reaches the form pages. No type picked, so none
-    # of a type's property fields render yet
+    # router's config attr reaches the form pages. Nothing saved yet, so it
+    # shows the first type the page offers — the one the form would be
+    # governed by anyway — and none of another type's property fields
     assert html =~ "Form type"
     assert html =~ "Demo prefill"
+
+    assert has_element?(
+             view,
+             ~s(select[name="dynamic_form[form_type]"] option[value="default"][selected])
+           )
+
+    refute has_element?(view, ~s(select[name="dynamic_form[form_type]"] option[value=""]))
     refute html =~ "Name to prefill"
 
     # Picking a type swaps in its properties' fields (FormFlow.Config.Property).
@@ -531,10 +539,6 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Typed", "form_type" => "demo_prefill"}})
 
-    # Auto-refresh defaults on, and DynamicForm debounces its change pass
-    # while it's on (`change_debounce_in_ms`) — the property swap lands
-    # through that same debounced pass, so it isn't there to read yet
-    Process.sleep(520)
     html = render(view)
     assert html =~ "Name to prefill"
     # A choice property renders as a select of its options
@@ -572,8 +576,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Name to prefill: Ada"
     assert html =~ "Salutation: Dr."
 
-    # Picking "default" again removes the key — and the property values with
-    # it — rather than pinning a value
+    # The type is required: a blank is refused, and picking the first type
+    # again saves it explicitly, its property values gone with the old type
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     view
@@ -586,7 +590,21 @@ defmodule Demo.FormFlowFormsCrudTest do
       }
     })
 
-    assert Forms.get(form.id).properties == %{"slug" => "typed"}
+    assert render(view) =~ "can&#39;t be blank"
+    assert Forms.get(form.id).properties["form_type"] == "demo_prefill"
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Typed",
+        "form_type" => "default",
+        "definition" => ~s({"elements": []})
+      }
+    })
+
+    assert render(view) =~ "Saved."
+    assert Forms.get(form.id).properties == %{"form_type" => "default", "slug" => "typed"}
   end
 
   test "a blank, never-published draft offers the copy-or-custom chooser; anything else doesn't",

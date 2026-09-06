@@ -169,9 +169,20 @@ defmodule FormFlow.Web.CoreComponents do
   attr(:class, :any, default: nil, doc: "the input class to use over defaults")
   attr(:error_class, :any, default: nil, doc: "the input error class to use over defaults")
 
+  # Declared rather than global so the label can show the mark: DynamicForm
+  # passes both beside an explicit `rest`, where a global would be dropped
+  # (see button/1). The mark follows DynamicForm's own convention — "*" unless
+  # the definition sets another, or blanks it while staying required.
+  attr(:required, :boolean, default: false)
+
+  attr(:required_label, :any,
+    default: "*",
+    doc: ~s|mark shown beside the label of a required field; nil or false shows none|
+  )
+
   attr(:rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
-                multiple pattern placeholder readonly required rows size step)
+                multiple pattern placeholder readonly rows size step)
   )
 
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
@@ -214,9 +225,10 @@ defmodule FormFlow.Web.CoreComponents do
             name={@name}
             value="true"
             checked={@checked}
+            required={@required}
             class={@class || "checkbox checkbox-sm"}
             {@rest}
-          />{@label}
+          />{@label}<.required_mark required={@required} required_label={@required_label} />
         </span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -228,7 +240,9 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<.required_mark required={@required} required_label={@required_label} />
+        </span>
         <select
           id={@id}
           name={@name}
@@ -237,9 +251,15 @@ defmodule FormFlow.Web.CoreComponents do
             @errors != [] && (@error_class || "select-error")
           ]}
           multiple={@multiple}
+          required={@required}
           {@rest}
         >
-          <option :if={@prompt} value="">{@prompt}</option>
+          <%!-- A required select that already holds a value offers no blank
+                option: it could never be submitted, and picking it would only
+                earn an error --%>
+          <option :if={@prompt && not (@required && @value not in [nil, "", []])} value="">
+            {@prompt}
+          </option>
           {Phoenix.HTML.Form.options_for_select(@options, @value)}
         </select>
       </label>
@@ -252,7 +272,9 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<.required_mark required={@required} required_label={@required_label} />
+        </span>
         <textarea
           id={@id}
           name={@name}
@@ -260,6 +282,7 @@ defmodule FormFlow.Web.CoreComponents do
             @class || "w-full textarea bg-white border border-zinc-300",
             @errors != [] && (@error_class || "textarea-error")
           ]}
+          required={@required}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </label>
@@ -273,7 +296,9 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<.required_mark required={@required} required_label={@required_label} />
+        </span>
         <input
           type={@type}
           name={@name}
@@ -283,11 +308,24 @@ defmodule FormFlow.Web.CoreComponents do
             @class || "w-full input bg-white border border-zinc-300",
             @errors != [] && (@error_class || "input-error")
           ]}
+          required={@required}
           {@rest}
         />
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
+    """
+  end
+
+  # The mark beside a required field's label: nothing unless the field is
+  # required and a mark is set, so a definition can blank it while the field
+  # stays required server-side
+  attr(:required, :boolean, default: false)
+  attr(:required_label, :any, default: "*")
+
+  defp required_mark(assigns) do
+    ~H"""
+    <span :if={@required && @required_label} class="ml-0.5 text-red-500">{@required_label}</span>
     """
   end
 

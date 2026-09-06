@@ -44,6 +44,68 @@ defmodule FormFlow.Web.CoreComponentsTest do
     end
   end
 
+  describe "input/1" do
+    test "marks a required field's label, as DynamicForm asks it to" do
+      html =
+        render_component(&CoreComponents.input/1, %{
+          id: "name",
+          name: "name",
+          label: "Name",
+          value: "",
+          required: true,
+          required_label: "*",
+          rest: %{}
+        })
+
+      assert html =~ ~s(Name<span class="ml-0.5 text-red-500">*</span>)
+      assert html =~ ~s(required)
+    end
+
+    test "a required select with a value offers no blank option; otherwise the prompt stays" do
+      render = fn assigns ->
+        render_component(
+          &CoreComponents.input/1,
+          Map.merge(
+            %{
+              id: "t",
+              name: "t",
+              type: "select",
+              options: [{"A", "a"}],
+              prompt: "Pick…",
+              rest: %{}
+            },
+            assigns
+          )
+        )
+      end
+
+      refute render.(%{value: "a", required: true}) =~ ~s(<option value="">)
+      assert render.(%{value: "", required: true}) =~ "Pick…"
+      assert render.(%{value: "a", required: false}) =~ "Pick…"
+    end
+
+    test "shows no mark for an optional field, or a blanked mark" do
+      optional =
+        render_component(&CoreComponents.input/1, %{id: "a", name: "a", label: "A", value: ""})
+
+      refute optional =~ "text-red-500"
+
+      blanked =
+        render_component(&CoreComponents.input/1, %{
+          id: "a",
+          name: "a",
+          label: "A",
+          value: "",
+          required: true,
+          required_label: false,
+          rest: %{}
+        })
+
+      refute blanked =~ "text-red-500"
+      assert blanked =~ "required"
+    end
+  end
+
   test "header/1 renders the title and subtitle slots" do
     html =
       render_component(&CoreComponents.header/1, %{
