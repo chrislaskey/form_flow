@@ -68,6 +68,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        notice: nil,
        editor_error: nil,
        preview_refresh_token: nil,
+       scopes: ["elements", "children"],
        publishing?: false,
        auto_update?: true,
        preview_rev: 0,
@@ -819,7 +820,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # inline on the field like any built-in validation. Either way the
   # definition map rides the payload's extra into the "save" event above.
   defp validate_definition(%{data: %{definition_editor: "form"}} = payload) do
-    DynamicForm.Payload.put_extra(payload, :definition, current_definition(payload, "form"))
+    payload =
+      DynamicForm.Payload.put_extra(payload, :definition, current_definition(payload, "form"))
+
+    # Siblings repeating a name are caught by each nested form's key; a group
+    # member repeating a name outside its group is caught here
+    case Builder.duplicate_names(payload.data[:elements] || []) do
+      [] ->
+        payload
+
+      names ->
+        DynamicForm.Payload.add_error(
+          payload,
+          :elements,
+          "uses the same name more than once: #{Enum.join(names, ", ")}"
+        )
+    end
   end
 
   defp validate_definition(payload), do: validate_json(payload)
@@ -1138,7 +1154,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               the SurveyJS properties they set. Which fields show for a type,
               and which the entry writes back, come from one table in
               Builder — a hidden field keeps its held value, and that value
-              must not reach the JSON. --%>
+              must not reach the JSON.
+
+              Two scopes render the same field list (element_fields/1): the
+              form's elements, and the members of a group or nested form
+              ("children", a nested form inside each entry). A container's
+              members render after its own properties because the children
+              declaration takes the position of its first member field, and
+              every children-scope field is declared after the last
+              elements-scope one. --%>
         <:nested
           name="elements"
           title="Elements"
@@ -1152,7 +1176,33 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           generate_ids={false}
           visible_if="{definition_editor} = 'form'"
         />
-        <:group name="element_type_and_name" nested="elements" type="horizontal" />
+        <:nested
+          name="children"
+          nested="elements"
+          title="Elements inside"
+          description="The questions and content this group or nested form holds, in order."
+          entry_title="Element {panelIndex}"
+          add_text="Add element inside"
+          remove_text="Remove element"
+          no_entries_text="Nothing inside yet."
+          key="name"
+          key_error="is already used by another element"
+          generate_ids={false}
+          visible_if={Builder.visible_if("children")}
+        />
+        <:group
+          :for={scope <- @scopes}
+          name={"#{scope}_type_and_name"}
+          nested={scope}
+          type="horizontal"
+        />
+        <:group
+          :for={{scope, group} <- for(scope <- @scopes, group <- element_groups(), do: {scope, group})}
+          name={"#{scope}_#{group.name}"}
+          nested={scope}
+          type="horizontal"
+          visible_if={Builder.visible_if(group.visible_if)}
+        />
         <%!-- Up and down: the arrows write "up"/"down" into this hidden field
               and fire the form's change, so the move travels with the rest
               of the form's values (Builder.move/1, move_element/1). The
@@ -1161,152 +1211,54 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field
           :let={field}
           nested="elements"
-          group="element_type_and_name"
+          group="elements_type_and_name"
           type="text"
           name="move"
           label={false}
         >
-          <input type="hidden" id={field.id} name={field.name} value="" />
-          <div class="flex flex-col">
-            <button
-              type="button"
-              class="btn btn-xs btn-ghost px-1"
-              aria-label="Move up"
-              title="Move up"
-              disabled={field.form.index == 0}
-              phx-click={move_element_js(field, "up")}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              class="btn btn-xs btn-ghost px-1"
-              aria-label="Move down"
-              title="Move down"
-              disabled={field.form.index + 1 >= length(DynamicForm.form_data(field)[:elements] || [])}
-              phx-click={move_element_js(field, "down")}
-            >
-              ↓
-            </button>
-          </div>
+          <.move_arrows field={field} />
         </:field>
         <:field
+          :for={field <- element_fields("elements")}
           nested="elements"
-          group="element_type_and_name"
-          type="dropdown"
-          name="type"
-          label="Type"
-          options={Builder.type_options()}
-          required
+          group={field[:group] && "elements_#{field.group}"}
+          type={field.type}
+          input_type={field[:input_type]}
+          name={field.name}
+          label={field.label}
+          options={field[:options]}
+          placeholder={field[:placeholder]}
+          description={field[:description]}
+          pattern={field[:pattern]}
+          required={field[:required]}
+          visible_if={field[:visible_if]}
+          required_if={field[:required_for_type] && field[:visible_if]}
         />
         <:field
-          nested="elements"
-          group="element_type_and_name"
+          :let={field}
+          nested="children"
+          group="children_type_and_name"
           type="text"
-          name="name"
-          label="Name"
-          description="Letters, numbers, _ and -."
-          pattern="^[A-Za-z0-9_-]+$"
-          required
-        />
+          name="move"
+          label={false}
+        >
+          <.move_arrows field={field} />
+        </:field>
         <:field
-          nested="elements"
-          type="text"
-          name="title"
-          label="Label"
-          visible_if={Builder.visible_if("title")}
-        />
-        <:field
-          nested="elements"
-          type="dropdown"
-          name="inputType"
-          label="Input type"
-          options={Builder.input_type_options()}
-          visible_if={Builder.visible_if("inputType")}
-        />
-        <:field
-          nested="elements"
-          type="comment"
-          name="choices"
-          label="Choices"
-          description="One per line. Write value | Label to store a value different from the label shown."
-          visible_if={Builder.visible_if("choices")}
-          required_if={Builder.visible_if("choices")}
-        />
-        <:group
-          name="element_rating"
-          nested="elements"
-          type="horizontal"
-          visible_if={Builder.visible_if("rateMin")}
-        />
-        <:field
-          nested="elements"
-          group="element_rating"
-          type="text"
-          input_type="number"
-          name="rateMin"
-          label="Minimum"
-        />
-        <:field
-          nested="elements"
-          group="element_rating"
-          type="text"
-          input_type="number"
-          name="rateMax"
-          label="Maximum"
-        />
-        <:field
-          nested="elements"
-          group="element_rating"
-          type="text"
-          input_type="number"
-          name="rateStep"
-          label="Step"
-        />
-        <:field
-          nested="elements"
-          type="comment"
-          name="html"
-          label="HTML"
-          visible_if={Builder.visible_if("html")}
-          required_if={Builder.visible_if("html")}
-        />
-        <:field
-          nested="elements"
-          type="text"
-          name="placeholder"
-          label="Placeholder"
-          visible_if={Builder.visible_if("placeholder")}
-        />
-        <:field
-          nested="elements"
-          type="text"
-          name="description"
-          label="Help text"
-          visible_if={Builder.visible_if("description")}
-        />
-        <:field
-          nested="elements"
-          type="text"
-          name="defaultValue"
-          label="Default value"
-          visible_if={Builder.visible_if("defaultValue")}
-        />
-        <:field
-          nested="elements"
-          type="boolean"
-          name="isRequired"
-          label="Required"
-          visible_if={Builder.visible_if("isRequired")}
-        />
-        <:field
-          nested="elements"
-          type="text"
-          name="visibleIf"
-          label="Visible if"
-          placeholder="{other_element} = 'value'"
-          description="A SurveyJS expression over the other elements' names — {subject} = 'support', or {email} notempty. Leave blank to always show it."
-          visible_if={Builder.visible_if("visibleIf")}
+          :for={field <- element_fields("children")}
+          nested="children"
+          group={field[:group] && "children_#{field.group}"}
+          type={field.type}
+          input_type={field[:input_type]}
+          name={field.name}
+          label={field.label}
+          options={field[:options]}
+          placeholder={field[:placeholder]}
+          description={field[:description]}
+          pattern={field[:pattern]}
+          required={field[:required]}
+          visible_if={field[:visible_if]}
+          required_if={field[:required_for_type] && field[:visible_if]}
         />
           </DynamicForm.form>
 
@@ -1407,11 +1359,161 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp preview_id(assigns), do: "#{assigns.id}-preview-r#{assigns.preview_rev}"
 
+  # One entry's fields, in render order, for a scope: the form's elements or
+  # the members inside a container. Type and Name come first, then each
+  # editable property in Builder.properties/0 with its control. A field shows
+  # only for the types its property applies to, and `required_for_type`
+  # makes it required for those same types. Inside a container no container
+  # can be picked, so its fields are left out there.
+  defp element_fields(scope) do
+    inside? = scope != "elements"
+
+    [
+      %{
+        name: "type",
+        type: "dropdown",
+        label: "Type",
+        options: Builder.type_options(scope),
+        required: true,
+        group: "type_and_name"
+      },
+      %{
+        name: "name",
+        type: "text",
+        label: "Name",
+        description: "Letters, numbers, _ and -.",
+        pattern: "^[A-Za-z0-9_-]+$",
+        required: true,
+        group: "type_and_name"
+      },
+      %{name: "title", type: "text", label: "Label"},
+      %{
+        name: "groupType",
+        type: "dropdown",
+        label: "Layout",
+        options: [{"Members side by side", "horizontal"}, {"Members stacked", "vertical"}],
+        container: true
+      },
+      %{
+        name: "inputType",
+        type: "dropdown",
+        label: "Input type",
+        options: Builder.input_type_options()
+      },
+      %{
+        name: "choices",
+        type: "comment",
+        label: "Choices",
+        description:
+          "One per line. Write value | Label to store a value different from the label shown.",
+        required_for_type: true
+      },
+      %{name: "rateMin", type: "text", input_type: "number", label: "Minimum", group: "rating"},
+      %{name: "rateMax", type: "text", input_type: "number", label: "Maximum", group: "rating"},
+      %{name: "rateStep", type: "text", input_type: "number", label: "Step", group: "rating"},
+      %{
+        name: "templateTitle",
+        type: "text",
+        label: "Entry title",
+        description: "{panelIndex} stands for the entry's number, counting from 1.",
+        container: true
+      },
+      %{
+        name: "minPanelCount",
+        type: "text",
+        input_type: "number",
+        label: "Fewest entries",
+        group: "entry_count",
+        container: true
+      },
+      %{
+        name: "maxPanelCount",
+        type: "text",
+        input_type: "number",
+        label: "Most entries",
+        group: "entry_count",
+        container: true
+      },
+      %{name: "addPanelText", type: "text", label: "Add button text", container: true},
+      %{name: "html", type: "comment", label: "HTML", required_for_type: true},
+      %{name: "placeholder", type: "text", label: "Placeholder"},
+      %{name: "description", type: "text", label: "Help text"},
+      %{name: "defaultValue", type: "text", label: "Default value"},
+      %{name: "isRequired", type: "boolean", label: "Required"},
+      %{
+        name: "visibleIf",
+        type: "text",
+        label: "Visible if",
+        placeholder: "{other_element} = 'value'",
+        description:
+          "A SurveyJS expression over the other elements' names — {subject} = 'support', or {email} notempty. Leave blank to always show it."
+      }
+    ]
+    |> Enum.reject(&(inside? and &1[:container]))
+    |> Enum.map(fn field ->
+      if Map.has_key?(Builder.properties(), field.name),
+        do: Map.put(field, :visible_if, Builder.visible_if(field.name)),
+        else: field
+    end)
+  end
+
+  # The rows of related number fields, shown for the types of their first
+  # member. Type and Name share a row too, declared on its own since it has
+  # no visible_if.
+  defp element_groups do
+    [
+      %{name: "rating", visible_if: "rateMin"},
+      %{name: "entry_count", visible_if: "minPanelCount"}
+    ]
+  end
+
   # Set the entry's hidden `move` field and fire the form's change from it,
   # entirely on the client — no event of its own to handle
   defp move_element_js(field, direction) do
     JS.set_attribute({"value", direction}, to: "##{field.id}")
     |> JS.dispatch("input", to: "##{field.id}")
+  end
+
+  defp move_arrows(assigns) do
+    ~H"""
+    <input type="hidden" id={@field.id} name={@field.name} value="" />
+    <div class="flex flex-col">
+      <button
+        type="button"
+        class="btn btn-xs btn-ghost px-1"
+        aria-label="Move up"
+        title="Move up"
+        disabled={@field.form.index == 0}
+        phx-click={move_element_js(@field, "up")}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        class="btn btn-xs btn-ghost px-1"
+        aria-label="Move down"
+        title="Move down"
+        disabled={@field.form.index + 1 >= entry_count(@field)}
+        phx-click={move_element_js(@field, "down")}
+      >
+        ↓
+      </button>
+    </div>
+    """
+  end
+
+  # How many entries sit beside this one: the form's elements, or the
+  # members of the container the entry's form name places it in
+  defp entry_count(field) do
+    elements = DynamicForm.form_data(field)[:elements] || []
+
+    case Regex.run(~r/\[elements\]\[(\d+)\]\[children\]/, field.form.name) do
+      [_match, index] ->
+        elements |> Enum.at(String.to_integer(index), %{}) |> Map.get(:children, []) |> length()
+
+      nil ->
+        length(elements)
+    end
   end
 
   defp based_on_version(versions, %{based_on_version_id: base_id}) when is_binary(base_id) do

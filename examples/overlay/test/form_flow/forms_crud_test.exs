@@ -248,6 +248,111 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute Forms.get_version(draft.id).definition |> inspect() =~ "move"
   end
 
+  test "a group and a nested form hold elements inside them", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Nested"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+    submit = fn elements ->
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{
+          "name" => "Nested",
+          "definition_editor" => "form",
+          "elements" => elements
+        }
+      })
+
+      render(view)
+    end
+
+    # A group's members are written as its elements, a nested form's as its
+    # template — one level deep, each as the same kind of entry
+    html =
+      submit.(%{
+        "0" => %{
+          "type" => "panel",
+          "name" => "address",
+          "title" => "Address",
+          "groupType" => "vertical",
+          "children" => %{
+            "0" => %{"type" => "text", "name" => "street"},
+            "1" => %{"type" => "text", "name" => "city", "isRequired" => "true"}
+          }
+        },
+        "1" => %{
+          "type" => "paneldynamic",
+          "name" => "phones",
+          "templateTitle" => "Phone {panelIndex}",
+          "minPanelCount" => "1",
+          "children" => %{"0" => %{"type" => "text", "name" => "number", "inputType" => "tel"}}
+        }
+      })
+
+    assert html =~ "Saved."
+
+    assert Forms.get_version(draft.id).definition == %{
+             "elements" => [
+               %{
+                 "type" => "panel",
+                 "name" => "address",
+                 "title" => "Address",
+                 "groupType" => "vertical",
+                 "elements" => [
+                   %{"type" => "text", "name" => "street"},
+                   %{"type" => "text", "name" => "city", "isRequired" => true}
+                 ]
+               },
+               %{
+                 "type" => "paneldynamic",
+                 "name" => "phones",
+                 "templateTitle" => "Phone {panelIndex}",
+                 "minPanelCount" => 1,
+                 "templateElements" => [
+                   %{"type" => "text", "name" => "number", "inputType" => "tel"}
+                 ]
+               }
+             ]
+           }
+
+    # Reopened, the members show inside their container's entry, with the
+    # container types on offer at the form level only
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[elements][0][children][1][name]"][value="city"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(select[name="dynamic_form[elements][0][type]"] option[value="panel"])
+           )
+
+    refute has_element?(
+             view,
+             ~s(select[name="dynamic_form[elements][0][children][0][type]"] option[value="panel"])
+           )
+
+    # A group's member shares the form's scope, so it can't repeat a name
+    # outside the group; a nested form's template is a scope of its own
+    html =
+      submit.(%{
+        "0" => %{"type" => "text", "name" => "city"},
+        "1" => %{
+          "type" => "panel",
+          "name" => "address",
+          "children" => %{"0" => %{"type" => "text", "name" => "city"}}
+        }
+      })
+
+    assert html =~ "uses the same name more than once: city"
+    refute html =~ "Saved."
+  end
+
   test "switching editors moves the definition across, and refuses what the builder can't show",
        %{conn: conn} do
     {:ok, form} =

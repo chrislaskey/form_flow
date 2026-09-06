@@ -133,6 +133,112 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
     end
   end
 
+  describe "containers" do
+    @nested %{
+      "elements" => [
+        %{
+          "type" => "panel",
+          "name" => "address",
+          "title" => "Address",
+          "groupType" => "vertical",
+          "elements" => [
+            %{"type" => "text", "name" => "street"},
+            %{"type" => "text", "name" => "city", "isRequired" => true}
+          ]
+        },
+        %{
+          "type" => "paneldynamic",
+          "name" => "phones",
+          "templateTitle" => "Phone {panelIndex}",
+          "minPanelCount" => 1,
+          "addPanelText" => "Add phone",
+          "templateElements" => [%{"type" => "text", "name" => "number", "inputType" => "tel"}]
+        }
+      ]
+    }
+
+    test "members become the entry's children, and round-trip by type" do
+      [address, phones] = Builder.entries(@nested)
+
+      assert address["children"] == [
+               %{"type" => "text", "name" => "street"},
+               %{"type" => "text", "name" => "city", "isRequired" => true}
+             ]
+
+      assert phones["children"] == [%{"type" => "text", "name" => "number", "inputType" => "tel"}]
+      assert Builder.definition(@nested, Builder.entries(@nested)) == @nested
+      assert Builder.unsupported(@nested) == []
+    end
+
+    test "a container with nothing inside still writes its members" do
+      assert Builder.definition(%{}, [%{type: "panel", name: "empty"}]) == %{
+               "elements" => [%{"type" => "panel", "name" => "empty", "elements" => []}]
+             }
+    end
+
+    test "one level only: a container inside a container is unsupported" do
+      definition = %{
+        "elements" => [
+          %{
+            "type" => "panel",
+            "name" => "outer",
+            "elements" => [%{"type" => "panel", "name" => "inner", "elements" => []}]
+          }
+        ]
+      }
+
+      assert Builder.unsupported(definition) == [
+               ~s(Element "inner" sits inside another group or nested form; the form builder shows one level.)
+             ]
+    end
+
+    test "inside a container the type options offer no container" do
+      assert {"Group of elements", "panel"} in Builder.type_options()
+      refute {"Group of elements", "panel"} in Builder.type_options("children")
+    end
+
+    test "duplicate_names/1 sees a group's members in the form's scope, a nested form's apart" do
+      entries = [
+        %{type: "text", name: "city"},
+        %{type: "panel", name: "address", children: [%{type: "text", name: "city"}]},
+        %{type: "paneldynamic", name: "phones", children: [%{type: "text", name: "city"}]}
+      ]
+
+      assert Builder.duplicate_names(entries) == ["city"]
+
+      assert Builder.duplicate_names([
+               %{type: "text", name: "city"},
+               %{type: "paneldynamic", name: "phones", children: [%{type: "text", name: "city"}]}
+             ]) == []
+    end
+
+    test "complete_entries/1 and move/1 reach inside a container" do
+      entries = [
+        %{
+          type: "panel",
+          name: "g",
+          children: [%{type: "text", name: "a"}, %{type: "text", name: ""}]
+        }
+      ]
+
+      assert Builder.complete_entries(entries) == [
+               %{type: "panel", name: "g", children: [%{type: "text", name: "a"}]}
+             ]
+
+      entries = [
+        %{type: "text", name: "x"},
+        %{type: "panel", name: "g", children: [%{name: "a"}, %{name: "b", move: "up"}]}
+      ]
+
+      assert Builder.move(entries) ==
+               {:moved,
+                [
+                  %{type: "text", name: "x"},
+                  %{type: "panel", name: "g", children: [%{name: "b"}, %{name: "a"}]}
+                ]}
+    end
+  end
+
   describe "move/1" do
     test "swaps the asking entry with its neighbour and clears the request" do
       entries = [%{name: "a"}, %{name: "b", move: "up"}, %{name: "c"}]

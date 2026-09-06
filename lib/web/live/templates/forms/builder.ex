@@ -10,8 +10,16 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   `DynamicForm.Instance.Question` or the SurveyJS documentation directly.
   Two shapes differ from the JSON and are translated here: `choices` is
   typed one per line (`value | Label` for a choice whose stored value differs
-  from its label), and the rating bounds arrive as the decimals a number
-  input casts to.
+  from its label), and numbers arrive as the decimals a number input casts
+  to.
+
+  Two element types hold other elements — a **group** (`panel`, whose
+  members belong to the enclosing form) and a **nested form**
+  (`paneldynamic`, a repeating template with a scope of its own). Either
+  carries its members in the entry's `children`, a second nested form inside
+  the entry, written back as `elements` or `templateElements` by type. The
+  builder shows one level of that: a container holds questions and content,
+  not another container.
 
   The builder covers a subset of what a definition can hold — the properties
   in `properties/0`, for the types in `type_options/0`. `unsupported/1` names
@@ -32,43 +40,63 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
     {"Boolean (yes/no)", "boolean"},
     {"Rating", "rating"},
     {"Tag box (multi-select)", "tagbox"},
-    {"HTML content", "html"}
+    {"HTML content", "html"},
+    {"Group of elements", "panel"},
+    {"Nested form (repeating entries)", "paneldynamic"}
   ]
 
   @types Enum.map(@type_options, &elem(&1, 1))
+
+  @container_types ~w(panel paneldynamic)
 
   @input_types ~w(text email number tel url date time datetime-local password)
 
   @choice_types ~w(dropdown radiogroup checkbox tagbox)
 
-  @not_html @types -- ["html"]
+  @questions @types -- ["html" | @container_types]
 
   # Which element types each editable property applies to. This one table
   # drives what the page shows for a type (`visible_if/1`), what an entry
   # writes back (`element/1` ignores anything else — a hidden field keeps
   # the value it had, and that value must not leak into the JSON), and what
-  # `unsupported/1` accepts.
+  # `unsupported/1` accepts. `children` is the builder's own name for a
+  # container's members; the JSON key depends on the type.
   @properties %{
-    "title" => @not_html,
+    "title" => @types -- ["html"],
+    "groupType" => ["panel"],
     "inputType" => ["text"],
     "choices" => @choice_types,
     "rateMin" => ["rating"],
     "rateMax" => ["rating"],
     "rateStep" => ["rating"],
+    "templateTitle" => ["paneldynamic"],
+    "minPanelCount" => ["paneldynamic"],
+    "maxPanelCount" => ["paneldynamic"],
+    "addPanelText" => ["paneldynamic"],
     "html" => ["html"],
     "placeholder" => ~w(text comment dropdown tagbox),
-    "description" => @not_html,
+    "description" => @questions ++ ["paneldynamic"],
     "defaultValue" => ~w(text comment dropdown radiogroup),
-    "isRequired" => @not_html,
-    "visibleIf" => @types
+    "isRequired" => @questions ++ ["paneldynamic"],
+    "visibleIf" => @types,
+    "children" => @container_types
   }
 
-  @numbers ~w(rateMin rateMax rateStep)
+  @numbers ~w(rateMin rateMax rateStep minPanelCount maxPanelCount)
   @booleans ~w(isRequired)
-  @strings ~w(title inputType html placeholder description defaultValue visibleIf)
+  @strings ~w(title groupType inputType templateTitle addPanelText html placeholder description defaultValue visibleIf)
 
-  @doc "The element types the builder offers, as dropdown options."
-  def type_options, do: @type_options
+  # The JSON key a container keeps its members under
+  @children_key %{"panel" => "elements", "paneldynamic" => "templateElements"}
+
+  @doc """
+  The element types the builder offers, as dropdown options — every type at
+  the form level, and everything but the containers inside one, since the
+  builder shows one level of nesting.
+  """
+  def type_options(scope \\ "elements")
+  def type_options("elements"), do: @type_options
+  def type_options(_inside), do: Enum.reject(@type_options, &(elem(&1, 1) in @container_types))
 
   @doc "The `inputType` values offered for a `text` element, as dropdown options."
   def input_type_options, do: Enum.map(@input_types, &{&1, &1})
@@ -90,7 +118,8 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   @doc """
   The builder's entries for a definition: one string-keyed map per element,
-  in the shape the nested form's `data` expects.
+  in the shape the nested form's `data` expects, a container's members under
+  `children`.
   """
   def entries(%{"elements" => elements}) when is_list(elements), do: Enum.map(elements, &entry/1)
   def entries(_definition), do: []
@@ -99,12 +128,20 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
     %{"type" => element["type"], "name" => element["name"]}
     |> put_unless_nil("choices", choices_text(element["choices"]))
     |> put_properties(element, @strings ++ @numbers ++ @booleans)
+    |> put_children(element)
   end
 
   defp put_properties(entry, element, properties) do
     Enum.reduce(properties, entry, fn property, acc ->
       put_unless_nil(acc, property, element[property])
     end)
+  end
+
+  defp put_children(entry, element) do
+    case Map.get(@children_key, element["type"]) do
+      nil -> entry
+      key -> Map.put(entry, "children", Enum.map(List.wrap(element[key]), &entry/1))
+    end
   end
 
   @doc """
@@ -115,66 +152,14 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   payload or as the string-keyed maps `entries/1` produced. An entry writes
   only the properties that apply to its type and only those with a value —
   `isRequired: false` is the default and is left out, as the JSON would be
-  written by hand.
+  written by hand. A container always writes its members, even none.
   """
   def definition(definition, entries) when is_map(definition) and is_list(entries) do
     Map.put(definition, "elements", Enum.map(entries, &element/1))
   end
 
-  @doc """
-  Applies the one move an entry asked for through its `move` field — `"up"`
-  or `"down"` — swapping it with its neighbour, and clears the request from
-  every entry. `{:moved, entries}` when one asked; `:none` otherwise.
-
-  The request rides in the form's own change, so it arrives with every other
-  value as the admin left it; the page then hands the reordered entries back
-  as the form's data. An entry at the edge asked to go further stays put.
-  """
-  def move(entries) when is_list(entries) do
-    case Enum.find_index(entries, &(move_of(&1) in ["up", "down"])) do
-      nil ->
-        :none
-
-      index ->
-        direction = move_of(Enum.at(entries, index))
-        target = if direction == "up", do: index - 1, else: index + 1
-
-        entries
-        |> Enum.map(&Map.drop(&1, [:move, "move"]))
-        |> swap(index, target)
-        |> then(&{:moved, &1})
-    end
-  end
-
-  defp move_of(entry), do: entry[:move] || entry["move"]
-
-  defp swap(entries, _index, target) when target < 0 or target >= length(entries), do: entries
-
-  defp swap(entries, index, target) do
-    moving = Enum.at(entries, index)
-    neighbour = Enum.at(entries, target)
-
-    entries
-    |> List.replace_at(index, neighbour)
-    |> List.replace_at(target, moving)
-  end
-
-  @doc """
-  The entries that are elements already: those with both a type and a name.
-
-  A row the admin has added but not finished is not an element yet. Save
-  refuses it anyway (both fields are required), and the preview renders the
-  form without it rather than failing on a question with no name.
-  """
-  def complete_entries(entries) when is_list(entries) do
-    Enum.filter(entries, fn entry ->
-      entry = Map.new(entry, fn {key, value} -> {to_string(key), value} end)
-      entry["type"] not in [nil, ""] and entry["name"] not in [nil, ""]
-    end)
-  end
-
   defp element(entry) do
-    entry = Map.new(entry, fn {key, value} -> {to_string(key), value} end)
+    entry = stringify(entry)
     type = entry["type"]
 
     # An unfinished entry writes what it has; a missing name or type is a
@@ -188,8 +173,12 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
     |> Enum.filter(fn {_property, types} -> type in types end)
     |> Enum.map(fn {property, _types} -> property end)
     |> Enum.sort()
-    |> Enum.reduce(base, fn property, acc ->
-      put_unless_nil(acc, property, property_value(property, entry[property]))
+    |> Enum.reduce(base, fn
+      "children", acc ->
+        Map.put(acc, @children_key[type], Enum.map(List.wrap(entry["children"]), &element/1))
+
+      property, acc ->
+        put_unless_nil(acc, property, property_value(property, entry[property]))
     end)
   end
 
@@ -197,30 +186,165 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   defp property_value("choices", text), do: choices_from_text(text)
   defp property_value(property, value) when property in @numbers, do: number(value)
   defp property_value(property, value) when property in @booleans, do: if(value, do: true)
-  defp property_value(_property, value) when is_binary(value), do: value
   defp property_value(_property, value), do: value
+
+  @doc """
+  Applies the one move an entry asked for through its `move` field — `"up"`
+  or `"down"` — swapping it with its neighbour, and clears the request from
+  every entry, at any level. `{:moved, entries}` when one asked; `:none`
+  otherwise.
+
+  The request rides in the form's own change, so it arrives with every other
+  value as the admin left it; the page then hands the reordered entries back
+  as the form's data. An entry at the edge asked to go further stays put.
+  """
+  def move(entries) when is_list(entries) do
+    case Enum.find_index(entries, &(move_of(&1) in ["up", "down"])) do
+      nil ->
+        move_within(entries)
+
+      index ->
+        direction = move_of(Enum.at(entries, index))
+        target = if direction == "up", do: index - 1, else: index + 1
+
+        entries
+        |> Enum.map(&clear_move/1)
+        |> swap(index, target)
+        |> then(&{:moved, &1})
+    end
+  end
+
+  # No entry at this level asked; the first container whose members did
+  defp move_within(entries) do
+    Enum.reduce_while(Enum.with_index(entries), :none, fn {entry, index}, :none ->
+      case move(children_of(entry)) do
+        {:moved, children} ->
+          moved =
+            entries
+            |> Enum.map(&clear_move/1)
+            |> List.replace_at(index, put_children_of(entry, children))
+
+          {:halt, {:moved, moved}}
+
+        :none ->
+          {:cont, :none}
+      end
+    end)
+  end
+
+  defp move_of(entry), do: entry[:move] || entry["move"]
+  defp clear_move(entry), do: Map.drop(entry, [:move, "move"])
+  defp children_of(entry), do: List.wrap(entry[:children] || entry["children"])
+
+  defp put_children_of(entry, children) do
+    key = if Map.has_key?(entry, "children"), do: "children", else: :children
+    Map.put(entry, key, children)
+  end
+
+  defp swap(entries, _index, target) when target < 0 or target >= length(entries), do: entries
+
+  defp swap(entries, index, target) do
+    moving = Enum.at(entries, index)
+    neighbour = Enum.at(entries, target)
+
+    entries
+    |> List.replace_at(index, neighbour)
+    |> List.replace_at(target, moving)
+  end
+
+  @doc """
+  The entries that are elements already: those with both a type and a name,
+  at every level.
+
+  A row the admin has added but not finished is not an element yet. Save
+  refuses it anyway (both fields are required), and the preview renders the
+  form without it rather than failing on a question with no name.
+  """
+  def complete_entries(entries) when is_list(entries) do
+    entries
+    |> Enum.filter(fn entry ->
+      entry = stringify(entry)
+      entry["type"] not in [nil, ""] and entry["name"] not in [nil, ""]
+    end)
+    |> Enum.map(fn entry ->
+      case children_of(entry) do
+        [] -> entry
+        children -> put_children_of(entry, complete_entries(children))
+      end
+    end)
+  end
+
+  @doc """
+  The names used by more than one element within one scope. A group's
+  members belong to the form they sit in, while a nested form's template is
+  a scope of its own and is checked separately. The nested forms' own `key`
+  already catches a repeat among siblings; this catches a group member
+  repeating a name outside its group.
+  """
+  def duplicate_names(entries) when is_list(entries) do
+    entries
+    |> Enum.map(&stringify/1)
+    |> scopes()
+    |> Enum.flat_map(fn scope ->
+      scope
+      |> Enum.map(& &1["name"])
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_name, count} -> count > 1 end)
+      |> Enum.map(fn {name, _count} -> name end)
+    end)
+    |> Enum.uniq()
+  end
+
+  # The scopes a list of entries makes: its own (the entries themselves and
+  # every group's members) first, then one per nested form
+  defp scopes(entries) when is_list(entries) do
+    {own, nested} =
+      Enum.reduce(entries, {[], []}, fn entry, {own, nested} ->
+        children = Enum.map(children_of(entry), &stringify/1)
+
+        case entry["type"] do
+          "panel" ->
+            [members | more] = scopes(children)
+            {own ++ [entry | members], nested ++ more}
+
+          "paneldynamic" ->
+            {own ++ [entry], nested ++ scopes(children)}
+
+          _other ->
+            {own ++ [entry], nested}
+        end
+      end)
+
+    [own | nested]
+  end
 
   @doc """
   Why the builder cannot show a definition — one sentence per problem, or
   `[]` when it can. A blank definition can always be shown.
 
   Checks each element's type against `type_options/0`, its properties
-  against `properties/0` for that type, and each value's shape against what
-  the entry's control can hold: a string, a number, a boolean, or a list of
-  choices that are strings or `value`/`text` objects.
+  against `properties/0` for that type, each value's shape against what the
+  entry's control can hold — a string, a number, a boolean, a list of
+  choices that are strings or `value`/`text` objects — and that no container
+  sits inside another, since the builder shows one level.
   """
   def unsupported(definition) when definition == %{}, do: []
 
   def unsupported(%{"elements" => elements}) when is_list(elements) do
-    elements
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {element, position} -> unsupported_element(element, position) end)
+    unsupported_elements(elements, "elements")
   end
 
   def unsupported(%{"elements" => _other}), do: ["\"elements\" is not a list."]
   def unsupported(%{}), do: []
 
-  defp unsupported_element(element, position) when is_map(element) do
+  defp unsupported_elements(elements, scope) do
+    elements
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {element, position} -> unsupported_element(element, position, scope) end)
+  end
+
+  defp unsupported_element(element, position, scope) when is_map(element) do
     type = element["type"]
     label = element_label(element, position)
 
@@ -228,11 +352,17 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
       type not in @types ->
         ["#{label} has type #{inspect(type)}, which the form builder does not offer."]
 
+      type in @container_types and scope != "elements" ->
+        ["#{label} sits inside another group or nested form; the form builder shows one level."]
+
       not is_binary(element["name"]) or element["name"] == "" ->
         ["#{label} has no name."]
 
       true ->
-        allowed = for {property, types} <- @properties, type in types, do: property
+        allowed =
+          for {property, types} <- @properties, type in types do
+            if property == "children", do: @children_key[type], else: property
+          end
 
         unknown =
           element
@@ -252,11 +382,18 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
             "#{label} has a #{inspect(property)} the form builder cannot edit."
           end
 
-        unknown_reasons ++ shape_reasons
+        children_reasons =
+          case Map.get(@children_key, type) do
+            nil -> []
+            key -> unsupported_elements(List.wrap(element[key]), element["name"])
+          end
+
+        unknown_reasons ++ shape_reasons ++ children_reasons
     end
   end
 
-  defp unsupported_element(_element, position), do: ["Element #{position} is not an object."]
+  defp unsupported_element(_element, position, _scope),
+    do: ["Element #{position} is not an object."]
 
   defp element_label(%{"name" => name}, _position) when is_binary(name) and name != "",
     do: "Element #{inspect(name)}"
@@ -277,11 +414,17 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   end
 
   defp valid_shape?("choices", _choices), do: false
+
+  defp valid_shape?(key, members) when key in ["elements", "templateElements"],
+    do: is_list(members)
+
   defp valid_shape?(property, value) when property in @numbers, do: is_number(value)
   defp valid_shape?(property, value) when property in @booleans, do: is_boolean(value)
   defp valid_shape?(property, value) when property in @strings, do: is_binary(value)
 
   defp scalar?(value), do: is_binary(value) or is_number(value)
+
+  defp stringify(entry), do: Map.new(entry, fn {key, value} -> {to_string(key), value} end)
 
   # Choices, one per line: a bare line is a choice whose stored value is its
   # label; `value | Label` stores the part before the bar and shows the part

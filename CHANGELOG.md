@@ -23,6 +23,24 @@ says why, rather than losing what it cannot show. The builder opens by
 default whenever it can show the saved definition, so a blank draft starts
 there. Copy definition belongs to the JSON editor and hides with it.
 
+**Groups and nested forms.** Two more element types: a **group** (`panel`)
+and a **nested form** (`paneldynamic`, repeating entries). Either holds
+its members in an "Elements inside" list within its own entry — the same
+kind of entry, one level deep — written back as `elements` or
+`templateElements` by type. A group's members share the form's scope, so a
+name repeated between a group member and an element outside it is refused
+on Save; a nested form's template is a scope of its own. A group offers its
+layout; a nested form its entry title, fewest and most entries, and add
+button text.
+
+**Move up and down.** Every element carries arrows. They set a hidden
+`move` field and fire the form's change on the client, so the request
+arrives with every other value as the admin left it, and the page hands the
+reordered entries back as the form's data.
+
+**The preview stays in view** while the editor scrolls, once the two
+columns sit side by side, and scrolls on its own when it is the taller.
+
 **Changed:** the edit page no longer debounces DynamicForm's change pass;
 it debounces the preview refresh alone (500ms of quiet, while auto-refresh
 is on), so the dirty flag, an editor switch, and every other consequence of
