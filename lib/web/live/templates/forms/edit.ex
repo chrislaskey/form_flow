@@ -1467,11 +1467,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     ]
   end
 
-  # Set the entry's hidden `move` field and fire the form's change from it,
-  # entirely on the client — no event of its own to handle
+  # Set the entry's hidden `move` field, fire the form's change from it, and
+  # clear it again — entirely on the client, no event of its own to handle.
+  # The form is serialized as the event fires, so the request is in that one
+  # change and no other. Clearing it here matters: the server renders the
+  # field's value as "" every time, so a value set on the client is never
+  # patched away, and a request left in the DOM would ride every later
+  # change too — swapping the elements back and forth on each keystroke.
   defp move_element_js(field, direction) do
     JS.set_attribute({"value", direction}, to: "##{field.id}")
     |> JS.dispatch("input", to: "##{field.id}")
+    |> JS.set_attribute({"value", ""}, to: "##{field.id}")
   end
 
   defp move_arrows(assigns) do

@@ -31,15 +31,16 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   import DynamicForm.Helpers.Map, only: [put_unless_nil: 3]
 
+  # Inputs carry a prefix so the two containers stand apart in the dropdown
   @type_options [
-    {"Text", "text"},
-    {"Comment (multi-line text)", "comment"},
-    {"Dropdown", "dropdown"},
-    {"Radio group", "radiogroup"},
-    {"Checkboxes", "checkbox"},
-    {"Boolean (yes/no)", "boolean"},
-    {"Rating", "rating"},
-    {"Tag box (multi-select)", "tagbox"},
+    {"Input - Text", "text"},
+    {"Input - Comment (multi-line text)", "comment"},
+    {"Input - Dropdown", "dropdown"},
+    {"Input - Radio group", "radiogroup"},
+    {"Input - Checkboxes", "checkbox"},
+    {"Input - Boolean (yes/no)", "boolean"},
+    {"Input - Rating", "rating"},
+    {"Input - Tag box (multi-select)", "tagbox"},
     {"HTML content", "html"},
     {"Group of elements", "panel"},
     {"Nested form (repeating entries)", "paneldynamic"}
