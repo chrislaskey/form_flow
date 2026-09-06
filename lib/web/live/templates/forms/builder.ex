@@ -360,41 +360,53 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
         ["#{label} has no name."]
 
       true ->
-        allowed =
-          for {property, types} <- @properties, type in types do
-            if property == "children", do: @children_key[type], else: property
-          end
-
-        unknown =
-          element
-          |> Map.keys()
-          |> Kernel.--(["type", "name" | allowed])
-          |> Enum.sort()
-
-        unknown_reasons =
-          if unknown == [],
-            do: [],
-            else: ["#{label} uses #{Enum.map_join(unknown, ", ", &inspect/1)}."]
-
-        shape_reasons =
-          for property <- allowed,
-              Map.has_key?(element, property),
-              not valid_shape?(property, element[property]) do
-            "#{label} has a #{inspect(property)} the form builder cannot edit."
-          end
-
-        children_reasons =
-          case Map.get(@children_key, type) do
-            nil -> []
-            key -> unsupported_elements(List.wrap(element[key]), element["name"])
-          end
-
-        unknown_reasons ++ shape_reasons ++ children_reasons
+        unsupported_properties(element, type, label)
     end
   end
 
   defp unsupported_element(_element, position, _scope),
     do: ["Element #{position} is not an object."]
+
+  defp unsupported_properties(element, type, label) do
+    allowed = allowed_properties(type)
+
+    unknown_reasons(element, allowed, label) ++
+      shape_reasons(element, allowed, label) ++
+      children_reasons(element, type)
+  end
+
+  defp allowed_properties(type) do
+    for {property, types} <- @properties, type in types do
+      if property == "children", do: @children_key[type], else: property
+    end
+  end
+
+  defp unknown_reasons(element, allowed, label) do
+    unknown =
+      element
+      |> Map.keys()
+      |> Kernel.--(["type", "name" | allowed])
+      |> Enum.sort()
+
+    if unknown == [],
+      do: [],
+      else: ["#{label} uses #{Enum.map_join(unknown, ", ", &inspect/1)}."]
+  end
+
+  defp shape_reasons(element, allowed, label) do
+    for property <- allowed,
+        Map.has_key?(element, property),
+        not valid_shape?(property, element[property]) do
+      "#{label} has a #{inspect(property)} the form builder cannot edit."
+    end
+  end
+
+  defp children_reasons(element, type) do
+    case Map.get(@children_key, type) do
+      nil -> []
+      key -> unsupported_elements(List.wrap(element[key]), element["name"])
+    end
+  end
 
   defp element_label(%{"name" => name}, _position) when is_binary(name) and name != "",
     do: "Element #{inspect(name)}"

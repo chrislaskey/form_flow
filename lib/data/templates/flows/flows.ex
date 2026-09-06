@@ -42,9 +42,9 @@ defmodule FormFlow.Data.Templates.Flows do
 
   Some of what a canvas edits on a node really belongs to the entity behind
   the node, and `update/2` writes those edits through rather than storing a
-  second copy. Loading goes the other way:
+  second copy. For the two types, loading goes the other way:
   `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
-  values back into the node's `data` for display. Writing through to a
+  type back into the node's `data` for display. Writing a type through to a
   *reusable* child (or a shared catalog form) changes it for every consumer,
   like any other edit to a shared entity. Three write-throughs exist:
 
@@ -59,13 +59,15 @@ defmodule FormFlow.Data.Templates.Flows do
     * `data.form_type` on a form node — the collected form's type, stored only
       in the form lineage's `properties["form_type"]`
       (see `FormFlow.Data.Templates.Form`), with the same rules.
-    * `data.label` on a subflow or form node — renaming the node renames the
-      embedded flow or the collected form, the same value the entity's own
-      pages edit. Unlike `form_flow_type` the label *stays* on the node too:
-      entity-less nodes (Start/End, fresh nodes) have no other home for it,
-      and save-time child creation names fresh children from it. A blank or
-      missing label renames nothing — names are never blanked from the
-      canvas.
+    * `data.label` on a subflow or form node — the step's name, what the
+      instance pages show users. Unlike the types the label *stays* on the
+      node: it is the stored value, never projected from the entity. Renaming
+      the node also renames the embedded flow or the collected form **when
+      this flow tree owns it**, so an owned entity's `name` and its step's
+      label are one value; a reusable subflow or a catalog form keeps its own
+      name for every consumer. The entity's own edit pages keep the same
+      pair in step from the other side (`rename_node/2`). A blank or missing
+      label renames nothing — names are never blanked from the canvas.
 
   See the Neo4j guide (`guides/neo4j.md`) for how all of this maps onto a
   graph database when the dual-write extension lands.
@@ -202,6 +204,25 @@ defmodule FormFlow.Data.Templates.Flows do
       _other -> nil
     end
   end
+
+  @doc """
+  Renames a step: writes `label` as the node's `data.label`, the name the
+  instance pages show for the position (`FormFlow.Data.Instances.FlowProgress`).
+
+  The entity behind the step is the caller's concern, the same split the
+  canvas save makes (see "Canvas write-throughs"): the form and flow edit
+  pages rename an owned form or subflow alongside, and leave a catalog form
+  or a reusable subflow alone. A blank label renames nothing — names are
+  never blanked.
+  """
+  def rename_node(%Node{} = node, label) when is_binary(label) and label != "" do
+    properties =
+      Map.update(node.properties, "data", %{"label" => label}, &Map.put(&1, "label", label))
+
+    Repo.update(Node.changeset(node, %{properties: properties}))
+  end
+
+  def rename_node(%Node{} = node, _blank), do: {:ok, node}
 
   @doc """
   The node within an ownership domain that embeds the given flow, or `nil`.
@@ -637,7 +658,7 @@ defmodule FormFlow.Data.Templates.Flows do
        when not is_nil(subflow_id) do
     child = Repo.get(Flow, subflow_id)
     properties = put_type(child.properties, "form_flow_type", intent.form_flow_type)
-    changes = rename_change(child.name, intent.label)
+    changes = rename_change(child, intent.label)
 
     changes =
       if properties == child.properties,
@@ -654,7 +675,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp apply_canvas_intent(%{form_id: form_id}, intent) when not is_nil(form_id) do
     form = Repo.get(Templates.Form, form_id)
     properties = put_type(form.properties, "form_type", intent.form_type)
-    changes = rename_change(form.name, intent.label)
+    changes = rename_change(form, intent.label)
 
     changes =
       if properties == form.properties,
@@ -683,9 +704,13 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # A rename only when the canvas holds a real name that differs — a blank or
-  # missing label never blanks an entity's name
-  defp rename_change(current, label) do
+  # A rename only for an entity this flow tree owns — a reusable subflow or a
+  # catalog form keeps its own name for every consumer; the step's label is
+  # this flow's word for it — and only when the canvas holds a real name that
+  # differs: a blank or missing label never blanks an entity's name
+  defp rename_change(%{owner_flow_id: nil}, _label), do: %{}
+
+  defp rename_change(%{name: current}, label) do
     if is_binary(label) and label != "" and label != current do
       %{name: label}
     else

@@ -660,7 +660,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get_version(draft.id).definition == %{}
   end
 
-  test "Copy form writes the source's identity and definition, keeping this form's own slug",
+  test "Copy form writes the source's description, type, and definition, keeping this form's own name and slug",
        %{conn: conn} do
     {:ok, source} =
       Forms.create(%{
@@ -696,8 +696,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element(~s(button[phx-click="copy_form"]))
     |> render_click()
 
+    # The step keeps its own name — a copy brings content, not identity — so
+    # the node's label and its owned form's name stay one value
     updated = Forms.get(dest.id)
-    assert updated.name == "Source Form"
+    assert updated.name == "W-2 Details"
     assert updated.description == "The original"
     assert updated.slug == "taxes-2026_w2-details"
     assert updated.properties["form_type"] == "demo_prefill"
@@ -707,6 +709,87 @@ defmodule Demo.FormFlowFormsCrudTest do
     # The chooser served its purpose — a copy is content, so it stops offering
     html = render(view)
     refute html =~ "Start this form from"
+  end
+
+  describe "a step's name" do
+    # The Name field edits the step — the node's label, which is what the
+    # instance pages show — and the owned form's name follows it. A catalog
+    # form's own name is edited on its catalog page, not from a step.
+    test "from a node, Name is the step's label; saving renames the step and its owned form",
+         %{conn: conn} do
+      {root, node} = flow_with_form_node("Dog License", "Owner contact")
+      form = Forms.get(node.form_id)
+      [draft] = Forms.list_versions(form.id)
+
+      {:ok, view, html} =
+        live(
+          conn,
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+        )
+
+      assert html =~ "Step name"
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Your details", "definition" => ~s({"fields": []})}
+      })
+
+      assert render(view) =~ "Saved."
+      assert Forms.get(form.id).name == "Your details"
+
+      [node] = Flows.get(root.id).nodes
+      assert get_in(node.properties, ["data", "label"]) == "Your details"
+    end
+
+    test "from a node, a catalog form keeps its own name; saving renames only the step",
+         %{conn: conn} do
+      {:ok, catalog} = Forms.create(%{name: "Owner contact"})
+      [draft] = Forms.list_versions(catalog.id)
+      {root, node} = flow_with_catalog_form_node("Cat License", catalog)
+
+      {:ok, view, html} =
+        live(
+          conn,
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+        )
+
+      # The field shows the step's label, and says whose name is not being edited
+      assert html =~ "Step name"
+      assert has_element?(view, "input[name='dynamic_form[name]'][value='Owner contact']")
+      assert html =~ "catalog"
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Your details", "definition" => ~s({"fields": []})}
+      })
+
+      assert render(view) =~ "Saved."
+
+      [node] = Flows.get(root.id).nodes
+      assert get_in(node.properties, ["data", "label"]) == "Your details"
+      assert Forms.get(catalog.id).name == "Owner contact"
+    end
+
+    test "on its catalog page, Name is the form's own name and saving renames it", %{conn: conn} do
+      {:ok, catalog} = Forms.create(%{name: "Owner contact"})
+      [draft] = Forms.list_versions(catalog.id)
+
+      {:ok, view, html} =
+        live(conn, "/admin/forms/#{catalog.id}/versions/#{draft.id}/edit?start=custom")
+
+      refute html =~ "Step name"
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Owner details", "definition" => ~s({"fields": []})}
+      })
+
+      assert render(view) =~ "Saved."
+      assert Forms.get(catalog.id).name == "Owner details"
+    end
   end
 
   test "Copy definition, under the JSON field, works any time and touches only the definition",
@@ -1270,6 +1353,26 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     node_attrs = %{
       properties: %{"type" => "step", "data" => %{"label" => form_label, "kind" => "form"}}
+    }
+
+    {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
+    [node] = Flows.get(flow.id).nodes
+
+    {Flows.get(flow.id), node}
+  end
+
+  # A flow whose one form step points at an existing catalog form — what the
+  # reuse of a catalog form produces — labelled with the form's own name, so
+  # that building it renames nothing
+  defp flow_with_catalog_form_node(flow_name, catalog) do
+    {:ok, flow} = Flows.create(%{name: flow_name})
+
+    node_attrs = %{
+      properties: %{
+        "type" => "step",
+        "form_id" => catalog.id,
+        "data" => %{"label" => catalog.name, "kind" => "form"}
+      }
     }
 
     {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})

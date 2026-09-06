@@ -34,8 +34,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   A draft that is blank and has never been published shows nothing but a
   choice, in place of the identity form: Custom form (an explicit no-op —
   the fields are already ready once chosen) or Copy form (pick another form
-  and write its name, description, form type, and definition onto this one
-  — never its slug, which already carries this form's own place). Selecting
+  and write its description, form type, and definition onto this one —
+  never its name or slug: the name is the step's, and the slug already
+  carries this form's own place). Selecting
   either is what reveals the rest of the page (`awaiting_start?`), and the
   chooser stops being offered on any later visit the moment either
   triggering fact changes — a save, a publish — so nothing tracks that a
@@ -135,25 +136,29 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def update(%{event: "save", payload: payload}, socket) do
     type_id = presence(payload.data[:form_type])
     properties = Shared.properties(socket.assigns.form_types, type_id)
+    name = payload.data[:name]
 
-    identity = %{
-      name: payload.data[:name],
-      description: payload.data[:description],
-      slug: payload.data[:slug],
-      properties:
-        template_properties(
-          socket.assigns.form,
-          type_id,
-          Shared.payload_property_values(payload.data, properties)
-        )
-    }
+    identity =
+      %{
+        description: payload.data[:description],
+        slug: payload.data[:slug],
+        properties:
+          template_properties(
+            socket.assigns.form,
+            type_id,
+            Shared.payload_property_values(payload.data, properties)
+          )
+      }
+      |> put_form_name(socket.assigns.form, socket.assigns.node, name)
 
-    with {:ok, form} <- Forms.update(socket.assigns.form, identity),
+    with {:ok, node} <- rename_step(socket.assigns.node, name),
+         {:ok, form} <- Forms.update(socket.assigns.form, identity),
          {:ok, version} <-
            Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
       {:ok,
        assign(socket,
          form: form,
+         node: node,
          version: version,
          versions: Forms.list_versions(form.id),
          saved_values: values_from(payload.data, type_id, properties, payload.extra[:definition]),
@@ -223,23 +228,26 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       catalog_forms: catalog_forms(form)
     )
     |> assign_breadcrumb(node)
-    |> assign_new(:definition_json, fn ->
-      version && Phoenix.json_library().encode!(version.definition, pretty: true)
-    end)
+    |> assign_new(:definition_json, fn -> saved_definition_json(version) end)
     # Kept across reloads once set, so a parent re-render leaves the admin's
     # choice alone; Copy clears it so it is derived again
     |> assign(:definition_editor, socket.assigns[:definition_editor] || initial_editor(version))
-    |> then(fn socket ->
-      socket
-      |> assign(:saved_values, saved_values(form, version))
-      |> assign(:form_data, form_data(form, socket.assigns))
-      |> assign(:dirty?, false)
-      # What the preview currently shows, and the editor's latest content —
-      # both start at the saved definition; change events move latest_json,
-      # and a refresh copies it over and bumps the rev
-      |> assign_new(:preview_json, fn %{definition_json: json} -> json end)
-      |> assign_new(:latest_json, fn %{definition_json: json} -> json end)
-    end)
+    |> assign_data(form, node, version)
+  end
+
+  defp saved_definition_json(version),
+    do: version && Phoenix.json_library().encode!(version.definition, pretty: true)
+
+  defp assign_data(socket, form, node, version) do
+    socket
+    |> assign(:saved_values, saved_values(form, node, version))
+    |> assign(:form_data, form_data(form, socket.assigns))
+    |> assign(:dirty?, false)
+    # What the preview currently shows, and the editor's latest content —
+    # both start at the saved definition; change events move latest_json,
+    # and a refresh copies it over and bumps the rev
+    |> assign_new(:preview_json, fn %{definition_json: json} -> json end)
+    |> assign_new(:latest_json, fn %{definition_json: json} -> json end)
   end
 
   defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket),
@@ -311,11 +319,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # definition is compared as the map that is persisted, the one shape both
   # editors produce — so re-indenting the JSON is not a change, and neither
   # is opening the builder.
-  defp saved_values(nil, _version), do: nil
+  defp saved_values(nil, _node, _version), do: nil
 
-  defp saved_values(form, version) do
+  defp saved_values(form, node, version) do
     %{
-      name: to_string(form.name),
+      name: to_string(step_name(form, node)),
       description: to_string(form.description),
       slug: to_string(form.slug),
       form_type: to_string(form.properties["form_type"]),
@@ -532,6 +540,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp default_type_id([]), do: nil
   defp default_type_id([first | _rest]), do: first.id
 
+  # What the Name field edits. From a node it is the step: the node's label,
+  # which is what the instance pages show users. An owned form's name is the
+  # same value, written alongside; a catalog form's name is its own, edited
+  # on its catalog page — from a step, the save leaves it alone. Standalone
+  # (no node), the field is the form's own name.
+  defp step_name(form, nil), do: form.name
+  defp step_name(form, node), do: get_in(node.properties, ["data", "label"]) || form.name
+
+  defp put_form_name(identity, %{owner_flow_id: nil}, %{} = _node, _name), do: identity
+  defp put_form_name(identity, _form, _node, name), do: Map.put(identity, :name, name)
+
+  defp rename_step(nil, _name), do: {:ok, nil}
+  defp rename_step(node, name), do: Flows.rename_node(node, name)
+
+  defp name_label(%{node: nil}), do: "Name"
+  defp name_label(_assigns), do: "Step name"
+
+  # The step's name is this flow's; a catalog form reused here is not renamed
+  # from a step
+  defp name_description(%{node: %{}, form: %{owner_flow_id: nil} = form}) do
+    "This step reuses the catalog form “#{form.name}”. Renaming the step here does not " <>
+      "rename the catalog form; do that on its catalog page."
+  end
+
+  defp name_description(_assigns), do: nil
+
   defp form_data(nil, _assigns), do: nil
 
   defp form_data(form, assigns) do
@@ -539,7 +573,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     values = FormFlow.Config.Forms.Type.property_values(form)
 
     %{
-      name: form.name,
+      name: step_name(form, assigns.node),
       description: form.description,
       slug: form.slug,
       form_type: type_id,
@@ -603,8 +637,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> Map.put("form_type_property_values", values)
   end
 
-  # The chooser's Copy: the source's name, description, form type and its
-  # property values become *this* lineage's; the source's resolved
+  # The chooser's Copy: the source's description, form type and its
+  # property values become *this* lineage's — never its name, which is the
+  # step's (`step_name/2`); the source's resolved
   # definition (latest published, else newest draft — the same fallback
   # `FormFlow.Web.Templates.Forms.Show` resolves a bare URL to) becomes
   # *this* draft's. Neither this form's id nor its slug moves — a property
@@ -617,7 +652,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     with %{} = source <- Forms.get(source_id),
          %{} = source_version <- resolved_version(source.id),
          identity = %{
-           name: source.name,
            description: source.description,
            properties:
              template_properties(
@@ -1114,7 +1148,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </.section_heading>
         </:field>
         <:group name="name_and_slug" type="horizontal" title={false} />
-        <:field group="name_and_slug" type="text" name="name" label="Name" required />
+        <:field
+          group="name_and_slug"
+          type="text"
+          name="name"
+          label={name_label(assigns)}
+          description={name_description(assigns)}
+          required
+        />
         <:field
           group="name_and_slug"
           type="text"

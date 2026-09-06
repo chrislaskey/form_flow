@@ -151,16 +151,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
     {:ok,
      socket
-     |> assign(flow: flow, root: root, flow_types: types, form_data: form_data(flow, types))
-     |> assign(pending(flow))
+     |> assign(
+       flow: flow,
+       root: root,
+       subflow_node: subflow_node,
+       flow_types: types,
+       form_data: form_data(flow, subflow_node, types)
+     )
+     |> assign(pending(flow, subflow_node))
      |> assign(page(socket.assigns, flow, root))}
   end
 
   # The form values the last save wrote, which the identity form edits
   # against — nil across the board for a flow that does not exist
-  defp pending(flow) do
+  defp pending(flow, node) do
     %{
-      pending_name: flow && flow.name,
+      pending_name: flow && step_name(flow, node),
       pending_slug: flow && flow.slug,
       pending_perspectives: Perspective.ids(flow),
       pending_type: flow && flow.properties["form_flow_type"],
@@ -216,14 +222,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # The type shown is the one the flow amounts to: a flow that never chose
   # shows the first type, which is what it behaves as everywhere else, while
   # its stored value stays unset — "the default" — until the admin picks.
-  defp form_data(nil, _types), do: nil
+  defp form_data(nil, _node, _types), do: nil
 
-  defp form_data(flow, types) do
+  defp form_data(flow, node, types) do
     type_id = Shared.effective_type(types, flow.properties["form_flow_type"])
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
     form_data(
-      flow.name,
+      step_name(flow, node),
       flow.slug,
       Perspective.ids(flow),
       type_id,
@@ -412,7 +418,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # persisted, and the pending form values against the flow's saved ones.
   defp unsaved_changes?(assigns) do
     assigns.current != assigns.data or
-      assigns.pending_name != assigns.flow.name or
+      assigns.pending_name != step_name(assigns.flow, assigns.subflow_node) or
       assigns.pending_slug != assigns.flow.slug or
       assigns.pending_perspectives != Perspective.ids(assigns.flow) or
       assigns.pending_type != assigns.flow.properties["form_flow_type"] or
@@ -481,7 +487,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     attrs =
       socket.assigns.current
       |> ReactFlow.to_flow_attrs()
-      |> Map.put(:name, socket.assigns.pending_name)
+      |> Map.put(
+        :name,
+        flow_name(socket.assigns.flow, socket.assigns.subflow_node, socket.assigns.pending_name)
+      )
       |> Map.put(:slug, socket.assigns.pending_slug)
       |> Map.put(
         :properties,
@@ -490,29 +499,30 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         |> Perspective.put_ids(socket.assigns.pending_perspectives)
       )
 
-    case Flows.update(socket.assigns.flow, attrs) do
-      {:ok, flow} ->
-        flow = Flows.get(flow.id)
-        data = ReactFlow.to_data(flow)
+    with {:ok, flow} <- Flows.update(socket.assigns.flow, attrs),
+         {:ok, node} <- rename_step(socket.assigns.subflow_node, socket.assigns.pending_name) do
+      flow = Flows.get(flow.id)
+      data = ReactFlow.to_data(flow)
 
-        socket =
-          socket
-          |> assign(
-            flow: flow,
-            data: data,
-            current: data,
-            pending_name: flow.name,
-            pending_slug: flow.slug,
-            pending_perspectives: Perspective.ids(flow),
-            pending_type: flow.properties["form_flow_type"],
-            pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
-            form_data: form_data(flow, socket.assigns.flow_types),
-            error: nil
-          )
-          |> push_event("form_flow:set_flow", %{flow: data})
+      socket =
+        socket
+        |> assign(
+          flow: flow,
+          subflow_node: node,
+          data: data,
+          current: data,
+          pending_name: step_name(flow, node),
+          pending_slug: flow.slug,
+          pending_perspectives: Perspective.ids(flow),
+          pending_type: flow.properties["form_flow_type"],
+          pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
+          form_data: form_data(flow, node, socket.assigns.flow_types),
+          error: nil
+        )
+        |> push_event("form_flow:set_flow", %{flow: data})
 
-        {:ok, socket, attrs.id_map}
-
+      {:ok, socket, attrs.id_map}
+    else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
          assign(
@@ -686,7 +696,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           on_change={&changed(&1, @id)}
           components={@components || CoreComponents}
         >
-          <:field type="text" name="name" label="Name" />
+          <:field
+            type="text"
+            name="name"
+            label={name_label(assigns)}
+            description={name_description(assigns)}
+          />
           <:field
             type="text"
             name="slug"
@@ -803,6 +818,31 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp resolve_flow(_assigns, _node), do: nil
+
+  # What the Name field edits. Reached through a node, it is the step: the
+  # node's label, which is what the instance pages show users. An owned
+  # subflow's name is the same value, written alongside; a reusable flow's
+  # name is its own, edited on its own page — from a step, the save leaves it
+  # alone. The root flow, with no node, edits its own name.
+  defp step_name(flow, nil), do: flow.name
+  defp step_name(flow, node), do: get_in(node.properties, ["data", "label"]) || flow.name
+
+  defp flow_name(flow, nil, pending_name), do: pending_name || flow.name
+  defp flow_name(%{owner_flow_id: nil} = flow, _node, _pending_name), do: flow.name
+  defp flow_name(_flow, _node, pending_name), do: pending_name
+
+  defp rename_step(nil, _name), do: {:ok, nil}
+  defp rename_step(node, name), do: Flows.rename_node(node, name)
+
+  defp name_label(%{node_id: nil}), do: "Name"
+  defp name_label(_assigns), do: "Step name"
+
+  defp name_description(%{subflow_node: %{}, flow: %{owner_flow_id: nil} = flow}) do
+    "This step embeds the reusable flow “#{flow.name}”. Renaming the step here does not " <>
+      "rename that flow; do that on its own page."
+  end
+
+  defp name_description(_assigns), do: nil
 
   defp changed(payload, component_id) do
     Phoenix.LiveView.send_update(__MODULE__, %{

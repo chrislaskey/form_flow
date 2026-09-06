@@ -471,6 +471,60 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ "Collect documents"
   end
 
+  test "renaming a subflow on its own edit page renames the step in the parent too", %{conn: conn} do
+    root_id = create_flow(conn, "Dog License", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert html =~ "Step name"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"name" => "Application"}})
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    assert Flows.get(node.subflow_id).name == "Application"
+    [node] = Flows.get(root_id).nodes
+    assert get_in(node.properties, ["data", "label"]) == "Application"
+
+    # Reloading the parent's canvas shows the step's own label — nothing is
+    # projected over it from the subflow
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/edit")
+    assert html =~ "Application"
+  end
+
+  test "a reusable subflow keeps its own name when its step is renamed", %{conn: conn} do
+    root_id = create_flow(conn, "Dog License", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+    {:ok, _} = Flows.make_reusable(Flows.get(node.subflow_id))
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert html =~ "Step name"
+    assert html =~ "reusable"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"name" => "Application"}})
+
+    view |> element("button", "Save") |> render_click()
+    assert render(view) =~ "Saved."
+
+    [node] = Flows.get(root_id).nodes
+    assert get_in(node.properties, ["data", "label"]) == "Application"
+    assert Flows.get(node.subflow_id).name == "Subflow 1"
+  end
+
+  test "the root flow's own edit page still edits its name", %{conn: conn} do
+    id = create_flow(conn, "Dog License")
+
+    {:ok, _view, html} = live(conn, "/admin/flows/#{id}/edit")
+    refute html =~ "Step name"
+  end
+
   test "renaming a form step on the canvas renames its form", %{conn: conn} do
     id = create_flow(conn)
 

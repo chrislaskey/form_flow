@@ -10,6 +10,7 @@ defmodule Demo.FormFlowFlowsTest do
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Forms
 
   test "create, get, update, and delete a flow" do
     assert {:ok, %Flow{id: id}} = Flows.create()
@@ -665,4 +666,111 @@ defmodule Demo.FormFlowFlowsTest do
       properties: Keyword.get(opts, :properties, %{})
     })
   end
+
+  describe "step names" do
+    # A step's name is its node's data.label — what the instance pages show.
+    # Saving the canvas writes it through to the entity behind the step only
+    # when this flow owns that entity; a catalog form or a reusable subflow
+    # keeps its own name for every consumer.
+    test "a canvas save renames the owned form behind a step, never a catalog form" do
+      {:ok, dog} = Flows.create(%{name: "Dog License"})
+      {:ok, _} = Flows.update(dog, %{nodes: [form_step("Owner contact")]})
+      [owned_node] = Flows.get(dog.id).nodes
+      assert Forms.get(owned_node.form_id).name == "Owner contact"
+
+      {:ok, _} =
+        Flows.update(Flows.get(dog.id), %{nodes: [form_step("Your details", owned_node)]})
+
+      assert Forms.get(owned_node.form_id).name == "Your details"
+      assert step_label(Flows.get(dog.id)) == "Your details"
+
+      # A step pointing at a catalog form, labelled with the form's name, then
+      # relabelled by a canvas save (which carries the node's id — a node saved
+      # without one records no intent, so the first save here renames nothing)
+      {:ok, catalog} = Forms.create(%{name: "Owner contact"})
+      {:ok, cat} = Flows.create(%{name: "Cat License"})
+
+      {:ok, _} =
+        Flows.update(cat, %{nodes: [form_step("Owner contact", %{"form_id" => catalog.id})]})
+
+      [cat_node] = Flows.get(cat.id).nodes
+      assert cat_node.form_id == catalog.id
+
+      {:ok, _} = Flows.update(Flows.get(cat.id), %{nodes: [form_step("Your details", cat_node)]})
+
+      assert step_label(Flows.get(cat.id)) == "Your details"
+      assert Forms.get(catalog.id).name == "Owner contact"
+      assert Forms.get(catalog.id).owner_flow_id == nil
+    end
+
+    test "a canvas save renames the owned subflow behind a step, never a reusable one" do
+      {:ok, root} = Flows.create(%{name: "Dog License", label: "subflows"})
+      {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Subflow 1")]})
+      [node] = Flows.get(root.id).nodes
+      assert Flows.get(node.subflow_id).name == "Subflow 1"
+
+      {:ok, _} = Flows.update(Flows.get(root.id), %{nodes: [subflow_step("Application", node)]})
+      assert Flows.get(node.subflow_id).name == "Application"
+      assert step_label(Flows.get(root.id)) == "Application"
+
+      {:ok, _} = Flows.make_reusable(Flows.get(node.subflow_id))
+      {:ok, _} = Flows.update(Flows.get(root.id), %{nodes: [subflow_step("Intake", node)]})
+
+      assert step_label(Flows.get(root.id)) == "Intake"
+      assert Flows.get(node.subflow_id).name == "Application"
+    end
+
+    test "rename_node writes the step's label and nothing else" do
+      {:ok, flow} = Flows.create(%{name: "Dog License"})
+      {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner contact")]})
+      [node] = Flows.get(flow.id).nodes
+
+      assert {:ok, renamed} = Flows.rename_node(node, "Your details")
+      assert get_in(renamed.properties, ["data", "label"]) == "Your details"
+      assert get_in(renamed.properties, ["data", "kind"]) == "form"
+      assert renamed.form_id == node.form_id
+      assert step_label(Flows.get(flow.id)) == "Your details"
+
+      # The form is the step's owner's concern, not this function's
+      assert Forms.get(node.form_id).name == "Owner contact"
+
+      # A blank label renames nothing — names are never blanked
+      assert {:ok, same} = Flows.rename_node(renamed, "")
+      assert get_in(same.properties, ["data", "label"]) == "Your details"
+    end
+  end
+
+  defp form_step(label, node_or_extra \\ %{})
+
+  defp form_step(label, %{id: id} = node) do
+    %{
+      id: id,
+      properties: %{
+        "type" => "step",
+        "form_id" => node.form_id,
+        "data" => %{"label" => label, "kind" => "form"}
+      }
+    }
+  end
+
+  defp form_step(label, extra) when is_map(extra) do
+    %{
+      properties:
+        Map.merge(%{"type" => "step", "data" => %{"label" => label, "kind" => "form"}}, extra)
+    }
+  end
+
+  defp subflow_step(label, node \\ nil) do
+    properties = %{
+      "type" => "subflow",
+      "data" => %{"label" => label, "subflow_label" => "forms"}
+    }
+
+    case node do
+      nil -> %{properties: properties}
+      node -> %{id: node.id, properties: Map.put(properties, "subflow_id", node.subflow_id)}
+    end
+  end
+
+  defp step_label(%Flow{nodes: [node]}), do: get_in(node.properties, ["data", "label"])
 end

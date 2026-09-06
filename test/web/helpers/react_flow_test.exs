@@ -277,24 +277,26 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       refute Map.has_key?(plain, "form_type")
     end
 
-    test "projects the backing entity's name into a node's data.label" do
+    test "keeps the node's stored label even when the entity behind it is named differently" do
+      # The step's name is the node's — a catalog form or reusable subflow
+      # named for the catalog must not rename every consumer's step on load
       subflow_node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),
-        properties: %{"type" => "subflow", "data" => %{"label" => "Stale label"}},
-        subflow: %FormFlow.Data.Templates.Flow{name: "Collect address"}
+        properties: %{"type" => "subflow", "data" => %{"label" => "Application"}},
+        subflow: %FormFlow.Data.Templates.Flow{name: "Pet application"}
       }
 
       form_node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),
-        properties: %{"type" => "step", "data" => %{"label" => "Stale label", "kind" => "form"}},
-        form: %FormFlow.Data.Templates.Form{name: "W-2 Details"}
+        properties: %{"type" => "step", "data" => %{"label" => "Your details", "kind" => "form"}},
+        form: %FormFlow.Data.Templates.Form{name: "Owner contact"}
       }
 
       flow = %FormFlow.Data.Templates.Flow{nodes: [subflow_node, form_node], relationships: []}
 
       assert [
-               %{"data" => %{"label" => "Collect address"}},
-               %{"data" => %{"label" => "W-2 Details"}}
+               %{"data" => %{"label" => "Application"}},
+               %{"data" => %{"label" => "Your details"}}
              ] =
                ReactFlow.to_data(flow).nodes
     end

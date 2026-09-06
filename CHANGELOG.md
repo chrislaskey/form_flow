@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.20.0
+
+### A step's name is the node's, and stays in step with an owned form or subflow
+
+**Breaking: the canvas no longer loads a form's or subflow's `name` over the
+node's label.** `FormFlow.Web.Helpers.ReactFlow.to_data/1` used to project
+the entity's current name into every form and subflow node's `data.label`
+on load, so a catalog form pointed at from two flows renamed both steps to
+the catalog's name, and a rename on a form's own page reached users only
+after the next canvas save. The node's stored label is now the step's name
+everywhere — it always was on the instance side
+(`FormFlow.Data.Instances.FlowProgress`) — and the two pages that rename a
+step keep the entity behind it in step from both sides:
+
+  * **The canvas save** (`FormFlow.Data.Templates.Flows.update/2`) still
+    writes the label through to the form or subflow, but **only when this
+    flow tree owns it**. A catalog form or a reusable subflow keeps its own
+    name for every consumer; the step's label is this flow's word for it.
+  * **The form and flow edit pages** reached through a node now edit the
+    step — the field reads **Step name** — and write the node's label
+    (`FormFlow.Data.Templates.Flows.rename_node/2`, new) *and* an owned
+    entity's `name` in one save, so there is no longer a state where the
+    admin sees one name and users another. From a step, a catalog form's or
+    reusable flow's own name is left alone, and the field says so. A
+    catalog form's own page (`/forms/:id`) and a root flow's own page keep
+    editing the entity's name as before.
+  * **Copy form** no longer writes the source's name onto the form being
+    started: a copy brings description, type, and definition, and the step
+    keeps its name.
+
+Hosts that renamed forms or subflows through `FormFlow.Data.Templates.Forms.update/2`
+or `Flows.update/2` directly, expecting the canvas to pick the new name up,
+now rename the step too (`rename_node/2`), or do it on the pages.
+
 ## v0.19.0
 
 ### The definition can be built as a form, not only typed as JSON

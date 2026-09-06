@@ -83,7 +83,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
 
-  Five exceptions to the pure pass-through, all display projections
+  Four exceptions to the pure pass-through, all display projections
   `to_data/1` merges into a node's `data`:
 
     * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
@@ -105,12 +105,14 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       the subflow's own identity form, so this one does *not* flow back —
       `FormFlow.Data.Templates.Flows` drops it from the node's properties at
       save.
-    * `label` — on nodes backed by a real entity, the entity's current `name`:
-      the embedded flow's (`:subflow` preloaded) or the collected form's
-      (`:form` preloaded). The canvas's inline rename edits it, and saves
-      write it through to the entity, so the node title and the entity's own
-      pages always show the same name. Entity-less nodes (Start/End, fresh
-      nodes) keep their stored label untouched.
+
+  `data.label` is *not* projected. The node's stored label is the step's
+  name — what `FormFlow.Data.Instances.FlowProgress` shows users — and the
+  pages that rename a step write it to the node and, when this flow tree owns
+  the entity behind the step, to that entity's `name` as well
+  (`FormFlow.Data.Templates.Flows`). A catalog form or a reusable subflow
+  keeps its own name for every consumer, so loading one over the node's
+  label would show every consumer the same name.
   """
 
   @edge_label "CONNECTS_TO"
@@ -193,7 +195,6 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     |> put_form_flow_type(node)
     |> put_form_type(node)
     |> put_perspectives(node)
-    |> put_entity_name(node)
   end
 
   # A node with no labels (nothing has run its changeset yet) is left exactly
@@ -203,25 +204,6 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   defp put_labels(properties, labels) do
     Map.update(properties, "data", %{"labels" => labels}, &Map.put(&1, "labels", labels))
   end
-
-  # The backing entity's name, projected into data.label so the node's title
-  # is the same name the entity's own pages show — the load side of the rename
-  # write-through in FormFlow.Data.Templates.Flows. A node with no entity, a
-  # nameless entity, or an unloaded association (%Ecto.Association.NotLoaded{}
-  # has no :name) keeps its stored label.
-  defp put_entity_name(properties, node) do
-    case entity_name(node) do
-      nil ->
-        properties
-
-      name ->
-        Map.update(properties, "data", %{"label" => name}, &Map.put(&1, "label", name))
-    end
-  end
-
-  defp entity_name(%{subflow: %{name: name}}) when is_binary(name), do: name
-  defp entity_name(%{form: %{name: name}}) when is_binary(name), do: name
-  defp entity_name(_node), do: nil
 
   # The embedded flow's type, projected into data for the canvas dropdown —
   # the load-side mirror of the save-side pop in
