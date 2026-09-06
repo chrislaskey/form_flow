@@ -218,11 +218,11 @@ defmodule Demo.FormFlowFormsCrudTest do
              ~s(input[name="dynamic_form[definition_editor]"][value="json"][checked])
            )
 
-    # Asking for the builder is refused, by name, and the radio snaps back.
-    # Auto-refresh defaults on, so the change pass is debounced.
+    # Asking for the builder is refused, by name, and the radio snaps back
+    # The page reacts to the change through a send_update the component
+    # handles after the change event replies, so read the page afterwards
     switch = fn params ->
       view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
-      Process.sleep(520)
       render(view)
     end
 
@@ -554,7 +554,6 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"definition_editor" => "json"}})
 
-    Process.sleep(520)
     assert render(view) =~ "Copy definition from existing form"
 
     view
@@ -697,9 +696,6 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
-    # Auto-refresh defaults on, and DynamicForm debounces its change pass
-    # while it's on — dirty? flips through that same debounced pass
-    Process.sleep(520)
     refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
 
     view

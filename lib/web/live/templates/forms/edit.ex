@@ -65,6 +65,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        error: nil,
        notice: nil,
        editor_error: nil,
+       preview_refresh_token: nil,
        publishing?: false,
        auto_update?: true,
        preview_rev: 0,
@@ -113,7 +114,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> switch_editor(payload, definition)
       |> reset_form_data_on_switch(pending_type, payload)
 
-    {:ok, maybe_refresh_preview(socket)}
+    {:ok, schedule_preview_refresh(socket)}
+  end
+
+  # The debounced preview refresh, delivered by the timer schedule_preview_refresh/1
+  # set. A stale token is a timer superseded by a later change, and is
+  # dropped — the message can't be recalled once it is in the mailbox.
+  def update(%{event: "refresh_preview", token: token}, socket) do
+    if token == socket.assigns.preview_refresh_token do
+      {:ok, socket |> assign(:preview_refresh_token, nil) |> force_refresh_preview()}
+    else
+      {:ok, socket}
+    end
   end
 
   def update(%{event: "save", payload: payload}, socket) do
@@ -230,6 +242,25 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     do: force_refresh_preview(socket)
 
   defp maybe_refresh_preview(socket), do: socket
+
+  # Only the preview waits. Remounting or re-rendering it per keystroke would
+  # be wasteful, so with auto-refresh on it follows 500ms of quiet — while
+  # every other consequence of a change (the dirty flag, an editor switch, a
+  # moved element) happens at once. Each change supersedes the pending
+  # refresh, by token.
+  defp schedule_preview_refresh(%{assigns: %{auto_update?: true}} = socket) do
+    token = make_ref()
+
+    Phoenix.LiveView.send_update_after(
+      __MODULE__,
+      %{id: socket.assigns.id, event: "refresh_preview", token: token},
+      500
+    )
+
+    assign(socket, :preview_refresh_token, token)
+  end
+
+  defp schedule_preview_refresh(socket), do: socket
 
   defp force_refresh_preview(socket) do
     if FormFlow.app_config(:pubsub_server) do
@@ -991,10 +1022,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             saying which draft is being edited. The save event writes each
             value to its owner — identity to the form row, definition to the
             draft. Picking a different draft belongs on Show, where the
-            version history lists them all.
-
-            The 500ms debounce exists for the preview — no point remounting
-            it per keystroke — so it only applies while auto-update is on. --%>
+            version history lists them all. --%>
           <DynamicForm.form
             id={"#{@id}-form"}
             data={@form_data}
@@ -1002,7 +1030,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             on_change={&changed(&1, @id)}
             on_submit={&validate_definition/1}
             on_success={&saved(&1, @id)}
-            change_debounce_in_ms={if(@auto_update?, do: 500)}
             components={@components || CoreComponents}
           >
         <:field type="text" name="name" label="Name" required />

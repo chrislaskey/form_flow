@@ -23,7 +23,10 @@ says why, rather than losing what it cannot show. The builder opens by
 default whenever it can show the saved definition, so a blank draft starts
 there. Copy definition belongs to the JSON editor and hides with it.
 
-**Changed:** `FormFlow.Web.Templates.Forms.Preview` now catches a
+**Changed:** the edit page no longer debounces DynamicForm's change pass;
+it debounces the preview refresh alone (500ms of quiet, while auto-refresh
+is on), so the dirty flag, an editor switch, and every other consequence of
+a change happen at once. `FormFlow.Web.Templates.Forms.Preview` now catches a
 definition that parses but cannot build a form (a question with no name)
 and shows it inline, where before the error surfaced inside DynamicForm's
 component at render time. Dirtiness compares the definition as the map that is saved,
