@@ -71,7 +71,14 @@ defmodule FormFlow.Web.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr(:rest, :global, include: ~w(href navigate patch method download name type value disabled))
+  attr(:rest, :global, include: ~w(href navigate patch method download name value form))
+
+  # Declared, not global: DynamicForm renders its add-entry buttons through
+  # this function with `type: "button"` beside an explicit `rest`, and
+  # Phoenix folds undeclared assigns into `rest` only when none is given. As
+  # a global, `type` was dropped there and the button submitted the form.
+  attr(:type, :string, default: nil)
+  attr(:disabled, :boolean, default: nil)
   attr(:class, :any)
   attr(:variant, :string, values: ~w(primary))
   slot(:inner_block, required: true)
@@ -92,7 +99,7 @@ defmodule FormFlow.Web.CoreComponents do
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
+      <button class={@class} type={@type} disabled={@disabled} {@rest}>
         {render_slot(@inner_block)}
       </button>
       """

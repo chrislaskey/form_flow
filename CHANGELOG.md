@@ -41,6 +41,13 @@ reordered entries back as the form's data.
 **The preview stays in view** while the editor scrolls, once the two
 columns sit side by side, and scrolls on its own when it is the taller.
 
+**Fixed:** `FormFlow.Web.CoreComponents.button/1` declares `type` and
+`disabled` as attributes rather than globals. DynamicForm renders its
+add-entry buttons through it with `type: "button"` beside an explicit
+`rest`, and Phoenix folds undeclared assigns into `rest` only when none is
+given — so the type was dropped, the button was a submit button, and Add
+element silently saved the draft.
+
 **Changed:** the edit page no longer debounces DynamicForm's change pass;
 it debounces the preview refresh alone (500ms of quiet, while auto-refresh
 is on), so the dirty flag, an editor switch, and every other consequence of

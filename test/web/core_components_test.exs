@@ -19,6 +19,20 @@ defmodule FormFlow.Web.CoreComponentsTest do
       assert html =~ "Save"
     end
 
+    test "keeps type and disabled when called with an explicit rest, as DynamicForm does" do
+      html =
+        render_component(&CoreComponents.button/1, %{
+          type: "button",
+          disabled: true,
+          rest: %{"phx-click" => "add_nested_entry"},
+          inner_block: text_slot("Add")
+        })
+
+      assert html =~ ~s(type="button")
+      assert html =~ "disabled"
+      assert html =~ ~s(phx-click="add_nested_entry")
+    end
+
     test "renders a link instead of a button when given navigate" do
       html =
         render_component(&CoreComponents.button/1, %{

@@ -123,6 +123,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} =
       live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
+    # Add element must not also submit the form — a button with no type is a
+    # submit button, and a click would silently save the draft
+    assert has_element?(view, ~s(button[type="button"][phx-click="add_nested_entry"]))
+
     # Entries arrive as the browser sends a nested form: indexed, with the
     # entry fields named after the SurveyJS properties they set. Choices are
     # one per line; a property that doesn't apply to the type (a text
