@@ -48,6 +48,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   import FormFlow.Web.Helpers.Paths
 
+  alias Phoenix.LiveView.JS
+
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
@@ -99,6 +101,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # change, so the definition — for dirtiness and the preview — is read by
   # that editor, and only then is a change of editor applied
   def update(%{event: "change", payload: payload}, socket) do
+    {payload, moved?} = move_element(payload)
     pending_type = pending_type(payload, socket.assigns.pending_type)
     properties = Shared.properties(socket.assigns.form_types, pending_type)
     definition = current_definition(payload, socket.assigns.definition_editor)
@@ -111,6 +114,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       socket
       |> assign(dirty?: dirty?, notice: nil, editor_error: nil, pending_type: pending_type)
       |> assign(:latest_json, definition_json(preview_definition(payload, socket, definition)))
+      |> reset_form_data_on_move(moved?, payload)
       |> switch_editor(payload, definition)
       |> reset_form_data_on_switch(pending_type, payload)
 
@@ -330,6 +334,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       definition: definition
     }
   end
+
+  # An element's up/down arrow sets its entry's `move` field and fires the
+  # form's change, so the request arrives here with every other value as the
+  # admin left it. The reordered entries replace the payload's, and become
+  # the form's data — DynamicForm rebuilds from that, the same way an editor
+  # switch or a form-type switch already does.
+  defp move_element(payload) do
+    case Builder.move(payload.data[:elements] || []) do
+      {:moved, entries} -> {%{payload | data: Map.put(payload.data, :elements, entries)}, true}
+      :none -> {payload, false}
+    end
+  end
+
+  defp reset_form_data_on_move(socket, true, payload),
+    do: assign(socket, :form_data, payload.data)
+
+  defp reset_form_data_on_move(socket, false, _payload), do: socket
 
   # The definition a payload describes, read by the editor it came from. JSON
   # mode: the text, decoded when it parses so it compares to the saved map,
@@ -1132,6 +1153,43 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           visible_if="{definition_editor} = 'form'"
         />
         <:group name="element_type_and_name" nested="elements" type="horizontal" />
+        <%!-- Up and down: the arrows write "up"/"down" into this hidden field
+              and fire the form's change, so the move travels with the rest
+              of the form's values (Builder.move/1, move_element/1). The
+              library's entries are otherwise positional, with no reorder of
+              their own. --%>
+        <:field
+          :let={field}
+          nested="elements"
+          group="element_type_and_name"
+          type="text"
+          name="move"
+          label={false}
+        >
+          <input type="hidden" id={field.id} name={field.name} value="" />
+          <div class="flex flex-col">
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost px-1"
+              aria-label="Move up"
+              title="Move up"
+              disabled={field.form.index == 0}
+              phx-click={move_element_js(field, "up")}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost px-1"
+              aria-label="Move down"
+              title="Move down"
+              disabled={field.form.index + 1 >= length(DynamicForm.form_data(field)[:elements] || [])}
+              phx-click={move_element_js(field, "down")}
+            >
+              ↓
+            </button>
+          </div>
+        </:field>
         <:field
           nested="elements"
           group="element_type_and_name"
@@ -1348,6 +1406,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp preview_id(assigns), do: "#{assigns.id}-preview-r#{assigns.preview_rev}"
+
+  # Set the entry's hidden `move` field and fire the form's change from it,
+  # entirely on the client — no event of its own to handle
+  defp move_element_js(field, direction) do
+    JS.set_attribute({"value", direction}, to: "##{field.id}")
+    |> JS.dispatch("input", to: "##{field.id}")
+  end
 
   defp based_on_version(versions, %{based_on_version_id: base_id}) when is_binary(base_id) do
     Enum.find(versions, &(&1.id == base_id))

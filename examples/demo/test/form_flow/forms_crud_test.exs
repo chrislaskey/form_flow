@@ -197,6 +197,57 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Saved."
   end
 
+  test "an element's arrows move it up and down the builder", %{conn: conn} do
+    {:ok, form} =
+      Forms.create(%{
+        name: "Ordered",
+        definition: %{
+          "elements" => [
+            %{"type" => "text", "name" => "first"},
+            %{"type" => "text", "name" => "second"},
+            %{"type" => "text", "name" => "third"}
+          ]
+        }
+      })
+
+    [draft] = Forms.list_versions(form.id)
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][0][name]"][value="first"]))
+    assert has_element?(view, ~s(button[aria-label="Move up"][disabled]))
+
+    # The arrow writes "up" into the entry's move field and fires the form's
+    # change; the page reorders and hands the entries back as the form's data
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{
+      "dynamic_form" => %{
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "first"},
+          "1" => %{"type" => "text", "name" => "second", "move" => "up"},
+          "2" => %{"type" => "text", "name" => "third"}
+        }
+      }
+    })
+
+    render(view)
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][0][name]"][value="second"]))
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][1][name]"][value="first"]))
+    assert has_element?(view, ~s(input[name="dynamic_form[elements][2][name]"][value="third"]))
+
+    # Saved in the new order, with nothing of the request in the JSON
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{"dynamic_form" => %{"name" => "Ordered", "definition_editor" => "form"}})
+
+    assert render(view) =~ "Saved."
+
+    assert Enum.map(Forms.get_version(draft.id).definition["elements"], & &1["name"]) ==
+             ["second", "first", "third"]
+
+    refute Forms.get_version(draft.id).definition |> inspect() =~ "move"
+  end
+
   test "switching editors moves the definition across, and refuses what the builder can't show",
        %{conn: conn} do
     {:ok, form} =

@@ -133,6 +133,24 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
     end
   end
 
+  describe "move/1" do
+    test "swaps the asking entry with its neighbour and clears the request" do
+      entries = [%{name: "a"}, %{name: "b", move: "up"}, %{name: "c"}]
+      assert Builder.move(entries) == {:moved, [%{name: "b"}, %{name: "a"}, %{name: "c"}]}
+
+      entries = [%{"name" => "a", "move" => "down"}, %{"name" => "b"}]
+      assert Builder.move(entries) == {:moved, [%{"name" => "b"}, %{"name" => "a"}]}
+    end
+
+    test "an entry at the edge stays put, and no request is none" do
+      assert Builder.move([%{name: "a", move: "up"}, %{name: "b"}]) ==
+               {:moved, [%{name: "a"}, %{name: "b"}]}
+
+      assert Builder.move([%{name: "a", move: ""}, %{name: "b"}]) == :none
+      assert Builder.move([]) == :none
+    end
+  end
+
   test "complete_entries/1 keeps the entries with both a type and a name" do
     entries = [
       %{type: "text", name: "a"},

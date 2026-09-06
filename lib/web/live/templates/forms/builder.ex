@@ -122,6 +122,44 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   end
 
   @doc """
+  Applies the one move an entry asked for through its `move` field — `"up"`
+  or `"down"` — swapping it with its neighbour, and clears the request from
+  every entry. `{:moved, entries}` when one asked; `:none` otherwise.
+
+  The request rides in the form's own change, so it arrives with every other
+  value as the admin left it; the page then hands the reordered entries back
+  as the form's data. An entry at the edge asked to go further stays put.
+  """
+  def move(entries) when is_list(entries) do
+    case Enum.find_index(entries, &(move_of(&1) in ["up", "down"])) do
+      nil ->
+        :none
+
+      index ->
+        direction = move_of(Enum.at(entries, index))
+        target = if direction == "up", do: index - 1, else: index + 1
+
+        entries
+        |> Enum.map(&Map.drop(&1, [:move, "move"]))
+        |> swap(index, target)
+        |> then(&{:moved, &1})
+    end
+  end
+
+  defp move_of(entry), do: entry[:move] || entry["move"]
+
+  defp swap(entries, _index, target) when target < 0 or target >= length(entries), do: entries
+
+  defp swap(entries, index, target) do
+    moving = Enum.at(entries, index)
+    neighbour = Enum.at(entries, target)
+
+    entries
+    |> List.replace_at(index, neighbour)
+    |> List.replace_at(target, moving)
+  end
+
+  @doc """
   The entries that are elements already: those with both a type and a name.
 
   A row the admin has added but not finished is not an element yet. Save
