@@ -716,9 +716,10 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     assert render(view) =~ "Copy definition from existing form"
 
+    # The source is a field of the form; the button carries the pick with it
     view
-    |> element("#forms-edit-definition-copy")
-    |> render_change(%{"source_form_id" => source.id})
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"definition_copy_source" => source.id}})
 
     view
     |> element(~s(button[phx-click="copy_definition"]))

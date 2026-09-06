@@ -74,8 +74,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        preview_rev: 0,
        preview_topic: Ecto.UUID.generate(),
        chooser_selection: "custom",
-       chooser_source_form_id: nil,
-       definition_copy_source_form_id: nil
+       chooser_source_form_id: nil
      )}
   end
 
@@ -738,19 +737,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  @impl true
-  def handle_event("definition_copy_pick_source", %{"source_form_id" => source_form_id}, socket) do
-    {:noreply, assign(socket, :definition_copy_source_form_id, presence(source_form_id))}
-  end
-
   # Unlike Copy form, this is always available — it isn't gated by
   # `show_chooser?/2` — and it touches only the definition: no name, slug,
-  # description, or form type moves.
+  # description, or form type moves. The source comes with the click: the
+  # button reads it off the form's own dropdown.
   @impl true
-  def handle_event("copy_definition", _params, socket) do
-    %{version: version, definition_copy_source_form_id: source_id} = socket.assigns
+  def handle_event("copy_definition", %{"source_form_id" => source_id}, socket) do
+    %{version: version} = socket.assigns
 
-    case source_id && copy_definition_content(version, source_id) do
+    case presence(source_id) && copy_definition_content(version, source_id) do
       {:ok, json} ->
         {:noreply,
          socket
@@ -1052,14 +1047,28 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         This draft was based on a version that is no longer the latest — review before publishing.
       </Core.alert>
 
-      <div class="flex flex-wrap gap-6">
-        <div class="min-w-0 flex-1">
-          <%!-- One form, one Save: the lineage's identity (name, description)
-            above the version's definition, separated by a read-only strip
-            saying which draft is being edited. The save event writes each
-            value to its owner — identity to the form row, definition to the
-            draft. Picking a different draft belongs on Show, where the
-            version history lists them all. --%>
+      <%!-- One form, one Save: the lineage's identity (name, description)
+        above the version's definition, separated by a read-only strip
+        saying which draft is being edited. The save event writes each
+        value to its owner — identity to the form row, definition to the
+        draft. Picking a different draft belongs on Show, where the
+        version history lists them all.
+
+        Two parts, one form: the identity fields run the full width, then
+        the version — the draft strip and the definition editors, collected
+        in the "version" group — shares a row with the preview. The
+        component's root and its <form> are display: contents, so the
+        field wrappers and the group are the flex items themselves: a field
+        wrapper (the library's div.mb-4) takes a full line, and the group
+        (the one child without that class) and the preview split the last,
+        side by side from lg up and stacked below. --%>
+      <div class={[
+        "flex flex-wrap gap-x-6",
+        "[&>:first-child]:contents [&>:first-child>form]:contents",
+        "[&_form>.mb-4]:basis-full",
+        "[&_form>div:not(.mb-4)]:min-w-0 [&_form>div:not(.mb-4)]:basis-full",
+        "lg:[&_form>div:not(.mb-4)]:grow lg:[&_form>div:not(.mb-4)]:basis-0"
+      ]}>
           <DynamicForm.form
             id={"#{@id}-form"}
             data={@form_data}
@@ -1098,7 +1107,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           read_only={Shared.read_only?(property)}
           default={property.default_value}
         />
-        <:field type="html" name="draft_info">
+        <:group name="version" type="vertical" title={false} />
+        <:field group="version" type="html" name="draft_info">
           <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
             Editing <span class="font-medium">draft</span>,
             last updated {Calendar.strftime(@version.updated_at, "%Y-%m-%d %H:%M")}<span :if={@based_on}>, based on
@@ -1137,6 +1147,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               required — and content crosses between them only when the
               radio changes (switch_editor/3). --%>
         <:field
+          group="version"
           type="radiogroup"
           name="definition_editor"
           label="Definition"
@@ -1144,12 +1155,45 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           metadata={%{"style" => "horizontal"}}
         />
         <:field
+          group="version"
           type="comment"
           name="definition"
           label="Definition (JSON)"
           required
           visible_if="{definition_editor} = 'json'"
         />
+        <%!-- Copy definition belongs to the JSON editor: it writes JSON, and
+              the builder is re-seeded from the saved draft anyway. Fields of
+              this form rather than a form of their own, so they sit in the
+              version group; the button reads the picked source off the form.
+              A dropdown needs options, so neither renders with no catalog. --%>
+        <:field
+          :if={@catalog_forms != []}
+          group="version"
+          type="dropdown"
+          name="definition_copy_source"
+          label="Copy definition from existing form"
+          options={Enum.map(@catalog_forms, &{catalog_option_label(&1), &1.id})}
+          visible_if="{definition_editor} = 'json'"
+        />
+        <:field
+          :let={form}
+          :if={@catalog_forms != []}
+          group="version"
+          type="custom"
+          name="definition_copy"
+          visible_if="{definition_editor} = 'json'"
+        >
+          <Core.button
+            components={@components}
+            phx-click="copy_definition"
+            phx-target={@myself}
+            phx-value-source_form_id={form[:definition_copy_source].value}
+            disabled={is_nil(presence(form[:definition_copy_source].value))}
+          >
+            Copy definition
+          </Core.button>
+        </:field>
         <%!-- The form builder: one entry per element, its fields named after
               the SurveyJS properties they set. Which fields show for a type,
               and which the entry writes back, come from one table in
@@ -1165,6 +1209,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               elements-scope one. --%>
         <:nested
           name="elements"
+          group="version"
           title="Elements"
           description="The form's questions and content blocks, in order. An element's name is the key its answer is stored under."
           entry_title="Element {panelIndex}"
@@ -1262,41 +1307,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
           </DynamicForm.form>
 
-          <%!-- Copy definition belongs to the JSON editor: it writes JSON,
-                and the builder is re-seeded from the saved draft anyway --%>
-          <div :if={@definition_editor == "json"} class="mt-2 flex items-center gap-2">
-            <form
-              id={"#{@id}-definition-copy"}
-              phx-change="definition_copy_pick_source"
-              phx-target={@myself}
-            >
-              <select name="source_form_id" class="w-full max-w-xs select">
-                <option value="">Copy definition from existing form…</option>
-                <option
-                  :for={source <- @catalog_forms}
-                  value={source.id}
-                  selected={source.id == @definition_copy_source_form_id}
-                >
-                  {catalog_option_label(source)}
-                </option>
-              </select>
-            </form>
-            <Core.button
-              components={@components}
-              phx-click="copy_definition"
-              phx-target={@myself}
-              disabled={is_nil(@definition_copy_source_form_id)}
-            >
-              Copy definition
-            </Core.button>
-          </div>
-        </div>
-
         <%!-- Sticky beside a long editor: the preview stays in view while
               the admin scrolls the fields, and scrolls on its own when it is
               the taller of the two. Only once the columns sit side by side —
               stacked, sticky would pin it over the editor. --%>
-        <div class="min-w-0 flex-1 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+        <div class="min-w-0 basis-full lg:grow lg:basis-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           <div class="mb-1 flex items-center justify-between gap-2">
             <h3 class="text-xs font-medium text-zinc-500">Preview</h3>
             <div class="flex items-center gap-2">
