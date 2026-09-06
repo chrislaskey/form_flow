@@ -30,12 +30,15 @@ defmodule Demo.FormFlowFormsTest do
       assert {:error, %Ecto.Changeset{}} = Forms.create(%{definition: %{}})
     end
 
-    test "list is the catalog: unowned forms for one app, oldest first" do
+    test "list is the catalog: unowned forms, oldest first, narrowed to a tenant on request" do
       {:ok, first} = Forms.create(%{name: "First"})
-      {:ok, _other_app} = Forms.create(%{name: "Elsewhere", app: "other"})
+      {:ok, other_tenant} = Forms.create(%{name: "Elsewhere", tenant_id: "other"})
       {:ok, second} = Forms.create(%{name: "Second"})
 
-      assert Enum.map(Forms.list(), & &1.id) == [first.id, second.id]
+      # No tenant given lists every tenant's catalog — a host with no tenants
+      # has nothing to narrow by
+      assert Enum.map(Forms.list(), & &1.id) == [first.id, other_tenant.id, second.id]
+      assert Enum.map(Forms.list(tenant_id: "other"), & &1.id) == [other_tenant.id]
     end
 
     test "update touches identity only" do
@@ -44,11 +47,14 @@ defmodule Demo.FormFlowFormsTest do
       assert {:ok, %Form{name: "After"}} = Forms.update(Forms.get(form.id), %{name: "After"})
     end
 
-    test "catalog names are unique per app" do
+    test "catalog names are unique — the catalog is one namespace, across tenants" do
       {:ok, _} = Forms.create(%{name: "Enrollment"})
 
       assert {:error, changeset} = Forms.create(%{name: "Enrollment"})
-      assert %{app: _} = errors_on(changeset)
+      assert %{name: ["has already been taken"]} = errors_on(changeset)
+
+      assert {:error, changeset} = Forms.create(%{name: "Enrollment", tenant_id: "other"})
+      assert %{name: ["has already been taken"]} = errors_on(changeset)
     end
 
     test "delete removes versions then the lineage" do
@@ -461,6 +467,9 @@ defmodule Demo.FormFlowFormsTest do
     Forms.update_status(draft, :published, opts)
   end
 
+  # Inserts the row as given. `Instances.Form.changeset/2` never casts
+  # `status` or `completed_at` — completion is `Instances.Forms.update_status/4`'s
+  # to write — so a test that needs a completed row sets the struct directly.
   defp insert_instance(version, attrs \\ []) do
     attrs =
       Enum.into(attrs, %{
@@ -469,8 +478,7 @@ defmodule Demo.FormFlowFormsTest do
         status: "in_progress"
       })
 
-    {:ok, instance} =
-      FormFlowRepo.insert(Instances.Form.changeset(%Instances.Form{}, attrs))
+    {:ok, instance} = FormFlowRepo.insert(struct(Instances.Form, attrs))
 
     instance
   end

@@ -7,18 +7,14 @@ defmodule Demo.Users do
   `DemoWeb.UserHook`); visitors without one see the demo as the default user.
   """
 
+  # In the order a visitor meets them: reading, applying, then the two staff
+  # roles — the reviewer works applications, the admin builds the flows.
   @users [
     %{
       id: "docs_reader",
       name: "Docs Reader",
       initials: "DR",
       blurb: "Reads the README-style docs at /"
-    },
-    %{
-      id: "reviewer",
-      name: "Pet License Reviewer",
-      initials: "PR",
-      blurb: "Reviews and decides license applications"
     },
     %{
       id: "dog_owner",
@@ -31,6 +27,18 @@ defmodule Demo.Users do
       name: "Cat Owner",
       initials: "CO",
       blurb: "Applies for and renews a cat license"
+    },
+    %{
+      id: "reviewer",
+      name: "Pet License Reviewer",
+      initials: "PR",
+      blurb: "Reviews and decides license applications"
+    },
+    %{
+      id: "admin",
+      name: "Pet License Admin",
+      initials: "PA",
+      blurb: "Builds the licensing flows and forms"
     }
   ]
 
