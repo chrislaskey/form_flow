@@ -80,7 +80,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Editable"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    # Past the never-published-and-blank chooser, straight to the form
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     assert html =~ "Definition (JSON)"
 
@@ -130,7 +131,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Mine"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
     assert html =~ "mine"
 
     # The save lands through send_update after the submit, so render the
@@ -157,7 +158,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Before", description: "Old"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     view
     |> element("#forms-edit-form-form")
@@ -181,7 +182,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Typed"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # The dropdown carries what the demo's Config enables — proof the
     # router's config attr reaches the form pages. No type picked, so none
@@ -197,6 +198,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Typed", "form_type" => "demo_prefill"}})
 
+    # Auto-refresh defaults on, and DynamicForm debounces its change pass
+    # while it's on (`change_debounce_in_ms`) — the property swap lands
+    # through that same debounced pass, so it isn't there to read yet
+    Process.sleep(520)
     html = render(view)
     assert html =~ "Name to prefill"
     # A choice property renders as a select of its options
@@ -251,6 +256,140 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get(form.id).properties == %{"slug" => "typed"}
   end
 
+  test "a blank, never-published draft offers the copy-or-custom chooser; anything else doesn't",
+       %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Fresh"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    assert html =~ "Start this form from"
+    assert html =~ "Custom form"
+    assert html =~ "Copy form"
+
+    # A definition already typed in — even once nothing has been published —
+    # is something a copy would overwrite, so the chooser stops offering
+    {:ok, _} = Forms.update_draft(draft, %{definition: %{"fields" => []}})
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    refute html =~ "Start this form from"
+
+    # Publishing is the other way out, regardless of the definition
+    {:ok, _} = Forms.update_draft(draft, %{definition: %{}})
+    {:ok, _v1} = Forms.update_status(draft, :published)
+    {:ok, new_draft} = Forms.create_draft(form.id, based_on: draft.id)
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{new_draft.id}/edit")
+    refute html =~ "Start this form from"
+  end
+
+  test "the chooser is the only thing on the page until a choice is made", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Fresh"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    assert html =~ "Start this form from"
+    refute has_element?(view, "#forms-edit-form-form")
+    refute has_element?(view, "button", "Publish")
+    refute html =~ "Definition (JSON)"
+
+    # Custom form is the default selection; Select is what commits it
+    view
+    |> element(~s(button[phx-click="select_custom"]))
+    |> render_click()
+
+    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+    refute html =~ "Start this form from"
+    assert has_element?(view, "#forms-edit-form-form")
+    assert has_element?(view, "button", "Publish")
+
+    # Nothing about the form or draft changed — Custom form is a no-op
+    assert Forms.get_version(draft.id).definition == %{}
+  end
+
+  test "Copy form writes the source's identity and definition, keeping this form's own slug",
+       %{conn: conn} do
+    {:ok, source} =
+      Forms.create(%{
+        name: "Source Form",
+        description: "The original",
+        definition: %{"fields" => [%{"name" => "ssn"}]}
+      })
+
+    [source_draft] = Forms.list_versions(source.id)
+    {:ok, _v1} = Forms.update_status(source_draft, :published)
+    {:ok, source} = Forms.update(source, %{properties: %{"form_type" => "demo_prefill"}})
+
+    {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
+    dest = Forms.get(node.form_id)
+    [dest_draft] = Forms.list_versions(dest.id)
+
+    {:ok, view, _html} =
+      live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{dest_draft.id}/edit")
+
+    view
+    |> element("input[type=radio][value=copy]")
+    |> render_click(%{"selection" => "copy"})
+
+    # The option shows the slug alongside the name, so two forms with the
+    # same display name are still tellable apart in the dropdown
+    assert render(view) =~ "Source Form · #{source.slug}"
+
+    view
+    |> element("#forms-edit-chooser-copy")
+    |> render_change(%{"source_form_id" => source.id})
+
+    view
+    |> element(~s(button[phx-click="copy_form"]))
+    |> render_click()
+
+    updated = Forms.get(dest.id)
+    assert updated.name == "Source Form"
+    assert updated.description == "The original"
+    assert updated.slug == "taxes-2026_w2-details"
+    assert updated.properties["form_type"] == "demo_prefill"
+
+    assert Forms.get_version(dest_draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
+
+    # The chooser served its purpose — a copy is content, so it stops offering
+    html = render(view)
+    refute html =~ "Start this form from"
+  end
+
+  test "Copy definition, under the JSON field, works any time and touches only the definition",
+       %{conn: conn} do
+    {:ok, source} =
+      Forms.create(%{name: "Source Form", definition: %{"fields" => [%{"name" => "ssn"}]}})
+
+    [source_draft] = Forms.list_versions(source.id)
+    {:ok, _v1} = Forms.update_status(source_draft, :published)
+
+    {form, v1} = published_form()
+    {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    # Already published, so the main chooser doesn't offer itself — Copy
+    # definition isn't gated by that at all
+    refute html =~ "Start this form from"
+    assert html =~ "Copy definition from existing form"
+
+    view
+    |> element("#forms-edit-definition-copy")
+    |> render_change(%{"source_form_id" => source.id})
+
+    view
+    |> element(~s(button[phx-click="copy_definition"]))
+    |> render_click()
+
+    updated = Forms.get(form.id)
+    assert updated.name == form.name
+    assert updated.description == form.description
+    assert updated.slug == form.slug
+    assert Forms.get_version(draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
+  end
+
   test "a related-form property offers the forms earlier in the flow", %{conn: conn} do
     # Start → Intake → Review: editing Review's form, Intake is the only
     # earlier form; Review itself and nothing after it are offered
@@ -271,6 +410,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Review", "form_type" => "demo_prefill"}})
 
+    # Auto-refresh defaults on, and DynamicForm debounces its change pass
+    # while it's on — the property swap lands through that same debounced
+    # pass, so it isn't there to read yet
+    Process.sleep(520)
     html = render(view)
     assert html =~ "Copy name from"
     assert html =~ ~s(value="#{intake.id}")
@@ -354,7 +497,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Remote"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # The header button submits the DynamicForm below through its form= id;
     # the form itself renders no built-in submit. Publish sits to its right,
@@ -371,6 +514,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
+    # Auto-refresh defaults on, and DynamicForm debounces its change pass
+    # while it's on — dirty? flips through that same debounced pass
+    Process.sleep(520)
     refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
 
     view
@@ -381,9 +527,34 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
   end
 
-  test "opening a form node from the edit canvas lands on its show page, like the read-only canvas",
+  test "opening a never-published form node from the edit canvas lands straight on its editor",
        %{conn: conn} do
     {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
+    [draft] = Forms.list_versions(node.form_id)
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_form", %{"node_id" => node.id})
+
+    # Nothing has ever been published, so there's nothing on Show worth
+    # seeing yet — Open lands straight on the node's own (sole) draft,
+    # exactly as it would have landed on a fresh "Save & Continue"
+    assert_redirect(
+      view,
+      "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?mode=edit"
+    )
+
+    # And it creates nothing to get there — the same draft as before the click
+    assert length(Forms.list_versions(node.form_id)) == 1
+  end
+
+  test "opening a form node from the edit canvas lands on its show page once it has been published",
+       %{conn: conn} do
+    {root, node} = flow_with_form_node("Taxes 2026", "W-2 Details")
+    [draft] = Forms.list_versions(node.form_id)
+    {:ok, _v1} = Forms.update_status(draft, :published)
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/edit")
 
@@ -406,7 +577,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Publishable"})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     view |> element("button", "Publish") |> render_click()
 
@@ -559,6 +730,24 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get_version(draft.id) == nil
   end
 
+  test "Delete draft is hidden when a draft is the form's only version", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Solo"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
+    refute html =~ "Delete draft"
+
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+    refute html =~ "Delete draft"
+
+    # A second version — draft or published, doesn't matter which — is what
+    # brings the button back
+    {:ok, _other_draft} = Forms.create_draft(form.id)
+
+    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}")
+    assert html =~ "Delete draft"
+  end
+
   test "deleting a catalog form returns to the catalog", %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Mistake"})
 
@@ -604,6 +793,8 @@ defmodule Demo.FormFlowFormsCrudTest do
   test "opening a form node from a subflow's edit canvas points its breadcrumb back at both editors",
        %{conn: conn} do
     {root, subflow_node, form_node} = nested_flow_with_form_node()
+    [draft] = Forms.list_versions(form_node.form_id)
+    {:ok, _v1} = Forms.update_status(draft, :published)
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit")
 
@@ -611,10 +802,11 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_form", %{"node_id" => form_node.id})
 
-    {show_path, _flash} = assert_redirect(view)
-    assert show_path =~ "?mode=edit"
+    # Published, so this lands on Show rather than the never-published
+    # shortcut straight to the editor
+    assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{form_node.id}/form?mode=edit")
 
-    {:ok, view, _html} = live(conn, show_path)
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{form_node.id}/form?mode=edit")
     assert has_element?(view, "a[href='/admin/flows/#{root.id}/edit']", "Taxes 2026")
 
     assert has_element?(
@@ -623,9 +815,9 @@ defmodule Demo.FormFlowFormsCrudTest do
              "Wages"
            )
 
-    # Edit draft carries the same query forward, so the editor's own
-    # breadcrumb stays pointed at both editors too
-    view |> element("a", "Edit draft") |> render_click()
+    # "New draft from this version" carries the same query forward, so the
+    # editor's own breadcrumb stays pointed at both editors too
+    view |> element("button", "New draft from this version") |> render_click()
     {edit_path, _flash} = assert_redirect(view)
     assert edit_path =~ "?mode=edit"
 
@@ -637,6 +829,33 @@ defmodule Demo.FormFlowFormsCrudTest do
              "a[href='/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit']",
              "Wages"
            )
+  end
+
+  test "opening a never-published form node from a nested edit canvas lands straight on its editor",
+       %{conn: conn} do
+    {root, subflow_node, form_node} = nested_flow_with_form_node()
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:open_form", %{"node_id" => form_node.id})
+
+    {edit_path, _flash} = assert_redirect(view)
+    assert edit_path =~ ~r{/versions/[^/]+/edit\?mode=edit$}
+
+    {:ok, view, _html} = live(conn, edit_path)
+    assert has_element?(view, "a[href='/admin/flows/#{root.id}/edit']", "Taxes 2026")
+
+    assert has_element?(
+             view,
+             "a[href='/admin/flows/#{root.id}/nodes/#{subflow_node.id}/edit']",
+             "Wages"
+           )
+
+    # Nothing was created to make this possible — this is the node's own
+    # initial draft
+    assert length(Forms.list_versions(form_node.form_id)) == 1
   end
 
   test "a form node's Open button navigates to the drill-in URL", %{conn: conn} do

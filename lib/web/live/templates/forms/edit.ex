@@ -17,6 +17,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   Addressed like `FormFlow.Web.Templates.Forms.Show`, standalone
   (`/forms/:id/versions/:version_id/edit`) or by drill-in
   (`/flows/:root/nodes/:node_id/form/versions/:version_id/edit`).
+
+  A draft that is blank and has never been published shows nothing but a
+  choice, in place of the identity form: Custom form (an explicit no-op —
+  the fields are already ready once chosen) or Copy form (pick another form
+  and write its name, description, form type, and definition onto this one
+  — never its slug, which already carries this form's own place). Selecting
+  either is what reveals the rest of the page (`awaiting_start?`), and the
+  chooser stops being offered on any later visit the moment either
+  triggering fact changes — a save, a publish — so nothing tracks that a
+  choice was made, beyond Custom form's own `?start=custom` (see
+  `select_custom_path/1`; Copy needs no such marker, since writing the
+  definition already makes the draft not blank).
   """
 
   use Phoenix.LiveComponent
@@ -38,9 +50,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        error: nil,
        notice: nil,
        publishing?: false,
-       auto_update?: false,
+       auto_update?: true,
        preview_rev: 0,
-       preview_topic: Ecto.UUID.generate()
+       preview_topic: Ecto.UUID.generate(),
+       chooser_selection: "custom",
+       chooser_source_form_id: nil,
+       definition_copy_source_form_id: nil
      )}
   end
 
@@ -151,6 +166,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     version = assigns.version_id && Forms.get_version(assigns.version_id)
     versions = if form, do: Forms.list_versions(form.id), else: []
 
+    show_chooser? = show_chooser?(form, version)
+
     socket
     |> assign(
       form: form,
@@ -160,7 +177,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       based_on: based_on_version(versions, version),
       counts: form && Forms.instance_counts(form.id),
       form_types: form_types(assigns, form, version, node),
-      pending_type: saved_type(form)
+      pending_type: saved_type(form),
+      show_chooser?: show_chooser?,
+      awaiting_start?: awaiting_start?(show_chooser?, assigns.params),
+      catalog_forms: catalog_forms(form)
     )
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn ->
@@ -179,15 +199,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end)
   end
 
-  defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket) do
+  defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket),
+    do: force_refresh_preview(socket)
+
+  defp maybe_refresh_preview(socket), do: socket
+
+  defp force_refresh_preview(socket) do
     if FormFlow.app_config(:pubsub_server) do
       refresh_preview_by_pubsub(socket)
     else
       refresh_preview_by_re_render(socket)
     end
   end
-
-  defp maybe_refresh_preview(socket), do: socket
 
   defp refresh_preview_by_pubsub(socket) do
     if socket.assigns.latest_json != socket.assigns.preview_json do
@@ -259,6 +282,38 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp presence(empty) when empty in [nil, ""], do: nil
   defp presence(value), do: value
 
+  # The one-time chooser: offered only for a draft that is both blank and
+  # has never been published — nothing published means nothing at stake
+  # (same test `FormFlow.Web.Templates.Forms.Show` uses to skip the
+  # migration-policy dialog on a first publish), and a blank definition
+  # means there is nothing here a copy would overwrite. Either fact turning
+  # false — a save, a publish — is what makes the chooser stop being
+  # offered; nothing tracks that a choice was made, because none is needed.
+  defp show_chooser?(nil, _version), do: false
+  defp show_chooser?(_form, nil), do: false
+
+  defp show_chooser?(form, version),
+    do: version.definition == %{} and not Forms.ever_published?(form.id)
+
+  # Whether the page is still waiting on a choice: `show_chooser?/2` is the
+  # data condition, `?start=custom` (`select_custom_path/1`) is Custom
+  # form's own way of saying the choice was already made
+  defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "custom"
+
+  # The catalog forms this form could be copied from — every reusable form
+  # but itself, computed only while the chooser is actually offered
+  defp catalog_forms(nil), do: []
+
+  defp catalog_forms(form) do
+    Forms.list(tenant_id: form.tenant_id)
+    |> Enum.reject(&(&1.id == form.id))
+  end
+
+  # The dropdown's own label — the slug alongside the name, the way an
+  # admin looks a form up in code
+  defp catalog_option_label(%{slug: nil} = source), do: source.name
+  defp catalog_option_label(source), do: "#{source.name} · #{source.slug}"
+
   # The identity form's data: the saved values, with the saved type's property
   # values under their field names. Switching the type dropdown re-renders
   # the property fields, and DynamicForm rebuilds a form whose fields changed
@@ -329,6 +384,63 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> Map.put("form_type_property_values", values)
   end
 
+  # The chooser's Copy: the source's name, description, form type and its
+  # property values become *this* lineage's; the source's resolved
+  # definition (latest published, else newest draft — the same fallback
+  # `FormFlow.Web.Templates.Forms.Show` resolves a bare URL to) becomes
+  # *this* draft's. Neither this form's id nor its slug moves — a property
+  # value tied to this form's own place in the flow (a `related_form`
+  # choice, say) would be meaningless copied from the source's; the existing
+  # stale-choice handling (`FormFlow.Web.Templates.Shared.fill_related_forms/4`)
+  # is what tells the admin to pick it again rather than silently keeping a
+  # value that names a form here.
+  defp copy_form_content(form, version, source_id) do
+    with %{} = source <- Forms.get(source_id),
+         %{} = source_version <- resolved_version(source.id),
+         identity = %{
+           name: source.name,
+           description: source.description,
+           properties:
+             template_properties(
+               form,
+               source.properties["form_type"],
+               FormFlow.Config.Forms.Type.property_values(source)
+             )
+         },
+         {:ok, _form} <- Forms.update(form, identity),
+         {:ok, _version} <- Forms.update_draft(version, %{definition: source_version.definition}) do
+      {:ok, Phoenix.json_library().encode!(source_version.definition, pretty: true)}
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, Shared.save_error(changeset, "Could not copy that form. Please try again.")}
+
+      _other ->
+        {:error, "Could not copy that form. Please try again."}
+    end
+  end
+
+  defp resolved_version(form_id) do
+    Forms.get_latest_version(form_id) || List.first(Forms.list_versions(form_id))
+  end
+
+  # The definition field's own copy, next to it: only the source's resolved
+  # definition moves — name, slug, description, and form type are untouched.
+  # Available any time, not gated by `show_chooser?/2`.
+  defp copy_definition_content(version, source_id) do
+    with %{} = source <- Forms.get(source_id),
+         %{} = source_version <- resolved_version(source.id),
+         {:ok, _version} <- Forms.update_draft(version, %{definition: source_version.definition}) do
+      {:ok, Phoenix.json_library().encode!(source_version.definition, pretty: true)}
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         Shared.save_error(changeset, "Could not copy that definition. Please try again.")}
+
+      _other ->
+        {:error, "Could not copy that definition. Please try again."}
+    end
+  end
+
   # The page's form types, with each related-form property's choices filled
   # in for this form's place in its flow. Empty means no dropdown.
   defp form_types(_assigns, nil, _version, _node), do: []
@@ -373,10 +485,79 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   @impl true
   def handle_event("update_preview", _params, socket) do
-    if FormFlow.app_config(:pubsub_server) do
-      {:noreply, refresh_preview_by_pubsub(socket)}
-    else
-      {:noreply, refresh_preview_by_re_render(socket)}
+    {:noreply, force_refresh_preview(socket)}
+  end
+
+  @impl true
+  def handle_event("chooser_select", %{"selection" => selection}, socket) do
+    {:noreply, assign(socket, :chooser_selection, selection)}
+  end
+
+  # Custom form changes nothing about the form or draft — there is no data
+  # event that would make `show_chooser?/2` false on its own, unlike Copy.
+  # `?start=custom` is what a reload of this exact page reads back to know the
+  # choice was already made.
+  @impl true
+  def handle_event("select_custom", _params, socket) do
+    {:noreply, push_navigate(socket, to: select_custom_path(socket.assigns))}
+  end
+
+  @impl true
+  def handle_event("chooser_pick_source", %{"source_form_id" => source_form_id}, socket) do
+    {:noreply, assign(socket, :chooser_source_form_id, presence(source_form_id))}
+  end
+
+  # The one-time copy: writes the source's identity (name, description, form
+  # type and its property values) and its resolved definition onto *this*
+  # lineage and draft — this form's own slug is never touched, since it
+  # already carries this node's place in the flow (or its own, standalone).
+  # Reloading afterwards is what makes the chooser stop offering itself: its
+  # condition is the definition no longer being blank, nothing more to track.
+  @impl true
+  def handle_event("copy_form", _params, socket) do
+    %{form: form, version: version, chooser_source_form_id: source_id} = socket.assigns
+
+    case source_id && copy_form_content(form, version, source_id) do
+      {:ok, json} ->
+        {:noreply,
+         socket
+         |> assign(definition_json: json, latest_json: json)
+         |> load()
+         |> force_refresh_preview()}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :error, message)}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("definition_copy_pick_source", %{"source_form_id" => source_form_id}, socket) do
+    {:noreply, assign(socket, :definition_copy_source_form_id, presence(source_form_id))}
+  end
+
+  # Unlike Copy form, this is always available — it isn't gated by
+  # `show_chooser?/2` — and it touches only the definition: no name, slug,
+  # description, or form type moves.
+  @impl true
+  def handle_event("copy_definition", _params, socket) do
+    %{version: version, definition_copy_source_form_id: source_id} = socket.assigns
+
+    case source_id && copy_definition_content(version, source_id) do
+      {:ok, json} ->
+        {:noreply,
+         socket
+         |> assign(definition_json: json, latest_json: json)
+         |> load()
+         |> force_refresh_preview()}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :error, message)}
+
+      nil ->
+        {:noreply, socket}
     end
   end
 
@@ -489,6 +670,97 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     """
   end
 
+  # Nothing else on the page until a choice is made: the identity form, the
+  # definition, the header's Save/Publish — none of them mean anything yet.
+  # Custom form's Select has to leave a mark server-side or reloading this
+  # exact page would show the chooser again forever (the data itself never
+  # changes for it, unlike Copy) — a query param is the only channel that
+  # survives `push_navigate`'s full remount (see `select_custom_path/1`).
+  def render(%{awaiting_start?: true} = assigns) do
+    ~H"""
+    <div>
+      <div class="mb-2 h-14 flex items-center">
+        <Breadcrumb.breadcrumb
+          base={@base}
+          section="forms"
+          root={@root}
+          parent_node={@parent_node}
+          mode={@params["mode"]}
+          components={@components}
+        >
+          <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
+          <span class="ml-1 text-xs font-normal text-zinc-500">draft</span>
+        </Breadcrumb.breadcrumb>
+      </div>
+
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <div class="rounded-md border border-zinc-200 p-4">
+        <fieldset class="flex flex-wrap items-center gap-4 text-sm">
+          <legend class="mb-2 text-xs font-medium text-zinc-600">Start this form from</legend>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="chooser_selection"
+              value="custom"
+              checked={@chooser_selection == "custom"}
+              phx-click="chooser_select"
+              phx-value-selection="custom"
+              phx-target={@myself}
+            /> Custom form
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="chooser_selection"
+              value="copy"
+              checked={@chooser_selection == "copy"}
+              phx-click="chooser_select"
+              phx-value-selection="copy"
+              phx-target={@myself}
+            /> Copy form
+          </label>
+        </fieldset>
+
+        <div :if={@chooser_selection == "custom"} class="mt-3">
+          <Core.button
+            components={@components}
+            phx-click="select_custom"
+            phx-target={@myself}
+            variant="primary"
+          >
+            Select
+          </Core.button>
+        </div>
+
+        <div :if={@chooser_selection == "copy"} class="mt-3 flex items-center gap-2">
+          <form id={"#{@id}-chooser-copy"} phx-change="chooser_pick_source" phx-target={@myself}>
+            <select name="source_form_id" class="w-full max-w-xs select">
+              <option value="">Choose a form…</option>
+              <option
+                :for={source <- @catalog_forms}
+                value={source.id}
+                selected={source.id == @chooser_source_form_id}
+              >
+                {catalog_option_label(source)}
+              </option>
+            </select>
+          </form>
+          <Core.button
+            components={@components}
+            phx-click="copy_form"
+            phx-target={@myself}
+            disabled={is_nil(@chooser_source_form_id)}
+            variant="primary"
+          >
+            Select
+          </Core.button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <div>
@@ -506,6 +778,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         </Breadcrumb.breadcrumb>
         <div class="flex items-center gap-2">
           <Core.button
+            :if={length(@versions) > 1}
             components={@components}
             phx-click="delete_draft"
             phx-target={@myself}
@@ -634,6 +907,33 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         </:field>
         <:field type="comment" name="definition" label="Definition (JSON)" required />
           </DynamicForm.form>
+
+          <div class="mt-2 flex items-center gap-2">
+            <form
+              id={"#{@id}-definition-copy"}
+              phx-change="definition_copy_pick_source"
+              phx-target={@myself}
+            >
+              <select name="source_form_id" class="w-full max-w-xs select">
+                <option value="">Copy definition from existing form…</option>
+                <option
+                  :for={source <- @catalog_forms}
+                  value={source.id}
+                  selected={source.id == @definition_copy_source_form_id}
+                >
+                  {catalog_option_label(source)}
+                </option>
+              </select>
+            </form>
+            <Core.button
+              components={@components}
+              phx-click="copy_definition"
+              phx-target={@myself}
+              disabled={is_nil(@definition_copy_source_form_id)}
+            >
+              Copy definition
+            </Core.button>
+          </div>
         </div>
 
         <div class="min-w-0 flex-1">
@@ -725,5 +1025,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       assigns.params,
       ["mode"]
     )
+  end
+
+  # This same edit page, with `start=custom` added — `mode` carries forward
+  # if it was already there. Reloading is what makes Custom form's choice
+  # stick, since nothing about the form or draft changed to make
+  # `show_chooser?/2` false on its own.
+  defp select_custom_path(assigns) do
+    query = assigns.params |> Map.take(["mode"]) |> Map.put("start", "custom")
+    "#{form_base_path(assigns)}/versions/#{assigns.version.id}/edit?#{URI.encode_query(query)}"
   end
 end

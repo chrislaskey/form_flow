@@ -22,7 +22,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   own Save, a form's answer is a new draft version with its own publish
   lifecycle — so crossing into one from the other is the ordinary boundary,
   not a continuation of it. Reaching a form's *edit* page from here is a
-  second, deliberate click, same as it would be from anywhere else.
+  second, deliberate click, same as it would be from anywhere else — except
+  for a form nobody has ever published, which has nothing on Show worth
+  seeing yet; Open lands straight on its draft's editor (`form_node_path/2`).
 
   Two addressing modes, matching the router:
 
@@ -95,6 +97,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -432,9 +435,28 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # breadcrumb (`FormFlow.Web.Templates.Components.Breadcrumb`) that Root
   # and Parent should route back to their editors, not their show pages,
   # since that's where this click came from.
+  #
+  # One exception: a form nobody has ever published has nothing for Show to
+  # show — no history, no content a draft might overwrite — so Open lands
+  # straight on its (sole) draft's editor, same as it always has for a form
+  # node fresh off "Save & Continue". `ever_published?/1` is what already
+  # answers this same question for Show's own publish dialog
+  # (`FormFlow.Web.Templates.Forms.Show`), for the same reason: nothing is
+  # at stake yet.
   defp form_node_path(assigns, node_id) do
     root_id = assigns.root_id || assigns.flow.id
-    "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form?mode=edit"
+    base_path = "#{assigns.base}/flows/#{root_id}/nodes/#{node_id}/form"
+
+    path =
+      with %{form_id: form_id} when is_binary(form_id) <- Flows.get_node(node_id),
+           false <- Forms.ever_published?(form_id),
+           %{id: draft_id} <- Enum.find(Forms.list_versions(form_id), &(&1.status == "draft")) do
+        "#{base_path}/versions/#{draft_id}/edit"
+      else
+        _other -> base_path
+      end
+
+    "#{path}?mode=edit"
   end
 
   # A plain path was already the destination; a pending node needs its

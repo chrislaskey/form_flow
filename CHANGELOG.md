@@ -2,6 +2,44 @@
 
 ## v0.18.0
 
+### A blank, never-published draft asks Custom form or Copy form first
+
+**New chooser on `FormFlow.Web.Templates.Forms.Edit`**, shown only for a
+draft that is both blank (`definition == %{}`) and has never been
+published — the same "nothing at stake yet" state `ever_published?/1`
+already names elsewhere on this side. Until a choice is made, **the chooser
+is the whole page** — no identity form, no definition field, no Save or
+Publish. Custom form's **Select** reveals the rest with nothing changed;
+Copy form's own **Select** picks another form and writes its name,
+description, form type (and that type's property values), and definition
+onto this one — never its slug, which already carries this form's own
+place (a flow node's, or its own).
+
+Copy changes the data, which is what makes the chooser stop offering
+itself on its own. Custom form doesn't, so it leaves a `?start=custom` on the
+URL — the one thing that has to persist across the `push_navigate` its own
+Select performs, since nothing else does. Copy's dropdown labels each
+option with the form's slug alongside its name.
+
+**New, separate: a "Copy definition" control under the Definition (JSON)
+field**, available any time (not gated by the chooser above) — a plain
+select ("Copy definition from existing form…") and button that write only
+the chosen source's definition, leaving name, slug, description, and form
+type untouched.
+
+### Auto-refresh defaults on; Delete draft needs another version to delete
+
+**`FormFlow.Web.Templates.Forms.Edit`'s Auto-refresh toggle now defaults
+on.** One consequence worth knowing: `DynamicForm`'s `change_debounce_in_ms`
+is tied to it, so every field on the page — not only the definition JSON —
+now debounces its change pass by 500ms while the toggle is on, including
+the Save button's dirty/clean styling. Turning Auto-refresh off restores
+instant feedback, as before.
+
+**Delete draft is hidden on `Forms.Show` and `.Edit` when the draft is the
+lineage's only version.** A second version — another draft, or a published
+one — is what brings the button back.
+
 ### Status messages and badges are components, and daisyUI ones
 
 **New: `alert/1` and `badge/1` on `FormFlow.Web.CoreComponents`**, resolved
@@ -59,6 +97,13 @@ continuation of the canvas's.
 This also removes a side effect: Open used to silently create a fresh draft
 version for a form that had none, purely so there would be something to
 land the edit page on. It creates nothing now.
+
+One exception: a form nobody has ever published has nothing on Show worth
+seeing — no history, no content a draft might overwrite — so Open still
+lands straight on its (sole) draft's editor there, exactly as it did
+before. `FormFlow.Data.Templates.Forms.ever_published?/1` is what decides
+it, the same check `FormFlow.Web.Templates.Forms.Show` already uses to skip
+its publish-migration dialog for the same reason.
 
 ### The Show/Edit toggle is gone from the form template pages
 

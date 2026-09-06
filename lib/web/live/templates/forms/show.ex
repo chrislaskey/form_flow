@@ -281,7 +281,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         </Breadcrumb.breadcrumb>
         <div :if={@version} class="flex items-center gap-2">
           <Core.button
-            :if={@version.status == "draft"}
+            :if={@version.status == "draft" && length(@versions) > 1}
             components={@components}
             phx-click="delete_draft"
             phx-target={@myself}
