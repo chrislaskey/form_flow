@@ -31,11 +31,15 @@ defmodule DemoWeb.Router do
   scope "/", DemoWeb do
     pipe_through :browser
 
-    live "/install-check", InstallCheckLive
-    live "/branding", BrandingLive
-    live "/admin/*path", FormFlowLive.Admin
-    live "/users/*path", FormFlowLive.Users
-    live "/*path", ReadmeLive
+    post "/switch-user/:user_id", UserSwitchController, :create
+
+    live_session :default, on_mount: DemoWeb.UserHook do
+      live "/install-check", InstallCheckLive
+      live "/branding", BrandingLive
+      live "/admin/*path", FormFlowLive.Admin
+      live "/users/*path", FormFlowLive.Users
+      live "/*path", ReadmeLive
+    end
   end
 
   # Other scopes may use custom stacks.

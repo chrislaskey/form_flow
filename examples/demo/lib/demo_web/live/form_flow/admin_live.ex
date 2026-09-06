@@ -31,7 +31,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_nav={@current_nav}>
+    <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Admin</h1>
