@@ -1005,16 +1005,142 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(node.subflow_id) == nil
   end
 
-  test "show and edit handle a flow that does not exist", %{conn: conn} do
+  test "show, edit, and the overview handle a flow that does not exist", %{conn: conn} do
     for path <- [
           "/admin/flows/#{Ecto.UUID.generate()}",
           "/admin/flows/not-a-uuid/edit",
-          "/admin/flows/#{Ecto.UUID.generate()}/nodes/#{Ecto.UUID.generate()}"
+          "/admin/flows/#{Ecto.UUID.generate()}/nodes/#{Ecto.UUID.generate()}",
+          "/admin/flows/#{Ecto.UUID.generate()}/overview"
         ] do
       {:ok, _view, html} = live(conn, path)
 
       assert html =~ "Flow not found"
     end
+  end
+
+  test "the overview draws every level at once, connected steps only", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+
+    # Start → Application → End, plus a subflow node nothing points at
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        %{
+          "id" => "2",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Application", "subflow_label" => "forms"}
+        },
+        step_attrs("3", "End", "end"),
+        %{
+          "id" => "4",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Abandoned idea", "subflow_label" => "forms"}
+        }
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    application = flow_node(root_id, "Application")
+
+    # Inside it: Start → Intake → End, plus a form step nothing points at
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{application.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        step_attrs("2", "Intake", "form"),
+        step_attrs("3", "End", "end"),
+        step_attrs("4", "Draft form", "form")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/overview")
+
+    assert html =~ "Licensing"
+
+    tree = overview_tree(view)
+
+    assert tree["flow"]["name"] == "Licensing"
+    assert node_labels(tree["nodes"]) == ["Application", "End", "Start"]
+
+    # The subflow is expanded in place, keyed by the node that embeds it
+    assert Map.keys(tree["subflows"]) == [application.id]
+    assert [inner] = Map.values(tree["subflows"])
+    assert node_labels(inner["nodes"]) == ["End", "Intake", "Start"]
+
+    # Neither level's unwired step is drawn here — the drill-down is where
+    # they are seen and fixed, and both are still on it
+    refute html =~ "Abandoned idea"
+    refute html =~ "Draft form"
+
+    {:ok, _view, root_html} = live(conn, "/admin/flows/#{root_id}")
+    assert root_html =~ "Abandoned idea"
+
+    {:ok, _view, inner_html} = live(conn, "/admin/flows/#{root_id}/nodes/#{application.id}")
+    assert inner_html =~ "Draft form"
+  end
+
+  test "the overview's Open events navigate under the root, like the show page's", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/overview")
+
+    view
+    |> element("#flows-overview-overview")
+    |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
+
+    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}")
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/overview")
+
+    view
+    |> element("#flows-overview-overview")
+    |> render_hook("form_flow:open_form", %{"node_id" => node.id})
+
+    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/form")
+  end
+
+  test "show and edit link to the overview, from any depth, for the root", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    overview = "/admin/flows/#{root_id}/overview"
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    assert has_element?(view, ~s(a[href="#{overview}"]), "Overview")
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert has_element?(view, ~s(a[href="#{overview}"]), "Overview")
+
+    # The edit page leaves through its own "navigate" event, so unsaved
+    # changes prompt first — a button carrying the destination, not a link
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert has_element?(view, ~s(button[phx-value-to="#{overview}"]), "Overview")
+
+    view |> element(~s(button[phx-value-to="#{overview}"])) |> render_click()
+    assert_redirect(view, overview)
   end
 
   # Creates a flow the way a user would: through the new page's chooser
@@ -1129,4 +1255,32 @@ defmodule Demo.FormFlowFlowsCrudTest do
       "edges" => []
     })
   end
+
+  # A Start, End, or form step the way the editor reports it
+  defp step_attrs(id, label, kind) do
+    %{
+      "id" => id,
+      "type" => "step",
+      "position" => %{"x" => 0, "y" => 0},
+      "data" => %{"label" => label, "kind" => kind}
+    }
+  end
+
+  defp flow_node(flow_id, label) do
+    Enum.find(Flows.get(flow_id).nodes, &(get_in(&1.properties, ["data", "label"]) == label))
+  end
+
+  # The nested ReactFlow data the overview canvas mounts with, read off the
+  # hook's container the way the bundle reads it
+  defp overview_tree(view) do
+    view
+    |> element("#flows-overview-overview")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.attribute("data-tree")
+    |> hd()
+    |> Jason.decode!()
+  end
+
+  defp node_labels(nodes), do: nodes |> Enum.map(&get_in(&1, ["data", "label"])) |> Enum.sort()
 end

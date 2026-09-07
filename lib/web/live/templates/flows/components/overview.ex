@@ -11,15 +11,16 @@ defmodule FormFlow.Web.Components.Overview do
   bundle lays it out; nothing here has a position.
 
   The hook is the only channel between Elixir and React, the container being
-  `phx-update="ignore"`:
-
-    * React to Elixir — `pushEventTo(this.el, ...)`, landing in the
-      `handle_event/3` of the LiveComponent passed as `target`:
-      `"form_flow:overview_mounted"` once the bundle has loaded,
-      `"form_flow:open_subflow"` with `%{"node_id" => ...}` from a group's
-      Open button, and `"form_flow:open_form"` likewise from a form node's
-    * Elixir to React — `push_event/3` with `form_flow:set_tree`, picked up
-      by `handleEvent` in the hook
+  `phx-update="ignore"`, and it runs one way. React pushes to Elixir with
+  `pushEventTo(this.el, ...)`, landing in the `handle_event/3` of the
+  LiveComponent passed as `target`: `"form_flow:overview_mounted"` once the
+  bundle has loaded, `"form_flow:open_subflow"` with `%{"node_id" => ...}`
+  from a group's Open button, and `"form_flow:open_form"` likewise from a
+  form node's. Nothing goes the other way — unlike
+  `FormFlow.Web.Components.Editor`, which pushes a saved flow back with
+  `form_flow:set_flow` so editor-temporary node ids become real ones, this
+  page never saves, so the tree it mounts with is the tree it draws until a
+  fresh page arrives.
 
   Used by `FormFlow.Web.Templates.Flows.Overview`:
 
@@ -105,8 +106,6 @@ defmodule FormFlow.Web.Components.Overview do
               onOpenForm: (nodeId) =>
                 this.pushEventTo(this.el, "form_flow:open_form", {node_id: nodeId})
             })
-
-            this.handleEvent("form_flow:set_tree", ({tree}) => this.overview.setTree(tree))
 
             this.pushEventTo(this.el, "form_flow:overview_mounted", {})
           } catch (error) {

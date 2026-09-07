@@ -703,7 +703,17 @@ function SubflowGroupNode({ id, data, isConnectable }) {
   );
 }
 
-const overviewNodeTypes = { step: StepNode, group: SubflowGroupNode };
+// "subflow", not "group", even though ReactFlow's word for a node holding
+// others is a group: ReactFlow ships four node types of its own — input,
+// default, output, and group — and its stylesheet reaches them by the
+// `react-flow__node-<type>` class the wrapper puts on *every* node, custom
+// ones included. A type named `group` therefore inherits that stylesheet's
+// dark border, white background, 10px padding, and centred text, drawing a
+// second box around the dashed one and (nodes being border-box) eating 22px
+// out of the size the layout assigned. Only the CSS collides — nesting is
+// driven by parentId, and the built-in `group` component renders nothing —
+// so the fix is the name. It is also the better name: this is a subflow.
+const overviewNodeTypes = { step: StepNode, subflow: SubflowGroupNode };
 
 // An edge that skips a layer — Application → Payment, past Review — would be
 // drawn straight through whatever sits in between, and ReactFlow paints
@@ -742,6 +752,23 @@ const overviewEdgeTypes = { detour: DetourEdge };
 const READ_ONLY_NODE = { draggable: false, selectable: false, connectable: false, deletable: false };
 const READ_ONLY_EDGE = { selectable: false, focusable: false, deletable: false };
 
+// A stored node carries the *editing* canvas's layout state in its
+// properties, and both halves of it are wrong here:
+//
+//   * `origin` is [0, 0.5] on every node the editor's add buttons made
+//     (NODE_ORIGIN), which places a node by its left centre. This canvas
+//     lays out top-left corners, so a node keeping that origin is drawn
+//     half its height too high.
+//   * `measured` is the size ReactFlow measured *there*. A subflow node is
+//     a group header here, a different size entirely. Worse, ReactFlow
+//     reads its "have all nodes been measured?" flag straight off the nodes
+//     handed in (adoptUserNodes), so a stored `measured` makes
+//     useNodesInitialized true before this canvas has measured anything and
+//     the layout runs on the editor's numbers.
+//
+// Both are dropped, so the layout starts from what it can see (D6).
+const WITHOUT_EDITOR_LAYOUT = { origin: [0, 0], measured: undefined };
+
 // The tree as ReactFlow's flat lists, every node at the origin until the
 // layout has sizes to work with. Parents precede their children, as
 // ReactFlow requires of parentId nesting.
@@ -755,12 +782,13 @@ function flattenTree(tree, parentId = null, nodes = [], edges = []) {
     const flat = {
       ...node,
       ...READ_ONLY_NODE,
+      ...WITHOUT_EDITOR_LAYOUT,
       position: { x: 0, y: 0 },
       ...(parentId ? { parentId } : {}),
     };
 
     if (subflow) {
-      flat.type = "group";
+      flat.type = "subflow";
       flat.data = {
         ...node.data,
         flow_label: subtree?.flow?.label ?? node.data?.subflow_label ?? "forms",
@@ -1161,33 +1189,32 @@ export function mount(el, opts = {}) {
  * Renders the overview into `el`: the whole flow, every level at once,
  * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
  * shape. The option lists and the two open callbacks mean what they mean for
- * mount/2; there is no onChange, since nothing here can change.
+ * mount/2; there is no onChange, since nothing here can change. Nor is
+ * there a setter for the tree: the page never edits, so the only tree it
+ * ever draws is the one it mounted with, and a fresh one arrives as a fresh
+ * page.
  *
- * Returns a handle with `setTree/1` and `unmount/0`.
+ * Returns a handle with `unmount/0`.
  */
 export function mountOverview(el, opts = {}) {
   const root = createRoot(el);
-  const render = (tree) =>
-    root.render(
-      <ReactFlowProvider>
-        <FlowOverview
-          tree={tree}
-          formFlowTypeOptions={opts.formFlowTypeOptions}
-          formTypeOptions={opts.formTypeOptions}
-          perspectiveOptions={opts.perspectiveOptions}
-          onOpenSubflow={opts.onOpenSubflow}
-          onOpenForm={opts.onOpenForm}
-        />
-      </ReactFlowProvider>,
-    );
+
+  root.render(
+    <ReactFlowProvider>
+      <FlowOverview
+        tree={opts.tree}
+        formFlowTypeOptions={opts.formFlowTypeOptions}
+        formTypeOptions={opts.formTypeOptions}
+        perspectiveOptions={opts.perspectiveOptions}
+        onOpenSubflow={opts.onOpenSubflow}
+        onOpenForm={opts.onOpenForm}
+      />
+    </ReactFlowProvider>,
+  );
 
   roots.set(el, root);
-  render(opts.tree);
 
-  return {
-    setTree: (tree) => render(tree),
-    unmount: () => unmount(el),
-  };
+  return { unmount: () => unmount(el) };
 }
 
 export function unmount(el) {
