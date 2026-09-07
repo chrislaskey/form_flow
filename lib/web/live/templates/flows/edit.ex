@@ -627,6 +627,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           </span>
         </Breadcrumb.breadcrumb>
         <div class="flex items-center gap-2">
+          <%!-- The whole flow at once, read-only — through the "navigate"
+                event like every other way off this page, so unsaved
+                changes prompt first --%>
+          <button
+            type="button"
+            phx-click="navigate"
+            phx-value-to={overview_path(assigns)}
+            phx-target={@myself}
+            class="text-xs link link-primary"
+          >
+            Overview
+          </button>
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would
                 desync from reality when unsaved changes turn this click into
@@ -842,6 +854,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     })
 
     payload
+  end
+
+  defp overview_path(assigns) do
+    "#{assigns.base}/flows/#{assigns.root_id || assigns.flow.id}/overview"
   end
 
   defp show_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}"

@@ -241,3 +241,79 @@
 .ff-node .react-flow__handle:hover {
   border-color: #0891b2;
 }
+
+/* The overview's group node: a subflow expanded in place. The node wrapper
+   gets the size the layout computed (style.width/height); the header sits at
+   the top and the inner flow's nodes — separate ReactFlow nodes with this one
+   as parentId — occupy the rest. Before layout the node is header-sized, which
+   is how the layout learns the header's height. */
+.ff-group {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 180px;
+  border: 1px dashed #ca8a04;
+  border-radius: 10px;
+  background: rgb(250 204 21 / 6%);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  color: #18181b;
+}
+
+/* One row: name, kind and type, perspectives, then Open at the far right. A
+   header-sized node before layout is as wide as this row wants to be, and
+   the layout only ever widens it. */
+.ff-group__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.ff-group__open {
+  margin-left: auto;
+}
+
+.ff-group__title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ff-group__meta {
+  font-size: 11px;
+  color: #71717a;
+}
+
+.ff-group__empty {
+  font-size: 11px;
+  font-style: italic;
+  color: #a1a1aa;
+}
+
+.ff-group .ff-node__perspectives {
+  margin-top: 0;
+}
+
+.ff-group .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ca8a04;
+  border-radius: 9999px;
+  background: #fff;
+}
+
+/* A note in a panel, next to (or instead of) the panel's buttons */
+.ff-panel__note {
+  padding: 4px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  color: #71717a;
+}

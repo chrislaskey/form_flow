@@ -537,6 +537,55 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
+  @doc """
+  Narrows a resolved tree (`resolve_tree/1`) to its connected nodes: at
+  every level, the nodes reachable from that flow's Start nodes by following
+  relationships forward, and the relationships among them. Nodes a user
+  filling the flow in could never reach — a form step nothing points at, a
+  fragment wired only to End — are dropped, together with their
+  relationships. Subflows are narrowed the same way, recursively; a subflow
+  node that is itself unreachable takes its subtree with it.
+
+  This is the same reading of "reachable" `FormFlow.Data.Instances.FlowProgress`
+  walks with, so the narrowed tree shows exactly the positions a journey
+  can visit. `FormFlow.Web.Templates.Flows.Overview` draws it. `nil` in,
+  `nil` out, so a missing flow needs no special casing by the caller.
+
+  Nodes and relationships keep the order they were stored in.
+  """
+  def connected_tree(nil), do: nil
+
+  def connected_tree(%{nodes: nodes, relationships: relationships, subflows: subflows} = tree) do
+    starts = for node <- nodes, "Start" in node.labels, do: node.id
+    outgoing = Enum.group_by(relationships, & &1.source_id, & &1.target_id)
+    reachable = reachable_nodes(starts, outgoing, MapSet.new())
+
+    %{
+      tree
+      | nodes: Enum.filter(nodes, &MapSet.member?(reachable, &1.id)),
+        relationships:
+          Enum.filter(relationships, fn relationship ->
+            MapSet.member?(reachable, relationship.source_id) and
+              MapSet.member?(reachable, relationship.target_id)
+          end),
+        subflows:
+          Map.new(
+            Enum.filter(subflows, fn {node_id, _subtree} -> MapSet.member?(reachable, node_id) end),
+            fn {node_id, subtree} -> {node_id, connected_tree(subtree)} end
+          )
+    }
+  end
+
+  defp reachable_nodes([], _outgoing, seen), do: seen
+
+  defp reachable_nodes([id | rest], outgoing, seen) do
+    if MapSet.member?(seen, id) do
+      reachable_nodes(rest, outgoing, seen)
+    else
+      reachable_nodes(rest ++ Map.get(outgoing, id, []), outgoing, MapSet.put(seen, id))
+    end
+  end
+
   # Owned forms are deleted explicitly — their owner FK nilifies on flow
   # deletion, and a nil owner is the *definition* of a catalog form, so
   # leaving them to the FK would launder every owned form into /forms.
