@@ -12,7 +12,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   `DynamicForm` nested form with one entry per element
   (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
   **JSON** in a comment field, or by **Copy existing form** — a select of
-  the catalog forms and a button that writes the picked form's resolved
+  the forms to copy from (`copy_sources/2`: this root flow's own forms, then
+  the catalog) and a button that writes the picked form's resolved
   definition onto this draft, and nothing else of it. All three sit in the
   one form under `visible_if`, so whatever is hidden keeps its content and
   stops being required. Content moves between the editors only when the
@@ -40,6 +41,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   A draft that is blank and has never been published shows nothing but a
   choice, in place of the identity form: Custom form (an explicit no-op —
   the fields are already ready once chosen) or Copy form (pick another form
+  — the same `copy_sources/2` —
   and write its description, form type, and definition onto this one —
   never its name or slug: the name is the step's, and the slug already
   carries this form's own place). Selecting
@@ -231,7 +233,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       pending_type: effective_type(form, assigns.form_types),
       show_chooser?: show_chooser?,
       awaiting_start?: awaiting_start?(show_chooser?, assigns.params),
-      catalog_forms: catalog_forms(form)
+      copy_sources: copy_sources(form, assigns.root_id)
     )
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn -> saved_definition_json(version) end)
@@ -528,26 +530,44 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # form's own way of saying the choice was already made
   defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "custom"
 
-  # The catalog forms this form could be copied from — every reusable form
-  # but itself, computed only while the chooser is actually offered
-  defp catalog_forms(nil), do: []
+  # What both copies — the chooser's Copy form and the editor's Copy
+  # existing form — offer to copy from, as `{label, form id}` options: this
+  # root flow's own forms first, in the order a user works them, then the
+  # catalog. Never this form itself, and a catalog form reused in this flow
+  # only once, at its step. Two lists from two places, merged here; the
+  # catalog alone is what reusing a form offers, and stays its own list.
+  defp copy_sources(nil, _root_id), do: []
 
-  defp catalog_forms(form) do
-    Forms.list(tenant_id: form.tenant_id)
-    |> Enum.reject(&(&1.id == form.id))
+  defp copy_sources(form, root_id) do
+    (flow_sources(root_id) ++ catalog_sources(form))
+    |> Enum.reject(fn {_label, id} -> id == form.id end)
+    |> Enum.uniq_by(fn {_label, id} -> id end)
   end
+
+  # Every option says where its form comes from, then how that place shows
+  # it — this root flow's forms by their step, the catalog's by name — with
+  # the slug last, the way an admin looks a form up in code: "Current flow -
+  # Documents / Proof of address (proof-of-address)", "Reusable form - W-2
+  # (w2)". None from the flow standalone.
+  defp flow_sources(root_id) do
+    for {path, source} <- Shared.flow_forms(root_id),
+        do: {option_label("Current flow", source, path), source.id}
+  end
+
+  defp catalog_sources(form) do
+    for source <- Forms.list(tenant_id: form.tenant_id),
+        do: {option_label("Reusable form", source, source.name), source.id}
+  end
+
+  defp option_label(origin, %{slug: nil}, shown), do: "#{origin} - #{shown}"
+  defp option_label(origin, source, shown), do: "#{origin} - #{shown} (#{source.slug})"
 
   # The radio's choices: Copy existing form only while there is something to
   # copy from
   defp editor_options([]), do: [{"Form builder", "form"}, {"JSON", "json"}]
 
-  defp editor_options(_catalog_forms),
+  defp editor_options(_copy_sources),
     do: [{"Form builder", "form"}, {"JSON", "json"}, {"Copy existing form", "copy"}]
-
-  # The dropdown's own label — the slug alongside the name, the way an
-  # admin looks a form up in code
-  defp catalog_option_label(%{slug: nil} = source), do: source.name
-  defp catalog_option_label(source), do: "#{source.name} · #{source.slug}"
 
   # The identity form's data: the saved values, with the saved type's property
   # values under their field names. Switching the type dropdown re-renders
@@ -1040,11 +1060,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             <select name="source_form_id" class="w-full max-w-xs select">
               <option value="">Choose a form…</option>
               <option
-                :for={source <- @catalog_forms}
-                value={source.id}
-                selected={source.id == @chooser_source_form_id}
+                :for={{label, id} <- @copy_sources}
+                value={id}
+                selected={id == @chooser_source_form_id}
               >
-                {catalog_option_label(source)}
+                {label}
               </option>
             </select>
           </form>
@@ -1194,6 +1214,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           label="Slug"
           placeholder="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
         />
+        <:field type="comment" name="description" label="Description" />
         <:field
           :if={@form_types != []}
           type="dropdown"
@@ -1202,7 +1223,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           options={Enum.map(@form_types, &{&1.name, &1.id})}
           required
         />
-        <:field type="comment" name="description" label="Description" />
+        <%!-- What the picked type does, under its dropdown: the pending
+              type's name and description, so the choice explains itself
+              before its properties ask for anything --%>
+        <:field :if={@form_types != []} type="html" name="form_type_description">
+          <.type_callout type={Shared.type(@form_types, @pending_type)} />
+        </:field>
         <%!-- The pending type's properties (FormFlow.Config.Property), one
               field each; picking another type swaps them --%>
         <:field
@@ -1267,7 +1293,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           type="radiogroup"
           name="definition_editor"
           label="Edit form version using:"
-          options={editor_options(@catalog_forms)}
+          options={editor_options(@copy_sources)}
           metadata={%{"style" => "horizontal"}}
         />
         <:field
@@ -1291,32 +1317,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Copy existing form: fields of this form rather than a form of
               their own, so they sit in the version group; the button reads
               the picked source off the form. A dropdown needs options, so
-              none of this renders with no catalog — nor does the radio
-              offer it then. --%>
+              none of this renders with nothing to copy from — nor does the
+              radio offer it then. --%>
         <:field
-          :if={@catalog_forms != []}
+          :if={@copy_sources != []}
           group="version"
           type="html"
           name="copy_heading"
           visible_if="{definition_editor} = 'copy'"
         >
           <.section_heading title="Copy existing form">
-            Replace this draft's definition with another form's. The name, slug, description,
-            and form type stay as they are.
+            Replace this draft's definition with another form's — one of this flow's steps, or a
+            catalog form. The name, slug, description, and form type stay as they are.
           </.section_heading>
         </:field>
         <:field
-          :if={@catalog_forms != []}
+          :if={@copy_sources != []}
           group="version"
           type="dropdown"
           name="definition_copy_source"
           label="Copy definition from existing form"
-          options={Enum.map(@catalog_forms, &{catalog_option_label(&1), &1.id})}
+          options={@copy_sources}
           visible_if="{definition_editor} = 'copy'"
         />
         <:field
           :let={form}
-          :if={@catalog_forms != []}
+          :if={@copy_sources != []}
           group="version"
           type="custom"
           name="definition_copy"
@@ -1643,6 +1669,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     <div class="min-w-0">
       <h3 class="text-lg font-bold">{@title}</h3>
       <div class="text-gray-500">{render_slot(@inner_block)}</div>
+    </div>
+    """
+  end
+
+  # The picked form type, named and described (`FormFlow.Config.Forms.Type`),
+  # in a bordered box like the draft strip's, headed "About Review form
+  # type". Nothing for no type.
+  defp type_callout(%{type: nil} = assigns), do: ~H""
+
+  defp type_callout(assigns) do
+    ~H"""
+    <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+      <div class="font-medium text-zinc-800">About {@type.name} form type</div>
+      <p :if={@type.description} class="mt-0.5 text-xs text-zinc-600">{@type.description}</p>
     </div>
     """
   end

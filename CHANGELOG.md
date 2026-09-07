@@ -16,6 +16,44 @@ offered only while there is another form to copy from, as the select
 always was. Hosts that drive the radio by value in tests pass
 `definition_editor: "copy"` to reach the control.
 
+**Both copies offer this flow's forms as well as the catalog.** The
+chooser's Copy form and the editor's Copy existing form used to list the
+catalog alone. Opened from a flow, they now list that root flow's forms
+first — subflows included, in the order a user works them — then the
+catalog. Every option says where its form comes from, then how that place
+shows it, then its slug: "Current flow - Documents / Proof of address
+(proof-of-address)" for a step, "Reusable form - W-2 (w2)" for a catalog
+form (which used to read "W-2 · w2"). Never the form being edited; a catalog form
+reused in this flow appears once, at its step. The two lists come from two places
+(`FormFlow.Web.Templates.Shared.flow_forms/1`, new, and
+`FormFlow.Data.Templates.Forms.list/1`) and are merged on the page, so
+reusing a catalog form — which is the catalog alone — is unchanged.
+
+### A version's page leads to the draft under way, and archived versions can be forked
+
+**Breaking: `FormFlow.Data.Templates.Forms.create_draft/2` accepts an
+archived `based_on:`, and refuses a draft base as `{:error, :based_on_draft}`
+(was `:based_on_not_published` for both).** A draft forked from an archived
+version copies its definition and records it as the base, so
+`stale_draft?/1` reports it stale whenever something else is published —
+which it is.
+
+On `FormFlow.Web.Templates.Forms.Show`, a published version's actions gain
+**Continue editing latest draft**, shown while the lineage has a draft and
+leading to the newest one's editor: the default view is the latest
+published version, so a draft already started was easy to miss. An archived
+version's page, which offered nothing before, now offers that and **New
+draft from this version**; only a published version can be archived, as
+before.
+
+### Form type follows Description, and says what it does
+
+On `FormFlow.Web.Templates.Forms.Edit`, the **Form type** dropdown now
+sits after **Description** rather than before it, and a callout under the
+dropdown — "About Review form type" — shows the picked type's description
+(`FormFlow.Config.Forms.Type`), following the pick as it changes — so the
+choice explains itself before the type's properties ask for anything.
+
 ### A step's name is the node's, and stays in step with an owned form or subflow
 
 **Breaking: the canvas no longer loads a form's or subflow's `name` over the

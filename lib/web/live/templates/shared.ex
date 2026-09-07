@@ -112,6 +112,42 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
+  The forms a root flow's steps point at, subflows included, in the order a
+  user works them, as `{qualified label, form}` — the label is the step's
+  (`FormFlow.Data.Instances.FlowProgress.qualified_label/1`, "Documents /
+  Proof of address"), the form the lineage it points at. Each form once, at
+  its first step, so a catalog form reused at two steps is offered once.
+  Empty with no root, or a root that no longer exists.
+  """
+  def flow_forms(nil), do: []
+
+  def flow_forms(root_id) do
+    case Templates.Flows.resolve_tree(root_id) do
+      nil ->
+        []
+
+      tree ->
+        tree
+        |> FlowProgress.forms([])
+        |> Enum.flat_map(&flow_form/1)
+        |> Enum.uniq_by(fn {_label, form} -> form.id end)
+    end
+  end
+
+  # The step's form: the node at the end of the path is one of its flow's
+  # nodes, and its form_id is the lineage. A node whose form is gone offers
+  # nothing.
+  defp flow_form(progress) do
+    node_id = List.last(progress.path)
+    node = Enum.find(progress.flow.nodes, &(&1.id == node_id))
+
+    case node && node.form_id && Templates.Forms.get(node.form_id) do
+      %{} = form -> [{FlowProgress.qualified_label(progress), form}]
+      _none -> []
+    end
+  end
+
+  @doc """
   The forms before the node `node_id`, as `{qualified label, path}` options.
   `forms` is a flow tree's forms in the order a user works them
   (`FormFlow.Data.Instances.FlowProgress.forms/2`); the cut is the first

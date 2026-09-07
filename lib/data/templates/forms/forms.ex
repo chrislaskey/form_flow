@@ -263,11 +263,12 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Creates a draft for a lineage.
 
-  `based_on: version_id` forks a *published* version of the same lineage —
-  the definition is copied and the provenance recorded, powering
-  `stale_draft?/1`. Drafts cannot fork drafts, and the rule is checked here
-  at creation only: a base archived later leaves existing drafts valid.
-  Without `based_on`, the draft starts blank.
+  `based_on: version_id` forks a published or archived version of the same
+  lineage — the definition is copied and the provenance recorded, powering
+  `stale_draft?/1` (a draft forked from an archived version is stale from
+  the start whenever something else is published, which is the truth of it).
+  Drafts cannot fork drafts (`{:error, :based_on_draft}`). Without
+  `based_on`, the draft starts blank.
   """
   def create_draft(form_id, opts \\ []) do
     case Keyword.get(opts, :based_on) do
@@ -282,8 +283,8 @@ defmodule FormFlow.Data.Templates.Forms do
           %Version{template_form_id: other} when other != form_id ->
             {:error, :based_on_wrong_form}
 
-          %Version{status: status} when status != "published" ->
-            {:error, :based_on_not_published}
+          %Version{status: "draft"} ->
+            {:error, :based_on_draft}
 
           %Version{} = base ->
             insert_draft(form_id, base.definition, base.id)

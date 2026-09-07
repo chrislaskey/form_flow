@@ -686,9 +686,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("input[type=radio][value=copy]")
     |> render_click(%{"selection" => "copy"})
 
-    # The option shows the slug alongside the name, so two forms with the
-    # same display name are still tellable apart in the dropdown
-    assert render(view) =~ "Source Form · #{source.slug}"
+    # The option says where the form comes from, and ends with its slug, so
+    # two forms with the same display name are still tellable apart
+    assert render(view) =~ "Reusable form - Source Form (#{source.slug})"
 
     view
     |> element("#forms-edit-chooser-copy")
@@ -792,6 +792,101 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert render(view) =~ "Saved."
       assert Forms.get(catalog.id).name == "Owner details"
     end
+  end
+
+  test "Copy offers this flow's forms alongside the catalog, each once, never the form itself",
+       %{conn: conn} do
+    # Start → Owner details → Pet details → a reused catalog form. Owned
+    # forms are not in the catalog, but they are in this flow
+    {:ok, root} = Flows.create(%{name: "Licensing"})
+    {:ok, owner_form} = Forms.create(%{name: "Owner details", owner_flow_id: root.id})
+
+    {:ok, pet_form} =
+      Forms.create(%{
+        name: "Pet details",
+        owner_flow_id: root.id,
+        definition: %{"fields" => [%{"name" => "breed"}]}
+      })
+
+    {:ok, catalog} = Forms.create(%{name: "Catalog Form", definition: %{"fields" => []}})
+    start_node = build_node(root, ["Start"], "Start")
+    owner = build_node(root, ["Form"], "Owner details", %{form_id: owner_form.id})
+    pet = build_node(root, ["Form"], "Pet details", %{form_id: pet_form.id})
+    reused = build_node(root, ["Form"], "Vaccination record", %{form_id: catalog.id})
+    edge(root, start_node, owner)
+    edge(root, owner, pet)
+    edge(root, pet, reused)
+    [draft] = Forms.list_versions(owner_form.id)
+
+    assert Enum.map(Forms.list(), & &1.id) == [catalog.id]
+
+    {:ok, view, _html} =
+      live(conn, "/admin/flows/#{root.id}/nodes/#{owner.id}/form/versions/#{draft.id}/edit")
+
+    view
+    |> element("input[type=radio][value=copy]")
+    |> render_click(%{"selection" => "copy"})
+
+    html = render(view)
+    assert html =~ ~s(value="#{pet_form.id}")
+    assert html =~ "Current flow - Pet details (#{pet_form.slug})"
+    refute html =~ ~s(value="#{owner_form.id}")
+
+    # The reused catalog form is offered once, at its step, by the step's
+    # name — not again from the catalog
+    assert length(String.split(html, ~s(value="#{catalog.id}"))) == 2
+    assert html =~ "Current flow - Vaccination record (#{catalog.slug})"
+    refute html =~ "Reusable form - Catalog Form"
+
+    view
+    |> element("#forms-edit-chooser-copy")
+    |> render_change(%{"source_form_id" => pet_form.id})
+
+    view
+    |> element(~s(button[phx-click="copy_form"]))
+    |> render_click()
+
+    assert Forms.get_version(draft.id).definition == %{"fields" => [%{"name" => "breed"}]}
+
+    # The editor's own Copy existing form lists the same sources
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"definition_editor" => "copy"}})
+
+    html = render(view)
+    assert html =~ "Copy definition from existing form"
+    assert html =~ ~s(value="#{pet_form.id}")
+    assert html =~ ~s(value="#{catalog.id}")
+    refute html =~ ~s(value="#{owner_form.id}")
+  end
+
+  test "Form type follows Description, and the picked type's name and description show under it",
+       %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Typed"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+    {description_at, _} = :binary.match(html, ~s(name="dynamic_form[description]"))
+    {type_at, _} = :binary.match(html, ~s(name="dynamic_form[form_type]"))
+    assert description_at < type_at
+
+    # The default type is what an unset one resolves to, so it is described
+    assert html =~ "About Default form type"
+    assert html =~ "The form as designed, nothing more."
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"form_type" => "review"}})
+
+    # Lands through DynamicForm's debounced change pass, like the property swap
+    Process.sleep(520)
+    html = render(view)
+    assert html =~ "About Review form type"
+    assert html =~ "answers beside this one, for checking them."
+    refute html =~ "About Default form type"
+    refute html =~ "The form as designed, nothing more."
   end
 
   test "Copy existing form is its own editor, works any time and touches only the definition",
@@ -1122,12 +1217,53 @@ defmodule Demo.FormFlowFormsCrudTest do
   test "a published version offers a new draft, landing on its editor", %{conn: conn} do
     {form, _v1} = published_form()
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}")
+
+    # No draft yet, so nothing to continue
+    refute html =~ "Continue editing latest draft"
 
     view |> element("button", "New draft from this version") |> render_click()
 
     {path, _flash} = assert_redirect(view)
     assert path =~ ~r{^/admin/forms/#{form.id}/versions/.+/edit$}
+  end
+
+  test "published and archived versions lead to the latest draft, and an archived one can be forked",
+       %{conn: conn} do
+    {form, v1} = published_form()
+    {:ok, older_draft} = Forms.create_draft(form.id, based_on: v1.id)
+    {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+    # The default view is the published version; the newest draft is a click
+    # away rather than a version-history hunt
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/admin/forms/#{form.id}/versions/#{draft.id}/edit"]),
+             "Continue editing latest draft"
+           )
+
+    refute has_element?(
+             view,
+             ~s(a[href="/admin/forms/#{form.id}/versions/#{older_draft.id}/edit"])
+           )
+
+    # An archived version keeps both, and only loses Archive
+    {:ok, _} = Forms.update_status(v1, :archived)
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{v1.id}")
+    assert html =~ "v1 · archived"
+    assert html =~ "Continue editing latest draft"
+    assert html =~ "New draft from this version"
+    refute html =~ "Archive version"
+
+    view |> element("button", "New draft from this version") |> render_click()
+    {path, _flash} = assert_redirect(view)
+    assert path =~ ~r{^/admin/forms/#{form.id}/versions/.+/edit$}
+
+    [forked | _rest] = Forms.list_versions(form.id)
+    assert forked.based_on_version_id == v1.id
+    assert forked.definition == v1.definition
   end
 
   test "archiving the latest published version falls back to the previous one",

@@ -19,6 +19,12 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   Publishing happens here: the dialog offers the three presets (bug / small /
   big fix) with plain-language descriptions and restates the blast radius
   before anything moves.
+
+  A published or archived version's actions fork it — New draft from this
+  version — and, while a draft exists, lead to the newest one: Continue
+  editing latest draft. The default view is the latest published version, so
+  without that a draft already under way is easy to miss. Only a published
+  version can be archived.
   """
 
   use Phoenix.LiveComponent
@@ -308,7 +314,15 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             Publish
           </Core.button>
           <Core.button
-            :if={@version.status == "published"}
+            :if={@version.status != "draft" && latest_draft(@versions)}
+            components={@components}
+            navigate={edit_path(assigns, latest_draft(@versions))}
+            variant="primary"
+          >
+            Continue editing latest draft
+          </Core.button>
+          <Core.button
+            :if={@version.status in ["published", "archived"]}
             components={@components}
             phx-click="create_draft"
             phx-target={@myself}
@@ -419,6 +433,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         {:noreply, assign(socket, :error, "Could not publish. Please try again.")}
     end
   end
+
+  # The newest draft, or nil — `versions` is newest first
+  defp latest_draft(versions), do: Enum.find(versions, &(&1.status == "draft"))
 
   defp version_badge(%{status: "draft"}), do: "draft"
   defp version_badge(%{status: "published"} = v), do: "v#{v.version} · published"

@@ -91,7 +91,7 @@ defmodule Demo.FormFlowFormsTest do
       {:ok, form} = Forms.create(%{name: "Form"})
       [draft] = form.versions
 
-      assert {:error, :based_on_not_published} = Forms.create_draft(form.id, based_on: draft.id)
+      assert {:error, :based_on_draft} = Forms.create_draft(form.id, based_on: draft.id)
     end
 
     test "based_on must belong to the same lineage" do
@@ -187,11 +187,20 @@ defmodule Demo.FormFlowFormsTest do
       assert {:ok, %{version: 2}} = Forms.update_status(draft, :published)
     end
 
-    test "archived versions are not valid based_on targets" do
+    test "archived versions are valid based_on targets, and the draft is stale once anything else is published" do
       {form, v1} = published_form()
-      {:ok, _} = Forms.update_status(v1, :archived)
+      {:ok, v2_draft} = Forms.create_draft(form.id, based_on: v1.id)
+      {:ok, v2} = Forms.update_status(v2_draft, :published)
+      {:ok, v1} = Forms.update_status(v1, :archived)
 
-      assert {:error, :based_on_not_published} = Forms.create_draft(form.id, based_on: v1.id)
+      assert {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+      assert draft.definition == v1.definition
+      assert draft.based_on_version_id == v1.id
+      assert Forms.stale_draft?(draft)
+
+      # Retiring the only published version leaves nothing to be behind
+      {:ok, _} = Forms.update_status(v2, :archived)
+      refute Forms.stale_draft?(draft)
     end
   end
 
