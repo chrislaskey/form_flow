@@ -7,18 +7,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   definition is the point: the optimistic-lock "changed under you" conflict,
   the stale-draft warning, and the picker between coexisting drafts.
 
-  The definition is edited one of two ways, picked by the **Definition**
-  radio (`definition_editor`): as **JSON** in a comment field, or in the
-  **Form builder**, a `DynamicForm` nested form with one entry per element
-  (`FormFlow.Web.Templates.Forms.Builder` converts between the two). Both sit
-  in the one form under `visible_if`, so whichever is hidden keeps its
-  content and stops being required. Content moves between them only when
-  the radio changes — the `%{event: "change"}` clause decodes the JSON into
-  entries, or writes the entries back into the JSON — never per keystroke.
-  A definition the builder cannot show (a property it has no control for,
-  JSON that does not parse) refuses the switch and says why, rather than
-  dropping what it cannot show. The builder opens by default whenever it can
-  show the saved definition.
+  The definition is edited one of three ways, picked by the "Edit form
+  version using:" radio (`definition_editor`): in the **Form builder**, a
+  `DynamicForm` nested form with one entry per element
+  (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
+  **JSON** in a comment field, or by **Copy existing form** — a select of
+  the catalog forms and a button that writes the picked form's resolved
+  definition onto this draft, and nothing else of it. All three sit in the
+  one form under `visible_if`, so whatever is hidden keeps its content and
+  stops being required. Content moves between the editors only when the
+  radio changes — the `%{event: "change"}` clause decodes the JSON into
+  entries, or writes the entries back into the JSON — never per keystroke;
+  Copy holds the JSON in the hidden field meanwhile, so Save from there
+  saves what was typed. A definition the builder cannot show (a property it
+  has no control for, JSON that does not parse) refuses the switch and says
+  why, rather than dropping what it cannot show; Copy refuses JSON that
+  does not parse for the same reason. The builder opens by default whenever
+  it can show the saved definition, and Copy is offered only while there is
+  a catalog form to copy from.
 
   DynamicForm runs the validation lifecycle: `on_submit` is the definition
   gate (the JSON-syntax check in JSON mode, the entries written into the
@@ -417,30 +423,43 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # does), or refuse and snap the radio back. Refusing beats dropping: a
   # property the builder has no control for would be gone the moment the
   # admin switched back to JSON. `definition` is what the payload held, read
-  # by the editor the admin is leaving.
+  # by the editor the admin is leaving. JSON and Copy hold the definition
+  # the same way — as text in the JSON field — so moving to either writes
+  # it there; Copy additionally needs it to parse, since the field is hidden
+  # there and a syntax error would surface on Save where nobody could see
+  # it.
   defp switch_editor(socket, payload, definition) do
     from = socket.assigns.definition_editor
     to = payload.data[:definition_editor]
 
     cond do
-      to not in ["form", "json"] or to == from ->
+      to not in ["form", "json", "copy"] or to == from ->
         socket
 
-      to == "json" ->
+      to == "copy" and not is_map(definition) ->
+        refuse_switch(
+          socket,
+          payload,
+          from,
+          "Fix the JSON syntax before switching to Copy existing form."
+        )
+
+      to in ["json", "copy"] ->
         form_data =
           payload.data
-          |> Map.put(:definition_editor, "json")
+          |> Map.put(:definition_editor, to)
           |> Map.put(:definition, definition_json(definition))
           # Entries stay validated while hidden, and a half-filled one left
           # behind would block Save with an error nobody could see
           |> Map.delete(:elements)
 
-        assign(socket, definition_editor: "json", form_data: form_data)
+        assign(socket, definition_editor: to, form_data: form_data)
 
       not is_map(definition) ->
         refuse_switch(
           socket,
           payload,
+          from,
           "Fix the JSON syntax before switching to the form builder."
         )
 
@@ -448,6 +467,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         refuse_switch(
           socket,
           payload,
+          from,
           "The form builder can't show this definition, so it stays as JSON. " <>
             Enum.join(Builder.unsupported(definition), " ") <>
             " Remove those properties to edit it in the form builder."
@@ -463,13 +483,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  defp refuse_switch(socket, payload, message) do
+  # A refused switch only ever leaves JSON or Copy (the builder's content is
+  # always a map), so the radio snaps back to the one the admin was on
+  defp refuse_switch(socket, payload, from, message) do
     form_data =
       payload.data
-      |> Map.put(:definition_editor, "json")
+      |> Map.put(:definition_editor, from)
       |> Map.delete(:elements)
 
-    assign(socket, definition_editor: "json", form_data: form_data, editor_error: message)
+    assign(socket, definition_editor: from, form_data: form_data, editor_error: message)
   end
 
   # The raw param, not the applied changeset data: a type the admin just
@@ -514,6 +536,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     Forms.list(tenant_id: form.tenant_id)
     |> Enum.reject(&(&1.id == form.id))
   end
+
+  # The radio's choices: Copy existing form only while there is something to
+  # copy from
+  defp editor_options([]), do: [{"Form builder", "form"}, {"JSON", "json"}]
+
+  defp editor_options(_catalog_forms),
+    do: [{"Form builder", "form"}, {"JSON", "json"}, {"Copy existing form", "copy"}]
 
   # The dropdown's own label — the slug alongside the name, the way an
   # admin looks a form up in code
@@ -676,9 +705,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     Forms.get_latest_version(form_id) || List.first(Forms.list_versions(form_id))
   end
 
-  # The definition field's own copy, next to it: only the source's resolved
-  # definition moves — name, slug, description, and form type are untouched.
-  # Available any time, not gated by `show_chooser?/2`.
+  # Copy existing form: only the source's resolved definition moves — name,
+  # slug, description, and form type are untouched. Available any time, not
+  # gated by `show_chooser?/2`.
   defp copy_definition_content(version, source_id) do
     with %{} = source <- Forms.get(source_id),
          %{} = source_version <- resolved_version(source.id),
@@ -786,10 +815,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  # Unlike Copy form, this is always available — it isn't gated by
-  # `show_chooser?/2` — and it touches only the definition: no name, slug,
-  # description, or form type moves. The source comes with the click: the
-  # button reads it off the form's own dropdown.
+  # Copy existing form. Unlike the chooser's Copy form, this is always
+  # available — it isn't gated by `show_chooser?/2` — and it touches only the
+  # definition: no name, slug, description, or form type moves. The source
+  # comes with the click: the button reads it off the form's own dropdown.
+  # Reloading with no editor picked lands on whichever editor can show what
+  # was copied.
   @impl true
   def handle_event("copy_definition", %{"source_form_id" => source_id}, socket) do
     %{version: version} = socket.assigns
@@ -1226,16 +1257,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             </.link>
           </div>
         </:field>
-        <%!-- Two editors for one definition, under one radio. Each hides
+        <%!-- Three ways to edit one definition, under one radio. Each hides
               with visible_if — hidden, it keeps its content and stops being
-              required — and content crosses between them only when the
-              radio changes (switch_editor/3). --%>
+              required — and content crosses between the editors only when
+              the radio changes (switch_editor/3). Copy needs a catalog to
+              copy from, so with none the radio doesn't offer it. --%>
         <:field
           group="version"
           type="radiogroup"
           name="definition_editor"
           label="Edit form version using:"
-          options={[{"Form builder", "form"}, {"JSON", "json"}]}
+          options={editor_options(@catalog_forms)}
           metadata={%{"style" => "horizontal"}}
         />
         <:field
@@ -1256,11 +1288,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           required
           visible_if="{definition_editor} = 'json'"
         />
-        <%!-- Copy definition belongs to the JSON editor: it writes JSON, and
-              the builder is re-seeded from the saved draft anyway. Fields of
-              this form rather than a form of their own, so they sit in the
-              version group; the button reads the picked source off the form.
-              A dropdown needs options, so neither renders with no catalog. --%>
+        <%!-- Copy existing form: fields of this form rather than a form of
+              their own, so they sit in the version group; the button reads
+              the picked source off the form. A dropdown needs options, so
+              none of this renders with no catalog — nor does the radio
+              offer it then. --%>
+        <:field
+          :if={@catalog_forms != []}
+          group="version"
+          type="html"
+          name="copy_heading"
+          visible_if="{definition_editor} = 'copy'"
+        >
+          <.section_heading title="Copy existing form">
+            Replace this draft's definition with another form's. The name, slug, description,
+            and form type stay as they are.
+          </.section_heading>
+        </:field>
         <:field
           :if={@catalog_forms != []}
           group="version"
@@ -1268,7 +1312,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="definition_copy_source"
           label="Copy definition from existing form"
           options={Enum.map(@catalog_forms, &{catalog_option_label(&1), &1.id})}
-          visible_if="{definition_editor} = 'json'"
+          visible_if="{definition_editor} = 'copy'"
         />
         <:field
           :let={form}
@@ -1276,7 +1320,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           group="version"
           type="custom"
           name="definition_copy"
-          visible_if="{definition_editor} = 'json'"
+          visible_if="{definition_editor} = 'copy'"
         >
           <Core.button
             components={@components}

@@ -2,6 +2,20 @@
 
 ## v0.20.0
 
+### Copy existing form is the radio's third choice
+
+**"Edit form version using:" on `FormFlow.Web.Templates.Forms.Edit` now
+offers Form builder, JSON, or Copy existing form.** The "Copy definition
+from existing form" select and its button used to sit under the JSON
+textarea; they are a mode of their own now, with a heading that says what
+moves (the definition) and what stays (name, slug, description, form
+type). Whatever was typed in the other editors is held while Copy is
+showing, so Save from there saves it; switching to Copy from JSON that does
+not parse is refused the way the form builder refuses it. The choice is
+offered only while there is another form to copy from, as the select
+always was. Hosts that drive the radio by value in tests pass
+`definition_editor: "copy"` to reach the control.
+
 ### A step's name is the node's, and stays in step with an owned form or subflow
 
 **Breaking: the canvas no longer loads a form's or subflow's `name` over the

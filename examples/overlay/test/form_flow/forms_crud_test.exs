@@ -85,8 +85,10 @@ defmodule Demo.FormFlowFormsCrudTest do
       live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
 
     # A blank draft opens in the form builder; the JSON field is the radio's
-    # other choice, and a submit that names it is a submit as JSON
+    # other choice, and a submit that names it is a submit as JSON. With no
+    # other form to copy from, Copy existing form isn't offered
     assert has_element?(view, ~s(input[name="dynamic_form[definition_editor]"][value="json"]))
+    refute has_element?(view, ~s(input[name="dynamic_form[definition_editor]"][value="copy"]))
     assert html =~ "Add element"
     refute html =~ "Definition (JSON)"
 
@@ -792,7 +794,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     end
   end
 
-  test "Copy definition, under the JSON field, works any time and touches only the definition",
+  test "Copy existing form is its own editor, works any time and touches only the definition",
        %{conn: conn} do
     {:ok, source} =
       Forms.create(%{name: "Source Form", definition: %{"fields" => [%{"name" => "ssn"}]}})
@@ -806,16 +808,24 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
     # Already published, so the main chooser doesn't offer itself — Copy
-    # definition isn't gated by that at all. It belongs to the JSON editor,
-    # though: the blank draft opens in the form builder, where it is hidden
+    # existing form isn't gated by that at all. It is the radio's third
+    # choice, hidden while the draft opens in the form builder
     refute html =~ "Start this form from"
     refute html =~ "Copy definition from existing form"
 
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="copy"])
+           )
+
     view
     |> element("#forms-edit-form-form")
-    |> render_change(%{"dynamic_form" => %{"definition_editor" => "json"}})
+    |> render_change(%{"dynamic_form" => %{"definition_editor" => "copy"}})
 
-    assert render(view) =~ "Copy definition from existing form"
+    html = render(view)
+    assert html =~ "Copy definition from existing form"
+    refute html =~ "Definition (JSON)"
+    refute html =~ "Add element"
 
     # The source is a field of the form; the button carries the pick with it
     view
