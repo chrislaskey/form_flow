@@ -476,34 +476,6 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(child.id) != nil
     end
 
-    test "make_reusable detaches, stamps, and re-homes descendants" do
-      {:ok, root} = Flows.create()
-      {:ok, middle} = Flows.create(%{owner_flow_id: root.id})
-      {:ok, leaf} = Flows.create(%{owner_flow_id: root.id})
-
-      insert_subflow_node(root, middle)
-      insert_subflow_node(middle, leaf)
-
-      assert {:ok, middle} = Flows.make_reusable(Flows.get(middle.id))
-
-      assert middle.owner_flow_id == nil
-      assert %DateTime{} = middle.made_reusable_at
-
-      # The leaf under it stays private, re-homed to the new ownership root
-      assert Flows.get(leaf.id).owner_flow_id == middle.id
-    end
-
-    test "list_reusable lists only flows made reusable, newest first" do
-      {:ok, _root} = Flows.create()
-      {:ok, first} = Flows.create()
-      {:ok, second} = Flows.create()
-
-      {:ok, _} = Flows.make_reusable(first)
-      {:ok, _} = Flows.make_reusable(second)
-
-      assert Enum.map(Flows.list_reusable(), & &1.id) == [second.id, first.id]
-    end
-
     test "duplicate copies the identity: name, label, and properties" do
       {:ok, root} =
         Flows.create(%{
@@ -519,29 +491,21 @@ defmodule Demo.FormFlowFlowsTest do
       assert copy.properties["form_flow_type"] == "wizard_any_order"
       assert copy.slug == "onboarding-2"
       assert copy.properties["slug"] == "onboarding-2"
-      assert copy.made_reusable_at == nil
     end
 
-    test "duplicate deep-copies owned children and keeps reusable references" do
+    test "duplicate deep-copies the subflows" do
       {:ok, root} = Flows.create()
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
-      {:ok, shared} = Flows.create()
-      {:ok, shared} = Flows.make_reusable(shared)
 
       form = insert_node(owned, ["Step"], %{"label" => "Inside"})
       insert_subflow_node(root, owned)
-      insert_subflow_node(root, shared)
 
       assert {:ok, copy} = Flows.duplicate(Flows.get(root.id))
 
       assert copy.id != root.id
-      assert copy.made_reusable_at == nil
 
-      copied_refs = copy.nodes |> Enum.map(& &1.subflow_id) |> Enum.reject(&is_nil/1)
-
-      # The reusable reference is shared; the owned one points at a fresh copy
-      assert shared.id in copied_refs
-      assert [owned_copy_id] = copied_refs -- [shared.id]
+      # The subflow reference points at a fresh copy, never at the source's
+      assert [owned_copy_id] = copy.nodes |> Enum.map(& &1.subflow_id) |> Enum.reject(&is_nil/1)
       assert owned_copy_id != owned.id
 
       owned_copy = Flows.get(owned_copy_id)
@@ -551,46 +515,40 @@ defmodule Demo.FormFlowFlowsTest do
       assert inside.properties["label"] == "Inside"
     end
 
-    test "deleting a flow referenced by another flow is refused" do
-      {:ok, root} = Flows.create()
-      {:ok, shared} = Flows.create()
-      {:ok, shared} = Flows.make_reusable(shared)
-
-      insert_subflow_node(root, shared)
-
-      assert {:error, changeset} = Flows.delete(shared)
-      assert %{id: ["is still used as a subflow by another flow"]} = errors_on(changeset)
-
-      # Remove the reference and deletion goes through
-      {:ok, _} = Flows.update(Flows.get(root.id), %{nodes: [], relationships: []})
-      assert {:ok, _} = Flows.delete(shared)
-    end
-
-    test "deleting a root deletes its owned tree, sparing reusable flows" do
+    test "deleting a root deletes its owned tree" do
       {:ok, root} = Flows.create()
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
-      {:ok, shared} = Flows.create()
-      {:ok, shared} = Flows.make_reusable(shared)
+      {:ok, other} = Flows.create()
 
       insert_subflow_node(root, owned)
-      insert_subflow_node(root, shared)
 
       assert {:ok, _} = Flows.delete(Flows.get(root.id))
 
       assert Flows.get(root.id) == nil
       assert Flows.get(owned.id) == nil
-      assert Flows.get(shared.id) != nil
+      assert Flows.get(other.id) != nil
     end
 
-    test "delete_node removes the step and collects owned children, sparing reusable" do
+    test "deleting a subflow on its own is refused — its step is the way" do
+      {:ok, root} = Flows.create(%{label: "subflows"})
+      {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
+      node = insert_subflow_node(root, owned)
+
+      assert {:error, changeset} = Flows.delete(owned)
+      assert %{id: [message]} = errors_on(changeset)
+      assert message =~ "it is a subflow of another flow"
+      assert Flows.get(owned.id) != nil
+
+      {:ok, _} = Flows.delete_node(node)
+      assert Flows.get(owned.id) == nil
+    end
+
+    test "delete_node removes the step and collects the subtree under it" do
       {:ok, root} = Flows.create(%{label: "subflows"})
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
       {:ok, grandchild} = Flows.create(%{owner_flow_id: root.id})
-      {:ok, shared} = Flows.create()
-      {:ok, shared} = Flows.make_reusable(shared)
 
       owned_node = insert_subflow_node(root, owned)
-      shared_node = insert_subflow_node(root, shared)
       insert_subflow_node(owned, grandchild)
 
       {:ok, _} = Flows.delete_node(owned_node)
@@ -599,10 +557,37 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get_node(owned_node.id) == nil
       assert Flows.get(owned.id) == nil
       assert Flows.get(grandchild.id) == nil
+    end
 
-      # Removing a reusable usage keeps the reusable flow
-      {:ok, _} = Flows.delete_node(shared_node)
-      assert Flows.get(shared.id) != nil
+    test "a save refuses a subflow step pointing at a flow the tree does not own" do
+      {:ok, root} = Flows.create(%{label: "subflows"})
+      {:ok, other_root} = Flows.create(%{label: "subflows"})
+      {:ok, theirs} = Flows.create(%{owner_flow_id: other_root.id})
+
+      # Another tree's subflow, and a root flow: neither is this tree's to embed
+      for foreign <- [theirs, other_root] do
+        assert {:error, changeset} =
+                 Flows.update(Flows.get(root.id), %{
+                   nodes: [%{properties: %{"type" => "subflow", "subflow_id" => foreign.id}}],
+                   relationships: []
+                 })
+
+        assert %{nodes: [message]} = errors_on(changeset)
+        assert message =~ "must point at a flow this flow owns"
+      end
+
+      # Nothing was half-written, and the other tree is untouched
+      assert Flows.get(root.id).nodes == []
+      assert Flows.get(theirs.id).owner_flow_id == other_root.id
+
+      # Copying is the way to use it here
+      {:ok, mine} = Flows.duplicate(theirs, owner_flow_id: root.id)
+
+      assert {:ok, _} =
+               Flows.update(Flows.get(root.id), %{
+                 nodes: [%{properties: %{"type" => "subflow", "subflow_id" => mine.id}}],
+                 relationships: []
+               })
     end
 
     test "saving contents garbage-collects unreachable owned subflows" do
@@ -703,7 +688,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Forms.get(catalog.id).owner_flow_id == nil
     end
 
-    test "a canvas save renames the owned subflow behind a step, never a reusable one" do
+    test "a canvas save renames the subflow behind a step" do
       {:ok, root} = Flows.create(%{name: "Dog License", label: "subflows"})
       {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Subflow 1")]})
       [node] = Flows.get(root.id).nodes
@@ -712,12 +697,6 @@ defmodule Demo.FormFlowFlowsTest do
       {:ok, _} = Flows.update(Flows.get(root.id), %{nodes: [subflow_step("Application", node)]})
       assert Flows.get(node.subflow_id).name == "Application"
       assert step_label(Flows.get(root.id)) == "Application"
-
-      {:ok, _} = Flows.make_reusable(Flows.get(node.subflow_id))
-      {:ok, _} = Flows.update(Flows.get(root.id), %{nodes: [subflow_step("Intake", node)]})
-
-      assert step_label(Flows.get(root.id)) == "Intake"
-      assert Flows.get(node.subflow_id).name == "Application"
     end
 
     test "rename_node writes the step's label and nothing else" do

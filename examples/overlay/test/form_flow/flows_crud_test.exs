@@ -496,28 +496,6 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ "Application"
   end
 
-  test "a reusable subflow keeps its own name when its step is renamed", %{conn: conn} do
-    root_id = create_flow(conn, "Dog License", "subflows")
-    save_subflow_node(conn, root_id)
-    [node] = Flows.get(root_id).nodes
-    {:ok, _} = Flows.make_reusable(Flows.get(node.subflow_id))
-
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
-    assert html =~ "Step name"
-    assert html =~ "reusable"
-
-    view
-    |> element("#flows-edit-flow-form-form")
-    |> render_change(%{"dynamic_form" => %{"name" => "Application"}})
-
-    view |> element("button", "Save") |> render_click()
-    assert render(view) =~ "Saved."
-
-    [node] = Flows.get(root_id).nodes
-    assert get_in(node.properties, ["data", "label"]) == "Application"
-    assert Flows.get(node.subflow_id).name == "Subflow 1"
-  end
-
   test "the root flow's own edit page still edits its name", %{conn: conn} do
     id = create_flow(conn, "Dog License")
 
@@ -695,7 +673,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(middle.id) != nil
   end
 
-  test "deleting a subflow another flow still uses is refused with an explanation", %{conn: conn} do
+  test "deleting a subflow on its own page is refused with an explanation", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
@@ -705,7 +683,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Delete") |> render_click()
 
-    assert render(view) =~ "another flow still uses it as a subflow"
+    assert render(view) =~ "it is a subflow of another flow"
     assert Flows.get(node.subflow_id) != nil
   end
 

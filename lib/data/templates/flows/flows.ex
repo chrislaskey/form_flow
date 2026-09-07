@@ -14,16 +14,17 @@ defmodule FormFlow.Data.Templates.Flows do
 
   ## Subflows and ownership
 
-  A node whose `subflow_id` is set embeds another flow. By default such
-  flows are private: their `owner_flow_id` points at the root flow they
-  belong to (the ownership root — flat, not the immediate parent), and they
-  are cleaned up automatically when they stop being referenced (see
-  `update/2`) or when their root is deleted.
-
-  `make_reusable/1` detaches a flow from its owner and stamps
-  `made_reusable_at`, putting it in the catalog `list_reusable/0` returns.
-  Reusable flows can be referenced by many flows — edits show up everywhere —
-  or copied with `duplicate/2` for a private point-in-time copy.
+  A node whose `subflow_id` is set embeds another flow. Every such flow is
+  private: its `owner_flow_id` points at the root flow it belongs to (the
+  ownership root — flat, not the immediate parent), it is cleaned up
+  automatically when it stops being referenced (see `update/2`) or when its
+  root is deleted, and a save refuses a subflow step pointing at a flow the
+  tree does not own. A subflow wanted elsewhere is copied there with
+  `duplicate/2`. Sharing by reference is for forms alone (see "Reusing a
+  catalog form"): a form is a leaf, one lineage and one version pin per
+  instance, while a subflow is a subtree — its own forms, the paths through
+  it, its perspectives and type — and sharing one across trees makes every
+  operation on it ambiguous about which tree it is happening to.
 
   ## Declared flavor
 
@@ -53,9 +54,7 @@ defmodule FormFlow.Data.Templates.Flows do
       child's property, so picking "default" un-pins rather than freezing a
       value. A type that changes takes the old type's property values with
       it — they belonged to that type — while the canvas itself never edits
-      property values; those are set on the flow's own page. Writing the
-      type through to a *reusable* child changes it for every consumer,
-      like any other edit to a shared entity.
+      property values; those are set on the flow's own page.
     * `data.form_type` on a form node — the collected form's type, stored only
       in the form lineage's `properties["form_type"]`
       (see `FormFlow.Data.Templates.Form`), with the same rules — **when
@@ -67,9 +66,10 @@ defmodule FormFlow.Data.Templates.Flows do
       instance pages show users. Unlike the types the label *stays* on the
       node: it is the stored value, never projected from the entity. Renaming
       the node also renames the embedded flow or the collected form **when
-      this flow tree owns it**, so an owned entity's `name` and its step's
-      label are one value; a reusable subflow or a catalog form keeps its own
-      name for every consumer. The entity's own edit pages keep the same
+      this flow tree owns it** — always, for a subflow; for a form, unless
+      it is the catalog's — so an owned entity's `name` and its step's label
+      are one value, and a catalog form keeps its own name for every
+      consumer. The entity's own edit pages keep the same
       pair in step from the other side (`rename_node/2`). A blank or missing
       label renames nothing — names are never blanked from the canvas.
 
@@ -99,8 +99,8 @@ defmodule FormFlow.Data.Templates.Flows do
   alias FormFlow.Data.Templates.Slug
 
   @doc """
-  Returns the top-level flows — root flows and reusable subflows — oldest
-  first, without their nodes and relationships; just the counts, in the
+  Returns the root flows, oldest first, without their nodes and
+  relationships; just the counts, in the
   `:nodes_count` and `:relationships_count` virtual fields, as summary data
   for listings.
 
@@ -144,23 +144,6 @@ defmodule FormFlow.Data.Templates.Flows do
       }
     )
     |> narrow_tenant(Keyword.get(opts, :tenant_id))
-  end
-
-  @doc """
-  Returns the reusable catalog: flows made reusable, newest first.
-  `opts[:tenant_id]` narrows to one tenant.
-
-  Backed by a partial index on `made_reusable_at`, so this is a real-time
-  query — no caching needed.
-  """
-  def list_reusable(opts \\ []) do
-    Repo.all(
-      from(f in Flow,
-        where: not is_nil(f.made_reusable_at),
-        order_by: [desc: f.made_reusable_at]
-      )
-      |> narrow_tenant(Keyword.get(opts, :tenant_id))
-    )
   end
 
   defp narrow_tenant(query, nil), do: query
@@ -227,8 +210,7 @@ defmodule FormFlow.Data.Templates.Flows do
   The entity behind the step is the caller's concern, the same split the
   canvas save makes (see "Canvas write-throughs"): the form and flow edit
   pages rename an owned form or subflow alongside, and leave a catalog form
-  or a reusable subflow alone. A blank label renames nothing — names are
-  never blanked.
+  alone. A blank label renames nothing — names are never blanked.
   """
   def rename_node(%Node{} = node, label) when is_binary(label) and label != "" do
     properties =
@@ -371,9 +353,8 @@ defmodule FormFlow.Data.Templates.Flows do
   The node within an ownership domain that embeds the given flow, or `nil`.
 
   Used to build the drill-in URL of a flow's *containing* page: the node's id
-  is the `/flows/:root/nodes/:node_id` segment. Scoped to the domain because a
-  reusable flow can be embedded by many flows — only the usage under this
-  root is wanted.
+  is the `/flows/:root/nodes/:node_id` segment. Scoped to the domain, which
+  is where every embedding of an owned flow lives.
   """
   def embedding_node(flow_id, root_id) do
     case Ecto.UUID.cast(root_id) do
@@ -429,10 +410,8 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Whether the flow is some root flow's private property.
-
-  Unowned flows are root flows or reusable subflows — structurally the same
-  thing; `made_reusable_at` is what lists a flow in the reusable catalog.
+  Whether the flow is some root flow's private property. An unowned flow is
+  a root flow.
   """
   def owned?(%Flow{owner_flow_id: nil}), do: false
   def owned?(%Flow{}), do: true
@@ -480,16 +459,17 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Deletes a flow, everything it owns, and their nodes and relationships.
+  Deletes a root flow, everything it owns, and their nodes and relationships.
 
-  Refused with an error changeset while other flows still reference the flow
-  as a subflow — remove those references (or `duplicate/2` first) and retry —
-  or while instances of the whole flow have been started against it —
-  journeys, `FormFlow.Data.Instances.Flow` records: they reference their root
-  live and can never be orphaned by template deletion (the `:restrict`
-  FK on `instance_flows.flow_id` is the database backstop; this guard gives
-  the friendly error first). Note the owned-forms guard alone would miss a
-  flow built entirely from catalog forms.
+  Refused with an error changeset on `:id` for an owned flow — a subflow is
+  deleted by removing its step from the flow that embeds it (`delete_node/1`),
+  never on its own, since the embedding node would be left pointing at
+  nothing — and while instances of the whole flow have been started against
+  it — journeys, `FormFlow.Data.Instances.Flow` records: they reference
+  their root live and can never be orphaned by template deletion (the
+  `:restrict` FK on `instance_flows.flow_id` is the database backstop; this
+  guard gives the friendly error first). Note the owned-forms guard alone
+  would miss a flow built entirely from catalog forms.
   """
   def delete(%Flow{} = flow) do
     Repo.transaction(fn ->
@@ -498,33 +478,30 @@ defmodule FormFlow.Data.Templates.Flows do
 
       tree_ids = [flow.id | owned_ids]
 
-      referenced? =
-        Repo.exists?(
-          from(n in Node, where: n.subflow_id == ^flow.id and n.flow_id not in ^tree_ids)
-        )
-
       journeys? = Repo.exists?(from(i in Instances.Flow, where: i.flow_id == ^flow.id))
 
       cond do
-        journeys? ->
-          flow
-          |> Ecto.Changeset.change()
-          |> Ecto.Changeset.add_error(
-            :id,
-            "cannot be deleted: flow instances have been started against it"
+        owned?(flow) ->
+          refuse_delete(
+            flow,
+            "cannot be deleted: it is a subflow of another flow — remove its step from that " <>
+              "flow's canvas instead"
           )
-          |> Repo.rollback()
 
-        referenced? ->
-          flow
-          |> Ecto.Changeset.change()
-          |> Ecto.Changeset.add_error(:id, "is still used as a subflow by another flow")
-          |> Repo.rollback()
+        journeys? ->
+          refuse_delete(flow, "cannot be deleted: flow instances have been started against it")
 
         true ->
           delete_tree_with_owned_forms(flow, tree_ids)
       end
     end)
+  end
+
+  defp refuse_delete(flow, message) do
+    flow
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.add_error(:id, message)
+    |> Repo.rollback()
   end
 
   @doc """
@@ -586,9 +563,8 @@ defmodule FormFlow.Data.Templates.Flows do
   Deletes one node from its flow — the drill-in "delete this subflow".
 
   The node row goes (its relationships cascade), and the ownership domain is
-  swept: an owned subflow the node referenced becomes unreachable and is
-  collected with everything under it. A reusable subflow just loses this
-  usage and survives.
+  swept: the subflow the node referenced becomes unreachable and is
+  collected with everything under it.
   """
   def delete_node(%Node{} = node) do
     Repo.transaction(fn ->
@@ -603,63 +579,13 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Makes a flow reusable: detaches it from its owner and stamps
-  `made_reusable_at`, which lists it in `list_reusable/0`.
-
-  Its private descendants stay private — they are re-homed from the old
-  ownership root to this flow, which becomes the root of its own ownership
-  domain. Already-reusable flows pass through unchanged.
-  """
-  def make_reusable(%Flow{made_reusable_at: %DateTime{}} = flow), do: {:ok, flow}
-
-  def make_reusable(%Flow{} = flow) do
-    Repo.transaction(fn ->
-      old_owner_id = flow.owner_flow_id
-
-      {:ok, flow} =
-        flow
-        |> Ecto.Changeset.change(owner_flow_id: nil, made_reusable_at: DateTime.utc_now())
-        |> Repo.update()
-
-      if old_owner_id do
-        rehome_ids = reachable_owned([flow.id], old_owner_id)
-
-        Repo.update_all(
-          from(f in Flow, where: f.id in ^rehome_ids),
-          set: [owner_flow_id: flow.id]
-        )
-
-        # Owned forms referenced from the rehomed tree move with it — left in
-        # the old domain, the old root's next sweep would collect them while
-        # this flow still references them
-        form_ids =
-          Repo.all(
-            from(n in Node,
-              where: n.flow_id in ^[flow.id | rehome_ids] and not is_nil(n.form_id),
-              select: n.form_id
-            )
-          )
-
-        Repo.update_all(
-          from(f in Templates.Form,
-            where: f.owner_flow_id == ^old_owner_id and f.id in ^form_ids
-          ),
-          set: [owner_flow_id: flow.id]
-        )
-      end
-
-      flow
-    end)
-  end
-
-  @doc """
   Deep-copies a flow: a new flow with new UUIDs throughout — its name, label,
   and properties as they are, its contents copied, relationships re-pointed
   at the copied nodes.
 
-  Subflow references follow the copy boundary: flows the source *owns* are
-  deep-copied along with it; *reusable* flows stay shared references. The
-  copy is never in the reusable catalog — `made_reusable_at` starts empty.
+  Every subflow of the source is deep-copied along with it — a subflow is
+  its tree's own — while a catalog form a step points at stays a shared
+  reference (see `copy_form_reference/3`).
 
   The copy's slug is `opts[:slug]`, or the source's with a free `-N` suffix
   (`FormFlow.Data.Templates.Slug.available/3`). Copied children swap the
@@ -712,6 +638,7 @@ defmodule FormFlow.Data.Templates.Flows do
       with :ok <- validate_flavor(flow, nodes_attrs),
            :ok <- clear_contents(flow),
            {:ok, nodes} <- insert_contents(flow, Node, nodes_attrs),
+           :ok <- validate_subflow_ownership(flow, nodes),
            {:ok, _rels} <-
              insert_contents(flow, Relationship, Map.get(attrs, :relationships, [])),
            {:ok, _children} <- create_missing_subflows(flow, nodes),
@@ -854,8 +781,8 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # A rename only for an entity this flow tree owns — a reusable subflow or a
-  # catalog form keeps its own name for every consumer; the step's label is
+  # A rename only for an entity this flow tree owns — a catalog form keeps
+  # its own name for every consumer; the step's label is
   # this flow's word for it — and only when the canvas holds a real name that
   # differs: a blank or missing label never blanks an entity's name
   defp rename_change(%{owner_flow_id: nil}, _label), do: %{}
@@ -897,6 +824,39 @@ defmodule FormFlow.Data.Templates.Flows do
         flow
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.add_error(:nodes, error)
+
+      {:error, changeset}
+    else
+      :ok
+    end
+  end
+
+  # Every subflow a step points at belongs to this tree: a flow owned by
+  # another root would be deleted out from under this one with its tree, and
+  # a root flow is nobody's subflow. A step without a subflow yet gets one at
+  # save (create_missing_subflows/2); the way to use a flow from elsewhere is
+  # duplicate/2.
+  defp validate_subflow_ownership(flow, nodes) do
+    root_id = flow.owner_flow_id || flow.id
+    referenced = for %{subflow_id: id} <- nodes, is_binary(id), uniq: true, do: id
+
+    foreign? =
+      referenced != [] and
+        Repo.exists?(
+          from(f in Flow,
+            where:
+              f.id in ^referenced and (is_nil(f.owner_flow_id) or f.owner_flow_id != ^root_id)
+          )
+        )
+
+    if foreign? do
+      changeset =
+        flow
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.add_error(
+          :nodes,
+          "a subflow step must point at a flow this flow owns — copy the flow to use it here"
+        )
 
       {:error, changeset}
     else
@@ -1155,12 +1115,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp copy_subflow_reference(nil, _domain_id, _rewrite), do: nil
 
   defp copy_subflow_reference(subflow_id, domain_id, rewrite) do
-    # The copy boundary: owned flows are copied into the new domain,
-    # reusable flows stay shared references
     case Repo.get(Flow, subflow_id) do
-      %Flow{owner_flow_id: nil} ->
-        subflow_id
-
       %Flow{} = child ->
         slug = Slug.available(Flow, rewritten(child.slug, rewrite), child.tenant_id)
         copy_flow(subflow_id, domain_id, domain_id, slug, rewrite)

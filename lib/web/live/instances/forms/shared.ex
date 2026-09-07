@@ -293,12 +293,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   The page's `flows` attr resolved to `FormFlow.Data.Templates.Flow` structs:
   structs pass through, slugs are looked up in the tenant, `nil` entries and
   flows of another tenant are dropped. `nil` — the host named none in
-  particular — is every root flow of the tenant not made reusable. These are
+  particular — is every root flow of the tenant. These are
   the flows the page is about: what the listing offers to start, and the only
   flows whose instances the instance pages render.
   """
   def resolve_flows(nil, tenant_id) do
-    Templates.Flows.list(tenant_id: tenant_id) |> Enum.reject(& &1.made_reusable_at)
+    Templates.Flows.list(tenant_id: tenant_id)
   end
 
   def resolve_flows(flows, tenant_id) when is_list(flows) do

@@ -111,21 +111,6 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert changeset.changes.properties == %{"k" => "v"}
   end
 
-  test "made_reusable_at is not castable — only make_reusable/1 stamps it" do
-    changeset = Flow.changeset(%Flow{}, %{made_reusable_at: DateTime.utc_now()})
-
-    assert changeset.valid?
-    assert changeset.changes == %{}
-  end
-
-  test "an owned flow cannot be reusable" do
-    reusable = %Flow{made_reusable_at: DateTime.utc_now()}
-    changeset = Flow.changeset(reusable, %{owner_flow_id: Ecto.UUID.generate()})
-
-    refute changeset.valid?
-    assert {"an owned flow cannot be reusable", _opts} = changeset.errors[:owner_flow_id]
-  end
-
   test "ignores unknown attributes rather than casting them" do
     changeset = Flow.changeset(%Flow{}, %{color: "teal"})
 

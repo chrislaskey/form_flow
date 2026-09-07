@@ -278,7 +278,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     end
 
     test "keeps the node's stored label even when the entity behind it is named differently" do
-      # The step's name is the node's — a catalog form or reusable subflow
+      # The step's name is the node's — a catalog form
       # named for the catalog must not rename every consumer's step on load
       subflow_node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),

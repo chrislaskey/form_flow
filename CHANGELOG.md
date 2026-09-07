@@ -2,6 +2,38 @@
 
 ## v0.20.0
 
+### Subflows are always owned; sharing by reference is for forms alone
+
+**Breaking: reusable subflows are gone.** A subflow is a subtree — its own
+forms, the paths through it, its perspectives and type — and sharing one
+across trees made every operation on it ambiguous about which tree it was
+happening to: which root a usage belongs to, whose canvas typed it, whose
+users a strand reaches. A form is a leaf, one lineage and one version pin
+per instance, and that is where reuse stays (see below). A subflow wanted
+in a second tree is copied there with `FormFlow.Data.Templates.Flows.duplicate/2`.
+
+- `FormFlow.Data.Templates.Flow` loses `made_reusable_at`;
+  `FormFlow.Data.Templates.Flows` loses `make_reusable/1` and
+  `list_reusable/1`. **The v01 migration changed again**: `form_flow_flows`
+  drops the column and its partial index. Drop and recreate any database
+  migrated before this version.
+- **Saving a flow refuses a subflow step that points at a flow the tree
+  does not own** — another root's subflow, or a root flow — with an error
+  on `:nodes`: "a subflow step must point at a flow this flow owns — copy
+  the flow to use it here". Every subflow's `owner_flow_id` is the root of
+  the tree it sits in, and `duplicate/2` copies every subflow along with
+  its source; there is no shared reference to keep.
+- **`Flows.delete/1` refuses an owned flow** rather than scanning for
+  embedding nodes outside the tree: a subflow is deleted by removing its
+  step (`delete_node/1`). The flow Show page now shows the context's reason
+  for every refusal — "it is a subflow of another flow", "flow instances
+  have been started against it", an owned form with submitted data — where
+  it used to say "another flow still uses it as a subflow" for all of them.
+- The router's `flows` attr and `FormFlow.Web.Instances.Forms.Shared.resolve_flows/2`
+  offer every root flow of the tenant; there is no longer a reusable set to
+  leave out. The flow edit page's Step name field no longer has a
+  reusable-flow note: a step's subflow is always renamed with it.
+
 ### A step can reuse a catalog form
 
 A form step points at a form lineage, and saving a flow gives every new

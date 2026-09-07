@@ -23,7 +23,7 @@ That rule is what makes the Neo4j mapping mechanical:
     drift: the property is the fidelity contract, the relationship is the
     query accelerator.
   * Flow rows (`form_flow_flows`) map wholesale to `:Flow` nodes, so their
-    columns (`owner_flow_id`, `made_reusable_at`) need no properties copy.
+    column (`owner_flow_id`) needs no properties copy.
 
 ## The mapping
 
@@ -35,7 +35,7 @@ point at flows — so flows are nodes too.
 |-----|-------|
 | `form_flow_nodes` row | node — `labels` column → labels, `properties` column → property map, verbatim |
 | `form_flow_relationships` row | relationship — `label` → type, `properties` → property map |
-| `form_flow_flows` row | `:Flow` node (id, `made_reusable_at`, timestamps as properties) |
+| `form_flow_flows` row | `:Flow` node (id, timestamps as properties) |
 | `nodes.flow_id` column | `(n)-[:IN]->(:Flow)` |
 | `nodes.subflow_id` column | `(n)-[:EMBEDS]->(:Flow)` |
 | `flows.owner_flow_id` column | `(:Flow)-[:OWNED_BY]->(:Flow)` |
@@ -52,7 +52,7 @@ arrives.
 
 The queries that motivate a graph database become single patterns:
 
-    // where is this reusable subflow used?
+    // which step embeds this subflow?
     MATCH (n)-[:EMBEDS]->(:Flow {id: $id})
     RETURN DISTINCT n.flow_id
 

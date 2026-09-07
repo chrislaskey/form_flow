@@ -756,15 +756,12 @@ defmodule Demo.FormFlowInstancesTest do
     test "by default every root of the tenant is offered", %{conn: conn} do
       {:ok, dog} = Flows.create(%{name: "Dog License"})
       {:ok, cat} = Flows.create(%{name: "Cat License"})
-      {:ok, reusable} = Flows.create(%{name: "Shared"})
-      {:ok, _} = Flows.make_reusable(reusable)
       {:ok, acme} = Flows.create(%{name: "Elsewhere", tenant_id: "acme"})
 
       {:ok, view, _html} = isolated(conn, [])
 
       assert has_element?(view, start_button(dog))
       assert has_element?(view, start_button(cat))
-      refute has_element?(view, start_button(reusable))
       assert has_element?(view, start_button(acme))
 
       {:ok, view, _html} = isolated(conn, [], %{}, "acme")

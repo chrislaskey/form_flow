@@ -25,8 +25,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   the reference behind `FormFlow.Data.Templates.Flows`' subflow operations. A form
   node carries its form's *lineage* id in `form_id` — never a version id:
   which version to show is a read-time and instance-pin concern (see
-  `archive/form-versioning.md`, Decision 3), and a node inside a shared
-  reusable subflow has one pointer but many consumers. Both references follow
+  `archive/form-versioning.md`, Decision 3). Both references follow
   the same dual-write rule as `flow_id`, with one addition: when only the
   `properties` copy arrives (the editor round-trips properties untouched), the
   column adopts it, so a subflow or form node surviving an editor save keeps
