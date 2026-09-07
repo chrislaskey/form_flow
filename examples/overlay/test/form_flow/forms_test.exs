@@ -317,6 +317,26 @@ defmodule Demo.FormFlowFormsTest do
       assert v1.definition == %{"fields" => [%{"name" => "ssn"}]}
     end
 
+    test "the copy carries the source's properties, under its own slug" do
+      {:ok, form} =
+        Forms.create(%{
+          name: "Check owner",
+          properties: %{
+            "form_type" => "review",
+            "form_type_property_values" => %{"source" => "node-a/node-b"}
+          }
+        })
+
+      owner = insert_flow()
+      assert {:ok, copy} = Forms.copy(form, owner_flow_id: owner.id)
+
+      assert copy.properties["form_type"] == "review"
+      assert copy.properties["form_type_property_values"] == %{"source" => "node-a/node-b"}
+      # The dual-written identity keys are the copy's own
+      assert copy.properties["slug"] == copy.slug
+      assert copy.slug != form.slug
+    end
+
     test "a never-published source copies its newest draft as a draft" do
       {:ok, form} = Forms.create(%{name: "Unfinished", definition: %{"wip" => true}})
 
@@ -448,6 +468,64 @@ defmodule Demo.FormFlowFormsTest do
 
       assert copied_node.form_id == catalog_form.id
     end
+
+    test "delete refuses a catalog form that steps point at" do
+      {:ok, owner} = Forms.create(%{name: "Owner contact"})
+      flow = flow_reusing(owner, "Dog License")
+
+      assert {:error, :in_use} = Forms.delete(owner)
+      assert Forms.get(owner.id) != nil
+
+      # Removing the step is what frees it
+      {:ok, _} = Flows.update(Flows.get(flow.id), %{nodes: []})
+      assert {:ok, _} = Forms.delete(Forms.get(owner.id))
+    end
+
+    test "publishing a shared form reaches every flow using it; reusing it moves nothing" do
+      {owner, v1} = published_form(%{"fields" => [%{"name" => "email"}]})
+
+      dog = flow_reusing(owner, "Dog License")
+      dog_instance = start_at_step(dog)
+      assert dog_instance.template_form_version_id == v1.id
+
+      # A second flow starts reusing the form while the dog owner is mid-form
+      cat = flow_reusing(owner, "Cat License")
+      assert reload(dog_instance).template_form_version_id == v1.id
+      cat_instance = start_at_step(cat)
+
+      # The dialog's attribution, by root flow, flows by name
+      assert Forms.instance_counts_by_flow(owner.id) == [
+               %{flow_id: cat.id, flow_name: "Cat License", in_progress: 1, completed: 0},
+               %{flow_id: dog.id, flow_name: "Dog License", in_progress: 1, completed: 0}
+             ]
+
+      # One publish, both flows: the reason to share, and the thing to see
+      # coming
+      {:ok, v2} = publish_next(owner, v1, preset: :big_fix)
+
+      assert reload(dog_instance).template_form_version_id == v2.id
+      assert reload(cat_instance).template_form_version_id == v2.id
+    end
+  end
+
+  # A root "forms" flow whose one step points at the catalog form
+  defp flow_reusing(form, name) do
+    {:ok, flow} = Flows.create(%{name: name})
+
+    node_attrs = %{
+      form_id: form.id,
+      properties: %{"type" => "step", "data" => %{"label" => form.name, "kind" => "form"}}
+    }
+
+    {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
+    Flows.get(flow.id)
+  end
+
+  # A journey through the flow with its one step's form started
+  defp start_at_step(%{nodes: [step]} = flow) do
+    {:ok, journey} = Instances.Flows.create(%{flow_id: flow.id, user_id: "owner"})
+    {:ok, instance} = Instances.Forms.update_status(journey, [step.id], :in_progress)
+    instance
   end
 
   # --- helpers --------------------------------------------------------------

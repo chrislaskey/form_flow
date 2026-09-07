@@ -85,6 +85,25 @@ defmodule FormFlow.Config.Forms.Type do
   def property_values(nil), do: %{}
 
   @doc """
+  The first `:related_form` property the form's type declares among `types`,
+  or `nil` — what ties a form to one flow. A related form's value is a step
+  path in the flow the form was set up in, so a form of such a type cannot
+  be shared by reference across flows
+  (`FormFlow.Data.Templates.Flows.reuse_form/3`): it resolves in one of them
+  and not the other. An unset type is the first of `types`.
+  """
+  @spec related_form_property([t()], Form.t()) :: FormFlow.Config.Property.t() | nil
+  def related_form_property(types, %Form{properties: properties}) do
+    type =
+      case (properties || %{})["form_type"] do
+        nil -> List.first(types)
+        id -> Enum.find(types, &(&1.id == id))
+      end
+
+    type && Enum.find(type.properties, &(&1.type == :related_form))
+  end
+
+  @doc """
   The data the form renders with — keys are the definition's question names.
   Called when the edit page mounts, on the first start and on every later
   visit alike, so the default returns the user's stored answers and a type

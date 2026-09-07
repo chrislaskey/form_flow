@@ -16,6 +16,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   import Phoenix.LiveViewTest
 
+  alias FormFlow.Data.Instances
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
 
@@ -711,6 +712,149 @@ defmodule Demo.FormFlowFormsCrudTest do
     # The chooser served its purpose — a copy is content, so it stops offering
     html = render(view)
     refute html =~ "Start this form from"
+  end
+
+  describe "reusing a catalog form" do
+    # Dog License and Cat License share the catalog's Owner contact: one
+    # lineage, two steps pointing at it, each flow's step label its own.
+    test "the chooser's Reuse form: through a step only, the catalog alone, unpublished forms marked, landing on the step's form page",
+         %{conn: conn} do
+      {owner, _v1} = published_catalog("Owner contact")
+      {:ok, unpublished} = Forms.create(%{name: "License options"})
+
+      {:ok, _review} =
+        Forms.create(%{name: "Check owner", properties: %{"form_type" => "review"}})
+
+      {_other_root, _other_node} = flow_with_form_node("Other flow", "Private form")
+
+      # Standalone, a catalog form's own draft has nothing to repoint
+      [unpublished_draft] = Forms.list_versions(unpublished.id)
+
+      {:ok, _view, html} =
+        live(conn, "/admin/forms/#{unpublished.id}/versions/#{unpublished_draft.id}/edit")
+
+      assert html =~ "Start this form from"
+      refute html =~ "Reuse form"
+
+      {root, node} = flow_with_form_node("Dog License", "Owner contact")
+      own = Forms.get(node.form_id)
+      [own_draft] = Forms.list_versions(own.id)
+
+      {:ok, view, html} =
+        live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{own_draft.id}/edit")
+
+      assert html =~ "Reuse form"
+
+      view
+      |> element("input[type=radio][value=reuse]")
+      |> render_click(%{"selection" => "reuse"})
+
+      # The catalog alone: never an owned form, never a form whose type ties
+      # it to one flow; a form nobody could start yet says so
+      html = render(view)
+      assert html =~ "Owner contact (#{owner.slug})"
+      assert html =~ "License options (#{unpublished.slug}) — draft, never published"
+      refute html =~ "Check owner"
+      refute html =~ "Private form"
+
+      view
+      |> element("#forms-edit-chooser-reuse")
+      |> render_change(%{"source_form_id" => owner.id})
+
+      # The confirmation says what goes
+      assert has_element?(
+               view,
+               ~s|button[phx-click="reuse_form"][data-confirm*="(#{own.slug}) is deleted"]|
+             )
+
+      view |> element(~s(button[phx-click="reuse_form"])) |> render_click()
+
+      # This URL named the deleted draft; the step's form page is where to be
+      assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
+      assert Flows.get_node(node.id).form_id == owner.id
+      assert Forms.get(own.id) == nil
+
+      # Which now resolves the catalog form — published, so no chooser
+      {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
+      assert html =~ "Catalog form"
+      assert html =~ "used in Dog License"
+    end
+
+    test "the badge names every flow using the form and how to stop; the catalog says where it is used",
+         %{conn: conn} do
+      {owner, _v1} = published_catalog("Owner contact")
+      {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
+      {_cat, _cat_node} = flow_with_catalog_form_node("Cat License", owner)
+
+      {:ok, _view, html} = live(conn, "/admin/flows/#{dog.id}/nodes/#{dog_node.id}/form")
+      assert html =~ "Catalog form"
+      assert html =~ "used in Dog License, Cat License"
+
+      # And how a step leaves it
+      assert html =~ "remove this step from the canvas and add it again"
+
+      # The edit page wears it too, before the first keystroke
+      [v1] = Forms.list_versions(owner.id)
+      {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
+
+      {:ok, _view, html} =
+        live(conn, "/admin/flows/#{dog.id}/nodes/#{dog_node.id}/form/versions/#{draft.id}/edit")
+
+      assert html =~ "used in Dog License, Cat License"
+
+      # The catalog knows too, before anyone opens the form to edit it
+      {:ok, _view, html} = live(conn, "/admin/forms")
+      assert html =~ "Dog License, Cat License"
+
+      {:ok, _view, html} = live(conn, "/admin/forms/#{owner.id}")
+      assert html =~ "Used in Dog License, Cat License"
+      refute html =~ "Catalog form"
+    end
+
+    test "the publish dialog attributes instances to the flows they are in", %{conn: conn} do
+      {owner, v1} = published_catalog("Owner contact")
+      {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
+      {cat, cat_node} = flow_with_catalog_form_node("Cat License", owner)
+      start_at(dog, dog_node)
+      start_at(cat, cat_node)
+
+      {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
+      {:ok, view, _html} = live(conn, "/admin/forms/#{owner.id}/versions/#{draft.id}")
+
+      view |> element("button", "Publish") |> render_click()
+
+      html = render(view)
+      assert html =~ "2 in progress and 0 completed"
+      assert html =~ "In progress: 1 in Cat License, 1 in Dog License"
+    end
+
+    test "deleting a catalog form in use names the flows using it", %{conn: conn} do
+      {owner, _v1} = published_catalog("Owner contact")
+      flow_with_catalog_form_node("Dog License", owner)
+      flow_with_catalog_form_node("Cat License", owner)
+
+      {:ok, view, _html} = live(conn, "/admin/forms/#{owner.id}")
+
+      view |> element(~s(button[phx-click="delete"])) |> render_click()
+
+      assert render(view) =~ "Dog License and Cat License use it. Remove those steps first."
+      assert Forms.get(owner.id) != nil
+    end
+  end
+
+  # A published catalog form by name — what a step reuses
+  defp published_catalog(name) do
+    {:ok, form} = Forms.create(%{name: name})
+    [draft] = Forms.list_versions(form.id)
+    {:ok, v1} = Forms.update_status(draft, :published)
+    {Forms.get(form.id), v1}
+  end
+
+  # A user starts the form at a root flow's step
+  defp start_at(flow, node) do
+    {:ok, journey} = Instances.Flows.create(%{flow_id: flow.id, user_id: "owner"})
+    {:ok, instance} = Instances.Forms.update_status(journey, [node.id], :in_progress)
+    instance
   end
 
   describe "a step's name" do

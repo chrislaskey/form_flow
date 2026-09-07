@@ -740,6 +740,133 @@ defmodule Demo.FormFlowFlowsTest do
     end
   end
 
+  describe "reusing a catalog form" do
+    # Dog License and Cat License each embed an Application subflow with an
+    # Owner contact step. Saving gives each step a blank owned form; reusing
+    # makes both steps the catalog's one Owner contact.
+    test "form_usages names each step's flow and root, oldest root first" do
+      {:ok, owner} = Forms.create(%{name: "Owner contact"})
+      dog = license_flow("Dog License")
+      cat = license_flow("Cat License")
+
+      assert Flows.form_usages(owner.id) == []
+
+      {:ok, _} = Flows.reuse_form(dog.step, owner)
+      {:ok, _} = Flows.reuse_form(cat.step, owner)
+
+      assert [dog_use, cat_use] = Flows.form_usages(owner.id)
+      assert {dog_use.root.id, dog_use.flow.id} == {dog.root.id, dog.flow.id}
+      assert dog_use.node.id == dog.step.id
+      assert {cat_use.root.id, cat_use.flow.id} == {cat.root.id, cat.flow.id}
+      assert {dog_use.root.name, dog_use.flow.name} == {"Dog License", "Application"}
+
+      # An owned form is used once, in its own tree; a step in a root flow
+      # has that root as both flow and root
+      {:ok, flat} = Flows.create(%{name: "Flat"})
+      {:ok, _} = Flows.update(flat, %{nodes: [form_step("Only")]})
+      [flat_step] = Flows.get(flat.id).nodes
+
+      assert [%{root: %{id: root_id}, flow: %{id: flow_id}}] =
+               Flows.form_usages(flat_step.form_id)
+
+      assert {root_id, flow_id} == {flat.id, flat.id}
+    end
+
+    test "reuse_form repoints the step, deletes its own form, and frees the slug" do
+      {:ok, owner} = Forms.create(%{name: "Owner contact"})
+      dog = license_flow("Dog License")
+      own = Forms.get(dog.step.form_id)
+      assert own.owner_flow_id == dog.root.id
+
+      assert {:ok, %{form_id: form_id} = node} = Flows.reuse_form(dog.step, owner)
+      assert form_id == owner.id
+      # The properties copy the canvas round-trips moved with the column
+      assert node.properties["form_id"] == owner.id
+
+      assert Forms.get(own.id) == nil
+      assert Forms.get_by_slug(own.slug) == nil
+      assert Forms.get(owner.id).owner_flow_id == nil
+
+      # The flow's next save sweeps nothing: a catalog form has no owner
+      {:ok, _} =
+        Flows.update(Flows.get(dog.flow.id), %{nodes: [form_step("Owner contact", node)]})
+
+      assert Forms.get(owner.id) != nil
+      assert [%{form_id: ^form_id}] = Flows.get(dog.flow.id).nodes
+    end
+
+    test "reuse_form refuses what cannot be shared, and a published step form" do
+      dog = license_flow("Dog License")
+
+      {:ok, other_root} = Flows.create(%{name: "Other"})
+      {:ok, owned} = Forms.create(%{name: "Owned", owner_flow_id: other_root.id})
+      assert {:error, :owned_form} = Flows.reuse_form(dog.step, owned)
+
+      {:ok, elsewhere} = Forms.create(%{name: "Elsewhere", tenant_id: "other"})
+      assert {:error, :other_tenant} = Flows.reuse_form(dog.step, elsewhere)
+
+      # A review form's source is a step path in one flow
+      {:ok, review} = Forms.create(%{name: "Check owner", properties: %{"form_type" => "review"}})
+      assert {:error, :related_form} = Flows.reuse_form(dog.step, review)
+
+      # A published step form may have instances; it is never thrown away
+      {:ok, owner} = Forms.create(%{name: "Owner contact"})
+      [draft] = Forms.list_versions(dog.step.form_id)
+      {:ok, _v1} = Forms.update_status(draft, :published)
+      assert {:error, :step_form_published} = Flows.reuse_form(dog.step, owner)
+      assert Flows.get_node(dog.step.id).form_id == dog.step.form_id
+      assert Forms.get(dog.step.form_id) != nil
+
+      # Content alone is no bar — the page's confirmation names what goes
+      cat = license_flow("Cat License")
+      [cat_draft] = Forms.list_versions(cat.step.form_id)
+      {:ok, _} = Forms.update_draft(cat_draft, %{definition: %{"elements" => []}})
+      assert {:ok, _} = Flows.reuse_form(cat.step, owner)
+      assert Forms.get(cat.step.form_id) == nil
+    end
+
+    test "a canvas save types the owned form behind a step, never a catalog form" do
+      {:ok, owner} = Forms.create(%{name: "Owner contact"})
+      dog = license_flow("Dog License")
+
+      {:ok, _} =
+        Flows.update(Flows.get(dog.flow.id), %{nodes: [typed_step(dog.step, "review")]})
+
+      assert Forms.get(dog.step.form_id).properties["form_type"] == "review"
+
+      {:ok, step} = Flows.reuse_form(dog.step, owner)
+      {:ok, _} = Flows.update(Flows.get(dog.flow.id), %{nodes: [typed_step(step, "review")]})
+
+      refute Map.has_key?(Forms.get(owner.id).properties, "form_type")
+    end
+  end
+
+  # A root flow of subflows embedding one Application flow of forms with one
+  # Owner contact step — saved, so the step has its blank owned form
+  defp license_flow(name) do
+    {:ok, root} = Flows.create(%{name: name, label: "subflows"})
+    {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Application")]})
+    [subflow_node] = Flows.get(root.id).nodes
+
+    flow = Flows.get(subflow_node.subflow_id)
+    {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner contact")]})
+    [step] = Flows.get(flow.id).nodes
+
+    %{root: Flows.get(root.id), subflow_node: subflow_node, flow: Flows.get(flow.id), step: step}
+  end
+
+  # The step as the canvas saves it with a form type picked in its dropdown
+  defp typed_step(node, type) do
+    %{
+      id: node.id,
+      properties: %{
+        "type" => "step",
+        "form_id" => node.form_id,
+        "data" => %{"label" => "Owner contact", "kind" => "form", "form_type" => type}
+      }
+    }
+  end
+
   defp form_step(label, node_or_extra \\ %{})
 
   defp form_step(label, %{id: id} = node) do

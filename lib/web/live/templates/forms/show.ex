@@ -36,6 +36,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Web.Templates.Components.Breadcrumb
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
   alias FormFlow.Web.Templates.Forms.Preview
 
@@ -101,10 +102,16 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       versions: versions,
       version: version,
       counts: form && Forms.instance_counts(form.id),
+      counts_by_flow: (form && Forms.instance_counts_by_flow(form.id)) || [],
+      usages: (form && Flows.form_usages(form.id)) || [],
       form_types: form_types(assigns, form, version, node)
     )
     |> assign_breadcrumb(node)
   end
+
+  # A step whose form is the catalog's: shared, and said so
+  defp reusing?(%{node: %{}, form: %{owner_flow_id: nil}}), do: true
+  defp reusing?(_assigns), do: false
 
   # The page's form types, with each related-form property's choices filled
   # in for this form's place in its flow. Read-only pages still need
@@ -242,9 +249,24 @@ defmodule FormFlow.Web.Templates.Forms.Show do
            "This form can't be deleted: it has submitted data. Delete its instances first."
          )}
 
+      {:error, :in_use} ->
+        places = Shared.list_names(Shared.usage_labels(socket.assigns.usages))
+
+        {:noreply,
+         assign(
+           socket,
+           :error,
+           "This form can't be deleted: #{places} #{use_verb(socket.assigns.usages)} it. " <>
+             "Remove those steps first."
+         )}
+
       {:error, _other} ->
         {:noreply, assign(socket, :error, "Could not delete the form. Please try again.")}
     end
+  end
+
+  defp use_verb(usages) do
+    if length(Shared.usage_labels(usages)) == 1, do: "uses", else: "use"
   end
 
   @impl true
@@ -354,6 +376,24 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       </div>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <%!-- Sharing, made visible: from a step, the badge; on the catalog's
+            own page, where the form is used, so the admin knows what an
+            edit reaches before making it --%>
+      <CatalogBadge.catalog_badge
+        :if={reusing?(assigns)}
+        form={@form}
+        usages={@usages}
+        components={@components}
+        class="mb-3"
+      />
+      <p :if={@node == nil and @form.owner_flow_id == nil} class="mb-3 text-xs text-zinc-500">
+        <span :if={@usages == []}>Not used in any flow yet.</span>
+        <span :if={@usages != []}>
+          Used in {Enum.join(Shared.usage_labels(@usages), ", ")} — edits and publishes reach every one of them.
+        </span>
+      </p>
+
       <p :if={@form.description} class="mb-3 text-sm text-zinc-600">{@form.description}</p>
 
       <Core.alert
@@ -405,6 +445,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         :if={@publishing?}
         id={"#{@id}-publish-form"}
         counts={@counts}
+        counts_by_flow={@counts_by_flow}
         target={@myself}
         on_success={&publish(&1, @id)}
         components={@components}

@@ -27,6 +27,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   it can show the saved definition, and Copy is offered only while there is
   a catalog form to copy from.
 
+  Reached through a step whose form reuses the catalog's, the page wears
+  the badge saying where else that form is used
+  (`FormFlow.Web.Templates.Forms.Components.CatalogBadge`): an edit here is
+  an edit for every one of them.
+
   DynamicForm runs the validation lifecycle: `on_submit` is the definition
   gate (the JSON-syntax check in JSON mode, the entries written into the
   document in form mode; either way the definition map rides the payload's
@@ -40,17 +45,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   A draft that is blank and has never been published shows nothing but a
   choice, in place of the identity form: Custom form (an explicit no-op —
-  the fields are already ready once chosen) or Copy form (pick another form
+  the fields are already ready once chosen), Copy form (pick another form
   — the same `copy_sources/2` —
   and write its description, form type, and definition onto this one —
   never its name or slug: the name is the step's, and the slug already
-  carries this form's own place). Selecting
-  either is what reveals the rest of the page (`awaiting_start?`), and the
-  chooser stops being offered on any later visit the moment either
-  triggering fact changes — a save, a publish — so nothing tracks that a
-  choice was made, beyond Custom form's own `?start=custom` (see
-  `select_custom_path/1`; Copy needs no such marker, since writing the
-  definition already makes the draft not blank).
+  carries this form's own place), or — through a step only, since a
+  catalog form opened from the catalog has nothing to repoint — Reuse form,
+  the same pointer the radio's fourth choice is. Selecting
+  either of the first two is what reveals the rest of the page
+  (`awaiting_start?`), and the chooser stops being offered on any later
+  visit the moment either triggering fact changes — a save, a publish — so
+  nothing tracks that a choice was made, beyond Custom form's own
+  `?start=custom` (see `select_custom_path/1`; Copy needs no such marker,
+  since writing the definition already makes the draft not blank; Reuse
+  leaves for the step's form page, which now resolves the catalog form).
   """
 
   use Phoenix.LiveComponent
@@ -67,6 +75,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Builder
   alias FormFlow.Web.Templates.Forms.Preview
+  alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
 
   @impl true
@@ -83,7 +92,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        preview_rev: 0,
        preview_topic: Ecto.UUID.generate(),
        chooser_selection: "custom",
-       chooser_source_form_id: nil
+       chooser_source_form_id: nil,
+       chooser_reuse_form_id: nil
      )}
   end
 
@@ -213,13 +223,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp load(socket) do
     assigns = socket.assigns
-    node = assigns.node_id && Flows.get_node(assigns.node_id)
-    form_id = assigns.form_id || (node && node.form_id)
-    form = form_id && Forms.get(form_id)
-    version = assigns.version_id && Forms.get_version(assigns.version_id)
-    versions = if form, do: Forms.list_versions(form.id), else: []
+    {node, form, version, versions} = resolve_form_context(assigns)
 
     show_chooser? = show_chooser?(form, version)
+    form_types = form_types(assigns, form, version, node)
 
     socket
     |> assign(
@@ -228,19 +235,40 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       version: version,
       versions: versions,
       based_on: based_on_version(versions, version),
-      counts: form && Forms.instance_counts(form.id),
-      form_types: form_types(assigns, form, version, node),
+      form_types: form_types,
       pending_type: effective_type(form, assigns.form_types),
       show_chooser?: show_chooser?,
       awaiting_start?: awaiting_start?(show_chooser?, assigns.params),
-      copy_sources: copy_sources(form, assigns.root_id)
+      copy_sources: copy_sources(form, assigns.root_id),
+      reuse_forms: reuse_forms(form, node, form_types)
     )
+    |> assign(form_usage_stats(form))
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn -> saved_definition_json(version) end)
     # Kept across reloads once set, so a parent re-render leaves the admin's
     # choice alone; Copy clears it so it is derived again
     |> assign(:definition_editor, socket.assigns[:definition_editor] || initial_editor(version))
     |> assign_data(form, node, version)
+  end
+
+  defp resolve_form_context(assigns) do
+    node = assigns.node_id && Flows.get_node(assigns.node_id)
+    form_id = assigns.form_id || (node && node.form_id)
+    form = form_id && Forms.get(form_id)
+    version = assigns.version_id && Forms.get_version(assigns.version_id)
+    versions = if form, do: Forms.list_versions(form.id), else: []
+
+    {node, form, version, versions}
+  end
+
+  defp form_usage_stats(nil), do: %{counts: nil, counts_by_flow: [], usages: []}
+
+  defp form_usage_stats(form) do
+    %{
+      counts: Forms.instance_counts(form.id),
+      counts_by_flow: Forms.instance_counts_by_flow(form.id),
+      usages: Flows.form_usages(form.id)
+    }
   end
 
   defp saved_definition_json(version),
@@ -559,8 +587,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         do: {option_label("Reusable form", source, source.name), source.id}
   end
 
-  defp option_label(origin, %{slug: nil}, shown), do: "#{origin} - #{shown}"
-  defp option_label(origin, source, shown), do: "#{origin} - #{shown} (#{source.slug})"
+  defp option_label("", %{slug: nil}, shown), do: shown
+  defp option_label("", source, shown), do: "#{shown} (#{source.slug})"
+  defp option_label(origin, source, shown), do: "#{origin} - #{option_label("", source, shown)}"
 
   # The radio's choices: Copy existing form only while there is something to
   # copy from
@@ -568,6 +597,75 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp editor_options(_copy_sources),
     do: [{"Form builder", "form"}, {"JSON", "json"}, {"Copy existing form", "copy"}]
+
+  # What a step can be pointed at: the catalog, minus forms whose type ties
+  # them to one flow — a `:related_form` value is a step path there
+  # (`FormFlow.Config.Forms.Type.related_form_property/2`), the same test
+  # `Flows.reuse_form/3` refuses on. Owned forms are never offered: their
+  # tree's deletion would take them out from under this flow. None
+  # standalone, where there is no step to repoint.
+  defp reuse_forms(nil, _node, _form_types), do: []
+  defp reuse_forms(_form, nil, _form_types), do: []
+
+  defp reuse_forms(form, _node, form_types) do
+    for source <- Forms.list(tenant_id: form.tenant_id),
+        is_nil(FormFlow.Config.Forms.Type.related_form_property(form_types, source)),
+        do: source
+  end
+
+  # The select's options: the form's name, its slug, and — since a step
+  # reusing an unpublished form cannot be started until it publishes —
+  # whether it has ever been published
+  defp reuse_options(reuse_forms) do
+    for source <- reuse_forms do
+      published = if Forms.ever_published?(source.id), do: "", else: " — draft, never published"
+      {option_label("", source, source.name) <> published, source.id}
+    end
+  end
+
+  defp reuse_form(reuse_forms, id), do: Enum.find(reuse_forms, &(&1.id == id))
+
+  # A step whose form is the catalog's: shared, and said so
+  defp reusing?(%{node: %{}, form: %{owner_flow_id: nil}}), do: true
+  defp reusing?(_assigns), do: false
+
+  # The three things the admin agrees to: sharing, publish reach, and what
+  # happens to the form the step points at now
+  defp reuse_confirm(_assigns, nil), do: nil
+
+  defp reuse_confirm(%{form: current}, target) do
+    own =
+      case current do
+        %{owner_flow_id: nil} ->
+          "This step stops using “#{current.name}”, which stays in the catalog."
+
+        _owned ->
+          "This step's own form (#{current.slug}) is deleted."
+      end
+
+    "This step becomes the catalog's “#{target.name}”. Edits to that form reach every flow " <>
+      "using it; publishing it can reset or reopen users' forms in all of them. #{own} " <>
+      "To stop reusing it later, remove this step from the canvas and add it again."
+  end
+
+  defp reuse_error(:owned_form, _target, _form_types),
+    do: "Only catalog forms can be reused — that form belongs to a flow."
+
+  defp reuse_error(:other_tenant, _target, _form_types),
+    do: "That form belongs to another tenant."
+
+  defp reuse_error(:related_form, target, form_types) do
+    property = FormFlow.Config.Forms.Type.related_form_property(form_types, target)
+
+    "“#{target.name}” can't be reused: its form type's “#{property.name}” points at a step " <>
+      "in one flow, so the form cannot serve two."
+  end
+
+  defp reuse_error(:step_form_published, _target, _form_types),
+    do: "This step's form has been published, so it can't be replaced by a catalog form."
+
+  defp reuse_error(_other, _target, _form_types),
+    do: "Could not reuse that form. Please try again."
 
   # The identity form's data: the saved values, with the saved type's property
   # values under their field names. Switching the type dropdown re-renders
@@ -809,6 +907,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     {:noreply, assign(socket, :chooser_source_form_id, presence(source_form_id))}
   end
 
+  @impl true
+  def handle_event("chooser_pick_reuse", %{"source_form_id" => source_form_id}, socket) do
+    {:noreply, assign(socket, :chooser_reuse_form_id, presence(source_form_id))}
+  end
+
+  # The step becomes the picked catalog form, the source riding the click.
+  # The draft this URL names belongs to the form the step just left — deleted,
+  # if it was the step's own — so the page leaves for the step's form page,
+  # which resolves the catalog form.
+  @impl true
+  def handle_event("reuse_form", %{"source_form_id" => source_id}, socket) do
+    %{node: node, form_types: form_types} = socket.assigns
+    target = presence(source_id) && Forms.get(source_id)
+
+    case target && Flows.reuse_form(node, target, form_types: form_types) do
+      {:ok, _node} ->
+        {:noreply, push_navigate(socket, to: show_path(socket.assigns))}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, reuse_error(reason, target, form_types))}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
   # The one-time copy: writes the source's identity (name, description, form
   # type and its property values) and its resolved definition onto *this*
   # lineage and draft — this form's own slug is never touched, since it
@@ -1042,6 +1166,21 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               phx-target={@myself}
             /> Copy form
           </label>
+          <%!-- The first place the three stop being parallel: Custom and
+                Copy fill the form this step already has; Reuse throws that
+                form away and points the step at the catalog's. Only through
+                a step — a catalog form has nothing to repoint. --%>
+          <label :if={@reuse_forms != []} class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="chooser_selection"
+              value="reuse"
+              checked={@chooser_selection == "reuse"}
+              phx-click="chooser_select"
+              phx-value-selection="reuse"
+              phx-target={@myself}
+            /> Reuse form
+          </label>
         </fieldset>
 
         <div :if={@chooser_selection == "custom"} class="mt-3">
@@ -1077,6 +1216,37 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           >
             Select
           </Core.button>
+        </div>
+
+        <div :if={@chooser_selection == "reuse"} class="mt-3">
+          <p class="mb-2 text-xs text-zinc-600">
+            Reuse a form when every flow should change together; copy it when the flows will drift.
+          </p>
+          <div class="flex items-center gap-2">
+            <form id={"#{@id}-chooser-reuse"} phx-change="chooser_pick_reuse" phx-target={@myself}>
+              <select name="source_form_id" class="w-full max-w-xs select">
+                <option value="">Choose a catalog form…</option>
+                <option
+                  :for={{label, id} <- reuse_options(@reuse_forms)}
+                  value={id}
+                  selected={id == @chooser_reuse_form_id}
+                >
+                  {label}
+                </option>
+              </select>
+            </form>
+            <Core.button
+              components={@components}
+              phx-click="reuse_form"
+              phx-target={@myself}
+              phx-value-source_form_id={@chooser_reuse_form_id}
+              data-confirm={reuse_confirm(assigns, reuse_form(@reuse_forms, @chooser_reuse_form_id))}
+              disabled={is_nil(@chooser_reuse_form_id)}
+              variant="primary"
+            >
+              Select
+            </Core.button>
+          </div>
         </div>
       </div>
     </div>
@@ -1146,6 +1316,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       <Core.alert :if={Forms.stale_draft?(@version)} kind={:warning} components={@components} class="mb-3">
         This draft was based on a version that is no longer the latest — review before publishing.
       </Core.alert>
+
+      <%!-- A step editing a catalog form is editing it for every flow that
+            uses it — said before the first keystroke --%>
+      <CatalogBadge.catalog_badge
+        :if={reusing?(assigns)}
+        form={@form}
+        usages={@usages}
+        components={@components}
+        class="mb-3"
+      />
 
       <%!-- One form, one Save: the lineage's identity (name, description)
         above the version's definition, separated by a read-only strip
@@ -1529,6 +1709,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         :if={@publishing?}
         id={"#{@id}-publish-form"}
         counts={@counts}
+        counts_by_flow={@counts_by_flow}
         target={@myself}
         on_success={&publish(&1, @id)}
         components={@components}

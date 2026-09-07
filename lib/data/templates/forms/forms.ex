@@ -52,6 +52,7 @@ defmodule FormFlow.Data.Templates.Forms do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Form.Event
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Form
   alias FormFlow.Data.Templates.Form.Version
   alias FormFlow.Data.Templates.Slug
@@ -104,13 +105,17 @@ defmodule FormFlow.Data.Templates.Forms do
   Deletes a lineage and its versions.
 
   Refuses with `{:error, :has_instances}` when any instance pins any of the
-  lineage's versions — instance data can never be orphaned.
+  lineage's versions — instance data can never be orphaned — and with
+  `{:error, :in_use}` while any step still points at the lineage: the
+  node's foreign key would refuse anyway, and a catalog form shared by
+  several flows is deleted by removing those steps first.
+  `FormFlow.Data.Templates.Flows.form_usages/1` names them.
   """
   def delete(%Form{} = form) do
-    if has_instances?(form.id) do
-      {:error, :has_instances}
-    else
-      Repo.transaction(fn -> delete_versions_then_lineage(form) end)
+    cond do
+      has_instances?(form.id) -> {:error, :has_instances}
+      in_use?(form.id) -> {:error, :in_use}
+      true -> Repo.transaction(fn -> delete_versions_then_lineage(form) end)
     end
   end
 
@@ -133,6 +138,12 @@ defmodule FormFlow.Data.Templates.Forms do
   been published copies its most recently updated draft as a draft: the copy
   of an unpublished thing is an unpublished thing.
 
+  The copy carries the source's `properties` — its form type and that
+  type's property values — so a rolled-over form behaves as the source did.
+  A `:related_form` value is a step path in the source's tree; in the
+  copy's it resolves to nothing, and the form's edit page says so
+  (`FormFlow.Web.Templates.Shared.fill_related_forms/4`).
+
   Pass `owner_flow_id:` to make the copy a flow tree's private property —
   the normal case; a copy without an owner lands in the catalog and must not
   collide on `name`. The copy's slug is `opts[:slug]`, or the source's with
@@ -147,6 +158,7 @@ defmodule FormFlow.Data.Templates.Forms do
         |> Form.changeset(%{
           name: form.name,
           description: form.description,
+          properties: form.properties,
           tenant_id: form.tenant_id,
           slug: Keyword.get(opts, :slug) || Slug.available(Form, form.slug, form.tenant_id),
           owner_flow_id: owner_flow_id
@@ -258,6 +270,45 @@ defmodule FormFlow.Data.Templates.Forms do
       )
 
     Map.merge(%{"in_progress" => 0, "completed" => 0}, Map.new(rows))
+  end
+
+  @doc """
+  `instance_counts/1` attributed to the root flows the instances were
+  started in — what tells an admin publishing a catalog form which flows
+  the publish reaches. One entry per root flow with instances, as
+  `%{flow_id:, flow_name:, in_progress:, completed:}`, flows by name;
+  standalone instances — filled outside any flow — come last with a `nil`
+  flow. Empty when the lineage has no instances.
+  """
+  def instance_counts_by_flow(form_id) do
+    rows =
+      Repo.all(
+        from(i in Instances.Form,
+          join: v in Version,
+          on: i.template_form_version_id == v.id,
+          left_join: fi in Instances.Flow,
+          on: fi.id == i.instance_flow_id,
+          left_join: f in Flow,
+          on: f.id == fi.flow_id,
+          where: v.template_form_id == ^form_id,
+          group_by: [f.id, f.name, i.status],
+          select: {f.id, f.name, i.status, count(i.id)}
+        )
+      )
+
+    rows
+    |> Enum.group_by(fn {flow_id, flow_name, _status, _count} -> {flow_id, flow_name} end)
+    |> Enum.map(fn {{flow_id, flow_name}, rows} ->
+      counts = Map.new(rows, fn {_id, _name, status, count} -> {status, count} end)
+
+      %{
+        flow_id: flow_id,
+        flow_name: flow_name,
+        in_progress: Map.get(counts, "in_progress", 0),
+        completed: Map.get(counts, "completed", 0)
+      }
+    end)
+    |> Enum.sort_by(fn %{flow_name: name} -> {is_nil(name), name} end)
   end
 
   @doc """
@@ -599,6 +650,10 @@ defmodule FormFlow.Data.Templates.Forms do
         where: v.template_form_id == ^form_id
       )
     )
+  end
+
+  defp in_use?(form_id) do
+    Repo.exists?(from(n in Flow.Node, where: n.form_id == ^form_id))
   end
 
   defp pop_definition(attrs) do

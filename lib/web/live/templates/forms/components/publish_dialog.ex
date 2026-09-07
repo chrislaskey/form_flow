@@ -18,6 +18,14 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
 
   attr(:id, :string, required: true, doc: "the DynamicForm component id")
   attr(:counts, :map, required: true, doc: "instance counts by status, for the blast radius")
+
+  attr(:counts_by_flow, :list,
+    default: [],
+    doc:
+      "the same counts attributed to root flows (`Forms.instance_counts_by_flow/1`) — " <>
+        "how an admin learns a catalog form's publish reaches several flows"
+  )
+
   attr(:target, :any, required: true, doc: "the LiveComponent receiving cancel_publish")
   attr(:on_success, :any, required: true, doc: "1-arity payload callback performing the publish")
   attr(:components, :atom, default: nil)
@@ -35,6 +43,12 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
         <p class="mb-1 text-xs text-zinc-500">
           {@counts["in_progress"]} in progress and {@counts["completed"]} completed
           instance(s) exist for this form.
+        </p>
+        <%!-- Which flows those are in: publishing a shared form migrates the
+              instances of every flow using it, and this is the moment to
+              learn that --%>
+        <p :for={line <- attribution(@counts_by_flow)} class="mb-1 text-xs text-zinc-500">
+          {line}
         </p>
         <p :if={@saved_note} class="mb-1 text-xs text-amber-700">
           Publishing uses the last saved definition — unsaved edits are not included.
@@ -79,4 +93,17 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
     </div>
     """
   end
+
+  # One line per status with instances: "In progress: 1 in Dog License, 1 in
+  # Cat License". Standalone instances — no flow — are said to be so.
+  defp attribution(counts_by_flow) do
+    for {status, key} <- [{"In progress", :in_progress}, {"Completed", :completed}],
+        parts = for(%{^key => n} = entry <- counts_by_flow, n > 0, do: "#{n} in #{place(entry)}"),
+        parts != [] do
+      "#{status}: #{Enum.join(parts, ", ")}"
+    end
+  end
+
+  defp place(%{flow_name: nil}), do: "no flow (filled standalone)"
+  defp place(%{flow_name: name}), do: name
 end

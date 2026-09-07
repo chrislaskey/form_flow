@@ -148,6 +148,33 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
+  Where a form is used, one line per step, from
+  `FormFlow.Data.Templates.Flows.form_usages/1`: the root flow's name, then
+  the containing flow's when the step sits in a subflow — "Dog License /
+  Application", or "Dog License" for a step in the root itself. Each place
+  once: two steps of one flow pointing at the same form read as one use.
+  """
+  def usage_labels(usages) do
+    usages
+    |> Enum.map(fn %{flow: flow, root: root} ->
+      if flow.id == root.id, do: root.name, else: "#{root.name} / #{flow.name}"
+    end)
+    |> Enum.uniq()
+  end
+
+  @doc """
+  Names joined as a sentence lists them: "A", "A and B", "A, B, and C".
+  """
+  def list_names([]), do: ""
+  def list_names([one]), do: one
+  def list_names([one, two]), do: "#{one} and #{two}"
+
+  def list_names(names) do
+    {rest, [last]} = Enum.split(names, -1)
+    Enum.join(rest, ", ") <> ", and " <> last
+  end
+
+  @doc """
   The forms before the node `node_id`, as `{qualified label, path}` options.
   `forms` is a flow tree's forms in the order a user works them
   (`FormFlow.Data.Instances.FlowProgress.forms/2`); the cut is the first

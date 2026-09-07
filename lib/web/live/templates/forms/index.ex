@@ -22,6 +22,11 @@ defmodule FormFlow.Web.Templates.Forms.Index do
 
   `base` is the path prefix the forms pages are mounted under, used to build
   the links — with the default `""`, rows link to `/forms/:id`.
+
+  The "Used in" column names the flows whose steps point at each form
+  (`FormFlow.Data.Templates.Flows.form_usages/1`): a catalog form is shared
+  by reference, so an admin about to edit one sees what the edit reaches
+  before opening it.
   """
 
   use Phoenix.LiveComponent
@@ -29,8 +34,10 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Shared
 
   @impl true
   def update(assigns, socket) do
@@ -88,6 +95,9 @@ defmodule FormFlow.Web.Templates.Forms.Index do
         <:column :let={form} field={:description}>
           <span class="text-xs text-zinc-500">{form.description}</span>
         </:column>
+        <:column :let={form} label="Used in">
+          <span class="text-xs text-zinc-500">{used_in(form)}</span>
+        </:column>
         <:column :let={form} field={:inserted_at} label="Created" sortable>
           <span class="text-xs text-zinc-500">
             {Calendar.strftime(form.inserted_at, "%Y-%m-%d %H:%M")}
@@ -102,5 +112,13 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       </Slab.table>
     </div>
     """
+  end
+
+  # One query per row, for a page of ten
+  defp used_in(form) do
+    case Shared.usage_labels(Flows.form_usages(form.id)) do
+      [] -> "—"
+      places -> Enum.join(places, ", ")
+    end
   end
 end

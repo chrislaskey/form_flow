@@ -2,6 +2,67 @@
 
 ## v0.20.0
 
+### A step can reuse a catalog form
+
+A form step points at a form lineage, and saving a flow gives every new
+form step a blank owned lineage of its own. **A step can now be pointed at a
+catalog form instead** — one lineage shared by every flow whose steps point
+at it, so an edit reaches them all and one publish migrates the instances
+of all of them. Reuse a form when every flow should change together; copy
+it when the flows will drift.
+
+**`FormFlow.Data.Templates.Flows.reuse_form/3`** repoints a step at a
+catalog form and deletes the owned form the step abandons (its slug is free
+again at once). Refused as `{:error, :owned_form}` (only catalog forms are
+shared — an owned form is deleted with its tree), `{:error, :other_tenant}`,
+`{:error, :related_form}` (the form's type declares a `:related_form`
+property, whose value is a step path in one flow; the host's types come in
+as `form_types:`, the library's by default), and
+`{:error, :step_form_published}` (the step's own form has a published
+version, which may have instances; a never-published one cannot, and goes
+whether or not it has content). A step leaves a catalog form the way it
+leaves any form: removed from the canvas and added again, it is a new step
+with a fresh owned form and the chooser, where Copy form makes a private
+copy; the new step has a new id, so users who had started the old one are
+stranded there, as after any removed step.
+**`form_usages/1`** lists every step pointing at a lineage with its flow
+and that flow's root, for the pages that say where a shared form is used.
+`FormFlow.Config.Forms.Type.related_form_property/2` finds the property
+that ties a form to one flow.
+
+**Breaking: `FormFlow.Data.Templates.Forms.delete/1` refuses a form that
+steps point at, as `{:error, :in_use}`.** It used to raise on the node
+foreign key. `FormFlow.Web.Templates.Forms.Show` names the flows: "This
+form can't be deleted: Dog License and Cat License use it. Remove those
+steps first." `Forms.instance_counts_by_flow/1` attributes a lineage's
+instance counts to the root flows they were started in.
+
+**Breaking: the canvas writes a form type through only to an owned form.**
+`Flows.update/2`'s `data.form_type` write-through follows the label's
+ownership rule: a catalog form is typed on its own page, once for every
+flow reusing it, and a type picked for it on one flow's canvas is not
+written — the canvas shows the form's true type again on its next load. A
+reusable subflow's `data.form_flow_type` still writes through.
+
+On `FormFlow.Web.Templates.Forms.Edit`, reached through a step, the
+never-published-and-blank chooser offers **Reuse form** beside Custom form
+and Copy form: a select of the catalog alone (never an owned form, never
+one whose type ties it to a flow; a never-published one is marked "draft,
+never published", since a step reusing it cannot be started until it
+publishes) and a confirmation that says what is agreed to — edits reach
+every flow using the form, publishing it can reset or reopen users' forms
+in all of them, this step's own form is deleted, and leaving the form later
+means re-adding the step. Selecting leaves for the step's form page, since
+the URL named the deleted draft. Standalone, where there is no step to point,
+the chooser is Custom form and Copy form as before.
+
+Sharing is visible everywhere it matters: a step's form page (Show and
+Edit) wears a badge, **Catalog form · "Owner contact" · used in Dog
+License, Cat License**, that also says how to stop; the publish dialog
+attributes its counts, "In progress: 1 in Dog License, 1 in Cat License";
+and the catalog index gains a **Used in** column, a catalog form's Show
+page a "Used in" line.
+
 ### Copy existing form is the radio's third choice
 
 **"Edit form version using:" on `FormFlow.Web.Templates.Forms.Edit` now
@@ -85,6 +146,14 @@ step keep the entity behind it in step from both sides:
 Hosts that renamed forms or subflows through `FormFlow.Data.Templates.Forms.update/2`
 or `Flows.update/2` directly, expecting the canvas to pick the new name up,
 now rename the step too (`rename_node/2`), or do it on the pages.
+
+### Fixed
+
+- **`FormFlow.Data.Templates.Forms.copy/2` carries the source's
+  `properties`.** A copy used to come back with none, so every owned form
+  of a duplicated flow lost its form type and the type's property values.
+  A `:related_form` value is a step path in the source's tree and shows in
+  the copy as a choice to make again, as it does after any rearrangement.
 
 ## v0.19.0
 

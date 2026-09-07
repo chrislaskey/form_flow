@@ -44,9 +44,7 @@ defmodule FormFlow.Data.Templates.Flows do
   the node, and `update/2` writes those edits through rather than storing a
   second copy. For the two types, loading goes the other way:
   `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
-  type back into the node's `data` for display. Writing a type through to a
-  *reusable* child (or a shared catalog form) changes it for every consumer,
-  like any other edit to a shared entity. Three write-throughs exist:
+  type back into the node's `data` for display. Three write-throughs exist:
 
     * `data.form_flow_type` on a subflow node — the embedded flow's
       presentation type, stored only in that flow's
@@ -55,10 +53,16 @@ defmodule FormFlow.Data.Templates.Flows do
       child's property, so picking "default" un-pins rather than freezing a
       value. A type that changes takes the old type's property values with
       it — they belonged to that type — while the canvas itself never edits
-      property values; those are set on the flow's own page.
+      property values; those are set on the flow's own page. Writing the
+      type through to a *reusable* child changes it for every consumer,
+      like any other edit to a shared entity.
     * `data.form_type` on a form node — the collected form's type, stored only
       in the form lineage's `properties["form_type"]`
-      (see `FormFlow.Data.Templates.Form`), with the same rules.
+      (see `FormFlow.Data.Templates.Form`), with the same rules — **when
+      this flow tree owns the form**. A catalog form is typed on its own
+      page, once for every flow that reuses it (`reuse_form/3`); a type
+      picked for it on one flow's canvas is not written, and the canvas
+      shows the form's true type again on its next load.
     * `data.label` on a subflow or form node — the step's name, what the
       instance pages show users. Unlike the types the label *stays* on the
       node: it is the stored value, never projected from the entity. Renaming
@@ -69,8 +73,19 @@ defmodule FormFlow.Data.Templates.Flows do
       pair in step from the other side (`rename_node/2`). A blank or missing
       label renames nothing — names are never blanked from the canvas.
 
-  See the Neo4j guide (`guides/neo4j.md`) for how all of this maps onto a
-  graph database when the dual-write extension lands.
+  ## Reusing a catalog form
+
+  A form step points at a form *lineage* (`FormFlow.Data.Templates.Flow.Node`'s
+  `form_id`), and saving a flow gives every new form step a blank owned
+  lineage of its own (`create_missing_forms/2`). `reuse_form/3` points the
+  step at a catalog form instead — one lineage, shared by every flow whose
+  steps point at it, so an edit or a publish reaches them all at once — and
+  deletes the owned lineage the step abandons. A step leaves a catalog form
+  the way it leaves any form: removed from the canvas and added again, it
+  is a new step with a fresh owned form and the chooser, where Copy form
+  makes a private copy of the catalog form. `form_usages/1` lists the steps
+  pointing at a lineage, with their flows, for every page that has to say
+  where a shared form is used.
   """
 
   import Ecto.Query
@@ -223,6 +238,134 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   def rename_node(%Node{} = node, _blank), do: {:ok, node}
+
+  @doc """
+  Every step that points at the form lineage `form_id`, as
+  `%{node:, flow:, root:}` — the step, the flow it is in, and that flow's
+  ownership root (the flow itself when it is a root), so a caller can say
+  "Dog License / Application". Oldest root first, then oldest flow, then
+  step. Empty for a form no step uses.
+
+  This is what a catalog form's pages show as "Used in", what the publish
+  dialog attributes counts by, and what `FormFlow.Data.Templates.Forms.delete/1`
+  refuses on. An owned form has exactly one usage, in its own tree, unless
+  the canvas duplicated its step.
+  """
+  def form_usages(form_id) do
+    case Ecto.UUID.cast(form_id) do
+      {:ok, form_id} ->
+        rows =
+          Repo.all(
+            from(n in Node,
+              join: f in Flow,
+              on: f.id == n.flow_id,
+              left_join: r in Flow,
+              on: r.id == f.owner_flow_id,
+              where: n.form_id == ^form_id,
+              order_by: [
+                asc: coalesce(r.inserted_at, f.inserted_at),
+                asc: f.inserted_at,
+                asc: n.inserted_at
+              ],
+              select: {n, f, r}
+            )
+          )
+
+        for {node, flow, root} <- rows, do: %{node: node, flow: flow, root: root || flow}
+
+      :error ->
+        []
+    end
+  end
+
+  @doc """
+  Points a form step at a catalog form: the step *becomes* that form, and
+  from then on shares it with every other flow whose steps point at it — an
+  edit through any of them is an edit for all, and a publish migrates the
+  instances of all of them (`FormFlow.Data.Templates.Forms.update_status/3`).
+  The owned form the step pointed at is deleted, so its slug is free again;
+  a catalog form the step pointed at before is left alone — it belongs to
+  the catalog, not the step. In one transaction; returns the repointed node.
+
+  Refused as:
+
+    * `{:error, :owned_form}` — `form` belongs to a flow tree. Only catalog
+      forms (`owner_flow_id` nil) can be shared: an owned form is deleted
+      with its tree, out from under any other flow pointing at it.
+    * `{:error, :other_tenant}` — `form` belongs to another tenant than the
+      step's flow.
+    * `{:error, :related_form}` — `form`'s type declares a `:related_form`
+      property (`FormFlow.Config.Forms.Type.related_form_property/2` over
+      `opts[:form_types]`, the host's types; the library's by default). Its
+      value is a step path in one flow, so the form cannot serve two.
+    * `{:error, :step_form_published}` — the step's own form has a published
+      version. A published form may have instances, which the repoint
+      would strand and the delete refuse; a never-published one cannot.
+
+  Instances already started at the step, in any flow, keep the version
+  they pinned: nothing here re-resolves a pin.
+
+  A step leaves a catalog form by being removed from the canvas and added
+  again; the new step has a new id, so users who had started the old one
+  are stranded there (`FormFlow.Data.Instances.Flows.list_stranded/2`), as
+  after any removed step.
+  """
+  def reuse_form(%Node{} = node, %Templates.Form{} = form, opts \\ []) do
+    form_types = Keyword.get(opts, :form_types, FormFlow.Config.Forms.Type.defaults())
+
+    Repo.transaction(fn ->
+      flow = Repo.get(Flow, node.flow_id)
+      current = node.form_id && Repo.get(Templates.Form, node.form_id)
+
+      with :ok <- reusable(form, flow, form_types),
+           :ok <- abandonable(current),
+           {:ok, node} <- Repo.update(Node.changeset(node, %{form_id: form.id})),
+           :ok <- abandon_form(current) do
+        node
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp reusable(form, flow, form_types) do
+    cond do
+      form.owner_flow_id != nil ->
+        {:error, :owned_form}
+
+      form.tenant_id != flow.tenant_id ->
+        {:error, :other_tenant}
+
+      FormFlow.Config.Forms.Type.related_form_property(form_types, form) ->
+        {:error, :related_form}
+
+      true ->
+        :ok
+    end
+  end
+
+  # What the step leaves behind: nothing, a catalog form (left where it is),
+  # or an owned form — which goes, so it must never have been published
+  defp abandonable(nil), do: :ok
+  defp abandonable(%Templates.Form{owner_flow_id: nil}), do: :ok
+
+  defp abandonable(%Templates.Form{} = owned) do
+    if Templates.Forms.ever_published?(owned.id), do: {:error, :step_form_published}, else: :ok
+  end
+
+  # The abandoned owned form is deleted now rather than at the tree's next
+  # sweep, freeing its slug at once — unless another step of the tree still
+  # points at it (a duplicated node), in which case it is theirs
+  defp abandon_form(nil), do: :ok
+  defp abandon_form(%Templates.Form{owner_flow_id: nil}), do: :ok
+
+  defp abandon_form(%Templates.Form{} = owned) do
+    if Repo.exists?(from(n in Node, where: n.form_id == ^owned.id)) do
+      :ok
+    else
+      with {:ok, _form} <- Templates.Forms.delete(owned), do: :ok
+    end
+  end
 
   @doc """
   The node within an ownership domain that embeds the given flow, or `nil`.
@@ -672,9 +815,16 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
+  # The type and the name both write through only to an owned form: a
+  # catalog form is typed and named on its own page, for every consumer
   defp apply_canvas_intent(%{form_id: form_id}, intent) when not is_nil(form_id) do
     form = Repo.get(Templates.Form, form_id)
-    properties = put_type(form.properties, "form_type", intent.form_type)
+
+    properties =
+      if form.owner_flow_id,
+        do: put_type(form.properties, "form_type", intent.form_type),
+        else: form.properties
+
     changes = rename_change(form, intent.label)
 
     changes =
