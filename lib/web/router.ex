@@ -26,6 +26,7 @@ defmodule FormFlow.Web.Router do
   | `/flows/new`                        | `FormFlow.Web.Templates.Flows.New` |
   | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
   | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
+  | `/flows/:id/overview`               | `FormFlow.Web.Templates.Flows.Overview` (the whole tree, read-only) |
   | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
   | `/flows/:root/nodes/:node_id/edit`  | `FormFlow.Web.Templates.Flows.Edit` (the node's subflow) |
   | `/forms`                            | `FormFlow.Web.Templates.Forms.Index` (the catalog) |
@@ -303,6 +304,16 @@ defmodule FormFlow.Web.Router do
               callback_data={@callback_data}
               components={@components}
             />
+          <% {:overview, id} -> %>
+            <.live_component
+              module={Flows.Overview}
+              id="flows-overview"
+              flow_id={id}
+              base={@base}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              components={@components}
+            />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
               module={Flows.Show}
@@ -527,6 +538,7 @@ defmodule FormFlow.Web.Router do
       ["flows", "new"] -> :new
       ["flows", id] -> {:show, id}
       ["flows", id, "edit"] -> {:edit, id}
+      ["flows", id, "overview"] -> {:overview, id}
       ["flows", root_id, "nodes", node_id] -> {:node_show, root_id, node_id}
       ["flows", root_id, "nodes", node_id, "edit"] -> {:node_edit, root_id, node_id}
       _other -> nil

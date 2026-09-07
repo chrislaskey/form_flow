@@ -203,6 +203,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           </span>
         </Breadcrumb.breadcrumb>
         <div class="flex items-center gap-2">
+          <%!-- The whole flow at once, every level, read-only — the root.s,
+                from any depth. Show and Edit stay one level at a time. --%>
+          <.link navigate={overview_path(assigns)} class="text-xs link link-primary">
+            Overview
+          </.link>
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)
                 side, so unlike there, nothing here needs to intercept the
@@ -310,6 +315,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       true ->
         "#{assigns.base}/flows/#{assigns.root_id}/edit"
     end
+  end
+
+  defp overview_path(assigns) do
+    "#{assigns.base}/flows/#{assigns.root_id || assigns.flow.id}/overview"
   end
 
   defp edit_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}/edit"

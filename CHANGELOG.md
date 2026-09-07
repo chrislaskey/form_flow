@@ -2,6 +2,29 @@
 
 ## v0.20.0
 
+### A flow can be read whole: the overview page
+
+The canvas builds a flow one level at a time — a subflow node's Open
+button drills into that subflow's own canvas. **`/flows/:id/overview`
+shows the whole flow at once**, read-only: every subflow expanded in place
+as a group holding its inner flow, recursively, laid out left to right.
+Only the steps a user can reach are drawn — at each level, the nodes a
+Start node reaches along the flow's connections — so an unwired step or a
+fragment wired only to End is left to the drill-down, where it is fixed.
+Open on a form node or a group's header goes where the Show page's Open
+goes. The Show and Edit pages link to it as **Overview**, from any depth,
+for the root.
+
+**`FormFlow.Data.Templates.Flows.connected_tree/1`** narrows a resolved
+tree (`resolve_tree/1`) to those nodes and the connections among them,
+recursively — the same reading of "reachable" `FormFlow.Data.Instances.FlowProgress`
+walks with. **`FormFlow.Web.Helpers.ReactFlow.to_tree_data/1`** encodes a
+tree as nested ReactFlow data for the canvas. **`FormFlow.Web.Templates.Flows.Overview`**
+is the page, **`FormFlow.Web.Components.Overview`** the canvas component;
+the React bundle gains a `mountOverview` export beside `mount` and lays the
+tree out itself from measured node sizes, since ReactFlow has no layout of
+its own.
+
 ### A step can reuse a catalog form
 
 A form step points at a form lineage, and saving a flow gives every new

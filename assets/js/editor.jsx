@@ -15,10 +15,12 @@ import {
   Handle,
   Position,
   MarkerType,
+  BaseEdge,
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
   useReactFlow,
+  useNodesInitialized,
   ReactFlowProvider,
 } from "@xyflow/react";
 
@@ -633,6 +635,460 @@ function normalize(flow) {
   return { nodes: flow.nodes, edges: Array.isArray(flow.edges) ? flow.edges : [] };
 }
 
+/* --------------------------------------------------------------- overview -- */
+
+// The overview: one read-only canvas of the whole flow, every level at once.
+// The server hands in a *tree* — FormFlow.Web.Helpers.ReactFlow.to_tree_data/1:
+// this level's nodes and edges, plus `subflows`, the same shape again for the
+// flow each subflow node embeds, keyed by that node's id — already narrowed
+// to the nodes connected to Start (FormFlow.Data.Templates.Flows.connected_tree/1).
+// Every subflow node becomes a group node with its inner flow drawn inside
+// it, using ReactFlow's parentId nesting; Start, End, and form nodes are the
+// canvas's own StepNode, read-only.
+//
+// ReactFlow has no layout engine, so positions are computed here (layoutLevel)
+// from the sizes ReactFlow measured on a first, invisible render — never
+// guessed from CSS. See archive/plans/flow-overview.md for the decisions.
+
+// Space between layers (x) and between nodes in a layer (y), and the padding
+// a group keeps around the inner flow it contains
+const LAYER_GAP = 72;
+const NODE_GAP = 28;
+const GROUP_PADDING = 20;
+
+// The vertical room one detour lane takes, above a level (see DetourEdge)
+const LANE_GAP = 24;
+
+// A subflow expanded in place. ReactFlow draws the inner flow's nodes inside
+// this one (they carry parentId), so this renders only the header; the body
+// is the space the layout reserves for them. Before layout, the node's
+// measured height is therefore exactly the header's — which is the offset
+// the inner flow needs — and its measured width is the header's natural
+// width, which the layout widens to fit the inner flow.
+function SubflowGroupNode({ id, data, isConnectable }) {
+  const { onOpenSubflow, formFlowTypeOptions } = useContext(EditorContext);
+
+  const isFormSubflow = data.flow_label !== "subflows";
+  const typeLabel =
+    formFlowTypeOptions.find((option) => option.value === data.form_flow_type)?.label ??
+    data.form_flow_type;
+
+  return (
+    <div className="ff-group">
+      <Handle type="target" position={Position.Left} isConnectable={isConnectable} />
+      <div className="ff-group__header">
+        <div className="ff-group__title">
+          <span aria-hidden="true">⧉</span>
+          <span>{data.label}</span>
+        </div>
+        <div className="ff-group__meta">
+          {isFormSubflow ? "Form subflow" : "Complex subflow"}
+          {isFormSubflow && typeLabel ? ` · ${typeLabel}` : ""}
+        </div>
+        {isFormSubflow && <NodePerspectives ids={data.perspectives} />}
+        {data.empty && <div className="ff-group__empty">No connected steps</div>}
+        <button
+          type="button"
+          className="ff-node__open ff-group__open"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSubflow?.(id);
+          }}
+        >
+          Open →
+        </button>
+      </div>
+      <Handle type="source" position={Position.Right} isConnectable={isConnectable} />
+    </div>
+  );
+}
+
+const overviewNodeTypes = { step: StepNode, group: SubflowGroupNode };
+
+// An edge that skips a layer — Application → Payment, past Review — would be
+// drawn straight through whatever sits in between, and ReactFlow paints
+// edges *under* nodes, so behind an expanded subflow it would simply
+// vanish. Such edges instead take a lane above the level: out of the source,
+// up to the lane, along, and down into the target. The layout reserves the
+// lanes (layoutLevel) and tells the edge how far above its source the lane
+// sits (data.rise), in the level's own coordinates, so the edge needs no
+// knowledge of the nodes it passes.
+function DetourEdge({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, style }) {
+  const laneY = sourceY - (data?.rise ?? 0);
+  const radius = 10;
+  const out = sourceX + 24;
+  const into = targetX - 24;
+  const direction = into >= out ? 1 : -1;
+
+  const path = [
+    `M ${sourceX} ${sourceY}`,
+    `L ${out - radius} ${sourceY}`,
+    `Q ${out} ${sourceY} ${out} ${sourceY - radius}`,
+    `L ${out} ${laneY + radius}`,
+    `Q ${out} ${laneY} ${out + radius * direction} ${laneY}`,
+    `L ${into - radius * direction} ${laneY}`,
+    `Q ${into} ${laneY} ${into} ${laneY + radius}`,
+    `L ${into} ${targetY - radius}`,
+    `Q ${into} ${targetY} ${into + radius} ${targetY}`,
+    `L ${targetX} ${targetY}`,
+  ].join(" ");
+
+  return <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />;
+}
+
+const overviewEdgeTypes = { detour: DetourEdge };
+
+// Nothing on the overview moves, connects, or selects
+const READ_ONLY_NODE = { draggable: false, selectable: false, connectable: false, deletable: false };
+const READ_ONLY_EDGE = { selectable: false, focusable: false, deletable: false };
+
+// The tree as ReactFlow's flat lists, every node at the origin until the
+// layout has sizes to work with. Parents precede their children, as
+// ReactFlow requires of parentId nesting.
+function flattenTree(tree, parentId = null, nodes = [], edges = []) {
+  if (!tree) return { nodes, edges };
+
+  for (const node of tree.nodes ?? []) {
+    const subflow = node.type === "subflow" || node.id in (tree.subflows ?? {});
+    const subtree = tree.subflows?.[node.id];
+
+    const flat = {
+      ...node,
+      ...READ_ONLY_NODE,
+      position: { x: 0, y: 0 },
+      ...(parentId ? { parentId } : {}),
+    };
+
+    if (subflow) {
+      flat.type = "group";
+      flat.data = {
+        ...node.data,
+        flow_label: subtree?.flow?.label ?? node.data?.subflow_label ?? "forms",
+        empty: !subtree?.nodes?.length,
+      };
+    }
+
+    nodes.push(flat);
+
+    if (subflow && subtree) flattenTree(subtree, node.id, nodes, edges);
+  }
+
+  for (const edge of tree.edges ?? []) {
+    edges.push({ ...edge, ...READ_ONLY_EDGE });
+  }
+
+  return { nodes, edges };
+}
+
+// Lays out one level of the tree, bottom-up: a subflow node's size is the
+// size of its inner flow laid out first, plus its header and padding.
+// Positions are relative to the level's own top-left corner — for a child
+// level that is what ReactFlow expects of a node with parentId. Writes
+// every node's position into `positions`, every group's size into `sizes`,
+// and the lane rise of every edge that needs a detour into `detours` (see
+// DetourEdge); returns the level's own size.
+function layoutLevel(tree, measured, positions, sizes, detours) {
+  const nodes = tree.nodes ?? [];
+  if (nodes.length === 0) return { width: 0, height: 0 };
+
+  const size = new Map();
+
+  for (const node of nodes) {
+    const header = measured.get(node.id) ?? { width: 180, height: 40 };
+    const subtree = tree.subflows?.[node.id];
+    const subflow = node.type === "subflow" || node.id in (tree.subflows ?? {});
+
+    if (!subflow) {
+      size.set(node.id, header);
+      continue;
+    }
+
+    const inner = layoutLevel(subtree ?? { nodes: [] }, measured, positions, sizes, detours);
+    const body = inner.width > 0 ? inner.height + GROUP_PADDING : 0;
+    const group = {
+      width: Math.max(header.width, inner.width + 2 * GROUP_PADDING),
+      height: header.height + body,
+    };
+
+    // The inner flow sits under the header, inset by the padding
+    for (const child of subtree?.nodes ?? []) {
+      const at = positions.get(child.id);
+      positions.set(child.id, { x: at.x + GROUP_PADDING, y: at.y + header.height });
+    }
+
+    size.set(node.id, group);
+    sizes.set(node.id, group);
+  }
+
+  const layers = layerNodes(tree);
+  const layerWidths = layers.map((layer) => Math.max(...layer.map((id) => size.get(id).width)));
+  const layerHeights = layers.map(
+    (layer) => layer.reduce((sum, id) => sum + size.get(id).height, 0) + (layer.length - 1) * NODE_GAP,
+  );
+  const height = Math.max(...layerHeights);
+
+  // Edges that do not step to the very next layer — a skip forwards, a loop
+  // back, a same-layer link — detour through lanes above the level. The
+  // shortest span takes the lane nearest the nodes, so lanes nest rather
+  // than cross. The band of lanes pushes the level's nodes down.
+  const layerOf = new Map();
+  layers.forEach((ids, index) => ids.forEach((id) => layerOf.set(id, index)));
+
+  const detourEdges = (tree.edges ?? [])
+    .filter((edge) => layerOf.has(edge.source) && layerOf.has(edge.target))
+    .filter((edge) => layerOf.get(edge.target) - layerOf.get(edge.source) !== 1)
+    .sort(
+      (a, b) =>
+        Math.abs(layerOf.get(a.target) - layerOf.get(a.source)) -
+        Math.abs(layerOf.get(b.target) - layerOf.get(b.source)),
+    );
+  const band = detourEdges.length * LANE_GAP;
+
+  let x = 0;
+  layers.forEach((layer, index) => {
+    // Each layer is centred on the tallest one, so a straight Start → End
+    // line stays straight
+    let y = band + (height - layerHeights[index]) / 2;
+
+    for (const id of layer) {
+      positions.set(id, { x, y });
+      y += size.get(id).height + NODE_GAP;
+    }
+
+    x += layerWidths[index] + LAYER_GAP;
+  });
+
+  detourEdges.forEach((edge, lane) => {
+    const laneY = band - (lane + 0.5) * LANE_GAP;
+    const source = positions.get(edge.source);
+    const sourceCenterY = source.y + size.get(edge.source).height / 2;
+
+    detours.set(edge.id, sourceCenterY - laneY);
+  });
+
+  return { width: x - LAYER_GAP, height: height + band };
+}
+
+// Longest-path layering from the level's Start nodes, left to right. A DFS
+// first marks back edges (an edge to a node still on the DFS stack), so a
+// loop in a flow is drawn but does not push its target rightwards forever.
+// Within a layer, nodes are ordered by the mean position of their
+// predecessors in the layer before — one barycenter pass, which keeps most
+// edges from crossing. Ties keep the stored order.
+function layerNodes(tree) {
+  const nodes = tree.nodes ?? [];
+  const order = new Map(nodes.map((node, index) => [node.id, index]));
+  const outgoing = new Map(nodes.map((node) => [node.id, []]));
+
+  for (const edge of tree.edges ?? []) {
+    if (outgoing.has(edge.source) && order.has(edge.target)) {
+      outgoing.get(edge.source).push(edge.target);
+    }
+  }
+
+  const starts = nodes.filter((node) => node.data?.kind === "start").map((node) => node.id);
+  // Should not happen — the server sends connected nodes, which means a
+  // Start exists — but a level without one still needs a first layer
+  const roots = starts.length ? starts : nodes.slice(0, 1).map((node) => node.id);
+
+  // Back edges, by DFS
+  const back = new Set();
+  const state = new Map(); // "open" while on the stack, "done" after
+
+  const visit = (id) => {
+    state.set(id, "open");
+
+    for (const target of outgoing.get(id)) {
+      const seen = state.get(target);
+
+      if (seen === "open") back.add(`${id}→${target}`);
+      else if (!seen) visit(target);
+    }
+
+    state.set(id, "done");
+  };
+
+  roots.forEach((id) => state.get(id) || visit(id));
+  // Nodes the roots never reached (only possible without a Start): treat
+  // each as another root so every node gets a layer
+  nodes.forEach((node) => state.get(node.id) || visit(node.id));
+
+  // Longest path over the forward edges, in topological order
+  const forward = new Map(
+    nodes.map((node) => [
+      node.id,
+      outgoing.get(node.id).filter((target) => !back.has(`${node.id}→${target}`)),
+    ]),
+  );
+  const incoming = new Map(nodes.map((node) => [node.id, 0]));
+  forward.forEach((targets) => targets.forEach((target) => incoming.set(target, incoming.get(target) + 1)));
+
+  const layer = new Map(nodes.map((node) => [node.id, 0]));
+  const queue = nodes.filter((node) => incoming.get(node.id) === 0).map((node) => node.id);
+
+  while (queue.length) {
+    const id = queue.shift();
+
+    for (const target of forward.get(id)) {
+      layer.set(target, Math.max(layer.get(target), layer.get(id) + 1));
+      incoming.set(target, incoming.get(target) - 1);
+
+      if (incoming.get(target) === 0) queue.push(target);
+    }
+  }
+
+  const depth = Math.max(...layer.values()) + 1;
+  const layers = Array.from({ length: depth }, () => []);
+  nodes.forEach((node) => layers[layer.get(node.id)].push(node.id));
+
+  // Barycenter ordering, left to right
+  const predecessors = new Map(nodes.map((node) => [node.id, []]));
+  forward.forEach((targets, source) => targets.forEach((target) => predecessors.get(target).push(source)));
+
+  const rank = new Map();
+  layers.forEach((ids) => {
+    const key = (id) => {
+      const above = predecessors.get(id).filter((source) => rank.has(source));
+      if (!above.length) return order.get(id);
+      return above.reduce((sum, source) => sum + rank.get(source), 0) / above.length;
+    };
+
+    ids.sort((a, b) => key(a) - key(b) || order.get(a) - order.get(b));
+    ids.forEach((id, index) => rank.set(id, index));
+  });
+
+  return layers;
+}
+
+function FlowOverview({
+  tree,
+  formFlowTypeOptions = [],
+  formTypeOptions = [],
+  perspectiveOptions = [],
+  onOpenSubflow,
+  onOpenForm,
+}) {
+  // Same combined state as the editor, for the same reason: dimension
+  // changes arrive per node through onNodesChange, and the layout needs
+  // them all at once
+  const [state, setState] = useState(() => flattenTree(tree));
+
+  // "measured": every node has a size from ReactFlow; "placed": positions
+  // and group sizes are set; "fitted": the viewport shows all of it. Nothing
+  // is visible until then, so no frame shows the nodes piled at the origin.
+  const [phase, setPhase] = useState("measuring");
+  const measured = useNodesInitialized();
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    setState(flattenTree(tree));
+    setPhase("measuring");
+  }, [tree]);
+
+  const onNodesChange = useCallback(
+    (changes) =>
+      setState((current) => ({ ...current, nodes: applyNodeChanges(changes, current.nodes) })),
+    [],
+  );
+
+  useEffect(() => {
+    if (phase !== "measuring") return;
+
+    // useNodesInitialized is false for an empty canvas; there is nothing to
+    // place, so go straight to showing it
+    if (state.nodes.length === 0) {
+      setPhase("fitted");
+      return;
+    }
+
+    if (!measured) return;
+
+    setState((current) => {
+      const sizesByNode = new Map(current.nodes.map((node) => [node.id, node.measured]));
+      const positions = new Map();
+      const groupSizes = new Map();
+      const detours = new Map();
+
+      layoutLevel(tree, sizesByNode, positions, groupSizes, detours);
+
+      return {
+        nodes: current.nodes.map((node) => ({
+          ...node,
+          position: positions.get(node.id) ?? node.position,
+          ...(groupSizes.has(node.id) ? { style: groupSizes.get(node.id) } : {}),
+        })),
+        edges: current.edges.map((edge) =>
+          detours.has(edge.id)
+            ? { ...edge, type: "detour", data: { ...edge.data, rise: detours.get(edge.id) } }
+            : edge,
+        ),
+      };
+    });
+
+    setPhase("placed");
+  }, [phase, measured, state.nodes.length, tree]);
+
+  // Fit once the groups have been re-measured at the sizes the layout gave
+  // them — fitting earlier would frame the header-sized groups
+  useEffect(() => {
+    if (phase !== "placed") return;
+
+    const resized = state.nodes.every(
+      (node) => !node.style?.width || Math.abs((node.measured?.width ?? 0) - node.style.width) < 1,
+    );
+
+    if (!resized) return;
+
+    fitView({ padding: 0.1 });
+    setPhase("fitted");
+  }, [phase, state.nodes, fitView]);
+
+  return (
+    <EditorContext.Provider
+      value={{
+        onOpenSubflow,
+        onOpenForm,
+        onNodeDataChange: null,
+        editable: false,
+        formFlowTypeOptions,
+        formTypeOptions,
+        perspectiveOptions,
+        focusId: null,
+        clearFocus: null,
+      }}
+    >
+      <div
+        className="ff-overview"
+        style={{ width: "100%", height: "100%", visibility: phase === "fitted" ? "visible" : "hidden" }}
+      >
+        <ReactFlow
+          nodes={state.nodes}
+          edges={state.edges}
+          nodeTypes={overviewNodeTypes}
+          edgeTypes={overviewEdgeTypes}
+          onNodesChange={onNodesChange}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          edgesReconnectable={false}
+          deleteKeyCode={null}
+          minZoom={0.1}
+          proOptions={{ hideAttribution: false }}
+        >
+          <Background variant="dots" gap={16} size={1} />
+          <Controls showInteractive={false} />
+          <MiniMap pannable zoomable />
+          {state.nodes.length === 0 && (
+            <Panel position="top-center" className="ff-panel">
+              <span className="ff-panel__note">Nothing is connected to Start yet.</span>
+            </Panel>
+          )}
+        </ReactFlow>
+      </div>
+    </EditorContext.Provider>
+  );
+}
+
 /* ----------------------------------------------------------------- public -- */
 
 const roots = new WeakMap();
@@ -697,6 +1153,39 @@ export function mount(el, opts = {}) {
 
   return {
     setFlow: (flow) => render(flow),
+    unmount: () => unmount(el),
+  };
+}
+
+/**
+ * Renders the overview into `el`: the whole flow, every level at once,
+ * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
+ * shape. The option lists and the two open callbacks mean what they mean for
+ * mount/2; there is no onChange, since nothing here can change.
+ *
+ * Returns a handle with `setTree/1` and `unmount/0`.
+ */
+export function mountOverview(el, opts = {}) {
+  const root = createRoot(el);
+  const render = (tree) =>
+    root.render(
+      <ReactFlowProvider>
+        <FlowOverview
+          tree={tree}
+          formFlowTypeOptions={opts.formFlowTypeOptions}
+          formTypeOptions={opts.formTypeOptions}
+          perspectiveOptions={opts.perspectiveOptions}
+          onOpenSubflow={opts.onOpenSubflow}
+          onOpenForm={opts.onOpenForm}
+        />
+      </ReactFlowProvider>,
+    );
+
+  roots.set(el, root);
+  render(opts.tree);
+
+  return {
+    setTree: (tree) => render(tree),
     unmount: () => unmount(el),
   };
 }

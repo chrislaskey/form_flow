@@ -178,14 +178,45 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   def to_data(%FormFlow.Data.Templates.Flow{} = flow) do
     %{
       nodes: Enum.map(flow.nodes, &node_data/1),
-      edges:
-        Enum.map(flow.relationships, fn relationship ->
-          relationship.properties
-          |> Map.put("id", relationship.id)
-          |> Map.put("source", relationship.source_id)
-          |> Map.put("target", relationship.target_id)
-        end)
+      edges: Enum.map(flow.relationships, &edge_data/1)
     }
+  end
+
+  @doc """
+  Converts a resolved flow tree — the `%{flow:, nodes:, relationships:,
+  subflows:}` shape of `FormFlow.Data.Templates.Flows.resolve_tree/1` and
+  `connected_tree/1` — into nested ReactFlow data, for the overview canvas
+  (`FormFlow.Web.Templates.Flows.Overview`):
+
+      %{
+        flow: %{id: ..., name: ..., label: "subflows"},
+        nodes: [...],   # this level, exactly as to_data/1 gives them
+        edges: [...],
+        subflows: %{node_id => the same shape, for the flow that node embeds}
+      }
+
+  Each level's `nodes` and `edges` are what `to_data/1` would produce for
+  that flow on its own, projections included, so the overview draws a node
+  the way the canvas does. `flow` carries only what a group's header shows.
+  A subflow the tree could not resolve (a reference cycle, see
+  `resolve_tree/1`) is `nil` under its node id. `nil` in, `nil` out.
+  """
+  def to_tree_data(nil), do: nil
+
+  def to_tree_data(%{flow: flow, nodes: nodes, relationships: relationships, subflows: subflows}) do
+    %{
+      flow: %{id: flow.id, name: flow.name, label: flow.label},
+      nodes: Enum.map(nodes, &node_data/1),
+      edges: Enum.map(relationships, &edge_data/1),
+      subflows: Map.new(subflows, fn {node_id, subtree} -> {node_id, to_tree_data(subtree)} end)
+    }
+  end
+
+  defp edge_data(relationship) do
+    relationship.properties
+    |> Map.put("id", relationship.id)
+    |> Map.put("source", relationship.source_id)
+    |> Map.put("target", relationship.target_id)
   end
 
   defp node_data(node) do

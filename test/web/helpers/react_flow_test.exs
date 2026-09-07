@@ -335,4 +335,101 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       end
     end
   end
+
+  describe "to_tree_data/1" do
+    test "nests each level as to_data/1 would give it, under the flow's header fields" do
+      inner_flow = %FormFlow.Data.Templates.Flow{
+        id: Ecto.UUID.generate(),
+        name: "Application",
+        label: "forms",
+        properties: %{"form_flow_type" => "wizard_any_order"}
+      }
+
+      inner_start = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        labels: ["Start"],
+        properties: %{"type" => "step", "data" => %{"label" => "Start", "kind" => "start"}}
+      }
+
+      subflow_node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        labels: ["Subflow"],
+        subflow_id: inner_flow.id,
+        subflow: inner_flow,
+        properties: %{"type" => "subflow", "data" => %{"label" => "Apply"}}
+      }
+
+      start = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        labels: ["Start"],
+        properties: %{"type" => "step", "data" => %{"label" => "Start", "kind" => "start"}}
+      }
+
+      edge = %FormFlow.Data.Templates.Flow.Relationship{
+        id: Ecto.UUID.generate(),
+        source_id: start.id,
+        target_id: subflow_node.id,
+        properties: %{"markerEnd" => %{"type" => "arrowclosed"}}
+      }
+
+      root_flow = %FormFlow.Data.Templates.Flow{
+        id: Ecto.UUID.generate(),
+        name: "Licensing",
+        label: "subflows"
+      }
+
+      tree = %{
+        flow: root_flow,
+        nodes: [start, subflow_node],
+        relationships: [edge],
+        subflows: %{
+          subflow_node.id => %{
+            flow: inner_flow,
+            nodes: [inner_start],
+            relationships: [],
+            subflows: %{}
+          }
+        }
+      }
+
+      data = ReactFlow.to_tree_data(tree)
+
+      assert data.flow == %{id: root_flow.id, name: "Licensing", label: "subflows"}
+
+      # Each level is what to_data/1 gives, projections included
+      assert data.nodes ==
+               ReactFlow.to_data(%{
+                 root_flow
+                 | nodes: [start, subflow_node],
+                   relationships: [edge]
+               }).nodes
+
+      assert [%{"id" => _, "source" => source, "target" => target, "markerEnd" => _}] = data.edges
+      assert {source, target} == {start.id, subflow_node.id}
+
+      assert Map.keys(data.subflows) == [subflow_node.id]
+      inner = data.subflows[subflow_node.id]
+      assert inner.flow == %{id: inner_flow.id, name: "Application", label: "forms"}
+      assert [%{"id" => inner_start_id}] = inner.nodes
+      assert inner_start_id == inner_start.id
+      assert inner.subflows == %{}
+    end
+
+    test "an unresolved subflow stays nil; nil in, nil out" do
+      node = %FormFlow.Data.Templates.Flow.Node{
+        id: Ecto.UUID.generate(),
+        properties: %{"type" => "subflow", "data" => %{"label" => "Cyclic"}}
+      }
+
+      tree = %{
+        flow: %FormFlow.Data.Templates.Flow{id: Ecto.UUID.generate(), label: "subflows"},
+        nodes: [node],
+        relationships: [],
+        subflows: %{node.id => nil}
+      }
+
+      assert ReactFlow.to_tree_data(tree).subflows == %{node.id => nil}
+      assert ReactFlow.to_tree_data(nil) == nil
+    end
+  end
 end
