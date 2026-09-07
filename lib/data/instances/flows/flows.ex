@@ -170,8 +170,8 @@ defmodule FormFlow.Data.Instances.Flows do
   The journey's stranded form instances: active (not superseded) instances
   whose `path` matches no position in the current tree. Accepts a
   `Templates.Flow` to sweep every journey of that root at once — one edit
-  to a shared reusable subflow can strand instances across every consumer
-  journey simultaneously, and batch reconciliation builds on this.
+  to a subflow strands instances across every journey of the root
+  simultaneously, and batch reconciliation builds on this.
   """
   def list_stranded(instance_or_flow, opts \\ [])
 

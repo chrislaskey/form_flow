@@ -16,20 +16,16 @@ defmodule FormFlow.Data.Templates.Flow do
   guarantee between sibling associations, which is why the changeset below
   casts no contents.
 
-  ## Ownership and reuse
+  ## Ownership
 
   `owner_flow_id` records whose private property this flow is. It points at
   the **ownership root** — everything private in one root flow's tree carries
   the same owner, so deleting the domain is one indexed operation. `nil` means
-  nobody owns it: the flow is a root flow, or a reusable subflow other flows
-  reference through `FormFlow.Data.Templates.Flow.Node`'s `subflow_id`.
-  Structurally those are the same thing —
-  `FormFlow.Data.Templates.Flows.make_reusable/1` just detaches a flow from
-  its owner and stamps `made_reusable_at`, which is what lists it in the
-  reusable catalog (`FormFlow.Data.Templates.Flows.list_reusable/0`).
-
-  An owned flow is never in the catalog: the changeset rejects setting an
-  owner on a flow that has `made_reusable_at`.
+  the flow is a root flow. Every subflow — a flow another flow embeds through
+  `FormFlow.Data.Templates.Flow.Node`'s `subflow_id` — is owned by the root of
+  the tree it sits in; a subflow wanted in a second tree is copied there
+  (`FormFlow.Data.Templates.Flows.duplicate/2`), never shared. Sharing by
+  reference is for forms alone (`FormFlow.Data.Templates.Form`).
 
   ## Tenancy
 
@@ -89,8 +85,6 @@ defmodule FormFlow.Data.Templates.Flow do
 
     belongs_to(:owner_flow, __MODULE__, foreign_key: :owner_flow_id)
 
-    field(:made_reusable_at, :utc_datetime_usec)
-
     # Summary counts for listings, filled by FormFlow.Data.Templates.Flows.list/0
     field(:nodes_count, :integer, virtual: true)
     field(:relationships_count, :integer, virtual: true)
@@ -105,8 +99,6 @@ defmodule FormFlow.Data.Templates.Flow do
   `:label` and `:tenant_id` are castable at creation and immutable afterwards — the
   declared flavor is a commitment (the escape hatch is wrapping in a new
   parent flow, not converting), and a template never changes tenants.
-  `:made_reusable_at` is deliberately not castable — it is only stamped by
-  `FormFlow.Data.Templates.Flows.make_reusable/1`.
   """
   def changeset(flow, attrs \\ %{}) do
     flow
@@ -115,7 +107,6 @@ defmodule FormFlow.Data.Templates.Flow do
     |> validate_immutable(:label)
     |> validate_immutable(:tenant_id)
     |> Slug.validate_slug(:form_flow_flows_slug_tenant_index)
-    |> validate_owned_flows_are_not_reusable()
     |> copy_into_properties(:tenant_id, "tenant_id")
     |> copy_into_properties(:slug, "slug")
     |> foreign_key_constraint(:owner_flow_id)
@@ -141,13 +132,5 @@ defmodule FormFlow.Data.Templates.Flow do
       end
 
     put_change(changeset, :properties, properties)
-  end
-
-  defp validate_owned_flows_are_not_reusable(changeset) do
-    if get_field(changeset, :owner_flow_id) && get_field(changeset, :made_reusable_at) do
-      add_error(changeset, :owner_flow_id, "an owned flow cannot be reusable")
-    else
-      changeset
-    end
   end
 end

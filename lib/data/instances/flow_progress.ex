@@ -111,9 +111,9 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   The forms sharing a position's "forms" flow, in order — the sequence the
   user works through.
 
-  Positions are compared by their parent path rather than by flow id: a
-  reusable subflow used twice in one journey is two traversals, tracked
-  separately, and they share a flow.
+  Positions are compared by their parent path rather than by flow id: the
+  path is a position's identity, and a flow embedded at two steps would be
+  two traversals, tracked separately.
   """
   @spec forms_in_flow([FormProgress.t()], path()) :: [FormProgress.t()]
   def forms_in_flow(forms, path) do

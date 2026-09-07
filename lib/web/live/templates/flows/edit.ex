@@ -712,7 +712,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             type="text"
             name="name"
             label={name_label(assigns)}
-            description={name_description(assigns)}
           />
           <:field
             type="text"
@@ -832,15 +831,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp resolve_flow(_assigns, _node), do: nil
 
   # What the Name field edits. Reached through a node, it is the step: the
-  # node's label, which is what the instance pages show users. An owned
-  # subflow's name is the same value, written alongside; a reusable flow's
-  # name is its own, edited on its own page — from a step, the save leaves it
-  # alone. The root flow, with no node, edits its own name.
+  # node's label, which is what the instance pages show users, and the
+  # subflow's name is the same value, written alongside. The root flow, with
+  # no node, edits its own name.
   defp step_name(flow, nil), do: flow.name
   defp step_name(flow, node), do: get_in(node.properties, ["data", "label"]) || flow.name
 
   defp flow_name(flow, nil, pending_name), do: pending_name || flow.name
-  defp flow_name(%{owner_flow_id: nil} = flow, _node, _pending_name), do: flow.name
   defp flow_name(_flow, _node, pending_name), do: pending_name
 
   defp rename_step(nil, _name), do: {:ok, nil}
@@ -848,13 +845,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   defp name_label(%{node_id: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"
-
-  defp name_description(%{subflow_node: %{}, flow: %{owner_flow_id: nil} = flow}) do
-    "This step embeds the reusable flow “#{flow.name}”. Renaming the step here does not " <>
-      "rename that flow; do that on its own page."
-  end
-
-  defp name_description(_assigns), do: nil
 
   defp changed(payload, component_id) do
     Phoenix.LiveView.send_update(__MODULE__, %{

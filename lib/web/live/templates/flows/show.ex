@@ -21,8 +21,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   Delete means different things in the two modes. At the top level it deletes
   the flow and everything it owns. On a drill-in page it removes the parent's
   subflow step (`FormFlow.Data.Templates.Flows.delete_node/1`) — the child's
-  flows go with it through garbage collection when owned, and survive when
-  reusable.
+  flows go with it through garbage collection.
   Deleting the child *flow* directly would be refused while the parent still
   references it, which is why that is not what the button does.
   """
@@ -153,16 +152,22 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       {:ok, _flow} ->
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows")}
 
-      {:error, %Ecto.Changeset{}} ->
-        # The context refuses while other flows still reference this flow
-        # as a subflow — deleting it would break their canvases
-        {:noreply,
-         assign(
-           socket,
-           :error,
-           "This flow can't be deleted: another flow still uses it as a subflow. " <>
-             "Remove that subflow step (or delete the flow containing it) first."
-         )}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :error, delete_error(changeset))}
+    end
+  end
+
+  # The context's refusal, as a sentence: it says why on `:id`, prefixed
+  # "cannot be deleted: " — a subflow deleted on its own, a flow with
+  # instances, an owned form with submitted data
+  defp delete_error(changeset) do
+    case Keyword.get(changeset.errors, :id) do
+      {message, _opts} ->
+        "This flow can't be deleted: " <>
+          String.replace_prefix(message, "cannot be deleted: ", "") <> "."
+
+      nil ->
+        "Could not delete the flow. Please try again."
     end
   end
 

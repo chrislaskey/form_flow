@@ -117,8 +117,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
         references(:form_flow_flows, type: :uuid, on_delete: :delete_all, prefix: context.prefix)
       )
 
-      add(:made_reusable_at, :utc_datetime_usec)
-
       timestamps(type: :utc_datetime_usec)
     end
 
@@ -129,13 +127,6 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
         name: :form_flow_flows_slug_tenant_index,
-        prefix: context.prefix
-      )
-    )
-
-    create_if_not_exists(
-      index(:form_flow_flows, [:made_reusable_at],
-        where: "made_reusable_at IS NOT NULL",
         prefix: context.prefix
       )
     )

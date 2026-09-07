@@ -21,7 +21,6 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :delete_all))
-      add(:made_reusable_at, :utc_datetime_usec)
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -34,10 +33,6 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
         where: "slug IS NOT NULL",
         name: :form_flow_flows_slug_tenant_index
       )
-    )
-
-    create_if_not_exists(
-      index(:form_flow_flows, [:made_reusable_at], where: "made_reusable_at IS NOT NULL")
     )
 
     create_if_not_exists table(:form_flow_template_forms, primary_key: false) do

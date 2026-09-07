@@ -79,7 +79,7 @@ defmodule FormFlow.Web.Router do
   give themselves.
 
   Drill-in URLs carry the *node* id, not the child flow's or form's id — a
-  reusable subflow or form used twice in one root is two nodes, so two
+  catalog form used at two steps of one root is two nodes, so two
   unambiguous URLs. Versions get an explicit id suffix because several drafts
   may coexist and nothing else disambiguates them.
 
@@ -204,8 +204,8 @@ defmodule FormFlow.Web.Router do
         "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped. " <>
         "The page offers them to start and refuses to start any other, its " <>
         "instance pages refuse an instance of any other, and when `instances` " <>
-        "is `nil` the listing shows the user's own instances of them alone. `nil` offers and lists every root flow of the tenant " <>
-        "(those not made reusable, for starting). The router's `tenant_id` is " <>
+        "is `nil` the listing shows the user's own instances of them alone. `nil` offers and lists every root flow of the tenant. " <>
+        "The router's `tenant_id` is " <>
         "applied on top. Ignored by the template pages"
   )
 
