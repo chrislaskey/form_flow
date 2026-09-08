@@ -73,9 +73,13 @@ echo "==> Replacing the default route with the demo LiveViews"
 # POST route is what the switcher's rows hit to change it.
 perl -pi -e 's{get "/", PageController, :home}{post "/switch-user/:user_id", UserSwitchController, :create\n\n    live_session :default, on_mount: DemoWeb.UserHook do\n      live "/install-check", InstallCheckLive\n      live "/branding", BrandingLive\n      live "/admin/*path", FormFlowLive.Admin\n      live "/users/*path", FormFlowLive.Users\n      live "/*path", ReadmeLive\n    end}' demo/lib/demo_web/router.ex
 
-# The generated home page test asserts the default Phoenix marketing copy,
-# but the route above replaced that page with the demo index
+# The generated home page, its test, and its controller go: the route above
+# replaced that page with the demo index, and the template it left behind
+# calls a Layouts.theme_toggle the overlay's layouts do not define, which
+# compiles as a warning on every start
 rm -f demo/test/demo_web/controllers/page_controller_test.exs
+rm -f demo/lib/demo_web/controllers/page_controller.ex
+rm -rf demo/lib/demo_web/controllers/page_html.ex demo/lib/demo_web/controllers/page_html
 
 echo "==> Declaring the route that serves FormFlow's editor bundle"
 # The editor is ~390 KB of React + ReactFlow, fetched at runtime by FormFlow's

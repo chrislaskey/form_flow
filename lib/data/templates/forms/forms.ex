@@ -70,9 +70,10 @@ defmodule FormFlow.Data.Templates.Forms do
   Creates a form: the lineage plus its initial draft, in one transaction.
 
   A `:definition` key in the attributes seeds the draft; everything else is
-  lineage identity. A missing `:slug` is generated from the name
-  (`FormFlow.Data.Templates.Slug`). Returns the form with its versions
-  preloaded.
+  lineage identity. A missing `:slug` is generated from the name for a
+  catalog form (`FormFlow.Data.Templates.Slug`); an owned form
+  (`:owner_flow_id`) gets none unless one is given — its step's slug is the
+  handle. Returns the form with its versions preloaded.
   """
   def create(attrs \\ %{}) do
     {definition, attrs} = pop_definition(attrs)
@@ -88,12 +89,17 @@ defmodule FormFlow.Data.Templates.Forms do
     end)
   end
 
+  # An owned form has no slug of its own; its step's is the handle
   defp default_slug(attrs) do
-    Slug.available(
-      Form,
-      Slug.segment(Slug.get(attrs, :name), "form"),
-      Slug.get(attrs, :tenant_id)
-    )
+    if Slug.get(attrs, :owner_flow_id) do
+      nil
+    else
+      Slug.available(
+        Form,
+        Slug.segment(Slug.get(attrs, :name), "form"),
+        Slug.get(attrs, :tenant_id)
+      )
+    end
   end
 
   @doc "Updates a lineage's identity fields (name, description, slug) and properties."
@@ -146,8 +152,11 @@ defmodule FormFlow.Data.Templates.Forms do
 
   Pass `owner_flow_id:` to make the copy a flow tree's private property —
   the normal case; a copy without an owner lands in the catalog and must not
-  collide on `name`. The copy's slug is `opts[:slug]`, or the source's with
-  a free `-N` suffix (`FormFlow.Data.Templates.Slug.available/3`).
+  collide on `name`. The copy's slug is `opts[:slug]`; otherwise an owned
+  copy has none — its step's slug is the handle — and a catalog copy takes
+  the source's with a free `-N` suffix
+  (`FormFlow.Data.Templates.Slug.available/3`), or a default from the name
+  when the source, being owned, had none.
   """
   def copy(%Form{} = form, opts \\ []) do
     owner_flow_id = Keyword.get(opts, :owner_flow_id)
@@ -160,7 +169,7 @@ defmodule FormFlow.Data.Templates.Forms do
           description: form.description,
           properties: form.properties,
           tenant_id: form.tenant_id,
-          slug: Keyword.get(opts, :slug) || Slug.available(Form, form.slug, form.tenant_id),
+          slug: Keyword.get(opts, :slug) || copy_slug(form, owner_flow_id),
           owner_flow_id: owner_flow_id
         })
         |> Ecto.Changeset.put_change(:copied_from_form_id, form.id)
@@ -174,6 +183,12 @@ defmodule FormFlow.Data.Templates.Forms do
     end)
   end
 
+  defp copy_slug(_form, owner_flow_id) when not is_nil(owner_flow_id), do: nil
+
+  defp copy_slug(form, nil) do
+    Slug.available(Form, form.slug || Slug.segment(form.name, "form"), form.tenant_id)
+  end
+
   @doc "Fetches a lineage by id, or nil."
   def get(form_id), do: Repo.get(Form, form_id)
 
@@ -181,10 +196,12 @@ defmodule FormFlow.Data.Templates.Forms do
   Fetches a lineage by its slug (`FormFlow.Data.Templates.Slug`), or `nil`.
   `opts[:tenant_id]` scopes the lookup to one tenant — slugs are unique per
   tenant, so a multitenant host passes it; a host with no tenants needs
-  nothing more than the slug.
+  nothing more than the slug. Only a catalog form has a slug; an owned form
+  is reached through its step
+  (`FormFlow.Data.Templates.Flows.get_node_by_slug/2`, then `form_id`).
 
-      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_user-inform")
-      FormFlow.Data.Templates.Forms.get_by_slug("dla2026_user-inform", tenant_id: "acme")
+      FormFlow.Data.Templates.Forms.get_by_slug("owner-contact")
+      FormFlow.Data.Templates.Forms.get_by_slug("owner-contact", tenant_id: "acme")
   """
   def get_by_slug(slug, opts \\ []) when is_binary(slug) do
     from(f in Form, where: f.slug == ^slug)

@@ -238,6 +238,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   defp form_progress(node, path, scope, ctx) do
     %FormProgress{
       path: path,
+      node: node,
       label: node_label(node),
       ancestors: scope.ancestors,
       status: ctx.statuses[path],

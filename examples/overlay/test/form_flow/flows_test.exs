@@ -311,6 +311,51 @@ defmodule Demo.FormFlowFlowsTest do
     end
   end
 
+  describe "tenancy on the graph tables" do
+    test "nodes and relationships carry the flow's tenant_id, in the column and in properties" do
+      {:ok, flow} = Flows.create(%{name: "Intake", tenant_id: "acme"})
+      start_id = Ecto.UUID.generate()
+      form_id = Ecto.UUID.generate()
+
+      {:ok, _} =
+        Flows.update(flow, %{
+          nodes: [
+            %{id: start_id, properties: %{"data" => %{"label" => "Start", "kind" => "start"}}},
+            %{id: form_id, properties: %{"data" => %{"label" => "Details", "kind" => "form"}}}
+          ],
+          relationships: [%{source_id: start_id, target_id: form_id, label: "CONNECTS_TO"}]
+        })
+
+      %{nodes: nodes, relationships: [relationship]} = Flows.get(flow.id)
+
+      for node <- nodes do
+        assert node.tenant_id == "acme"
+        assert node.properties["tenant_id"] == "acme"
+      end
+
+      assert relationship.tenant_id == "acme"
+      assert relationship.properties["tenant_id"] == "acme"
+
+      # A duplicate's rows carry it too
+      {:ok, copy} = Flows.duplicate(flow)
+      %{nodes: nodes, relationships: [relationship]} = Flows.get(copy.id)
+      assert Enum.all?(nodes, &(&1.tenant_id == "acme"))
+      assert relationship.tenant_id == "acme"
+
+      # A host with no tenants: nil, and no properties key
+      {:ok, plain} = Flows.create(%{name: "Plain"})
+
+      {:ok, _} =
+        Flows.update(plain, %{
+          nodes: [%{properties: %{"data" => %{"label" => "Start", "kind" => "start"}}}]
+        })
+
+      [node] = Flows.get(plain.id).nodes
+      assert node.tenant_id == nil
+      refute Map.has_key?(node.properties, "tenant_id")
+    end
+  end
+
   describe "slugs" do
     alias FormFlow.Data.Templates.Forms
 
@@ -364,68 +409,125 @@ defmodule Demo.FormFlowFlowsTest do
       refute Map.has_key?(cleared.properties, "slug")
     end
 
-    test "owned children carry the chain: root, subflow, form" do
+    test "steps get a slug under the root's; the owned children behind them have none" do
       {:ok, root} = Flows.create(%{name: "Dog License Application 2026", label: "subflows"})
+      {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Documents")], relationships: []})
 
+      [node] = Flows.get(root.id).nodes
+      assert node.slug == "dla2026_documents"
+      assert node.properties["slug"] == "dla2026_documents"
+
+      documents = Flows.get(node.subflow_id)
+      assert documents.slug == nil
+      refute Map.has_key?(documents.properties, "slug")
+
+      # Inside the subflow the prefix is still the root's — the subflow has no
+      # slug of its own — and two same-named steps in one save see each other
       {:ok, _} =
-        Flows.update(root, %{
-          nodes: [
-            %{
-              id: Ecto.UUID.generate(),
-              properties: %{
-                "type" => "subflow",
-                "data" => %{"label" => "Documents", "subflow_label" => "forms"}
-              }
-            }
-          ],
+        Flows.update(documents, %{
+          nodes: [form_step("User Information"), form_step("User Information")],
           relationships: []
         })
 
+      nodes = Flows.get(documents.id).nodes
+
+      assert Enum.sort(Enum.map(nodes, & &1.slug)) == [
+               "dla2026_user-inform",
+               "dla2026_user-inform-2"
+             ]
+
+      assert Enum.all?(nodes, &(Forms.get(&1.form_id).slug == nil))
+    end
+
+    test "Start and End get no slug; a slug given in node attrs is kept, and a taken one refused" do
+      {:ok, flow} = Flows.create(%{name: "Intake"})
+
+      {:ok, _} =
+        Flows.update(flow, %{
+          nodes:
+            Flows.starter_nodes() ++ [Map.put(form_step("Owner contact"), :slug, "owner-contact")]
+        })
+
+      nodes = Flows.get(flow.id).nodes
+      assert nodes |> Enum.reject(& &1.form_id) |> Enum.map(& &1.slug) == [nil, nil]
+      assert [%{slug: "owner-contact"}] = Enum.filter(nodes, & &1.form_id)
+
+      {:ok, other} = Flows.create(%{name: "Other"})
+
+      assert {:error, changeset} =
+               Flows.update(other, %{
+                 nodes: [Map.put(form_step("Owner contact"), :slug, "owner-contact")]
+               })
+
+      assert {"has already been taken", _} = changeset.errors[:slug]
+
+      # Another tenant may use it: steps are unique per tenant
+      {:ok, acme} = Flows.create(%{name: "Acme", tenant_id: "acme"})
+
+      assert {:ok, _} =
+               Flows.update(acme, %{
+                 nodes: [Map.put(form_step("Owner contact"), :slug, "owner-contact")]
+               })
+    end
+
+    test "a canvas save keeps a step's slug by id and ignores the properties copy" do
+      {:ok, flow} = Flows.create(%{name: "Intake"})
+      {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner contact")]})
+      [node] = Flows.get(flow.id).nodes
+      assert node.slug == "intake_owner-conta"
+
+      {:ok, _} = Flows.update_node(node, %{slug: "owner-contact"})
+
+      # A tab opened before the change sends the old copy back — the column wins
+      stale =
+        put_in(form_step("Owner contact", node), [:properties, "slug"], "intake_owner-conta")
+
+      {:ok, _} = Flows.update(Flows.get(flow.id), %{nodes: [stale]})
+
+      [saved] = Flows.get(flow.id).nodes
+      assert saved.slug == "owner-contact"
+      assert saved.properties["slug"] == "owner-contact"
+
+      # A step removed and added again is a new node, and takes the default
+      {:ok, _} = Flows.update(Flows.get(flow.id), %{nodes: [form_step("Owner contact")]})
+      [fresh] = Flows.get(flow.id).nodes
+      assert fresh.id != node.id
+      assert fresh.slug == "intake_owner-conta"
+    end
+
+    test "duplicate rewrites copied steps' defaults under the copy's slug; hand-set ones get a suffix" do
+      {:ok, root} = Flows.create(%{name: "Dog License Application 2026", label: "subflows"})
+      {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Documents")]})
       [node] = Flows.get(root.id).nodes
       documents = Flows.get(node.subflow_id)
-      assert documents.slug == "dla2026_documents"
 
       {:ok, _} =
         Flows.update(documents, %{
           nodes: [
-            %{
-              id: Ecto.UUID.generate(),
-              properties: %{"data" => %{"kind" => "form", "label" => "User Information"}}
-            },
-            %{
-              id: Ecto.UUID.generate(),
-              properties: %{"data" => %{"kind" => "form", "label" => "User Information"}}
-            }
-          ],
-          relationships: []
+            form_step("User Information"),
+            Map.put(form_step("Owner contact"), :slug, "owner-contact")
+          ]
         })
 
-      slugs =
-        Flows.get(documents.id).nodes
-        |> Enum.map(&Forms.get(&1.form_id).slug)
-        |> Enum.sort()
-
-      assert slugs == ["dla2026_documents_user-inform", "dla2026_documents_user-inform-2"]
-    end
-
-    test "duplicate takes a slug and rewrites the children's prefix" do
-      {:ok, root} = Flows.create(%{name: "Dog License Application 2026"})
-
-      {:ok, child} =
-        Flows.create(%{name: "Documents", slug: "dla2026_documents", owner_flow_id: root.id})
-
-      insert_subflow_node(root, child)
-
-      {:ok, copy} = Flows.duplicate(root, slug: "dla2027")
+      {:ok, copy} = Flows.duplicate(Flows.get(root.id), slug: "dla2027")
       assert copy.slug == "dla2027"
       [copied_node] = copy.nodes
-      assert Flows.get(copied_node.subflow_id).slug == "dla2027_documents"
+      assert copied_node.slug == "dla2027_documents"
 
-      # Without a slug the copy takes the next free suffix of the source's
-      {:ok, second} = Flows.duplicate(root)
+      copied_documents = Flows.get(copied_node.subflow_id)
+      assert copied_documents.slug == nil
+
+      assert Enum.sort(Enum.map(copied_documents.nodes, & &1.slug)) ==
+               ["dla2027_user-inform", "owner-contact-2"]
+
+      assert Enum.all?(copied_documents.nodes, &(Forms.get(&1.form_id).slug == nil))
+
+      # Without a slug the copy takes the next free suffix of the source's,
+      # and the steps' defaults follow it
+      {:ok, second} = Flows.duplicate(Flows.get(root.id))
       assert second.slug == "dla2026-2"
       [second_node] = second.nodes
-      assert Flows.get(second_node.subflow_id).slug == "dla2026-2_documents"
+      assert second_node.slug == "dla2026-2_documents"
     end
 
     test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do
@@ -439,6 +541,24 @@ defmodule Demo.FormFlowFlowsTest do
 
       {:ok, _} = Flows.delete(acme)
       assert Flows.get_by_slug("intake").id == plain.id
+    end
+
+    test "get_node_by_slug/2 looks a step up, scoped to a tenant when asked" do
+      {:ok, plain} = Flows.create(%{name: "Intake"})
+      {:ok, _} = Flows.update(plain, %{nodes: [Map.put(form_step("Details"), :slug, "details")]})
+      {:ok, acme} = Flows.create(%{name: "Intake", tenant_id: "acme"})
+      {:ok, _} = Flows.update(acme, %{nodes: [Map.put(form_step("Details"), :slug, "details")]})
+
+      assert %Flow.Node{flow_id: flow_id, form_id: form_id} =
+               Flows.get_node_by_slug("details", tenant_id: "acme")
+
+      assert flow_id == acme.id
+      assert Forms.get(form_id).owner_flow_id == acme.id
+      assert Flows.get_node_by_slug("details", tenant_id: "globex") == nil
+      assert Flows.get_node_by_slug("nope") == nil
+
+      {:ok, _} = Flows.delete(Flows.get(acme.id))
+      assert Flows.get_node_by_slug("details").flow_id == plain.id
     end
   end
 
@@ -699,23 +819,44 @@ defmodule Demo.FormFlowFlowsTest do
       assert step_label(Flows.get(root.id)) == "Application"
     end
 
-    test "rename_node writes the step's label and nothing else" do
+    test "update_node writes the step's label and slug, and nothing else" do
       {:ok, flow} = Flows.create(%{name: "Dog License"})
       {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner contact")]})
       [node] = Flows.get(flow.id).nodes
+      assert node.slug == "dog-license_owner-conta"
 
-      assert {:ok, renamed} = Flows.rename_node(node, "Your details")
+      assert {:ok, renamed} = Flows.update_node(node, %{label: "Your details"})
       assert get_in(renamed.properties, ["data", "label"]) == "Your details"
       assert get_in(renamed.properties, ["data", "kind"]) == "form"
       assert renamed.form_id == node.form_id
+      assert renamed.slug == "dog-license_owner-conta"
       assert step_label(Flows.get(flow.id)) == "Your details"
 
       # The form is the step's owner's concern, not this function's
       assert Forms.get(node.form_id).name == "Owner contact"
 
       # A blank label renames nothing — names are never blanked
-      assert {:ok, same} = Flows.rename_node(renamed, "")
+      assert {:ok, same} = Flows.update_node(renamed, %{label: ""})
       assert get_in(same.properties, ["data", "label"]) == "Your details"
+
+      # The slug: set, normalized, mirrored into properties; blank clears it
+      assert {:ok, slugged} = Flows.update_node(same, %{slug: " Your-Details "})
+      assert slugged.slug == "your-details"
+      assert slugged.properties["slug"] == "your-details"
+      assert get_in(slugged.properties, ["data", "label"]) == "Your details"
+
+      assert {:ok, cleared} = Flows.update_node(slugged, %{label: "Your details", slug: ""})
+      assert cleared.slug == nil
+      refute Map.has_key?(cleared.properties, "slug")
+
+      # A slug another step holds is refused by name
+      {:ok, other} = Flows.create(%{name: "Cat License"})
+
+      {:ok, _} =
+        Flows.update(other, %{nodes: [Map.put(form_step("Owner contact"), :slug, "taken")]})
+
+      assert {:error, changeset} = Flows.update_node(cleared, %{slug: "taken"})
+      assert {"has already been taken", _} = changeset.errors[:slug]
     end
   end
 
@@ -751,19 +892,22 @@ defmodule Demo.FormFlowFlowsTest do
       assert {root_id, flow_id} == {flat.id, flat.id}
     end
 
-    test "reuse_form repoints the step, deletes its own form, and frees the slug" do
+    test "reuse_form repoints the step, deletes its own form, and leaves the step's slug alone" do
       {:ok, owner} = Forms.create(%{name: "Owner contact"})
       dog = license_flow("Dog License")
       own = Forms.get(dog.step.form_id)
       assert own.owner_flow_id == dog.root.id
+      assert own.slug == nil
+      assert dog.step.slug == "dog-license_owner-conta"
 
       assert {:ok, %{form_id: form_id} = node} = Flows.reuse_form(dog.step, owner)
       assert form_id == owner.id
       # The properties copy the canvas round-trips moved with the column
       assert node.properties["form_id"] == owner.id
+      # The step is still the step: its handle survives the change of form
+      assert node.slug == "dog-license_owner-conta"
 
       assert Forms.get(own.id) == nil
-      assert Forms.get_by_slug(own.slug) == nil
       assert Forms.get(owner.id).owner_flow_id == nil
 
       # The flow's next save sweeps nothing: a catalog form has no owner

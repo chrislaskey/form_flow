@@ -12,6 +12,8 @@ defmodule FormFlow.Data.Instances.FormProgress do
 
     * `:path` - the position, as `FormFlow.Data.Instances.Form`'s `path`
       records it: the node ids from the root flow down to this form node
+    * `:node` - the form node itself — the step, whose `slug` is the handle
+      a host names it by (`FormFlow.Data.Templates.Flow.Node`)
     * `:label` - the form node's canvas label
     * `:ancestors` - the subflow nodes drilled through to reach it,
       outermost first; `[]` for a form in the root flow. `List.last/1` is
@@ -25,10 +27,11 @@ defmodule FormFlow.Data.Instances.FormProgress do
       `properties["form_flow_type"]` names its `FormFlow.Config.Flows.Type`
   """
 
-  defstruct [:path, :label, :ancestors, :status, :instance, :flow]
+  defstruct [:path, :node, :label, :ancestors, :status, :instance, :flow]
 
   @type t :: %__MODULE__{
           path: [binary()],
+          node: FormFlow.Data.Templates.Flow.Node.t(),
           label: String.t(),
           ancestors: [FormFlow.Data.Templates.Flow.Node.t()],
           status: FormFlow.Data.Instances.FlowProgress.status(),

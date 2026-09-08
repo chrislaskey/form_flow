@@ -1,21 +1,25 @@
 defmodule FormFlow.Data.Templates.Slug do
   @moduledoc """
-  `FormFlow.Data.Templates.Slug` — the secondary identifier of a
-  `FormFlow.Data.Templates.Flow` or `FormFlow.Data.Templates.Form`.
+  `FormFlow.Data.Templates.Slug` — the secondary identifier of a root
+  `FormFlow.Data.Templates.Flow`, a catalog `FormFlow.Data.Templates.Form`,
+  or a step (`FormFlow.Data.Templates.Flow.Node`).
 
-  A slug is a stable, human-chosen name a host can look a template up by
+  A slug is a stable, human-chosen name a host can look one of those up by
   (`FormFlow.Data.Templates.Flows.get_by_slug/2`,
-  `FormFlow.Data.Templates.Forms.get_by_slug/2`) without knowing the `id`,
-  which differs between environments. It is optional, unique per tenant
-  within its table, and never used as a foreign key. It never follows a
-  rename: once set it stays until an admin changes it.
+  `FormFlow.Data.Templates.Forms.get_by_slug/2`,
+  `FormFlow.Data.Templates.Flows.get_node_by_slug/2`) without knowing the
+  `id`, which differs between environments. It is optional, unique per
+  tenant within its table, and never used as a foreign key. It never
+  follows a rename: once set it stays until an admin changes it. The three
+  uses are distinct — a host naming a step knows it is naming a step — so
+  uniqueness is per table, not across them.
 
   ## Generation
 
-  Nothing requires a slug, but every template gets one by default so the
-  host has something to look up. A template created without one is named
-  from its `name`, one **segment** of at most ten lowercase letters and
-  digits:
+  Nothing requires a slug, but everything gets one by default so the host
+  has something to look up. A root flow or catalog form created without one
+  is named from its `name`, one **segment** of at most ten lowercase letters
+  and digits:
 
     * one word truncates: "Documentation" is `documentat`
     * two words are joined by `-`, the second truncated to what the budget
@@ -25,11 +29,14 @@ defmodule FormFlow.Data.Templates.Slug do
       words whole: "Dog License Application 2026" is `dla2026`
     * a name with nothing usable falls back to the kind: `flow` or `form`
 
-  Owned children — the subflows and forms a save creates for the nodes on a
-  canvas — prefix their segment with the slug of the flow that contains
-  them, joined by `_`, so a form "User Information" inside `dla2026` is
-  `dla2026_user-inform`, and a form inside a subflow of it carries the whole
-  chain. A slug already taken in the tenant gets `-2`, `-3`, … appended,
+  A **step** — a form or subflow node — gets one when its flow is saved:
+  its label's segment under the root flow's slug, joined by `_`, so the
+  "User Information" step of `dla2026` is `dla2026_user-inform`, wherever
+  in the tree it sits. The subflow or form a save creates for a step is
+  that step's private property and has no slug of its own — the step's is
+  the handle, and the entity is reached through it. The default is only a
+  default: it carries no structure, and an admin may replace it with
+  anything. A slug already taken in the tenant gets `-2`, `-3`, … appended,
   chosen by querying the existing ones (`available/3`) rather than by
   retrying the insert, since a violated constraint aborts the enclosing
   transaction on Postgres. The unique index stays as the backstop for the
@@ -37,9 +44,9 @@ defmodule FormFlow.Data.Templates.Slug do
 
   ## Hand-written slugs
 
-  `validate_slug/2` runs in both template changesets: lowercase, `[a-z0-9]`
+  `validate_slug/2` runs in all three changesets: lowercase, `[a-z0-9]`
   plus `_` and `-`, at most `max_length/0` characters, unique per tenant. A
-  blank slug is `nil` — a template may legitimately have none.
+  blank slug is `nil` — a template or a step may legitimately have none.
   """
 
   import Ecto.Changeset
@@ -92,13 +99,13 @@ defmodule FormFlow.Data.Templates.Slug do
     if String.match?(word, ~r/^\d+$/), do: word, else: String.first(word)
   end
 
-  @doc "A child's slug: its segment under the containing flow's slug."
+  @doc "A step's default slug: its segment under the root flow's slug."
   def join(nil, segment), do: segment
   def join(prefix, segment), do: prefix <> "_" <> segment
 
   @doc """
   `slug` with the old root prefix swapped for the new one — what a copied
-  child gets when its root is copied under a new slug. A slug not under the
+  step gets when its root is copied under a new slug. A slug not under the
   old prefix (one an admin wrote by hand) is returned as it is.
   """
   def rewrite(nil, _old_prefix, _new_prefix), do: nil

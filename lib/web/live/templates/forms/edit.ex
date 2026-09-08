@@ -48,8 +48,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   the fields are already ready once chosen), Copy form (pick another form
   — the same `copy_sources/2` —
   and write its description, form type, and definition onto this one —
-  never its name or slug: the name is the step's, and the slug already
-  carries this form's own place), or — through a step only, since a
+  never its name or slug: through a step both are the step's, and Copy
+  does not touch the step; standalone they are this form's own identity),
+  or — through a step only, since a
   catalog form opened from the catalog has nothing to repoint — Reuse form,
   the same pointer the radio's fourth choice is. Selecting
   either of the first two is what reveals the rest of the page
@@ -159,7 +160,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     identity =
       %{
         description: payload.data[:description],
-        slug: payload.data[:slug],
         properties:
           template_properties(
             socket.assigns.form,
@@ -168,8 +168,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           )
       }
       |> put_form_name(socket.assigns.form, socket.assigns.node, name)
+      |> put_form_slug(socket.assigns.node, payload.data[:slug])
 
-    with {:ok, node} <- rename_step(socket.assigns.node, name),
+    with {:ok, node} <- update_step(socket.assigns.node, name, payload.data[:slug]),
          {:ok, form} <- Forms.update(socket.assigns.form, identity),
          {:ok, version} <-
            Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
@@ -361,7 +362,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: to_string(step_name(form, node)),
       description: to_string(form.description),
-      slug: to_string(form.slug),
+      slug: to_string(step_slug(form, node)),
       form_type: to_string(form.properties["form_type"]),
       property_values: FormFlow.Config.Forms.Type.property_values(form),
       definition: version && version.definition
@@ -574,12 +575,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # Every option says where its form comes from, then how that place shows
   # it — this root flow's forms by their step, the catalog's by name — with
-  # the slug last, the way an admin looks a form up in code: "Current flow -
-  # Documents / Proof of address (proof-of-address)", "Reusable form - W-2
-  # (w2)". None from the flow standalone.
+  # the slug last, the way an admin looks it up in code: the step's slug for
+  # a flow's form ("Current flow - Documents / Proof of address
+  # (dla2026_proof-of-ad)"), the form's own for a catalog form ("Reusable
+  # form - W-2 (w2)"). None from the flow standalone.
   defp flow_sources(root_id) do
-    for {path, source} <- Shared.flow_forms(root_id),
-        do: {option_label("Current flow", source, path), source.id}
+    for {path, source, node} <- Shared.flow_forms(root_id),
+        do: {option_label("Current flow", node, path), source.id}
   end
 
   defp catalog_sources(form) do
@@ -640,7 +642,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           "This step stops using “#{current.name}”, which stays in the catalog."
 
         _owned ->
-          "This step's own form (#{current.slug}) is deleted."
+          "This step's own form “#{current.name}” is deleted."
       end
 
     "This step becomes the catalog's “#{target.name}”. Edits to that form reach every flow " <>
@@ -695,14 +697,42 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp step_name(form, nil), do: form.name
   defp step_name(form, node), do: get_in(node.properties, ["data", "label"]) || form.name
 
+  # Through a step the Slug field is the step's; standalone, the form's own
+  defp step_slug(form, nil), do: form.slug
+  defp step_slug(_form, node), do: node.slug
+
   defp put_form_name(identity, %{owner_flow_id: nil}, %{} = _node, _name), do: identity
   defp put_form_name(identity, _form, _node, name), do: Map.put(identity, :name, name)
 
-  defp rename_step(nil, _name), do: {:ok, nil}
-  defp rename_step(node, name), do: Flows.rename_node(node, name)
+  defp put_form_slug(identity, nil, slug), do: Map.put(identity, :slug, slug)
+  defp put_form_slug(identity, _node, _slug), do: identity
+
+  defp update_step(nil, _name, _slug), do: {:ok, nil}
+  defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
 
   defp name_label(%{node: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"
+
+  defp slug_label(%{node: nil}), do: "Slug"
+  defp slug_label(_assigns), do: "Step slug"
+
+  defp slug_placeholder(%{node: nil}),
+    do:
+      "A stable name for looking this form up in code — lowercase letters, numbers, _ and -. " <>
+        "It does not follow a rename."
+
+  defp slug_placeholder(_assigns),
+    do:
+      "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
+        "It does not follow a rename."
+
+  # A catalog form reused here keeps its own slug, and the field is not it
+  defp slug_description(%{node: %{}, form: %{owner_flow_id: nil, slug: slug}})
+       when is_binary(slug) do
+    "The catalog form's own slug is “#{slug}”; change it on its catalog page."
+  end
+
+  defp slug_description(_assigns), do: nil
 
   # The step's name is this flow's; a catalog form reused here is not renamed
   # from a step
@@ -722,7 +752,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       name: step_name(form, assigns.node),
       description: form.description,
-      slug: form.slug,
+      slug: step_slug(form, assigns.node),
       form_type: type_id,
       definition: assigns.definition_json,
       definition_editor: assigns.definition_editor
@@ -1391,8 +1421,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           group="name_and_slug"
           type="text"
           name="slug"
-          label="Slug"
-          placeholder="A stable name for looking this form up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+          label={slug_label(assigns)}
+          placeholder={slug_placeholder(assigns)}
+          description={slug_description(assigns)}
         />
         <:field type="comment" name="description" label="Description" />
         <:field

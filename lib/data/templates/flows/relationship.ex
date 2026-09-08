@@ -20,7 +20,9 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   inside `properties`, which is the copy that carries over to Neo4j, where
   there is no column. The changeset keeps the copy in sync — the column is
   authoritative, and a stale `"flow_id"` arriving in `properties` is
-  overwritten.
+  overwritten. `tenant_id` — the flow's, stamped at insert — is written the
+  same way, so the Neo4j property map carries the tenant on every edge as
+  well as every node.
 
   The labels `IN`, `EMBEDS`, and `OWNED_BY` are reserved: they become
   FormFlow's structural relationship types when the Neo4j dual-write lands.
@@ -40,6 +42,7 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   schema "form_flow_relationships" do
     field(:label, :string)
     field(:properties, :map, default: %{})
+    field(:tenant_id, :string)
 
     belongs_to(:flow, Flow)
     belongs_to(:source, Node)
@@ -57,26 +60,28 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   """
   def changeset(relationship, attrs) do
     relationship
-    |> cast(attrs, [:id, :flow_id, :source_id, :target_id, :label, :properties])
+    |> cast(attrs, [:id, :flow_id, :tenant_id, :source_id, :target_id, :label, :properties])
     |> validate_required([:flow_id, :source_id, :target_id, :label])
     |> validate_exclusion(:label, ~w(IN EMBEDS OWNED_BY), message: "is reserved by FormFlow")
-    |> copy_flow_id_into_properties()
+    |> copy_into_properties(:flow_id, "flow_id")
+    |> copy_into_properties(:tenant_id, "tenant_id")
     |> foreign_key_constraint(:flow_id)
     |> foreign_key_constraint(:source_id)
     |> foreign_key_constraint(:target_id)
     |> unique_constraint([:source_id, :target_id, :label])
   end
 
-  # The dual-write: properties carry a copy of the flow_id column, for Neo4j
-  defp copy_flow_id_into_properties(changeset) do
-    case get_field(changeset, :flow_id) do
-      nil ->
-        changeset
+  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # none when the column is empty
+  defp copy_into_properties(changeset, field, key) do
+    properties = get_field(changeset, :properties) || %{}
 
-      flow_id ->
-        properties = get_field(changeset, :properties) || %{}
+    properties =
+      case get_field(changeset, field) do
+        nil -> Map.delete(properties, key)
+        value -> Map.put(properties, key, value)
+      end
 
-        put_change(changeset, :properties, Map.put(properties, "flow_id", flow_id))
-    end
+    put_change(changeset, :properties, properties)
   end
 end

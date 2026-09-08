@@ -24,6 +24,11 @@ That rule is what makes the Neo4j mapping mechanical:
     query accelerator.
   * Flow rows (`form_flow_flows`) map wholesale to `:Flow` nodes, so their
     column (`owner_flow_id`) needs no properties copy.
+  * Two more infrastructure keys ride the same rule without becoming
+    relationships, since neither points at a node: `tenant_id` on nodes and
+    relationships (the flow's, stamped at insert), and `slug` on nodes (a
+    step's handle, `FormFlow.Data.Templates.Slug`). A query narrows by them
+    directly.
 
 ## The mapping
 
@@ -63,6 +68,10 @@ The queries that motivate a graph database become single patterns:
     // everything a root flow owns (the delete/garbage-collection set)
     MATCH (f:Flow)-[:OWNED_BY]->(:Flow {id: $root})
     RETURN f
+
+    // a step by its handle — no id, no join
+    MATCH (n {slug: $slug, tenant_id: $tenant})
+    RETURN n
 
 The first and third are indexed one-hop traversals; the second is the query
 that is genuinely painful in SQL (a recursive CTE joining three tables per

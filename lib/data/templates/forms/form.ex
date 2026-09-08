@@ -36,11 +36,12 @@ defmodule FormFlow.Data.Templates.Form do
 
   ## Slug
 
-  `slug` is the lineage's secondary identifier — see
+  `slug` is a catalog form's secondary identifier — see
   `FormFlow.Data.Templates.Slug`: optional, unique per tenant, editable,
   never following a rename, and dual-written into `properties["slug"]` the
   same way. `FormFlow.Data.Templates.Forms.create/1` fills one in from the
-  name when none is given; owned forms take their flow's slug as a prefix.
+  name when none is given. An owned form has none: the step that collects
+  it (`FormFlow.Data.Templates.Flow.Node`) carries the slug.
   """
 
   use Ecto.Schema

@@ -198,6 +198,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       flow: tree.flow,
       subflow: form.flow,
       subflow_node: List.last(form.ancestors),
+      form_node: form.node,
       flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
       flow_instance: flow_instance,
       form_progress: form,

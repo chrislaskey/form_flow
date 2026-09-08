@@ -238,10 +238,7 @@ defmodule DemoWeb.CoreComponents do
         <select
           id={@id}
           name={@name}
-          class={[
-            @class || "w-full select bg-white border border-zinc-300",
-            @errors != [] && (@error_class || "select-error")
-          ]}
+          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
           {@rest}
         >
@@ -263,7 +260,7 @@ defmodule DemoWeb.CoreComponents do
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea bg-white border border-zinc-300",
+            @class || "w-full textarea",
             @errors != [] && (@error_class || "textarea-error")
           ]}
           {@rest}
@@ -286,7 +283,7 @@ defmodule DemoWeb.CoreComponents do
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input bg-white border border-zinc-300",
+            @class || "w-full input",
             @errors != [] && (@error_class || "input-error")
           ]}
           {@rest}

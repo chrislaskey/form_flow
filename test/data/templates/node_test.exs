@@ -161,6 +161,61 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert %{labels: ["is invalid"]} = errors_on(changeset)
   end
 
+  test "casts tenant_id and slug, normalizing the slug, and copies both into properties" do
+    changeset =
+      Node.changeset(%Node{}, %{flow_id: @flow_id, tenant_id: "acme", slug: " Owner-Contact "})
+
+    assert changeset.valid?
+    assert changeset.changes.tenant_id == "acme"
+    assert changeset.changes.slug == "owner-contact"
+
+    assert changeset.changes.properties == %{
+             "flow_id" => @flow_id,
+             "tenant_id" => "acme",
+             "slug" => "owner-contact"
+           }
+  end
+
+  test "a slug in properties never becomes the column — the canvas cannot write one" do
+    # Unlike form_id and subflow_id, which the editor must be able to keep
+    changeset =
+      Node.changeset(%Node{}, %{flow_id: @flow_id, properties: %{"slug" => "stale"}})
+
+    assert changeset.valid?
+    refute Map.has_key?(changeset.changes, :slug)
+    refute Map.has_key?(changeset.changes.properties, "slug")
+  end
+
+  test "clearing the slug removes its properties copy" do
+    persisted =
+      %Node{
+        flow_id: @flow_id,
+        slug: "owner-contact",
+        properties: %{"flow_id" => @flow_id, "slug" => "owner-contact"}
+      }
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Node.changeset(persisted, %{slug: ""})
+
+    assert changeset.changes.slug == nil
+    assert changeset.changes.properties == %{"flow_id" => @flow_id}
+  end
+
+  test "tenant_id is immutable once the node is persisted" do
+    persisted = %Node{flow_id: @flow_id, tenant_id: "acme"} |> Ecto.put_meta(state: :loaded)
+    changeset = Node.changeset(persisted, %{tenant_id: "globex"})
+
+    refute changeset.valid?
+    assert %{tenant_id: ["cannot be changed after creation"]} = errors_on(changeset)
+  end
+
+  test "the slug is validated like a template's" do
+    changeset = Node.changeset(%Node{}, %{flow_id: @flow_id, slug: "Not Valid!"})
+
+    refute changeset.valid?
+    assert %{slug: [_message]} = errors_on(changeset)
+  end
+
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
       Regex.replace(~r"%{(\w+)}", message, fn _, key ->

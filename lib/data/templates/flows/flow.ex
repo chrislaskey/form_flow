@@ -40,12 +40,12 @@ defmodule FormFlow.Data.Templates.Flow do
 
   ## Slug
 
-  `slug` is the flow's secondary identifier — see
+  `slug` is a root flow's secondary identifier — see
   `FormFlow.Data.Templates.Slug`: optional, unique per tenant, editable, never
   following a rename, and dual-written into `properties["slug"]` the same
   way. `FormFlow.Data.Templates.Flows.create/1` fills one in from the name
-  when none is given; owned subflows take their containing flow's slug as a
-  prefix.
+  when none is given. An owned subflow has none: the step that embeds it
+  (`FormFlow.Data.Templates.Flow.Node`) carries the slug.
 
   This row maps wholesale to a `:Flow` node when the Neo4j dual-write lands —
   ownership becomes an `OWNED_BY` relationship. See the Neo4j guide

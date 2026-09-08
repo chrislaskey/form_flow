@@ -18,19 +18,23 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #
   # Flows are created first: `template_forms.owner_flow_id` references them.
   #
-  # `tenant_id` on flows and template forms is the host tenant a template
-  # belongs to — an opaque host identity, NULL for a host with no tenants,
-  # stamped at creation and immutable. Like `flow_id` on nodes it is written
-  # to both locations: the column, for indexing, and a copy inside
-  # `properties`, the location that carries over to Neo4j.
+  # `tenant_id` on flows, template forms, nodes, and relationships is the
+  # host tenant a row belongs to — an opaque host identity, NULL for a host
+  # with no tenants, stamped at creation and immutable; a node or
+  # relationship takes its flow's. Like `flow_id` on nodes it is written to
+  # both locations: the column, for indexing, and a copy inside `properties`,
+  # the location that carries over to Neo4j — so a graph query can narrow to
+  # a tenant without a hop to the flow.
   #
-  # `slug` on the same two tables is a template's secondary identifier — a
-  # stable name a host looks a flow or form up by across environments, where
-  # ids differ (FormFlow.Data.Templates.Slug). Nullable, dual-written like
-  # `tenant_id`, and unique per tenant: the unique index is over `slug` and
-  # `COALESCE(tenant_id, '')` because both databases treat NULLs as distinct,
-  # which would let a host with no tenants reuse a slug freely. `slug` leads
-  # the index so a lookup by slug alone uses it.
+  # `slug` on flows, template forms, and nodes is a secondary identifier — a
+  # stable name a host looks a root flow, a catalog form, or a step up by
+  # across environments, where ids differ (FormFlow.Data.Templates.Slug).
+  # Nullable, dual-written like `tenant_id`, and unique per tenant within its
+  # table: the unique index is over `slug` and `COALESCE(tenant_id, '')`
+  # because both databases treat NULLs as distinct, which would let a host
+  # with no tenants reuse a slug freely. `slug` leads the index so a lookup
+  # by slug alone uses it. Owned subflows and owned forms carry none — their
+  # step's slug is the handle.
   #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
   # only mode): `:restrict` would push deletion ordering onto every caller, and
@@ -419,6 +423,9 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
         )
       )
 
+      add(:tenant_id, :string)
+      add(:slug, :string)
+
       timestamps(type: :utc_datetime_usec)
     end
 
@@ -427,6 +434,16 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     create_if_not_exists(index(:form_flow_nodes, [:subflow_id], prefix: context.prefix))
 
     create_if_not_exists(index(:form_flow_nodes, [:form_id], prefix: context.prefix))
+
+    create_if_not_exists(index(:form_flow_nodes, [:tenant_id], prefix: context.prefix))
+
+    create_if_not_exists(
+      unique_index(:form_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_nodes_slug_tenant_index,
+        prefix: context.prefix
+      )
+    )
 
     # Label and property lookups use GIN: labels via array containment (@>),
     # properties via jsonb_path_ops, which serves @> containment queries only
@@ -478,6 +495,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(:label, :string, null: false)
       add(:properties, :map, null: false, default: %{})
+      add(:tenant_id, :string)
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -498,6 +516,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     )
 
     create_if_not_exists(index(:form_flow_relationships, [:flow_id], prefix: context.prefix))
+
+    create_if_not_exists(index(:form_flow_relationships, [:tenant_id], prefix: context.prefix))
   end
 
   def down(context) do

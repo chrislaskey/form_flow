@@ -46,6 +46,18 @@ defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
            }
   end
 
+  test "casts tenant_id and copies it into properties" do
+    changeset = Relationship.changeset(%Relationship{}, Map.put(@attrs, :tenant_id, "acme"))
+
+    assert changeset.valid?
+    assert changeset.changes.tenant_id == "acme"
+
+    assert changeset.changes.properties == %{
+             "flow_id" => @attrs.flow_id,
+             "tenant_id" => "acme"
+           }
+  end
+
   test "IN, EMBEDS, and OWNED_BY are reserved for the Neo4j structural vocabulary" do
     for label <- ~w(IN EMBEDS OWNED_BY) do
       changeset = Relationship.changeset(%Relationship{}, %{@attrs | label: label})

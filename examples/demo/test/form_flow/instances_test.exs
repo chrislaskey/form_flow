@@ -969,6 +969,8 @@ defmodule Demo.FormFlowInstancesTest do
 
       # The reaction saw the completed row and the flow instance's fresh progress
       assert_receive {:handle_complete, %Context{} = fresh}
+      # The step is in the context by its node — its slug is the host's handle
+      assert fresh.form_node.id == List.last(fresh.form_progress.path)
       assert fresh.form_instance.id == form_instance.id
       assert fresh.form_instance.status == "completed"
 

@@ -169,6 +169,33 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(id).slug == "mine"
   end
 
+  test "drilled into a subflow, the header's Step slug edits the step; the subflow has none",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+    assert node.slug == "licensing_subflow-1"
+    assert Flows.get(node.subflow_id).slug == nil
+
+    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert html =~ "Step slug"
+    assert html =~ "licensing_subflow-1"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"slug" => "documents"}})
+
+    assert Flows.get_node(node.id).slug == "licensing_subflow-1"
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get_node(node.id).slug == "documents"
+    assert Flows.get(node.subflow_id).slug == nil
+    assert Flows.get(root_id).slug == "licensing"
+    refute has_element?(view, "button", "Discard changes")
+  end
+
   test "a subflow's identity form offers its type's perspectives; Save stores them",
        %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
@@ -365,10 +392,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # One stored copy — the form lineage's properties; the node keeps none
     [saved_node] = Flows.get(id).nodes
 
-    assert Forms.get(node.form_id).properties == %{
-             "form_type" => "review",
-             "slug" => "applicatio_intake"
-           }
+    assert Forms.get(node.form_id).properties == %{"form_type" => "review"}
 
     refute Map.has_key?(saved_node.properties["data"], "form_type")
 
@@ -391,7 +415,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     view |> element("button", "Save") |> render_click()
-    assert Forms.get(node.form_id).properties == %{"slug" => "applicatio_intake"}
+    assert Forms.get(node.form_id).properties == %{}
   end
 
   test "a subflow node's form_flow_type writes through to the embedded flow", %{conn: conn} do
@@ -414,10 +438,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # One stored copy — the embedded flow's properties; the node keeps none
     [saved_node] = Flows.get(root_id).nodes
 
-    assert Flows.get(node.subflow_id).properties == %{
-             "form_flow_type" => "wizard_any_order",
-             "slug" => "onboarding_subflow-1"
-           }
+    assert Flows.get(node.subflow_id).properties == %{"form_flow_type" => "wizard_any_order"}
 
     refute Map.has_key?(saved_node.properties["data"], "form_flow_type")
 
@@ -442,7 +463,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(node.subflow_id).properties == %{"slug" => "onboarding_subflow-1"}
+    assert Flows.get(node.subflow_id).properties == %{}
   end
 
   test "renaming a subflow node on the canvas renames the embedded flow", %{conn: conn} do

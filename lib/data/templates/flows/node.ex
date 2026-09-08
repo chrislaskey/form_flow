@@ -31,6 +31,31 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   column adopts it, so a subflow or form node surviving an editor save keeps
   its reference. In Neo4j the subflow reference becomes an `EMBEDS`
   relationship — see the Neo4j guide (`guides/neo4j.md`).
+
+  ## Slug and tenant
+
+  A form or subflow node is a **step**, and a step's `slug` is the handle a
+  host names it by (`FormFlow.Data.Templates.Slug`): optional, editable,
+  unique per tenant among steps, never following a rename, dual-written
+  into `properties["slug"]`. The subflow or form behind a step is that
+  step's private property and has no slug of its own; a root flow and a
+  catalog form keep theirs. `FormFlow.Data.Templates.Flows.update/2` gives
+  every new step a default at save, `Flows.update_node/2` writes the one an
+  admin types, and `Flows.get_node_by_slug/2` looks a step up.
+
+  The slug is the one reference the changeset never adopts from
+  `properties`. The canvas does not edit slugs, so it must not be able to
+  write one: a save carries each surviving node's slug across by id, and a
+  stale `"slug"` arriving in properties is overwritten from the column — or
+  removed, when the column is empty. Adopting it, as `form_id` is adopted,
+  would let a tab opened before an admin changed the slug put the old one
+  back on its next save.
+
+  `tenant_id` is the flow's, stamped when the node is inserted and immutable
+  afterwards — a flow never changes tenants — and dual-written like the
+  rest, so a Neo4j query can narrow to a tenant without a hop to the
+  `:Flow` node. It is also what makes the slug's per-tenant unique index
+  possible.
   """
 
   use Ecto.Schema
@@ -39,6 +64,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
 
   alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Slug
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -46,6 +72,8 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   schema "form_flow_nodes" do
     field(:labels, {:array, :string}, default: [])
     field(:properties, :map, default: %{})
+    field(:tenant_id, :string)
+    field(:slug, :string)
 
     belongs_to(:flow, Flow)
     belongs_to(:subflow, Flow, foreign_key: :subflow_id)
@@ -59,21 +87,33 @@ defmodule FormFlow.Data.Templates.Flow.Node do
 
   `:id` is castable so callers can supply their own UUIDs — that is how ids
   stay stable when `FormFlow.Data.Templates.Flows.update/2` replaces a flow's
-  contents.
+  contents. `:tenant_id` is castable at insert and immutable afterwards.
   """
   def changeset(node, attrs) do
     node
-    |> cast(attrs, [:id, :flow_id, :subflow_id, :form_id, :labels, :properties])
+    |> cast(attrs, [:id, :flow_id, :tenant_id, :slug, :subflow_id, :form_id, :labels, :properties])
     |> validate_required([:flow_id])
+    |> validate_immutable(:tenant_id)
     |> adopt_from_properties(:subflow_id, "subflow_id")
     |> adopt_from_properties(:form_id, "form_id")
     |> derive_labels_from_kind()
+    |> Slug.validate_slug(:form_flow_nodes_slug_tenant_index)
     |> copy_into_properties(:flow_id, "flow_id")
+    |> copy_into_properties(:tenant_id, "tenant_id")
+    |> copy_into_properties(:slug, "slug")
     |> copy_into_properties(:subflow_id, "subflow_id")
     |> copy_into_properties(:form_id, "form_id")
     |> foreign_key_constraint(:flow_id)
     |> foreign_key_constraint(:subflow_id)
     |> foreign_key_constraint(:form_id)
+  end
+
+  defp validate_immutable(changeset, field) do
+    if changeset.data.__meta__.state == :loaded and get_change(changeset, field) do
+      add_error(changeset, field, "cannot be changed after creation")
+    else
+      changeset
+    end
   end
 
   # The editor round-trips properties untouched, so a saved subflow or form
@@ -127,16 +167,18 @@ defmodule FormFlow.Data.Templates.Flow.Node do
     end
   end
 
-  # The dual-write: properties carry a copy of the column, for Neo4j
+  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # none when the column is empty, so a stale copy the canvas round-tripped
+  # (a slug the admin cleared) cannot outlive the column
   defp copy_into_properties(changeset, field, key) do
-    case get_field(changeset, field) do
-      nil ->
-        changeset
+    properties = get_field(changeset, :properties) || %{}
 
-      value ->
-        properties = get_field(changeset, :properties) || %{}
+    properties =
+      case get_field(changeset, field) do
+        nil -> Map.delete(properties, key)
+        value -> Map.put(properties, key, value)
+      end
 
-        put_change(changeset, :properties, Map.put(properties, key, value))
-    end
+    put_change(changeset, :properties, properties)
   end
 end

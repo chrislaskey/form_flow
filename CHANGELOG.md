@@ -1,5 +1,91 @@
 # Changelog
 
+## v0.21.0
+
+### Steps have slugs; owned subflows and forms do not
+
+**Breaking: the slug moves to the step.** A form or subflow node — a step —
+now carries a `slug` on `FormFlow.Data.Templates.Flow.Node`: optional,
+editable, unique per tenant among steps, never following a rename,
+dual-written into `properties["slug"]`. It is the handle a host names a
+step by in seeds, gates, and callbacks, stable across environments where
+node ids are not. Reusing a catalog form had exposed the gap: an owned
+form's slug doubled as its step's, and reuse deleted the form, leaving the
+step nameable by nothing but its id. Root flows and catalog forms keep
+their own slugs. The three uses are distinct — a host naming a step knows
+it is naming a step — so uniqueness stays per table.
+
+- **Every step gets a default at save**: its label's segment under the root
+  flow's slug — the "Owner contact" step of `dog-license` is
+  `dog-license_owner-conta` — with `-2`, `-3`, … when taken among the
+  tenant's steps. Start and End nodes get none. A seed sets a step's slug
+  by passing `slug:` in the node's attributes to `Flows.create/1` or
+  `Flows.update/2`.
+- **Owned subflows and owned forms have no slug.** `Flows.create/1` and
+  `Forms.create/1` generate none when `owner_flow_id` is set;
+  `Forms.copy/2` with `owner_flow_id:` gives none unless `slug:` is
+  passed, and a catalog copy of an owned form defaults from its name.
+  `Flows.get_by_slug/2` and `Forms.get_by_slug/2` return `nil` for them:
+  look the step up with **`Flows.get_node_by_slug/2`** (`tenant_id:` as
+  the others take it) and follow `node.form_id` or `node.subflow_id`.
+- **The canvas cannot change a slug.** A save carries each surviving
+  node's slug across by id and overwrites the properties copy the canvas
+  round-trips; unlike `form_id`, a slug is never adopted from properties,
+  so a tab opened before an admin changed a slug cannot put the old one
+  back.
+- **`Flows.duplicate/2` re-slugs copied steps**: a default under the
+  source's slug is rewritten under the copy's (`dla2026_user-inform`
+  becomes `dla2027_user-inform`); a hand-set one gets a free suffix.
+  `reuse_form/3` leaves the step's slug alone — nothing about the node
+  changes but `form_id`.
+- **`Flows.update_node/2` replaces `rename_node/2`**, taking `:label` and
+  `:slug` — what the step's page edits on the node itself. A blank label
+  renames nothing; a blank slug clears it; a slug another step holds is
+  refused with an error on `:slug`.
+- **`FormFlow.Context.form_node`** is the step of the form in scope, beside
+  `subflow_node`. `context.form_node.slug` in `handle_complete/2`, the type
+  callbacks, and `on_mount` says which step, where `context.form.slug` is
+  a catalog form's, shared by every flow reusing it, and `nil` for an
+  owned form. `FormFlow.Data.Instances.FormProgress` gains `:node`.
+- **Pages.** Reached through a step, the form edit page's Slug field is
+  **Step slug** and writes the node; when the step reuses a catalog form,
+  the catalog form's own slug is named under the field. The flow edit
+  header, drilled into a subflow, edits the step's slug the same way. The
+  copy chooser labels a flow's forms by their step's slug and the catalog's
+  by the form's; the reuse confirmation names the deleted form by name.
+- **Tenancy on the graph tables.** `form_flow_nodes` and
+  `form_flow_relationships` gain `tenant_id`, stamped from the flow at
+  insert, immutable, dual-written into `properties` — a Neo4j query
+  narrows to a tenant without a hop to the flow, and the step slug's
+  per-tenant unique index needs it on the row.
+- **Breaking: the v01 migration changed again.** `form_flow_nodes` gains
+  `slug` and `tenant_id`, with a partial unique index over `slug` and
+  `COALESCE(tenant_id, '')`; `form_flow_relationships` gains `tenant_id`.
+  Drop and recreate any database migrated before this version.
+
+### A flow can be read whole: the overview page
+
+The canvas builds a flow one level at a time — a subflow node's Open
+button drills into that subflow's own canvas. **`/flows/:id/overview`
+shows the whole flow at once**, read-only: every subflow expanded in place
+as a group holding its inner flow, recursively, laid out left to right.
+Only the steps a user can reach are drawn — at each level, the nodes a
+Start node reaches along the flow's connections — so an unwired step or a
+fragment wired only to End is left to the drill-down, where it is fixed.
+Open on a form node or a group's header goes where the Show page's Open
+goes. The Show and Edit pages link to it as **Overview**, from any depth,
+for the root.
+
+**`FormFlow.Data.Templates.Flows.connected_tree/1`** narrows a resolved
+tree (`resolve_tree/1`) to those nodes and the connections among them,
+recursively — the same reading of "reachable" `FormFlow.Data.Instances.FlowProgress`
+walks with. **`FormFlow.Web.Helpers.ReactFlow.to_tree_data/1`** encodes a
+tree as nested ReactFlow data for the canvas. **`FormFlow.Web.Templates.Flows.Overview`**
+is the page, **`FormFlow.Web.Components.Overview`** the canvas component;
+the React bundle gains a `mountOverview` export beside `mount` and lays the
+tree out itself from measured node sizes, since ReactFlow has no layout of
+its own.
+
 ## v0.20.0
 
 ### Subflows are always owned; sharing by reference is for forms alone
@@ -33,29 +119,6 @@ in a second tree is copied there with `FormFlow.Data.Templates.Flows.duplicate/2
   offer every root flow of the tenant; there is no longer a reusable set to
   leave out. The flow edit page's Step name field no longer has a
   reusable-flow note: a step's subflow is always renamed with it.
-
-### A flow can be read whole: the overview page
-
-The canvas builds a flow one level at a time — a subflow node's Open
-button drills into that subflow's own canvas. **`/flows/:id/overview`
-shows the whole flow at once**, read-only: every subflow expanded in place
-as a group holding its inner flow, recursively, laid out left to right.
-Only the steps a user can reach are drawn — at each level, the nodes a
-Start node reaches along the flow's connections — so an unwired step or a
-fragment wired only to End is left to the drill-down, where it is fixed.
-Open on a form node or a group's header goes where the Show page's Open
-goes. The Show and Edit pages link to it as **Overview**, from any depth,
-for the root.
-
-**`FormFlow.Data.Templates.Flows.connected_tree/1`** narrows a resolved
-tree (`resolve_tree/1`) to those nodes and the connections among them,
-recursively — the same reading of "reachable" `FormFlow.Data.Instances.FlowProgress`
-walks with. **`FormFlow.Web.Helpers.ReactFlow.to_tree_data/1`** encodes a
-tree as nested ReactFlow data for the canvas. **`FormFlow.Web.Templates.Flows.Overview`**
-is the page, **`FormFlow.Web.Components.Overview`** the canvas component;
-the React bundle gains a `mountOverview` export beside `mount` and lays the
-tree out itself from measured node sizes, since ReactFlow has no layout of
-its own.
 
 ### A step can reuse a catalog form
 

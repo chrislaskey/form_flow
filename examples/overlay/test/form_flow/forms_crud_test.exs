@@ -704,7 +704,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     updated = Forms.get(dest.id)
     assert updated.name == "W-2 Details"
     assert updated.description == "The original"
-    assert updated.slug == "taxes-2026_w2-details"
+    assert updated.slug == nil
+    assert Flows.get_node(node.id).slug == "taxes-2026_w2-details"
     assert updated.properties["form_type"] == "demo_prefill"
 
     assert Forms.get_version(dest_draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
@@ -764,7 +765,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       # The confirmation says what goes
       assert has_element?(
                view,
-               ~s|button[phx-click="reuse_form"][data-confirm*="(#{own.slug}) is deleted"]|
+               ~s|button[phx-click="reuse_form"][data-confirm*="“#{own.name}” is deleted"]|
              )
 
       view |> element(~s(button[phx-click="reuse_form"])) |> render_click()
@@ -938,6 +939,104 @@ defmodule Demo.FormFlowFormsCrudTest do
     end
   end
 
+  describe "a step's slug" do
+    # Through a step the Slug field is the step's — the node's, the handle a
+    # host names the step by — and the owned form behind it has none. A
+    # catalog form's own slug is edited on its catalog page.
+    test "from a node, Slug is the step's; saving writes the node, and the owned form has none",
+         %{conn: conn} do
+      {root, node} = flow_with_form_node("Dog License", "Owner contact")
+      form = Forms.get(node.form_id)
+      [draft] = Forms.list_versions(form.id)
+
+      {:ok, view, html} =
+        live(
+          conn,
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+        )
+
+      assert html =~ "Step slug"
+
+      assert has_element?(
+               view,
+               "input[name='dynamic_form[slug]'][value='dog-license_owner-conta']"
+             )
+
+      submit = fn slug ->
+        view
+        |> element("#forms-edit-form-form")
+        |> render_submit(%{
+          "dynamic_form" => %{
+            "name" => "Owner contact",
+            "slug" => slug,
+            "definition" => ~s({"fields": []})
+          }
+        })
+
+        render(view)
+      end
+
+      assert submit.("owner-contact") =~ "Saved."
+      assert Flows.get_node(node.id).slug == "owner-contact"
+      assert Forms.get(form.id).slug == nil
+
+      # A slug another step holds is refused by name, and nothing moves
+      {:ok, other} = Flows.create(%{name: "Cat License"})
+
+      {:ok, _} =
+        Flows.update(other, %{
+          nodes: [
+            %{
+              slug: "taken",
+              properties: %{
+                "type" => "step",
+                "data" => %{"label" => "Owner contact", "kind" => "form"}
+              }
+            }
+          ]
+        })
+
+      assert submit.("taken") =~ "The slug has already been taken."
+      assert Flows.get_node(node.id).slug == "owner-contact"
+    end
+
+    test "from a node, a catalog form's own slug is named beside the step's, and stays its own",
+         %{conn: conn} do
+      {:ok, catalog} = Forms.create(%{name: "Owner contact"})
+      [draft] = Forms.list_versions(catalog.id)
+      {root, node} = flow_with_catalog_form_node("Cat License", catalog)
+
+      {:ok, view, html} =
+        live(
+          conn,
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+        )
+
+      assert html =~ "Step slug"
+
+      assert has_element?(
+               view,
+               "input[name='dynamic_form[slug]'][value='cat-license_owner-conta']"
+             )
+
+      assert html =~ "own slug is “owner-conta”"
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{
+          "name" => "Owner contact",
+          "slug" => "cat-owner",
+          "definition" => ~s({"fields": []})
+        }
+      })
+
+      assert render(view) =~ "Saved."
+      assert Flows.get_node(node.id).slug == "cat-owner"
+      assert Forms.get(catalog.id).slug == "owner-conta"
+    end
+  end
+
   test "Copy offers this flow's forms alongside the catalog, each once, never the form itself",
        %{conn: conn} do
     # Start → Owner details → Pet details → a reused catalog form. Owned
@@ -955,8 +1054,11 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, catalog} = Forms.create(%{name: "Catalog Form", definition: %{"fields" => []}})
     start_node = build_node(root, ["Start"], "Start")
     owner = build_node(root, ["Form"], "Owner details", %{form_id: owner_form.id})
-    pet = build_node(root, ["Form"], "Pet details", %{form_id: pet_form.id})
-    reused = build_node(root, ["Form"], "Vaccination record", %{form_id: catalog.id})
+    pet = build_node(root, ["Form"], "Pet details", %{form_id: pet_form.id, slug: "pet-details"})
+
+    reused =
+      build_node(root, ["Form"], "Vaccination record", %{form_id: catalog.id, slug: "vaccination"})
+
     edge(root, start_node, owner)
     edge(root, owner, pet)
     edge(root, pet, reused)
@@ -971,16 +1073,18 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("input[type=radio][value=copy]")
     |> render_click(%{"selection" => "copy"})
 
+    # A flow's form is named by its step: the step's label and the step's slug
     html = render(view)
     assert html =~ ~s(value="#{pet_form.id}")
-    assert html =~ "Current flow - Pet details (#{pet_form.slug})"
+    assert html =~ "Current flow - Pet details (pet-details)"
     refute html =~ ~s(value="#{owner_form.id}")
 
     # The reused catalog form is offered once, at its step, by the step's
-    # name — not again from the catalog
+    # name and slug — not again from the catalog under its own
     assert length(String.split(html, ~s(value="#{catalog.id}"))) == 2
-    assert html =~ "Current flow - Vaccination record (#{catalog.slug})"
+    assert html =~ "Current flow - Vaccination record (vaccination)"
     refute html =~ "Reusable form - Catalog Form"
+    refute html =~ "(#{catalog.slug})"
 
     view
     |> element("#forms-edit-chooser-copy")

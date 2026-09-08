@@ -93,6 +93,12 @@ receive:
   argument of every callback FormFlow makes: `on_mount` and the type
   callbacks alike.
 
+A callback or gate that needs to know *which step* it is about reads
+`context.form_node.slug` — the step's slug, set on the step's page and
+stable across environments where node ids differ. `context.form.slug` is a
+catalog form's, shared by every flow reusing it, and `nil` for a form a
+step owns.
+
 `tenant_id`, when the host has tenants, is applied on top of everything.
 
 ## Three pages

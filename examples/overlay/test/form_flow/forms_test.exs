@@ -317,7 +317,7 @@ defmodule Demo.FormFlowFormsTest do
       assert v1.definition == %{"fields" => [%{"name" => "ssn"}]}
     end
 
-    test "the copy carries the source's properties, under its own slug" do
+    test "the copy carries the source's properties, and no slug of its own" do
       {:ok, form} =
         Forms.create(%{
           name: "Check owner",
@@ -332,9 +332,10 @@ defmodule Demo.FormFlowFormsTest do
 
       assert copy.properties["form_type"] == "review"
       assert copy.properties["form_type_property_values"] == %{"source" => "node-a/node-b"}
-      # The dual-written identity keys are the copy's own
-      assert copy.properties["slug"] == copy.slug
-      assert copy.slug != form.slug
+      # An owned copy has no slug — its step's is the handle — and the
+      # dual-written copy of the source's did not come along
+      assert copy.slug == nil
+      refute Map.has_key?(copy.properties, "slug")
     end
 
     test "a never-published source copies its newest draft as a draft" do
@@ -577,19 +578,29 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   describe "slugs" do
-    test "create generates one from the name; copies get a free suffix or the given slug" do
+    test "a catalog form gets one from the name; an owned form or owned copy has none" do
       {:ok, form} = Forms.create(%{name: "User Information"})
       assert form.slug == "user-inform"
       assert form.properties["slug"] == "user-inform"
 
-      # Owned copies — a catalog copy would collide on name, not slug
       {:ok, root} = FormFlow.Data.Templates.Flows.create()
 
+      # Owned: the step's slug is the handle
+      {:ok, owned} = Forms.create(%{name: "Owner Contact", owner_flow_id: root.id})
+      assert owned.slug == nil
+      refute Map.has_key?(owned.properties, "slug")
+
       {:ok, copy} = Forms.copy(form, owner_flow_id: root.id)
-      assert copy.slug == "user-inform-2"
+      assert copy.slug == nil
 
       {:ok, named} = Forms.copy(form, owner_flow_id: root.id, slug: "userinfo2027")
       assert named.slug == "userinfo2027"
+
+      # A catalog copy suffixes the source's — or, when the source was owned
+      # and had none, defaults from the name
+      {:ok, promoted} = Forms.copy(owned)
+      assert promoted.owner_flow_id == nil
+      assert promoted.slug == "owner-conta"
     end
 
     test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do

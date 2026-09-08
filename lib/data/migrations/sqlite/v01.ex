@@ -220,6 +220,8 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:properties, :map, null: false)
       add(:subflow_id, references(:form_flow_flows, type: :uuid, on_delete: :nothing))
       add(:form_id, references(:form_flow_template_forms, type: :uuid, on_delete: :nothing))
+      add(:tenant_id, :string)
+      add(:slug, :string)
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -227,6 +229,14 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     create_if_not_exists(index(:form_flow_nodes, [:flow_id]))
     create_if_not_exists(index(:form_flow_nodes, [:subflow_id]))
     create_if_not_exists(index(:form_flow_nodes, [:form_id]))
+    create_if_not_exists(index(:form_flow_nodes, [:tenant_id]))
+
+    create_if_not_exists(
+      unique_index(:form_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
+        where: "slug IS NOT NULL",
+        name: :form_flow_nodes_slug_tenant_index
+      )
+    )
 
     create_if_not_exists table(:form_flow_relationships, primary_key: false) do
       add(:id, :uuid, primary_key: true)
@@ -251,6 +261,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
       add(:label, :string, null: false)
       add(:properties, :map, null: false)
+      add(:tenant_id, :string)
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -263,6 +274,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     create_if_not_exists(index(:form_flow_relationships, [:target_id, :label]))
 
     create_if_not_exists(index(:form_flow_relationships, [:flow_id]))
+    create_if_not_exists(index(:form_flow_relationships, [:tenant_id]))
   end
 
   def down(_context) do

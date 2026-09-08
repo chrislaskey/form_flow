@@ -172,6 +172,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       flow: tree && tree.flow,
       subflow: subflow,
       subflow_node: form && List.last(form.ancestors),
+      form_node: form && form.node,
       flow_type_property_values: FormFlow.Config.Flows.Type.property_values(subflow),
       flow_instance: flow_instance,
       form_progress: form,
@@ -219,6 +220,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       context
       | subflow: form.flow,
         subflow_node: List.last(form.ancestors),
+        form_node: form.node,
         flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
         form_progress: form,
         flow_progress: FlowProgress.forms_in_flow(forms, form.path)

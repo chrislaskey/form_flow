@@ -33,6 +33,10 @@ defmodule FormFlow.Context do
       flow to embed
     * `:subflow_node` - the `FormFlow.Data.Templates.Flow.Node` in scope, or `nil`
       when viewing a flow directly with no node drill-in
+    * `:form_node` - the `FormFlow.Data.Templates.Flow.Node` of the form in
+      scope — the step — or `nil`. Its `slug` is the handle a host names the
+      step by, stable across environments, where `form.slug` is a catalog
+      form's, shared by every flow reusing it, and `nil` for an owned form
     * `:form` - the `FormFlow.Data.Templates.Form` lineage in scope, or `nil`
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
       in scope, or `nil`
@@ -71,6 +75,7 @@ defmodule FormFlow.Context do
     :flow,
     :subflow,
     :subflow_node,
+    :form_node,
     :form,
     :form_version,
     :flow_type_property_values,
@@ -92,6 +97,7 @@ defmodule FormFlow.Context do
           flow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow: FormFlow.Data.Templates.Flow.t() | nil,
           subflow_node: FormFlow.Data.Templates.Flow.Node.t() | nil,
+          form_node: FormFlow.Data.Templates.Flow.Node.t() | nil,
           form: FormFlow.Data.Templates.Form.t() | nil,
           form_version: FormFlow.Data.Templates.Form.Version.t() | nil,
           flow_type_property_values: map() | nil,

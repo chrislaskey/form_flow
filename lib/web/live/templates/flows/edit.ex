@@ -167,7 +167,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp pending(flow, node) do
     %{
       pending_name: flow && step_name(flow, node),
-      pending_slug: flow && flow.slug,
+      pending_slug: flow && step_slug(flow, node),
       pending_perspectives: Perspective.ids(flow),
       pending_type: flow && flow.properties["form_flow_type"],
       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow)
@@ -230,7 +230,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
     form_data(
       step_name(flow, node),
-      flow.slug,
+      step_slug(flow, node),
       Perspective.ids(flow),
       type_id,
       Shared.properties(types, type_id),
@@ -419,7 +419,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp unsaved_changes?(assigns) do
     assigns.current != assigns.data or
       assigns.pending_name != step_name(assigns.flow, assigns.subflow_node) or
-      assigns.pending_slug != assigns.flow.slug or
+      assigns.pending_slug != step_slug(assigns.flow, assigns.subflow_node) or
       assigns.pending_perspectives != Perspective.ids(assigns.flow) or
       assigns.pending_type != assigns.flow.properties["form_flow_type"] or
       assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow)
@@ -491,7 +491,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         :name,
         flow_name(socket.assigns.flow, socket.assigns.subflow_node, socket.assigns.pending_name)
       )
-      |> Map.put(:slug, socket.assigns.pending_slug)
+      |> put_flow_slug(socket.assigns.subflow_node, socket.assigns.pending_slug)
       |> Map.put(
         :properties,
         socket.assigns
@@ -500,7 +500,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       )
 
     with {:ok, flow} <- Flows.update(socket.assigns.flow, attrs),
-         {:ok, node} <- rename_step(socket.assigns.subflow_node, socket.assigns.pending_name) do
+         {:ok, node} <-
+           update_step(
+             socket.assigns.subflow_node,
+             socket.assigns.pending_name,
+             socket.assigns.pending_slug
+           ) do
       flow = Flows.get(flow.id)
       data = ReactFlow.to_data(flow)
 
@@ -512,7 +517,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           data: data,
           current: data,
           pending_name: step_name(flow, node),
-          pending_slug: flow.slug,
+          pending_slug: step_slug(flow, node),
           pending_perspectives: Perspective.ids(flow),
           pending_type: flow.properties["form_flow_type"],
           pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
@@ -716,8 +721,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           <:field
             type="text"
             name="slug"
-            label="Slug"
-            description="A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. It does not follow a rename."
+            label={slug_label(assigns)}
+            description={slug_description(assigns)}
           />
           <:field
             :if={@flow_types != []}
@@ -840,11 +845,32 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp flow_name(flow, nil, pending_name), do: pending_name || flow.name
   defp flow_name(_flow, _node, pending_name), do: pending_name
 
-  defp rename_step(nil, _name), do: {:ok, nil}
-  defp rename_step(node, name), do: Flows.rename_node(node, name)
+  # What the Slug field edits: through a node, the step's slug — an owned
+  # subflow has none of its own; at the root, the flow's
+  defp step_slug(flow, nil), do: flow.slug
+  defp step_slug(_flow, node), do: node.slug
+
+  defp put_flow_slug(attrs, nil, slug), do: Map.put(attrs, :slug, slug)
+  defp put_flow_slug(attrs, _node, _slug), do: attrs
+
+  defp update_step(nil, _name, _slug), do: {:ok, nil}
+  defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
 
   defp name_label(%{node_id: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"
+
+  defp slug_label(%{node_id: nil}), do: "Slug"
+  defp slug_label(_assigns), do: "Step slug"
+
+  defp slug_description(%{node_id: nil}),
+    do:
+      "A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. " <>
+        "It does not follow a rename."
+
+  defp slug_description(_assigns),
+    do:
+      "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
+        "It does not follow a rename."
 
   defp changed(payload, component_id) do
     Phoenix.LiveView.send_update(__MODULE__, %{
