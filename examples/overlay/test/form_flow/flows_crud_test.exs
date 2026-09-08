@@ -69,6 +69,98 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
   end
 
+  test "the index shows each flow's health, and the problems behind the badge", %{conn: conn} do
+    {:ok, flow} =
+      Flows.create(%{
+        name: "Enrollment",
+        label: "forms",
+        nodes: Flows.starter_nodes(),
+        relationships: []
+      })
+
+    badge = "#flow-health-#{flow.id} > button"
+    problems = "#flow-health-#{flow.id} li"
+
+    # Start and End, unwired: Start reaches nothing, End is not connected.
+    # The badge counts; the list opens on click.
+    {:ok, view, _html} = live(conn, "/admin/flows")
+
+    assert has_element?(view, badge, "1 error, 1 warning")
+    refute has_element?(view, problems)
+
+    view |> element(badge) |> render_click()
+
+    assert has_element?(view, problems, "This flow does not connect Start to End")
+    assert has_element?(view, problems, "“End” is not connected from Start")
+
+    # Ignoring the warning: it leaves the count, stays listed with who and
+    # when, and is recorded on the flow for the next visit
+    second = "#flow-health-#{flow.id} li:nth-child(2) button"
+    view |> element(second, "Ignore") |> render_click()
+
+    assert has_element?(view, badge, "1 error, 1 ignored")
+    today = Date.to_iso8601(Date.utc_today())
+    assert has_element?(view, problems, "Ignored by demo-admin on #{today}")
+    assert has_element?(view, second, "Stop ignoring")
+
+    assert [%{"code" => "unconnected", "user_id" => "demo-admin", "path" => [_end_id]}] =
+             Flows.get(flow.id).properties["ignored_problems"]
+
+    {:ok, view, _html} = live(conn, "/admin/flows")
+    assert has_element?(view, badge, "1 error, 1 ignored")
+
+    view |> element(badge) |> render_click()
+    view |> element(second, "Stop ignoring") |> render_click()
+
+    assert has_element?(view, badge, "1 error, 1 warning")
+    assert Flows.get(flow.id).properties["ignored_problems"] == nil
+
+    # Wired through a form step: the save creates the step's form as a draft,
+    # which users cannot start
+    flow = Flows.get(flow.id)
+    start = Enum.find(flow.nodes, &("Start" in &1.labels))
+    stop = Enum.find(flow.nodes, &("End" in &1.labels))
+    name_id = Ecto.UUID.generate()
+
+    {:ok, _flow} =
+      Flows.update(flow, %{
+        nodes: [
+          %{id: start.id, properties: start.properties},
+          %{id: stop.id, properties: stop.properties},
+          %{
+            id: name_id,
+            properties: %{
+              "type" => "step",
+              "position" => %{"x" => 450, "y" => 0},
+              "data" => %{"label" => "Name", "kind" => "form"}
+            }
+          }
+        ],
+        relationships: [
+          %{source_id: start.id, target_id: name_id, label: "CONNECTS_TO"},
+          %{source_id: name_id, target_id: stop.id, label: "CONNECTS_TO"}
+        ]
+      })
+
+    {:ok, view, _html} = live(conn, "/admin/flows")
+
+    assert has_element?(view, badge, "1 error")
+    refute has_element?(view, badge, "warning")
+
+    view |> element(badge) |> render_click()
+    assert has_element?(view, problems, "“Name” has no published version — users cannot start it")
+
+    # Published: nothing left to report
+    %{form_id: form_id} = Flows.get_node(name_id)
+    [draft] = Forms.list_versions(form_id)
+    {:ok, _v1} = Forms.update_status(draft, :published)
+
+    {:ok, view, _html} = live(conn, "/admin/flows")
+
+    assert has_element?(view, "#flow-health-#{flow.id}", "OK")
+    refute has_element?(view, badge)
+  end
+
   test "editing a flow replaces its contents", %{conn: conn} do
     id = create_flow(conn)
 

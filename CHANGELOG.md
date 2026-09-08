@@ -2,6 +2,48 @@
 
 ## v0.21.0
 
+### A flow reports its health
+
+**`FormFlow.Data.Templates.Flows.Health`** checks a root flow — the whole
+tree, subflows included — and answers with the problems found, worst
+first, and the worst level as one word. Each problem is a
+**`FormFlow.Data.Templates.Flows.Health.Problem`**: a level (`:error`,
+`:warning`, `:info` — the alerts' and badges' own kinds), a stable code, one
+sentence for an admin naming the step by the way down ("Review / Check pet
+details"), and where it is (the flow, the node, the position path).
+`check/2` takes a root flow's id, or a resolved tree
+(`Flows.resolve_tree/1`) for a check that touches no database — what the
+tests use, and what a check of unsaved canvas contents would build. Both
+take the host's `flow_types:` and `form_types:`.
+
+The checks, at every connected level: no Start, no End, Start not reaching
+End, a step whose form or subflow is missing, a form with no published
+version, a type property the type requires left unset, a related form
+pointing at a position the tree no longer has — all errors, since a user
+cannot work the flow. A node no Start reaches, a node nothing follows,
+Start wired straight to End, a type the host no longer offers, a stale
+perspective — warnings. A draft with changes not yet published — info.
+What is behind an unconnected step is not checked: it is reported once,
+as unconnected.
+
+**A problem can be ignored.** A check cannot know what is fine on purpose,
+and an admin who always sees "5 warnings" stops reading them.
+`Health.ignore/3` records a problem on the root flow — under
+`properties["ignored_problems"]`, by its `code` and `path`, with the
+`user_id` and the time — and from then on the check lists it marked
+(`Problem`'s `:ignored`) but leaves it out of `level` and `counts`, so the
+badge says what is new. `Health.stop_ignoring/2` removes the record;
+records for problems the check no longer finds are dropped on the next
+write. `Health.open/1` and `Health.ignored/1` split a report the same way.
+
+**The flows index gains a Health column**: a badge per row — OK, or "2
+errors, 1 warning", or "1 error, 1 ignored" — that opens on the list, each
+problem with an **Ignore** button, an ignored one saying who ignored it
+and when beside **Stop ignoring**. The check runs as each row renders.
+`FormFlow.Web.Templates.Flows.Index` takes `flow_types`, `form_types`, and
+`user_id` for it, and `FormFlow.Web.router/1` passes them. Nothing gates on
+the result: saves and publishes go through as before.
+
 ### Steps have slugs; owned subflows and forms do not
 
 **Breaking: the slug moves to the step.** A form or subflow node — a step —

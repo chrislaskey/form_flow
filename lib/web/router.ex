@@ -61,10 +61,11 @@ defmodule FormFlow.Web.Router do
   later feature that needs one never means rewiring.
 
   `components` reaches every LiveComponent on both sides, including the
-  template Index/New pages that skip `flow_types`/`form_types`/
-  `callback_data` — a styling override belongs everywhere a page draws
-  markup, not only where a type callback runs. See
-  `FormFlow.Web.ComponentResolver`.
+  template pages that skip `flow_types`/`form_types`/`callback_data` — the
+  New pages and the forms index — since a styling override belongs
+  everywhere a page draws markup, not only where a type callback runs. See
+  `FormFlow.Web.ComponentResolver`. The flows index takes the two type
+  lists for its health column (`FormFlow.Data.Templates.Flows.Health`).
 
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
@@ -270,6 +271,9 @@ defmodule FormFlow.Web.Router do
               id="flows-index"
               base={@base}
               tenant_id={@tenant_id}
+              user_id={@user_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
               components={@components}
               uri={@uri}
               params={@params}
