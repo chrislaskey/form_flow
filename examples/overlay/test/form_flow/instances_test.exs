@@ -959,6 +959,7 @@ defmodule Demo.FormFlowInstancesTest do
     test "snapshot_data/2 lands on the event; handle_complete/2 sees the form done",
          %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, form_type: "recording")
+      {:ok, only} = Flows.update_node(only, %{slug: "recorded-step"})
       {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
       form_instance = instance_at(instance, [only.id])
 
@@ -969,8 +970,12 @@ defmodule Demo.FormFlowInstancesTest do
 
       # The reaction saw the completed row and the flow instance's fresh progress
       assert_receive {:handle_complete, %Context{} = fresh}
-      # The step is in the context by its node — its slug is the host's handle
+      # The step is in the context by its node, and its slug is the handle a
+      # host names it by — the step's own, not the form's, which a catalog
+      # form shares with every flow reusing it
       assert fresh.form_node.id == List.last(fresh.form_progress.path)
+      assert fresh.form_node.slug == "recorded-step"
+      refute fresh.form_node.slug == fresh.form.slug
       assert fresh.form_instance.id == form_instance.id
       assert fresh.form_instance.status == "completed"
 

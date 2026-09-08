@@ -179,9 +179,11 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   Fetches one flow by its slug (`FormFlow.Data.Templates.Slug`), loaded like
-  `get/1`, or `nil`. `opts[:tenant_id]` scopes the lookup to one tenant —
-  slugs are unique per tenant, so a multitenant host passes it; a host with
-  no tenants needs nothing more than the slug.
+  `get/1`, or `nil`. `opts[:tenant_id]` scopes the lookup to one tenant; a
+  host with no tenants needs nothing more than the slug. Slugs are unique per
+  tenant, not across them, so without `tenant_id:` a slug that several
+  tenants hold raises `Ecto.MultipleResultsError` — a multitenant host
+  always passes it.
 
       FormFlow.Data.Templates.Flows.get_by_slug("dla2026")
       FormFlow.Data.Templates.Flows.get_by_slug("dla2026", tenant_id: "acme")
@@ -220,8 +222,11 @@ defmodule FormFlow.Data.Templates.Flows do
   Fetches one step by its slug (`FormFlow.Data.Templates.Slug`), or `nil` —
   the node, with `flow_id`, `subflow_id`, and `form_id` for the caller to
   follow. `opts[:tenant_id]` scopes the lookup to one tenant, as
-  `get_by_slug/2` does. The owned subflow or form behind a step has no slug
-  of its own; this is how it is reached.
+  `get_by_slug/2` does, and matters more here: every step has a generated
+  default, so two tenants seeding the same flow hold the same step slugs,
+  and an untenanted lookup of one raises `Ecto.MultipleResultsError`. The
+  owned subflow or form behind a step has no slug of its own; this is how
+  it is reached.
 
       FormFlow.Data.Templates.Flows.get_node_by_slug("dog-license_owner-conta")
       FormFlow.Data.Templates.Flows.get_node_by_slug("owner-contact", tenant_id: "acme")
@@ -692,12 +697,16 @@ defmodule FormFlow.Data.Templates.Flows do
   its tree's own — while a catalog form a step points at stays a shared
   reference (see `copy_form_reference/3`).
 
-  The copy's slug is `opts[:slug]`, or the source's with a free `-N` suffix
-  (`FormFlow.Data.Templates.Slug.available/3`). Copied steps keep the shape
-  of their slugs: a default under the source's slug is rewritten under the
-  copy's — `dla2026_user-inform` under a copy slugged `dla2027` becomes
-  `dla2027_user-inform` — and a hand-set slug gets a free suffix. Owned
-  subflows and forms have no slug to copy.
+  The copy's slug is `opts[:slug]`; otherwise a copy that lands beside the
+  source takes the source's with a free `-N` suffix
+  (`FormFlow.Data.Templates.Slug.available/3`), and a copy made owned by
+  `owner_flow_id:` gets none, as an owned flow created from scratch does.
+  Copied steps keep the shape of their slugs: a default under the source
+  tree's root slug is rewritten under the copy's — `dla2026_user-inform`
+  under a copy slugged `dla2027` becomes `dla2027_user-inform`, and under a
+  copy made owned by `cat-license` becomes `cat-license_user-inform`, the
+  default a step made in that tree would get — and a hand-set slug gets a
+  free suffix. Owned subflows and forms have no slug to copy.
 
       {:ok, copy} = FormFlow.Data.Templates.Flows.duplicate(flow)
 
@@ -708,12 +717,25 @@ defmodule FormFlow.Data.Templates.Flows do
     owner_id = Keyword.get(opts, :owner_flow_id)
 
     Repo.transaction(fn ->
-      slug = Keyword.get(opts, :slug) || Slug.available(Flow, flow.slug, flow.tenant_id)
-      copy_id = copy_flow(flow.id, owner_id, nil, slug, {flow.slug, slug})
+      slug = Keyword.get(opts, :slug) || copy_slug(flow, owner_id)
+      rewrite = {root_flow(flow).slug, rewrite_prefix(owner_id, slug)}
+      copy_id = copy_flow(flow.id, owner_id, nil, slug, rewrite)
 
       Repo.preload(Repo.get(Flow, copy_id), [:nodes, :relationships])
     end)
   end
+
+  # An owned copy is a subflow of the destination tree, and an owned flow has
+  # no slug of its own — the step embedding it carries the handle
+  defp copy_slug(_flow, owner_id) when not is_nil(owner_id), do: nil
+  defp copy_slug(flow, nil), do: Slug.available(Flow, flow.slug, flow.tenant_id)
+
+  # What copied steps' defaults are rewritten under: the copy's own slug, or,
+  # for a copy made owned, the destination root's — the prefix a step created
+  # in that tree would get. The old prefix is the source tree's root slug,
+  # since an owned source has none of its own.
+  defp rewrite_prefix(nil, slug), do: slug
+  defp rewrite_prefix(owner_id, _slug), do: Repo.get(Flow, owner_id).slug
 
   # Only updates sweep: replacing existing contents is the one way owned
   # flows become unreachable. Creates must not — a child flow created

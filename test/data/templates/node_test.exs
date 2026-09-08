@@ -186,6 +186,19 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     refute Map.has_key?(changeset.changes.properties, "slug")
   end
 
+  test "the properties copies of tenant_id and slug follow the columns, never the other way" do
+    changeset =
+      Node.changeset(%Node{}, %{
+        flow_id: @flow_id,
+        properties: %{"tenant_id" => "stale", "slug" => "stale", "k" => "v"}
+      })
+
+    assert changeset.valid?
+    refute Map.has_key?(changeset.changes, :tenant_id)
+    refute Map.has_key?(changeset.changes, :slug)
+    assert changeset.changes.properties == %{"flow_id" => @flow_id, "k" => "v"}
+  end
+
   test "clearing the slug removes its properties copy" do
     persisted =
       %Node{

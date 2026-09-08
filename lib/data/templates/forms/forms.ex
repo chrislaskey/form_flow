@@ -194,9 +194,12 @@ defmodule FormFlow.Data.Templates.Forms do
 
   @doc """
   Fetches a lineage by its slug (`FormFlow.Data.Templates.Slug`), or `nil`.
-  `opts[:tenant_id]` scopes the lookup to one tenant — slugs are unique per
-  tenant, so a multitenant host passes it; a host with no tenants needs
-  nothing more than the slug. Only a catalog form has a slug; an owned form
+  `opts[:tenant_id]` scopes the lookup to one tenant; a host with no tenants
+  needs nothing more than the slug. Slugs are unique per
+  tenant, not across them, so without `tenant_id:` a slug that several
+  tenants hold raises `Ecto.MultipleResultsError` — a multitenant host
+  always passes it.
+  Only a catalog form has a slug; an owned form
   is reached through its step
   (`FormFlow.Data.Templates.Flows.get_node_by_slug/2`, then `form_id`).
 

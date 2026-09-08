@@ -36,7 +36,10 @@ defmodule FormFlow.Context do
     * `:form_node` - the `FormFlow.Data.Templates.Flow.Node` of the form in
       scope — the step — or `nil`. Its `slug` is the handle a host names the
       step by, stable across environments, where `form.slug` is a catalog
-      form's, shared by every flow reusing it, and `nil` for an owned form
+      form's, shared by every flow reusing it, and `nil` for an owned form.
+      It is always `form_progress.node` where both are set — the field is
+      the shorter read, not a second source — so code that re-aims a
+      context at another form sets both together
     * `:form` - the `FormFlow.Data.Templates.Form` lineage in scope, or `nil`
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
       in scope, or `nil`

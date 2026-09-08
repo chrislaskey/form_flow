@@ -405,13 +405,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     do: type.module.editable?(context, assigns.callback_data)
 
   # The sibling forms the user may jump to — asked of the type one form at a
-  # time. Navigating to the one this page addresses would do nothing, so it
-  # is never among them, which is what leaves an in-order wizard's progress
-  # entirely inert: the only form it lets the user edit is that one.
+  # time, through form_context/2, so the type is asked about the sibling with
+  # every field of the context aimed at it, `form_node` included. Navigating
+  # to the one this page addresses would do nothing, so it is never among
+  # them, which is what leaves an in-order wizard's progress entirely inert:
+  # the only form it lets the user edit is that one.
   defp clickable(type, context, assigns) do
     for sibling <- context.flow_progress,
         sibling.path != assigns.path,
-        editable?(type, %{context | form_progress: sibling}, assigns),
+        editable?(type, form_context(context, sibling), assigns),
         into: MapSet.new(),
         do: sibling.path
   end

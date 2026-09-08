@@ -528,6 +528,17 @@ defmodule Demo.FormFlowFlowsTest do
       assert second.slug == "dla2026-2"
       [second_node] = second.nodes
       assert second_node.slug == "dla2026-2_documents"
+
+      # Copied into another tree, the steps' defaults take that tree's root
+      # prefix — what a step made there would get — and the copy has no slug;
+      # the hand-set one is on its fourth holder by now
+      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
+      {:ok, into} = Flows.duplicate(Flows.get(documents.id), owner_flow_id: cat.id)
+      assert into.slug == nil
+      assert into.owner_flow_id == cat.id
+
+      assert Enum.sort(Enum.map(into.nodes, & &1.slug)) ==
+               ["cat-license_user-inform", "owner-contact-4"]
     end
 
     test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do

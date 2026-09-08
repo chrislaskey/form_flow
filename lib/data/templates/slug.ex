@@ -124,10 +124,8 @@ defmodule FormFlow.Data.Templates.Slug do
   def available(_schema, nil, _tenant_id), do: nil
 
   def available(schema, candidate, tenant_id) do
-    taken = taken(schema, candidate, tenant_id)
-
-    if MapSet.member?(taken, candidate),
-      do: first_free_suffix(candidate, taken),
+    if taken?(schema, candidate, tenant_id),
+      do: first_free_suffix(candidate, taken(schema, candidate, tenant_id)),
       else: candidate
   end
 
@@ -137,20 +135,25 @@ defmodule FormFlow.Data.Templates.Slug do
     |> Enum.find(&(not MapSet.member?(taken, &1)))
   end
 
+  # The common case — the candidate is free — is one lookup the unique index
+  # serves; the prefix scan below, which no index serves, runs only on a
+  # collision. Steps make this matter: a save or a copy asks once per new
+  # step, not once per flow.
+  defp taken?(schema, candidate, tenant_id) do
+    Repo.exists?(in_tenant(from(s in schema, where: s.slug == ^candidate), tenant_id))
+  end
+
   # Every slug starting with the candidate — a superset of what could
   # collide (LIKE treats the candidate's underscores as wildcards, which
   # only widens the match), so the suffix chosen is always free
   defp taken(schema, candidate, tenant_id) do
     query = from(s in schema, where: like(s.slug, ^(candidate <> "%")), select: s.slug)
 
-    query =
-      case tenant_id do
-        nil -> from(s in query, where: is_nil(s.tenant_id))
-        tenant_id -> from(s in query, where: s.tenant_id == ^tenant_id)
-      end
-
-    MapSet.new(Repo.all(query))
+    MapSet.new(Repo.all(in_tenant(query, tenant_id)))
   end
+
+  defp in_tenant(query, nil), do: from(s in query, where: is_nil(s.tenant_id))
+  defp in_tenant(query, tenant_id), do: from(s in query, where: s.tenant_id == ^tenant_id)
 
   @doc """
   The changeset rules for a slug — normalized to lowercase and trimmed,
