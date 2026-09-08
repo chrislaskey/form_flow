@@ -371,7 +371,8 @@ defmodule Demo.FormFlowFormsTest do
       {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("W-2")]})
       [node] = Flows.get(flow.id).nodes
 
-      # The editor round-trips properties; the column arrives nil and adopts
+      # The editor round-trips properties; the column arrives nil and takes
+      # its value from the copy
       {:ok, _} =
         Flows.update(Flows.get(flow.id), %{
           nodes: [%{id: node.id, properties: node.properties}]
@@ -449,7 +450,7 @@ defmodule Demo.FormFlowFormsTest do
       assert copied_form.owner_flow_id == copy.id
 
       # The stale property copy was overwritten — a copied node must never
-      # point back at the original lineage through property adoption
+      # point back at the original lineage through the properties copy
       assert copied_node.properties["form_id"] == copied_node.form_id
     end
 

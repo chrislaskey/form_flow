@@ -60,7 +60,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert changeset.changes.properties["subflow_id"] == subflow_id
   end
 
-  test "adopts subflow_id from properties when the column is not given" do
+  test "takes subflow_id from the properties copy when the column is not given" do
     # The editor round-trips properties untouched — the reference must survive
     subflow_id = Ecto.UUID.generate()
 
@@ -106,7 +106,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert changeset.changes.properties["form_id"] == form_id
   end
 
-  test "adopts form_id from properties when the column is not given" do
+  test "takes form_id from the properties copy when the column is not given" do
     # The editor round-trips properties untouched — the reference must survive
     form_id = Ecto.UUID.generate()
 
@@ -122,7 +122,8 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
 
   test "an explicit form_id wins over the properties copy" do
     # copy_flow relies on this: source properties carry the OLD lineage id,
-    # and adoption would re-point a copied node at the original form
+    # and taking that copy into the column would re-point a copied node at the
+    # original form
     explicit = Ecto.UUID.generate()
 
     changeset =

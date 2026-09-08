@@ -30,9 +30,8 @@ it is naming a step — so uniqueness stays per table.
   the others take it) and follow `node.form_id` or `node.subflow_id`.
 - **The canvas cannot change a slug.** A save carries each surviving
   node's slug across by id and overwrites the properties copy the canvas
-  round-trips; unlike `form_id`, a slug is never adopted from properties,
-  so a tab opened before an admin changed a slug cannot put the old one
-  back.
+  round-trips; unlike `form_id`, a slug is never taken from properties, so a
+  tab opened before an admin changed a slug cannot put the old one back.
 - **`Flows.duplicate/2` re-slugs copied steps**: a default under the
   source's slug is rewritten under the copy's (`dla2026_user-inform`
   becomes `dla2027_user-inform`); a hand-set one gets a free suffix.

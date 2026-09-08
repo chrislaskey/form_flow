@@ -28,8 +28,8 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   `archive/form-versioning.md`, Decision 3). Both references follow
   the same dual-write rule as `flow_id`, with one addition: when only the
   `properties` copy arrives (the editor round-trips properties untouched), the
-  column adopts it, so a subflow or form node surviving an editor save keeps
-  its reference. In Neo4j the subflow reference becomes an `EMBEDS`
+  column takes its value from the copy, so a subflow or form node surviving
+  an editor save keeps its reference. In Neo4j the subflow reference becomes an `EMBEDS`
   relationship — see the Neo4j guide (`guides/neo4j.md`).
 
   ## Slug and tenant
@@ -43,11 +43,12 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   every new step a default at save, `Flows.update_node/2` writes the one an
   admin types, and `Flows.get_node_by_slug/2` looks a step up.
 
-  The slug is the one reference the changeset never adopts from
-  `properties`. The canvas does not edit slugs, so it must not be able to
-  write one: a save carries each surviving node's slug across by id, and a
-  stale `"slug"` arriving in properties is overwritten from the column — or
-  removed, when the column is empty. Adopting it, as `form_id` is adopted,
+  The slug is the one reference the changeset never takes from
+  `properties`. Slugs are edited on the step's page, never on the canvas, so
+  the copy the canvas round-trips can be older than the column: a save
+  carries each surviving node's slug across by id, and a stale `"slug"`
+  arriving in properties is overwritten from the column — or removed, when
+  the column is empty. Taking it from the copy, the way `form_id` is taken,
   would let a tab opened before an admin changed the slug put the old one
   back on its next save.
 
@@ -94,8 +95,8 @@ defmodule FormFlow.Data.Templates.Flow.Node do
     |> cast(attrs, [:id, :flow_id, :tenant_id, :slug, :subflow_id, :form_id, :labels, :properties])
     |> validate_required([:flow_id])
     |> validate_immutable(:tenant_id)
-    |> adopt_from_properties(:subflow_id, "subflow_id")
-    |> adopt_from_properties(:form_id, "form_id")
+    |> put_new_from_properties(:subflow_id, "subflow_id")
+    |> put_new_from_properties(:form_id, "form_id")
     |> derive_labels_from_kind()
     |> Slug.validate_slug(:form_flow_nodes_slug_tenant_index)
     |> copy_into_properties(:flow_id, "flow_id")
@@ -117,11 +118,11 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   end
 
   # The editor round-trips properties untouched, so a saved subflow or form
-  # node arrives with only the properties copy — the column adopts it. An
-  # explicit reference in the attributes wins over the copy (copy_flow relies
-  # on this: it passes the *new* id so a stale property copy can't re-point a
-  # copied node at the original).
-  defp adopt_from_properties(changeset, field, key) do
+  # node arrives with only the properties copy — the column takes its value
+  # from it. `put_new`, not `put`: a reference already in the attributes wins
+  # over the copy (copy_flow relies on this: it passes the *new* id so a stale
+  # property copy can't re-point a copied node at the original).
+  defp put_new_from_properties(changeset, field, key) do
     properties = get_field(changeset, :properties) || %{}
 
     case {get_field(changeset, field), properties[key]} do

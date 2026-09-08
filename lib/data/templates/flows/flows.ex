@@ -831,11 +831,11 @@ defmodule FormFlow.Data.Templates.Flows do
   defp put_node_properties(attrs, _properties), do: attrs
 
   # The slugs the flow's nodes hold now, by id — read before the contents are
-  # replaced, so a node the canvas sends back keeps its slug. The canvas never
-  # edits a slug, so it must not be able to write one: the properties copy it
-  # round-trips is ignored (Node.changeset/2 overwrites it from the column),
-  # and a duplicated node cannot race another for the same slug. An explicit
-  # `slug:` in the attributes wins — that is how a seed names its steps.
+  # replaced, so a node the canvas sends back keeps its slug. The properties
+  # copy is ignored because slugs are edited on the step's page, never on the
+  # canvas, so the copy can be older than the column; were the canvas to edit
+  # them, Node.changeset/2's put_new_from_properties/3 would do this instead.
+  # An explicit `slug:` in the attributes wins: that is how a seed names steps.
   defp current_slugs(flow) do
     Map.new(Repo.all(from(n in Node, where: n.flow_id == ^flow.id, select: {n.id, n.slug})))
   end
@@ -1281,8 +1281,9 @@ defmodule FormFlow.Data.Templates.Flows do
           slug: Slug.available(Node, rewritten(node.slug, rewrite), source.tenant_id),
           subflow_id: copy_subflow_reference(node.subflow_id, domain_id, rewrite),
           # Explicit, even when unchanged: the source properties still carry
-          # the OLD form id, and the changeset's adopt-from-properties path
-          # would re-point the copy at the original if the column arrived nil
+          # the OLD form id, and the changeset would take that copy into the
+          # column if the column arrived nil, re-pointing the copy at the
+          # original
           form_id: copy_form_reference(node.form_id, domain_id),
           labels: node.labels,
           properties: node.properties
