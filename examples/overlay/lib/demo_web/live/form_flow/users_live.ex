@@ -52,6 +52,7 @@ defmodule DemoWeb.FormFlowLive.Users do
             flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
             form_types={DemoWeb.FormFlowLive.Types.form_types()}
             callback_data={%{hello: "world"}}
+            pre_release_user_ids={["demo-user"]}
           />
         </div>
       </div>

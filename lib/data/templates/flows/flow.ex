@@ -3,8 +3,8 @@ defmodule FormFlow.Data.Templates.Flow do
   `FormFlow.Data.Templates.Flow` Ecto Schema for a flow — the aggregate root
   the nodes and relationships of one flow diagram hang off.
 
-  The row itself is just an identity (`form_flow_flows` has only an id and
-  timestamps for now); the substance lives in the associated
+  The row is the flow's identity and what is said about it as a whole —
+  name, flavor (`label`), tenant, slug, status; the substance lives in the associated
   `FormFlow.Data.Templates.Flow.Node` and
   `FormFlow.Data.Templates.Flow.Relationship` records, following Neo4j's
   property graph vocabulary. `FormFlow.Data.Templates.Flows.get/1` returns the
@@ -15,6 +15,13 @@ defmodule FormFlow.Data.Templates.Flow do
   relationships that reference them — an ordering `cast_assoc` cannot
   guarantee between sibling associations, which is why the changeset below
   casts no contents.
+
+  ## Status
+
+  What users may do with the flow — start, continue, see — is one column,
+  `status`, born `draft`. The table of statuses and what each allows is the
+  comment on `@statuses`; `FormFlow.Data.Templates.Flows.update_status/3`
+  moves it and logs the move (`FormFlow.Data.Templates.Flow.Event`).
 
   ## Ownership
 
@@ -113,6 +120,13 @@ defmodule FormFlow.Data.Templates.Flow do
   #                                        sees it — a flow pulled back to draft
   #                                        disappears from its users until it
   #                                        reopens
+  #   pre_release     ✓*      ✓*       ✓*   open to the pre-release users a page
+  #                                        names (`pre_release_user_ids` on
+  #                                        `FormFlow.Web.router/1`), a draft to
+  #                                        everyone else. *The data layer allows
+  #                                        it for anyone; the pages are the gate
+  #                                        (the render is gated, not the write —
+  #                                        a host's own route decides for itself)
   #   open            ✓       ✓       ✓    taking starts; the normal state
   #   winding_down    –       ✓       ✓    no new starts; anyone in it finishes
   #   read_only       –       –       ✓    nothing changes; users can still look
@@ -121,18 +135,17 @@ defmodule FormFlow.Data.Templates.Flow do
   #                                        flow, its instances, its log
   #
   # Draft and archived allow the same nothing; they differ in meaning — never
-  # opened, and put away — and in what the admin's badge says. A `pre_release`
-  # rung after draft, for testing with some users before opening to all, has
-  # been floated and not decided (`archive/plans/flow-status.md` §6). Transitions
+  # opened, and put away — and in what the admin's badge says. Transitions
   # are any-to-any — real
   # programs go sideways and get fixed in unexpected ways, and the event log
   # (`FormFlow.Data.Templates.Flow.Event`) is what makes trusting the admin
   # safe. The admin side is not decided by status: the canvas is editable at
   # every one. An owned subflow carries the default and is never read — status
   # is the root's, as health is.
-  @statuses ~w(draft open winding_down read_only archived)
+  @statuses ~w(draft pre_release open winding_down read_only archived)
   @allowed %{
     "draft" => [],
+    "pre_release" => [:start, :continue, :see],
     "open" => [:start, :continue, :see],
     "winding_down" => [:continue, :see],
     "read_only" => [:see],

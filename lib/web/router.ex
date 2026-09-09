@@ -29,6 +29,7 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
   | `/flows/:id/overview`               | `FormFlow.Web.Templates.Flows.Overview` (the whole tree, read-only) |
   | `/flows/:id/health`                 | `FormFlow.Web.Templates.Flows.Health` (the health check, run on every visit) |
+  | `/flows/:id/history`                | `FormFlow.Web.Templates.Flows.History` (the flow's log, newest first) |
   | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
   | `/flows/:root/nodes/:node_id/edit`  | `FormFlow.Web.Templates.Flows.Edit` (the node's subflow) |
   | `/forms`                            | `FormFlow.Web.Templates.Forms.Index` (the catalog) |
@@ -58,7 +59,8 @@ defmodule FormFlow.Web.Router do
 
   Every instance component receives `user_id`, `tenant_id`, `perspectives`,
   `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
-  `flows`, `download_path`, `uri`, `params`, and `components`, whether or not
+  `flows`, `pre_release_user_ids`, `download_path`, `uri`, `params`, and
+  `components`, whether or not
   it reads them today — a host calling the components directly should pass the same, so a
   later feature that needs one never means rewiring.
 
@@ -66,10 +68,12 @@ defmodule FormFlow.Web.Router do
   template pages that skip `flow_types`/`form_types`/`callback_data` — the
   New pages and the forms index — since a styling override belongs
   everywhere a page draws markup, not only where a type callback runs. See
-  `FormFlow.Web.ComponentResolver`. The health page takes `user_id` too, to
-  stamp who ignored an entry (`FormFlow.Data.Templates.Flows.Health`), and
-  the flows New page takes the two type lists, to cache the new flow's
-  health with the host's types.
+  `FormFlow.Web.ComponentResolver`. Every template page takes `user_id`
+  too — the admin at the page, stamped on the flow's log
+  (`FormFlow.Data.Templates.Flow.Event`) and on a health ignore
+  (`FormFlow.Data.Templates.Flows.Health`); the forms pages carry it for
+  the events they will write — and the flows New page takes the two type
+  lists, to cache the new flow's health with the host's types.
 
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
@@ -200,6 +204,16 @@ defmodule FormFlow.Web.Router do
         "flows named by `flows` when it names some. The router's `tenant_id` " <>
         "is applied on top. A listing convenience, not access control: gate " <>
         "the page with `on_mount`. Ignored by the template pages"
+  )
+
+  attr(:pre_release_user_ids, :list,
+    default: [],
+    doc:
+      "the host's user ids for whom a `pre_release` flow is open — offered, " <>
+        "continued, seen — as if it were `open`; to everyone else it is a draft. " <>
+        "The pages are the gate: the data layer takes a pre-release start from " <>
+        "anyone and marks the journey's `metadata` (`\"form_flow\" => %{\"pre_release\" => true}`). " <>
+        "Ignored by the template pages"
   )
 
   attr(:flows, :any,
@@ -342,6 +356,14 @@ defmodule FormFlow.Web.Router do
               components={@components}
               params={@params}
             />
+          <% {:history, id} -> %>
+            <.live_component
+              module={Flows.History}
+              id="flows-history"
+              flow_id={id}
+              base={@base}
+              components={@components}
+            />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
               module={Flows.Show}
@@ -414,6 +436,7 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -428,6 +451,7 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -442,6 +466,7 @@ defmodule FormFlow.Web.Router do
               node_id={node_id}
               version_id={version_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -471,6 +496,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
               download_path={@download_path}
               uri={@uri}
               params={@params}
@@ -491,6 +517,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
               download_path={@download_path}
               uri={@uri}
               params={@params}
@@ -512,6 +539,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
               download_path={@download_path}
               uri={@uri}
               params={@params}
@@ -533,6 +561,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
               download_path={@download_path}
               uri={@uri}
               params={@params}
@@ -577,11 +606,12 @@ defmodule FormFlow.Web.Router do
     end
   end
 
-  # The pages under one flow: its editor, and the two read-only views of the
-  # whole tree
+  # The pages under one flow: its editor, the two read-only views of the
+  # whole tree, and its history
   defp flow_page(id, "edit"), do: {:edit, id}
   defp flow_page(id, "overview"), do: {:overview, id}
   defp flow_page(id, "health"), do: {:health, id}
+  defp flow_page(id, "history"), do: {:history, id}
   defp flow_page(_id, _other), do: nil
 
   defp forms_route(path) do

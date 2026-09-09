@@ -28,6 +28,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_flows, [:owner_flow_id]))
     create_if_not_exists(index(:form_flow_flows, [:tenant_id]))
+    create_if_not_exists(index(:form_flow_flows, [:status]))
 
     create_if_not_exists table(:form_flow_flow_events, primary_key: false) do
       add(:id, :uuid, primary_key: true)

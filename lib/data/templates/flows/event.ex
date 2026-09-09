@@ -6,12 +6,14 @@ defmodule FormFlow.Data.Templates.Flow.Event do
   and their discipline: every row carries the responsible principal
   (`user_id`, an opaque host-app identity — the admin at the page, or
   nothing when a host passes none), rows are never updated, and events never
-  cascade-delete with their flow — removal goes through
-  `FormFlow.Data.Templates.Flows.delete/1`, which deletes them deliberately
-  before the flow.
+  cascade-delete with their flow — the two paths that remove a flow row,
+  `FormFlow.Data.Templates.Flows.delete/1` and the sweep of unreachable
+  subflows inside a save, delete the log deliberately first.
 
-  Two events today. `created` is written by `Flows.create/2` and by
-  `Flows.copy/2` for every flow row they insert, owned subflows included.
+  Root flows only: an owned subflow's status and history are its root's,
+  as its health is, so it never has rows here. Two events today. `created`
+  is written by `Flows.create/2` and by `Flows.copy/2` for the root they
+  make.
   `status_changed` is written by `Flows.update_status/3` with the old and
   new status in `snapshot` (`"from"`, `"to"`); it is the answer to "when did
   we open this, when did we stop new starts, and who did it".

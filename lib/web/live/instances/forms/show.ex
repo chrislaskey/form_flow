@@ -80,6 +80,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:pre_release_user_ids, fn -> [] end)
       |> assign_new(:download_path, fn -> nil end)
       |> then(&assign(&1, :download_path, &1.assigns.download_path || Downloads.path()))
       |> assign_new(:uri, fn -> nil end)

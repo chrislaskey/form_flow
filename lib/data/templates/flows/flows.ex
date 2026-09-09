@@ -526,13 +526,22 @@ defmodule FormFlow.Data.Templates.Flows do
     Repo.transaction(fn ->
       with {:ok, flow} <-
              save(Flow.changeset(%Flow{}, attrs), attrs, &Repo.insert/1, sweep?: false),
-           {:ok, _event} <- insert_event(flow, "created", opts) do
+           {:ok, _event} <- insert_created(flow, opts) do
         flow
       else
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
   end
+
+  # A root flow's birth is logged; an owned subflow has no log of its own —
+  # its status and its history are the root's, as its health is — so a save
+  # that creates one writes nothing, and the sweep that removes one deletes
+  # nothing but rows
+  defp insert_created(%Flow{owner_flow_id: nil} = flow, opts),
+    do: insert_event(flow, "created", opts)
+
+  defp insert_created(%Flow{} = _owned, _opts), do: {:ok, nil}
 
   @doc """
   Moves a flow's status — one of `FormFlow.Data.Templates.Flow.statuses/0` —
@@ -543,35 +552,48 @@ defmodule FormFlow.Data.Templates.Flows do
 
   Any status may move to any other: real programs go sideways and get fixed
   in unexpected ways, and the log is what makes trusting the admin safe.
-  The same status again is a no-op — `{:ok, flow}` and no event. A status
-  the flow cannot have is `{:error, :unknown_status}`. What each status
-  lets a user do is the table on `FormFlow.Data.Templates.Flow`.
+  The row is read again inside the transaction, so `"from"` is the status
+  the flow had at the write, not the one the caller loaded — two admins
+  changing it at once each log what they actually changed. The same status
+  again is a no-op — `{:ok, flow}` and no event. A status the flow cannot
+  have is `{:error, :unknown_status}`; a flow deleted since it was loaded is
+  `{:error, :not_found}`. What each status lets a user do is the table on
+  `FormFlow.Data.Templates.Flow`.
 
       {:ok, flow} = Flows.update_status(flow, "open", user_id: admin_id)
   """
-  def update_status(%Flow{status: status} = flow, status, _opts), do: {:ok, flow}
+  def update_status(flow, status, opts \\ [])
+
+  def update_status(%Flow{} = flow, status, opts) when is_atom(status),
+    do: update_status(flow, Atom.to_string(status), opts)
 
   def update_status(%Flow{} = flow, status, opts) when is_binary(status) do
     if status in Flow.statuses() do
       Repo.transaction(fn ->
-        snapshot =
-          Map.merge(Keyword.get(opts, :snapshot, %{}), %{"from" => flow.status, "to" => status})
+        current = Repo.get(Flow, flow.id) || Repo.rollback(:not_found)
 
-        with {:ok, updated} <- Repo.update(Flow.status_changeset(flow, status)),
-             {:ok, _event} <-
-               insert_event(updated, "status_changed", Keyword.put(opts, :snapshot, snapshot)) do
-          updated
+        if current.status == status do
+          current
         else
-          {:error, reason} -> Repo.rollback(reason)
+          snapshot =
+            Map.merge(Keyword.get(opts, :snapshot, %{}), %{
+              "from" => current.status,
+              "to" => status
+            })
+
+          with {:ok, updated} <- Repo.update(Flow.status_changeset(current, status)),
+               {:ok, _event} <-
+                 insert_event(updated, "status_changed", Keyword.put(opts, :snapshot, snapshot)) do
+            updated
+          else
+            {:error, reason} -> Repo.rollback(reason)
+          end
         end
       end)
     else
       {:error, :unknown_status}
     end
   end
-
-  def update_status(%Flow{} = flow, status, opts) when is_atom(status),
-    do: update_status(flow, Atom.to_string(status), opts)
 
   @doc """
   How many instances a root flow has, by their status — the same shape as
@@ -590,6 +612,17 @@ defmodule FormFlow.Data.Templates.Flows do
       )
 
     Map.merge(%{"in_progress" => 0, "completed" => 0}, Map.new(rows))
+  end
+
+  @doc """
+  A flow's log (`FormFlow.Data.Templates.Flow.Event`), newest first — what
+  the history page draws. The flow's own rows only: an owned subflow's
+  `created` is not its root's history.
+  """
+  def list_events(%Flow{id: id}) do
+    Repo.all(
+      from(e in Event, where: e.flow_id == ^id, order_by: [desc: e.inserted_at, desc: e.id])
+    )
   end
 
   defp insert_event(%Flow{} = flow, event, opts) do
@@ -872,9 +905,10 @@ defmodule FormFlow.Data.Templates.Flows do
   `name:` names the copy; the subflows under it keep their own names, as
   their steps keep their labels. Without it the copy takes the source's
   name. The copy is a **draft** whatever the source's status — not offered
-  to users until an admin opens it — and every flow row written gets a
-  `created` event (`FormFlow.Data.Templates.Flow.Event`) carrying
-  `user_id:`, the admin copying, when given.
+  to users until an admin opens it — and the copy itself gets a `created`
+  event (`FormFlow.Data.Templates.Flow.Event`) carrying `user_id:`, the
+  admin copying, when given; the subflows copied under it have no log of
+  their own.
 
   A slug already taken, or any other refused insert, returns
   `{:error, changeset}` with nothing written.
@@ -1696,7 +1730,7 @@ defmodule FormFlow.Data.Templates.Flows do
         })
       )
 
-    case insert_event(copy, "created", user_id: context.user_id) do
+    case insert_created(copy, user_id: context.user_id) do
       {:ok, _event} -> :ok
       {:error, changeset} -> Repo.rollback(changeset)
     end

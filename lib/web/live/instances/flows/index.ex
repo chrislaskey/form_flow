@@ -91,6 +91,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:pre_release_user_ids, fn -> [] end)
       |> assign_new(:download_path, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
@@ -138,14 +139,31 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       (socket.assigns.instances || own_query(user_id, socket.assigns.flows, page_flows))
       |> Instances.Flows.narrow_tenant(tenant_id)
       |> Instances.Flows.narrow_allowed(:see)
+      |> hide_pre_release(socket.assigns)
 
     socket
     |> assign(:query, query)
     |> assign(:empty?, not Repo.exists?(query))
     |> assign(:page_flows, page_flows)
-    |> assign(:offered_flows, Enum.filter(page_flows, &Templates.Flow.allows?(&1, :start)))
-    |> assign(:winding_down_flows, Enum.filter(page_flows, &(&1.status == "winding_down")))
+    |> assign(
+      :offered_flows,
+      Enum.filter(page_flows, &Shared.status_allows?(&1, :start, socket.assigns))
+    )
+    # A flow the host named that stopped taking starts is worth a line; one
+    # the page merely lists among every root of the tenant is not
+    |> assign(
+      :winding_down_flows,
+      if(is_list(socket.assigns.flows),
+        do: Enum.filter(page_flows, &(&1.status == "winding_down")),
+        else: []
+      )
+    )
     |> assign(:table_params, table_params(socket.assigns.params))
+  end
+
+  # A pre-release flow's instances are listed for its pre-release users alone
+  defp hide_pre_release(query, %{user_id: user_id, pre_release_user_ids: ids}) do
+    if user_id in ids, do: query, else: Instances.Flows.exclude_status(query, "pre_release")
   end
 
   # The default listing is the user's own: of every flow when the host named
@@ -182,24 +200,30 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   # message this page does not understand.
   def handle_event("start", %{"flow-id" => _flow_id}, socket), do: {:noreply, socket}
 
+  # The status is the pages' rule, and it is asked again here, at the
+  # click, from the row as it now is — the page offered the flow when it
+  # drew, and it may have stopped taking starts since. The data layer does
+  # what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
   defp start(socket, flow_id) do
-    attrs = %{
-      flow_id: flow_id,
-      user_id: socket.assigns.user_id,
-      tenant_id: socket.assigns.tenant_id
-    }
+    flow = Templates.Flows.get(flow_id)
 
-    case Instances.Flows.create(attrs) do
-      {:ok, flow_instance} ->
-        to = Paths.flow_path(socket.assigns.base, flow_instance.id)
-        {:noreply, push_navigate(socket, to: to)}
+    if flow && Shared.status_allows?(flow, :start, socket.assigns) do
+      attrs = %{
+        flow_id: flow_id,
+        user_id: socket.assigns.user_id,
+        tenant_id: socket.assigns.tenant_id
+      }
 
-      {:error, :not_open} ->
-        # The flow stopped taking starts since the page drew
-        {:noreply, assign(socket, :error, "That flow is no longer taking new starts.")}
+      case Instances.Flows.create(attrs) do
+        {:ok, flow_instance} ->
+          to = Paths.flow_path(socket.assigns.base, flow_instance.id)
+          {:noreply, push_navigate(socket, to: to)}
 
-      {:error, _changeset} ->
-        {:noreply, assign(socket, :error, "Could not start the flow. Please try again.")}
+        {:error, _changeset} ->
+          {:noreply, assign(socket, :error, "Could not start the flow. Please try again.")}
+      end
+    else
+      {:noreply, assign(socket, :error, "That flow is no longer taking new starts.")}
     end
   end
 

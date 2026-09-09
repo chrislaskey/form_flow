@@ -7,8 +7,12 @@
 **`FormFlow.Data.Templates.Flow.status`** says what users may do with a
 flow — three facts: may they **start** a new instance, **continue** one
 already started, **see** their instances at all — and a status is the set
-it allows. Five values, the schema's table: **`draft`** (born this way; not
-offered, and hidden — nobody starts, continues, or sees), **`open`** (the
+it allows. Six values, the schema's table: **`draft`** (born this way; not
+offered, and hidden — nobody starts, continues, or sees),
+**`pre_release`** (open to the users a page names in the router's new
+**`pre_release_user_ids`** attr, a draft to everyone else; a journey
+started meanwhile carries `"form_flow" => %{"pre_release" => true}` in its
+`metadata`), **`open`** (the
 normal state), **`winding_down`** (no new starts; anyone in it finishes and
 keeps seeing it), **`read_only`** (nothing changes; everyone still sees,
 prints, and downloads their own), **`archived`** (put away; users see
@@ -31,12 +35,13 @@ nothing reads the log to decide what a page does.
 
 **A copy is a draft**, whatever its source's status.
 
-**On the user-facing side**, `FormFlow.Data.Instances.Flows.create/2`
-refuses a flow that is not open with **`{:error, :not_open}`**, and
-`FormFlow.Data.Instances.Forms.update_status/4` refuses to start, reopen,
-or submit a form in a flow that allows no continuing with
-**`{:error, :read_only}`** — both at the data layer, so a host's own route
-gets the rules — and **`Instances.Flows.narrow_allowed/2`** narrows a
+**On the user-facing side**, the status is the pages' rule and not the
+data layer's: `FormFlow.Data.Instances.Flows.create/2` and
+`FormFlow.Data.Instances.Forms.update_status/4` do what they are asked, so
+a host's admin and support tooling can repair state without a back door,
+and a host route that should honour the status asks `Flow.allows?/2`
+first, as the pages do — the listing asks again at the click, from the
+row as it now is. **`Instances.Flows.narrow_allowed/2`** narrows a
 listing query to instances of flows whose status allows `:start`,
 `:continue`, or `:see`. A read-only flow's instances are listed as View,
 their pages open, and their form edit pages say "This flow is read-only
@@ -64,13 +69,37 @@ and both change it too: the header's badge opens a dialog
 (**`FormFlow.Web.Templates.Flows.Components.StatusDialog`**), the index's
 ⋮ row menu has **Change status**, each a dropdown with the same summary
 and counts under it, saved on the click through `update_status/3`.
-The router now passes **`user_id`** to every flows template component,
-so the event has an author wherever it is written; a host rendering the
+The router now passes **`user_id`** to every template component — the
+flows pages, where the event has an author wherever it is written, and the
+forms pages, for the events they will write; a host rendering the
 components itself should pass it too.
 
-**Schema:** `form_flow_flows.status` (not null, default `draft`) and the
+Owned subflows have no log of their own — a save that creates one writes
+no `created` event — and the log is deleted deliberately on both paths that
+remove a flow row, `Flows.delete/1` and the save's sweep of unreachable
+subflows. `update_status/3` reads the row again inside its transaction, so
+the event's `"from"` is the status the flow had at the write. Download and
+Print refuse a flow whose status hides it from users — a page in all but
+name, and the token's lifetime is the one window in which that can change
+after the page drew.
+
+**Schema:** `form_flow_flows.status` (not null, default `draft`, indexed —
+every user-facing listing narrows by it) and the
 `form_flow_flow_events` table are in **v01**, edited in place — the project
-is pre-release; recreate the development database.
+is pre-release. A database that has already run v01 will not pick these
+up: Ecto records the host's migration as applied, so drop and recreate it.
+
+### A flow has a history page
+
+**`/flows/:id/history`** (**`FormFlow.Web.Templates.Flows.History`**)
+lists the flow's log newest first — "Created", "Draft → Open" — with who
+did it and when (relative, the absolute on hover). Roots only; an owned
+subflow's id lands on its root's page. **`Flows.list_events/1`** is the
+query behind it. Reached from the show page's **History** button and the
+flows index's ⋮ menu, where it is the one link: a lesser page than
+Overview and Health, there for auditing, and where other historical data
+about a flow would go. **`Templates.Shared.relative/1`** is the "3 hours
+ago" the health page already drew, now shared.
 
 ### Duplicate Flow, from the show page and the flows index
 

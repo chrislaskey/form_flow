@@ -102,6 +102,17 @@ defmodule FormFlow.Data.Instances.Flows do
     from(i in query, where: i.flow_id in subquery(templates))
   end
 
+  @doc """
+  `query` — one over `FormFlow.Data.Instances.Flow` — without the instances
+  of flows in `status`. The listing page drops pre-release flows this way
+  for a user the page does not name among its pre-release users.
+  """
+  def exclude_status(query, status) when is_binary(status) do
+    templates = from(f in Templates.Flow, where: f.status == ^status, select: f.id)
+
+    from(i in query, where: i.flow_id not in subquery(templates))
+  end
+
   defp narrow(query, _field, nil), do: query
   defp narrow(query, field, value), do: from(i in query, where: field(i, ^field) == ^value)
 
@@ -112,29 +123,42 @@ defmodule FormFlow.Data.Instances.Flows do
   `attrs`; the event's `user_id` (the actor of this creation) defaults to
   the owner and can be overridden with `opts[:user_id]`.
 
-  Only a flow whose status allows a start takes one
-  (`FormFlow.Data.Templates.Flow.allows?/2` — `open`, today); any other is
-  `{:error, :not_open}`, here at the data layer so a host's own route gets
-  the rule too. A `flow_id` no flow has fails as before, on the changeset.
+  The flow's status is not consulted: whether a user may start this flow
+  is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`, asked by
+  the listing at the click), so that a host's own route — an appeal taken
+  after the deadline, a support tool repairing a record — can do what it is
+  asked. A route of its own that should honour the status asks `allows?/2`
+  first, as the pages do.
+
+  One thing about the status is recorded: a journey started while the flow
+  is `pre_release` gets `"form_flow" => %{"pre_release" => true}` in its
+  `metadata`, so a listing or an export can tell the pre-release run's
+  instances from the real ones once the flow opens. `metadata` is otherwise
+  the host's map; `"form_flow"` is the one key FormFlow claims in it.
   """
   def create(attrs \\ %{}, opts \\ []) do
     flow_id = attrs[:flow_id] || attrs["flow_id"]
 
-    flow = flow_id && Repo.get(Templates.Flow, flow_id)
+    Repo.transaction(fn ->
+      attrs = mark_pre_release(attrs, flow_id && Repo.get(Templates.Flow, flow_id))
 
-    if flow && not Templates.Flow.allows?(flow, :start) do
-      {:error, :not_open}
-    else
-      Repo.transaction(fn ->
-        with {:ok, instance} <- Repo.insert(Instances.Flow.changeset(%Instances.Flow{}, attrs)),
-             {:ok, _event} <- insert_event(instance, "created", opts) do
-          instance
-        else
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
-      end)
-    end
+      with {:ok, instance} <- Repo.insert(Instances.Flow.changeset(%Instances.Flow{}, attrs)),
+           {:ok, _event} <- insert_event(instance, "created", opts) do
+        instance
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
   end
+
+  @pre_release_marker %{"form_flow" => %{"pre_release" => true}}
+
+  defp mark_pre_release(attrs, %Templates.Flow{status: "pre_release"}) do
+    key = if Map.has_key?(attrs, "flow_id"), do: "metadata", else: :metadata
+    Map.update(attrs, key, @pre_release_marker, &Map.merge(&1 || %{}, @pre_release_marker))
+  end
+
+  defp mark_pre_release(attrs, _flow), do: attrs
 
   @doc """
   Stamps `status: "completed"` and `completed_at`, writing a
@@ -142,7 +166,9 @@ defmodule FormFlow.Data.Instances.Flows do
   — it may legitimately diverge from `complete?/1` after a later template
   edit. Who calls it — runner-automatic on End reached, host-triggered, or
   End-node custom logic (planned) — is deliberately not decided here.
-  Completing a completed journey is a no-op.
+  Completing a completed journey is a no-op. The flow's status is not
+  consulted: this is an administrative stamp on the journey, not a user
+  continuing it, and a host closing out a read-only year may well call it.
   """
   def complete(instance, opts \\ [])
 

@@ -48,8 +48,9 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   stays `copy`, see `FormFlow.Web.Templates.Flows.Show`) and Change status
   (`FormFlow.Web.Templates.Flows.Components.StatusDialog`, the show page's
   dialog, saving through `Flows.update_status/3` signed by `user_id` and
-  reloading the listing). Duplicate Flow opens the same dialog the show
-  page does
+  reloading the listing) — and one link, History (`FormFlow.Web.Templates.Flows.History`),
+  a lesser page than Overview kept out of the row. Duplicate Flow opens
+  the same dialog the show page does
   (`FormFlow.Web.Templates.Flows.Components.CopyDialog`),
   prefilled for that row's flow, and lands on the copy's show page — the
   row is loaded whole for it (`FormFlow.Data.Templates.Flows.get/1`), since
@@ -82,6 +83,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
        copy_error: nil,
        changing_status: nil,
        status_pending: nil,
+       status_counts: nil,
        status_error: nil
      )}
   end
@@ -142,7 +144,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
 
   @impl true
   def handle_event("copy", params, socket) do
-    case Shared.copy_flow(socket.assigns.copying, params, socket.assigns.host_types) do
+    case Shared.copy_flow(
+           socket.assigns.copying,
+           params,
+           socket.assigns.host_types ++ [user_id: socket.assigns.user_id]
+         ) do
       {:ok, copy} ->
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{copy.id}")}
 
@@ -160,7 +166,12 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     case listed_flow(id, socket.assigns.tenant_id) do
       %Flow{} = flow ->
         {:noreply,
-         assign(socket, changing_status: flow, status_pending: flow.status, status_error: nil)}
+         assign(socket,
+           changing_status: flow,
+           status_pending: flow.status,
+           status_counts: Shared.instance_counts(flow),
+           status_error: nil
+         )}
 
       nil ->
         {:noreply, assign(socket, :error, "That flow is no longer listed here.")}
@@ -177,7 +188,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     {:noreply, assign(socket, changing_status: nil, status_error: nil)}
   end
 
+  # A save with no dialog open is not a rendered control: ignored
   @impl true
+  def handle_event("save_status", _params, %{assigns: %{changing_status: nil}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("save_status", %{"status" => status}, socket) do
     case Flows.update_status(socket.assigns.changing_status, status,
            user_id: socket.assigns.user_id
@@ -242,7 +257,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         :if={@changing_status}
         flow={@changing_status}
         status={@status_pending}
-        counts={Shared.instance_counts(@changing_status)}
+        counts={@status_counts}
         error={@status_error}
         target={@myself}
         components={@components}
@@ -265,7 +280,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <:column :let={flow} field={:slug} label="Slug" sortable>
           <code :if={flow.slug} class="text-xs text-zinc-600">{flow.slug}</code>
         </:column>
-        <:column :let={flow} field={:status} label="Status" sortable>
+        <:column :let={flow} field={:status} label="Status">
           <Core.badge
             components={@components}
             kind={Shared.status_kind(flow.status)}
@@ -347,6 +362,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
                   >
                     Change status
                   </button>
+                </li>
+                <%!-- The one link in the menu: a lesser page than Overview,
+                      there for auditing --%>
+                <li>
+                  <.link navigate={"#{@base}/flows/#{flow.id}/history"} role="menuitem">
+                    History
+                  </.link>
                 </li>
               </ul>
             </details>

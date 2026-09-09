@@ -328,13 +328,14 @@ defmodule FormFlow.Web.Templates.Shared do
   The copy dialog's submit: `FormFlow.Data.Templates.Flows.copy/2` of `flow`
   with the dialog's `name` and `slug` — a blank name is the one the dialog
   offered (`copy_name/1`), a blank slug leaves the choice to `copy/2` — and
-  the host's `types` (`flow_types:`, `form_types:`) so the copy's health is
-  checked once and cached. Returns the copy, or the message the dialog
+  `opts`: the host's types (`flow_types:`, `form_types:`) so the copy's
+  health is checked once and cached, and `user_id:`, the admin, for the
+  copy's `created` event. Returns the copy, or the message the dialog
   shows: a refused slug by name, anything else as a retry.
   """
-  def copy_flow(%Templates.Flow{} = flow, params, types) do
+  def copy_flow(%Templates.Flow{} = flow, params, opts) do
     name = blank_to_nil(params["name"]) || copy_name(flow)
-    opts = [name: name, slug: blank_to_nil(params["slug"])] ++ types
+    opts = [name: name, slug: blank_to_nil(params["slug"])] ++ opts
 
     case Templates.Flows.copy(flow, opts) do
       {:ok, copy} ->
@@ -352,6 +353,9 @@ defmodule FormFlow.Web.Templates.Shared do
   A flow status as the badge and the dropdown say it: the atom's words,
   capitalised once (`"winding_down"` → "Winding down").
   """
+  def status_label("pre_release"), do: "Pre-release"
+  def status_label("read_only"), do: "Read-only"
+
   def status_label(status) when is_binary(status) do
     status |> String.replace("_", " ") |> String.capitalize()
   end
@@ -369,6 +373,11 @@ defmodule FormFlow.Web.Templates.Shared do
     do:
       "Not offered to users, and hidden from them: nobody can start it, and anyone who " <>
         "already has an instance cannot continue or see it until the flow is opened."
+
+  def status_summary("pre_release"),
+    do:
+      "Open to the pre-release users a page names, and a draft to everyone else: they can " <>
+        "start it, continue it, and see it; nobody else sees it at all."
 
   def status_summary("open"),
     do: "Offered to users: anyone the page allows can start it, continue it, and see it."
@@ -394,6 +403,7 @@ defmodule FormFlow.Web.Templates.Shared do
   The badge kind a status draws in: a draft is quiet, an open flow is the
   good state, a winding-down one is worth a glance.
   """
+  def status_kind("pre_release"), do: :info
   def status_kind("open"), do: :success
   def status_kind("winding_down"), do: :warning
   def status_kind("read_only"), do: :info
@@ -422,6 +432,22 @@ defmodule FormFlow.Web.Templates.Shared do
 
   defp count(1, noun), do: "1 #{noun}"
   defp count(n, noun), do: "#{n} #{noun}s"
+
+  @doc """
+  A moment as the pages say it — "just now", "3 minutes ago", "2 hours
+  ago", "5 days ago" — as of the render; nothing ticks. The absolute time
+  goes in the element's title beside it.
+  """
+  def relative(%DateTime{} = at) do
+    seconds = DateTime.diff(DateTime.utc_now(), at)
+
+    cond do
+      seconds < 60 -> "just now"
+      seconds < 3_600 -> "#{count(div(seconds, 60), "minute")} ago"
+      seconds < 86_400 -> "#{count(div(seconds, 3_600), "hour")} ago"
+      true -> "#{count(div(seconds, 86_400), "day")} ago"
+    end
+  end
 
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do

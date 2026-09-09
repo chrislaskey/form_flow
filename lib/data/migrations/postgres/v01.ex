@@ -127,6 +127,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(index(:form_flow_flows, [:owner_flow_id], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_flows, [:tenant_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_flows, [:status], prefix: context.prefix))
 
     # The flow template's append-only audit (`FormFlow.Data.Templates.Flow.Event`),
     # the same discipline as the two instance logs below: `:restrict`, deleted

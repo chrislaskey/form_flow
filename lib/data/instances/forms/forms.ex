@@ -100,30 +100,19 @@ defmodule FormFlow.Data.Instances.Forms do
   the flow may have been edited), `{:error, :not_a_form_position}`,
   `{:error, :no_published_version}` (the form was never published), or an
   error changeset.
+
+  The flow's status is not consulted: whether a user may still continue —
+  start, reopen, submit — is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
+  so that a host's admin tooling can reopen a form in a read-only year or
+  repair a record in an archived one. This function does what it is asked.
   """
   def update_status(journey, path, status, opts \\ [])
 
   def update_status(%Instances.Flow{} = journey, path, status, opts)
       when is_list(path) and path != [] and status in [:in_progress, :completed] do
-    if continue_allowed?(journey) do
-      journey
-      |> find_instance(path)
-      |> apply_status(status, journey, path, opts)
-    else
-      {:error, :read_only}
-    end
-  end
-
-  # Starting, reopening, and submitting are all "continuing" the journey, and
-  # the flow's status says whether a user may (`FormFlow.Data.Templates.Flow`'s
-  # table): a read-only or archived flow refuses every one of them here, at
-  # the data layer, so a host's own route gets the rule. A journey whose flow
-  # row is gone fails further down, as before.
-  defp continue_allowed?(%Instances.Flow{flow_id: flow_id}) do
-    case Repo.get(Templates.Flow, flow_id) do
-      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, :continue)
-      nil -> true
-    end
+    journey
+    |> find_instance(path)
+    |> apply_status(status, journey, path, opts)
   end
 
   defp find_instance(journey, path) do

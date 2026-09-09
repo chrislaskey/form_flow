@@ -73,6 +73,7 @@ defmodule FormFlow.Web.Controllers.Downloads do
   import Plug.Conn
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Forms.Downloads.Parsers
   alias FormFlow.Web.Downloads
   alias FormFlow.Web.Downloads.Token
@@ -211,11 +212,21 @@ defmodule FormFlow.Web.Controllers.Downloads do
             flow_types: FormFlow.Config.Flows.Type.defaults()
           })
 
-        build(resolved.context, disposition(payload))
+        # The page that minted the token already gated the viewer; the one
+        # thing that can change in the token's lifetime is the flow's status,
+        # so the status that hides a flow from users hides its documents too
+        if seeable?(resolved.context) do
+          build(resolved.context, disposition(payload))
+        else
+          {:error, 403, "This flow is not available right now."}
+        end
     end
   end
 
   defp resolve(_payload), do: {:error, 404, "Not found."}
+
+  defp seeable?(%{flow: %Templates.Flow{} = flow}), do: Templates.Flow.allows?(flow, :see)
+  defp seeable?(_context), do: false
 
   # The two words the page mints with, mapped to the header that makes a
   # browser save or show

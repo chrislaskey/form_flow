@@ -61,6 +61,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        copy_error: nil,
        changing_status?: false,
        status_pending: nil,
+       status_counts: nil,
        status_error: nil
      )}
   end
@@ -198,6 +199,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
      assign(socket,
        changing_status?: true,
        status_pending: socket.assigns.flow.status,
+       status_counts: Shared.instance_counts(socket.assigns.flow),
        status_error: nil
      )}
   end
@@ -247,7 +249,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   @impl true
   def handle_event("copy", params, socket) do
-    case Shared.copy_flow(socket.assigns.flow, params, socket.assigns.host_types) do
+    case Shared.copy_flow(
+           socket.assigns.flow,
+           params,
+           socket.assigns.host_types ++ [user_id: socket.assigns.user_id]
+         ) do
       {:ok, copy} ->
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{copy.id}")}
 
@@ -339,6 +345,14 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Duplicate Flow
           </Core.button>
+          <%!-- The flow's log, the root's from any depth --%>
+          <Core.button
+            components={@components}
+            navigate={"#{@base}/flows/#{(@root || @flow).id}/history"}
+            class="btn btn-ghost"
+          >
+            History
+          </Core.button>
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)
                 side, so unlike there, nothing here needs to intercept the
@@ -389,7 +403,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         :if={@changing_status?}
         flow={@flow}
         status={@status_pending}
-        counts={Shared.instance_counts(@flow)}
+        counts={@status_counts}
         error={@status_error}
         target={@myself}
         components={@components}

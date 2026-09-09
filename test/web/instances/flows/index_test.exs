@@ -11,6 +11,10 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
 
   use ExUnit.Case, async: true
 
+  # A real id: the start reads the flow again at the click, and a string
+  # that is not a UUID is answered without touching the repo
+  @flow_id Ecto.UUID.generate()
+
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Instances.Flows.Index
 
@@ -20,8 +24,8 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
         %{
           __changed__: %{},
           page_state: :ready,
-          page_flows: [%Templates.Flow{id: "flow-1", status: "open"}],
-          offered_flows: [%Templates.Flow{id: "flow-1", status: "open"}],
+          page_flows: [%Templates.Flow{id: @flow_id, status: "open"}],
+          offered_flows: [%Templates.Flow{id: @flow_id, status: "open"}],
           user_id: "user-1",
           tenant_id: nil,
           base: "",
@@ -41,13 +45,13 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
         socket(%{page_state: :refused})
         |> Map.update!(:assigns, &Map.drop(&1, [:page_flows, :offered_flows]))
 
-      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => "flow-1"}, socket)
+      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => @flow_id}, socket)
     end
 
     test "refuses while the gate is redirecting" do
       socket = socket(%{page_state: :redirecting})
 
-      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => "flow-1"}, socket)
+      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => @flow_id}, socket)
     end
 
     test "refuses when the page has no state at all" do
@@ -55,7 +59,7 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
       # refusal rather than reaching the write
       socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
 
-      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => "flow-1"}, socket)
+      assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => @flow_id}, socket)
     end
 
     test "a flow the page did not offer is refused with the page's message" do
@@ -75,10 +79,10 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
 
     test "a flow the page offered is what gets as far as the write" do
       # No repo is configured in the library's own tests, so reaching the
-      # create raises. That this one differs from the refusals is the rules
-      # doing their job.
+      # click's re-read of the flow raises. That this one differs from the
+      # refusals is the rules doing their job.
       assert_raise UndefinedFunctionError, fn ->
-        Index.handle_event("start", %{"flow-id" => "flow-1"}, socket(%{}))
+        Index.handle_event("start", %{"flow-id" => @flow_id}, socket(%{}))
       end
     end
   end

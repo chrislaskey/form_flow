@@ -1,12 +1,46 @@
 defmodule Demo.FormFlowFlowStatusTest do
   @moduledoc """
-  A flow's status — `draft`, `open`, `winding_down` — and the event log that
-  records how it got there (`FormFlow.Data.Templates.Flow.Event`), against a
-  real database: the data layer's writes and refusals, and what each status
-  does on the user-facing pages and the admin pages.
+  A flow's status — `draft`, `pre_release`, `open`, `winding_down`,
+  `read_only`, `archived` — and the event log that records how it got there
+  (`FormFlow.Data.Templates.Flow.Event`), against a real database: the data
+  layer's writes and refusals, and what each status does on the user-facing
+  pages and the admin pages.
+
+  `/users` is the demo's page, which names `demo-user` among its pre-release
+  users; `UnlistedPage` below is the same router with nobody named, for the
+  other side of that rule.
   """
 
   use DemoWeb.ConnCase, async: false
+
+  defmodule UnlistedPage do
+    use Phoenix.LiveView
+
+    @impl true
+    def mount(_params, %{"path" => path} = session, socket) do
+      {:ok,
+       Phoenix.Component.assign(socket,
+         path: path,
+         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         params: %{},
+         flows: Map.get(session, "flows")
+       )}
+    end
+
+    @impl true
+    def render(assigns) do
+      ~H"""
+      <FormFlow.Web.router
+        user_id="demo-user"
+        uri={@uri}
+        params={@params}
+        path={@path}
+        base="/users"
+        flows={@flows}
+      />
+      """
+    end
+  end
 
   import Ecto.Query, only: [from: 2]
   import Phoenix.LiveViewTest
@@ -64,21 +98,54 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert {:error, :unknown_status} = Flows.update_status(flow, "closed", [])
     end
 
-    test "a read-only or archived flow refuses every way of continuing, at the data layer" do
-      {:ok, flow} = Flows.create(%{name: "Dog License 2025", status: "open"})
-      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "u"})
+    test "the data layer does what it is asked, whatever the status — the pages are the gate" do
+      {:ok, draft} = Flows.create(%{name: "Draft"})
+      {:ok, archived} = Flows.create(%{name: "Archived", status: "archived"})
 
-      for status <- ["read_only", "archived"] do
-        {:ok, _} = Flows.update_status(flow, status, [])
+      # A support tool repairing a record, an appeal after the deadline
+      assert {:ok, _} = Instances.Flows.create(%{flow_id: draft.id, user_id: "u"})
+      assert {:ok, instance} = Instances.Flows.create(%{flow_id: archived.id, user_id: "u"})
 
-        assert {:error, :not_open} = Instances.Flows.create(%{flow_id: flow.id, user_id: "u"})
+      # Continuing is refused for reasons of its own (no such position), never
+      # for the status
+      assert {:error, :unknown_position} =
+               Instances.Forms.update_status(instance, [Ecto.UUID.generate()], :in_progress)
+    end
 
-        assert {:error, :read_only} =
-                 Instances.Forms.update_status(instance, [Ecto.UUID.generate()], :in_progress)
+    test "a pre-release flow takes a start from anyone at the data layer, and marks the journey" do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
 
-        assert {:error, :read_only} =
-                 Instances.Forms.update_status(instance, [Ecto.UUID.generate()], :completed)
-      end
+      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "anyone"})
+      assert instance.metadata == %{"form_flow" => %{"pre_release" => true}}
+
+      # The host's own metadata is kept beside the marker
+      {:ok, instance} =
+        Instances.Flows.create(%{flow_id: flow.id, user_id: "b", metadata: %{"host" => 1}})
+
+      assert instance.metadata == %{"host" => 1, "form_flow" => %{"pre_release" => true}}
+
+      # An open flow marks nothing
+      {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
+      {:ok, instance} = Instances.Flows.create(%{flow_id: open.id, user_id: "c"})
+      assert instance.metadata == %{}
+    end
+
+    test "an owned subflow has no log of its own" do
+      {:ok, root} = Flows.create(%{name: "Licensing", label: "subflows"}, user_id: "demo-admin")
+      {:ok, owned} = Flows.create(%{name: "Application", owner_flow_id: root.id})
+
+      assert events(owned) == []
+      assert [%{event: "created", user_id: "demo-admin"}] = events(root)
+    end
+
+    test "update_status/3 logs the status the flow had at the write, not the one loaded" do
+      {:ok, flow} = Flows.create(%{name: "Dog License"})
+      {:ok, _} = Flows.update_status(flow, "open", [])
+
+      # A second admin still holds the draft struct
+      {:ok, _} = Flows.update_status(flow, "winding_down", user_id: "late-admin")
+
+      assert [_, _, %{snapshot: %{"from" => "open", "to" => "winding_down"}}] = events(flow)
     end
 
     test "a copy is a draft whatever the source is, with its own created event" do
@@ -100,16 +167,6 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, _deleted} = Flows.delete(Flows.get(flow.id))
 
       assert events(flow) == []
-    end
-
-    test "only an open flow takes a start" do
-      {:ok, draft} = Flows.create(%{name: "Draft"})
-      {:ok, open} = Flows.create(%{name: "Open", status: "open"})
-      {:ok, winding} = Flows.create(%{name: "Winding", status: "winding_down"})
-
-      assert {:error, :not_open} = Instances.Flows.create(%{flow_id: draft.id, user_id: "u"})
-      assert {:error, :not_open} = Instances.Flows.create(%{flow_id: winding.id, user_id: "u"})
-      assert {:ok, _instance} = Instances.Flows.create(%{flow_id: open.id, user_id: "u"})
     end
 
     test "narrow_allowed/2 keeps the instances of flows whose status allows the action" do
@@ -143,10 +200,49 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       assert has_element?(view, start_button(open))
       refute has_element?(view, start_button(winding))
-      assert html =~ "Dog License 2025"
-      assert html =~ "No longer taking new starts."
+      # /users names no flows, so a winding-down one is neither offered nor
+      # announced; a page that names it gets the line (tested below)
+      refute html =~ "Dog License 2025"
       refute html =~ "Dog License 2027"
       refute html =~ "No flows are open."
+    end
+
+    test "a pre-release flow is open to the users a page names and a draft to the rest",
+         %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+
+      # /users names demo-user: offered, listed, and open
+      {:ok, view, html} = live(conn, "/users")
+      assert has_element?(view, start_button(flow))
+      assert html =~ instance.id
+      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      assert html =~ "Dog License 2027"
+
+      # A page naming nobody: nothing offered, nothing listed, the page refused
+      {:ok, view, html} = live_isolated(conn, UnlistedPage, session: %{"path" => []})
+      refute has_element?(view, start_button(flow))
+      refute html =~ instance.id
+      refute html =~ "Dog License 2027"
+
+      {:ok, _view, html} =
+        live_isolated(conn, UnlistedPage, session: %{"path" => [instance.id]})
+
+      assert html =~ "This flow is not available right now."
+    end
+
+    test "the winding-down line is drawn for flows the page names, not for every root",
+         %{conn: conn} do
+      {:ok, winding} = Flows.create(%{name: "Dog License 2025", status: "winding_down"})
+
+      {:ok, _view, html} = live_isolated(conn, UnlistedPage, session: %{"path" => []})
+      refute html =~ "Dog License 2025"
+
+      {:ok, _view, html} =
+        live_isolated(conn, UnlistedPage, session: %{"path" => [], "flows" => [winding.slug]})
+
+      assert html =~ "Dog License 2025"
+      assert html =~ "No longer taking new starts."
     end
 
     test "with nothing open the listing says so", %{conn: conn} do
@@ -157,13 +253,14 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert html =~ "No flows are open."
     end
 
-    test "a start is refused server-side once the flow stops taking them", %{conn: conn} do
+    test "a start is refused at the click once the flow stops taking them", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Cat License", status: "open"})
 
       {:ok, view, _html} = live(conn, "/users")
       assert has_element?(view, start_button(flow))
 
-      # The flow winds down after the page drew; the stale click is refused
+      # The flow winds down after the page drew; the page asks again at the
+      # click, from the row as it now is
       {:ok, _} = Flows.update_status(flow, "winding_down", [])
       html = view |> element(start_button(flow)) |> render_click()
 
@@ -283,6 +380,39 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert length(events(flow)) == 2
     end
 
+    test "a status the flow cannot have is ignored by the edit page, not a crash", %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License"})
+
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/edit")
+
+      view
+      |> element("#flows-edit-flow-form-form")
+      |> render_change(%{"dynamic_form" => %{"status" => "closed"}})
+
+      # The choice is dropped; the page and its Save carry on
+      assert render(view) =~ "Not offered to users"
+      view |> element("button", "Save") |> render_click()
+      assert Flows.get(flow.id).status == "draft"
+      assert [%{event: "created"}] = events(flow)
+    end
+
+    test "a flow made on the New page has its creator; a duplicate has its copier", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin/flows/new")
+      view |> element("form") |> render_submit(%{"name" => "Dog License", "label" => "forms"})
+      {path, _flash} = assert_redirect(view)
+      ["", "admin", "flows", id, "edit"] = String.split(path, "/")
+
+      assert [%{event: "created", user_id: "demo-admin"}] = events(Flows.get(id))
+
+      {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+      view |> element("button", "Duplicate Flow") |> render_click()
+      view |> element("form[phx-submit=copy]") |> render_submit(%{"name" => "", "slug" => ""})
+      {path, _flash} = assert_redirect(view)
+      "/admin/flows/" <> copy_id = path
+
+      assert [%{event: "created", user_id: "demo-admin"}] = events(Flows.get(copy_id))
+    end
+
     test "the summary counts the instances a change reaches", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
       {:ok, _} = Instances.Flows.create(%{flow_id: flow.id, user_id: "a"})
@@ -302,7 +432,8 @@ defmodule Demo.FormFlowFlowStatusTest do
       html = view |> element("button[phx-click=request_status]") |> render_click()
       assert html =~ "Change the status of “Dog License”"
       assert html =~ "Not offered to users"
-      assert has_element?(view, "option[value=read_only]", "Read only")
+      assert has_element?(view, "option[value=read_only]", "Read-only")
+      assert has_element?(view, "option[value=pre_release]", "Pre-release")
       assert has_element?(view, "option[value=archived]", "Archived")
 
       # Picking redraws the summary; Cancel closes without a write
@@ -359,6 +490,52 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       {:ok, view, _html} = live(conn, path)
       assert has_element?(view, ".badge", "Winding down")
+    end
+
+    test "the history page lists the log newest first, reached from the show page and the index",
+         %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License"}, user_id: "demo-admin")
+      {:ok, flow} = Flows.update_status(flow, "open", user_id: "demo-admin")
+      {:ok, _flow} = Flows.update_status(flow, "winding_down", [])
+
+      {:ok, view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+
+      assert has_element?(view, "h2", "Dog License")
+      assert has_element?(view, "h2", "History")
+      assert has_element?(view, "nav", "History")
+
+      # Newest first, each with what happened and who did it
+      positions =
+        for line <- ["Open → Winding down", "Draft → Open", "Created"] do
+          {position, _length} = :binary.match(html, line)
+          position
+        end
+
+      assert positions == Enum.sort(positions)
+      assert has_element?(view, "#flows-history-events li", "Open → Winding down")
+
+      assert html =~ "by demo-admin"
+      assert html =~ "by nobody recorded"
+      assert html =~ "just now"
+
+      # An owned subflow's history is its root's
+      {:ok, owned} = Flows.create(%{name: "Application", owner_flow_id: flow.id})
+      {:ok, view, _html} = live(conn, "/admin/flows/#{owned.id}/history")
+      assert has_element?(view, "h2", "Dog License")
+
+      # Reached from the show page and the index's menu; a missing flow says so
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      assert has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/history"]), "History")
+      {:ok, view, _html} = live(conn, "/admin/flows")
+
+      assert has_element?(
+               view,
+               ~s(#flow-#{flow.id}-actions a[href="/admin/flows/#{flow.id}/history"]),
+               "History"
+             )
+
+      {:ok, _view, html} = live(conn, "/admin/flows/#{Ecto.UUID.generate()}/history")
+      assert html =~ "Flow not found."
     end
 
     test "an owned subflow has no status field: status is the root's", %{conn: conn} do

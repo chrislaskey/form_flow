@@ -83,6 +83,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:pre_release_user_ids, fn -> [] end)
       |> assign_new(:download_path, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
@@ -128,7 +129,6 @@ defmodule FormFlow.Web.Instances.Flows.Show do
            tenant_id: socket.assigns.tenant_id
          ) do
       {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
-      {:error, :read_only} -> {:noreply, assign(socket, :error, "This flow is read-only now.")}
       {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
     end
   end

@@ -275,14 +275,16 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   fails closed rather than falling through to the page.
   """
   def on_mount(socket, on_ok \\ & &1, opts \\ []) do
+    flow = instance_flow(socket.assigns)
+
     cond do
       not flow_in_scope?(socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available here.")
 
-      not flow_allows?(socket.assigns, :see) ->
+      flow && not status_allows?(flow, :see, socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available right now.")
 
-      not flow_allows?(socket.assigns, Keyword.get(opts, :allows, :see)) ->
+      flow && not status_allows?(flow, Keyword.get(opts, :allows, :see), socket.assigns) ->
         assign(
           socket,
           :mount_error,
@@ -294,20 +296,32 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     end
   end
 
-  # The flow's status is the second rule before the host's gate
-  # (`FormFlow.Data.Templates.Flow.allows?/2`): an instance of a flow whose
-  # status lets nobody see it (a draft, an archived one) is refused on every
-  # instance page, whoever is looking; the edit page asks for `:continue` as
-  # well (`opts[:allows]`), so a read-only flow refuses it with the sentence
-  # that says why. The listing has no instance and passes.
-  defp flow_allows?(%{flow_instance: %{flow_id: flow_id}}, action) do
-    case Templates.Flows.get(flow_id) do
-      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, action)
-      nil -> false
-    end
-  end
+  # The flow's status is the second rule before the host's gate: an instance
+  # of a flow whose status lets nobody see it (a draft, an archived one) is
+  # refused on every instance page, whoever is looking; the edit page asks
+  # for `:continue` as well (`opts[:allows]`), so a read-only flow refuses it
+  # with the sentence that says why. The listing has no instance and passes.
+  # The root flow is already in the page's context — `resolve/1` loaded it
+  # with the tree — so nothing is read again; a page without one (the
+  # instance's flow is gone) is refused by the pages' own not-found state.
+  defp instance_flow(%{flow_instance: %{}, context: %Context{flow: %Templates.Flow{} = flow}}),
+    do: flow
 
-  defp flow_allows?(_assigns, _action), do: true
+  defp instance_flow(_assigns), do: nil
+
+  @doc """
+  Whether the flow's status lets *this viewer* `:start`, `:continue`, or
+  `:see` (`FormFlow.Data.Templates.Flow.allows?/2`), with the one rule the
+  table cannot hold because it is about a person: a `pre_release` flow is
+  open to the users the page names in `pre_release_user_ids` and a draft to
+  everyone else. The listing and the instance pages ask this; the data
+  layer, which knows no viewer, allows a pre-release flow for anyone.
+  """
+  def status_allows?(%Templates.Flow{status: "pre_release"}, _action, assigns),
+    do: assigns.user_id in (assigns[:pre_release_user_ids] || [])
+
+  def status_allows?(%Templates.Flow{} = flow, action, _assigns),
+    do: Templates.Flow.allows?(flow, action)
 
   # The page's `flows` attr is its scope: an instance is in it when its flow
   # is one of the flows the attr names. No attr, or no instance in scope

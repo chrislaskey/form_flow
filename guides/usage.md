@@ -120,6 +120,7 @@ The applicant's page is about Dog License and nothing else.
       user_id={@current_user.id}
       perspectives="applicant"
       flows={["dog-license"]}
+      pre_release_user_ids={MyApp.Licensing.pre_release_user_ids()}
       flow_types={Types.flow_types()}
       form_types={Types.form_types()}
     />
@@ -186,6 +187,7 @@ keeps about what users may do with it.
 | Status | Start a new instance | Continue one | See their instances |
 |---|---|---|---|
 | `draft` | no | no | no |
+| `pre_release` | the page's pre-release users | the page's pre-release users | the page's pre-release users |
 | `open` | yes | yes | yes |
 | `winding_down` | no | yes | yes |
 | `read_only` | no | no | yes |
@@ -196,10 +198,19 @@ A flow is born a **draft**: built, checked, and never offered — a user with
 they somehow have. An admin opens it from the flow's show page (the status
 badge in the header opens a dialog), from the flows index (the row's ⋮
 menu), or from the edit page (the Status field under the canvas, saved with
-everything else). **Open** is the normal state. **Winding down** is a
-deadline that has passed: the listing names the flow with "No longer taking
-new starts." where its Start button was, and everyone already in it
-finishes and keeps seeing their record. **Read-only** is the year over:
+everything else). **Pre-release** is a draft that some people may use:
+the router's `pre_release_user_ids` names them, by the host's own user
+ids, and to them the flow is open — offered, continued, seen — while to
+everyone else it stays a draft. The pages are the gate; the data layer
+takes a pre-release start from anyone and marks the instance's `metadata`
+with `"form_flow" => %{"pre_release" => true}`, so once the flow opens the
+pre-release run's instances can be told from the real ones. **Open** is the
+normal state. **Winding down** is a deadline that has passed: the listing
+names the flow with "No longer taking new starts." where its Start button
+was, and everyone already in it finishes and keeps seeing their record — a
+reviewer finishing reviews after applications closed included; this is the
+state for "applications closed, reviews continuing". **Read-only** is the
+year over:
 nobody starts or continues — the edit page says "This flow is read-only
 now; your answers are kept as they are." — but everyone still sees, prints,
 and downloads their own. **Archived** puts it away: users see nothing of
@@ -220,20 +231,22 @@ So the year rolls over like this:
 4. Open 2027. Move 2026 to winding down on the deadline, or the day the
    new one opens.
 
-A pilot is the same shape with a different audience: duplicate, keep the
-copy open only on a page whose `flows=` names it and whose `on_mount`
-admits the pilot users, and when it has proved itself either open it to
-everyone (rename the slug, or point the main page at it) or duplicate it
-once more as the real thing. A rule change from a date — "filings after
-1 July need a certificate" — is a copy opened on the date while the
-original winds down.
+A pre-release is the same flow with a smaller audience: move it to
+**Pre-release** and name the people in `pre_release_user_ids` on the page
+that should offer it; when it has proved itself, open it. The pre-release
+instances stay in the flow, marked — duplicate the flow before opening if
+the trial run must not mix with the real one. A rule change from a date —
+"filings after 1 July need a certificate" — is a copy opened on the date
+while the original winds down.
 
-Two things follow for host code. `FormFlow.Data.Instances.Flows.create/2`
-refuses a flow that is not open with `{:error, :not_open}`, and
-`FormFlow.Data.Instances.Forms.update_status/4` refuses to start, reopen,
-or submit a form in a flow that is read-only or archived with
-`{:error, :read_only}`, so a route of your own gets both rules without
-asking. And a gate or
+Two things follow for host code. The status is the pages' rule, not the
+data layer's: `FormFlow.Data.Instances.Flows.create/2` and
+`FormFlow.Data.Instances.Forms.update_status/4` do what they are asked,
+so that your own admin and support tooling can take an appeal after the
+deadline or repair a record in an archived year without a back door. A
+route of your own that should honour the status asks
+`FormFlow.Data.Templates.Flow.allows?/2` first, as the pages do. And a
+gate or
 callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog

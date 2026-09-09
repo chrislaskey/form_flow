@@ -226,6 +226,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       socket
       |> assign(assigns)
       |> assign_new(:base, fn -> "" end)
+      |> assign_new(:user_id, fn -> nil end)
       |> assign_new(:form_id, fn -> nil end)
       |> assign_new(:version_id, fn -> nil end)
       |> assign_new(:root_id, fn -> nil end)

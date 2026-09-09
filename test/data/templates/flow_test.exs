@@ -141,7 +141,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
       refute changeset.valid?
       assert {"is invalid", _opts} = changeset.errors[:status]
 
-      assert Flow.statuses() == ~w(draft open winding_down read_only archived)
+      assert Flow.statuses() == ~w(draft pre_release open winding_down read_only archived)
     end
 
     test "status is immutable through the plain changeset — update_status/3 moves it" do
@@ -177,9 +177,11 @@ defmodule FormFlow.Data.Templates.FlowTest do
       assert Flow.allows?(%Flow{status: "open"}, :start)
       refute Flow.allows?("closed", :see)
 
-      assert Flow.statuses_allowing(:start) == ["open"]
-      assert Flow.statuses_allowing(:continue) == ["open", "winding_down"]
-      assert Flow.statuses_allowing(:see) == ["open", "winding_down", "read_only"]
+      # The data layer's answer for pre_release is "anyone" — the pages gate
+      assert Flow.allows?("pre_release", :start)
+      assert Flow.statuses_allowing(:start) == ["pre_release", "open"]
+      assert Flow.statuses_allowing(:continue) == ["pre_release", "open", "winding_down"]
+      assert Flow.statuses_allowing(:see) == ["pre_release", "open", "winding_down", "read_only"]
     end
   end
 end

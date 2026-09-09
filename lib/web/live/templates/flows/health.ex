@@ -239,7 +239,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
       <dl class="mb-4 grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <.fact :if={checked_at(@flow)} label="Checked">
           <span id={"#{@id}-checked"}>
-            {relative(checked_at(@flow))}
+            {Shared.relative(checked_at(@flow))}
             <span class="block text-xs font-normal text-zinc-500">
               {Calendar.strftime(checked_at(@flow), "%Y-%m-%d %H:%M UTC")}
             </span>
@@ -436,19 +436,6 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     case Health.status(flow) do
       %{checked_at: %DateTime{} = at} -> at
       _none -> nil
-    end
-  end
-
-  # "just now", "3 minutes ago", "2 hours ago", "5 days ago" — as of the
-  # render; the page does not tick
-  defp relative(%DateTime{} = at) do
-    seconds = DateTime.diff(DateTime.utc_now(), at)
-
-    cond do
-      seconds < 60 -> "just now"
-      seconds < 3_600 -> "#{plural(div(seconds, 60), "minute")} ago"
-      seconds < 86_400 -> "#{plural(div(seconds, 3_600), "hour")} ago"
-      true -> "#{plural(div(seconds, 86_400), "day")} ago"
     end
   end
 
