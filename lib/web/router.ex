@@ -28,6 +28,7 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
   | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
   | `/flows/:id/overview`               | `FormFlow.Web.Templates.Flows.Overview` (the whole tree, read-only) |
+  | `/flows/:id/health`                 | `FormFlow.Web.Templates.Flows.Health` (the health check, run on every visit) |
   | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
   | `/flows/:root/nodes/:node_id/edit`  | `FormFlow.Web.Templates.Flows.Edit` (the node's subflow) |
   | `/forms`                            | `FormFlow.Web.Templates.Forms.Index` (the catalog) |
@@ -65,8 +66,10 @@ defmodule FormFlow.Web.Router do
   template pages that skip `flow_types`/`form_types`/`callback_data` — the
   New pages and the forms index — since a styling override belongs
   everywhere a page draws markup, not only where a type callback runs. See
-  `FormFlow.Web.ComponentResolver`. The flows index takes the two type
-  lists for its health column (`FormFlow.Data.Templates.Flows.Health`).
+  `FormFlow.Web.ComponentResolver`. The health page takes `user_id` too, to
+  stamp who ignored an entry (`FormFlow.Data.Templates.Flows.Health`), and
+  the flows New page takes the two type lists, to cache the new flow's
+  health with the host's types.
 
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
@@ -274,9 +277,6 @@ defmodule FormFlow.Web.Router do
               id="flows-index"
               base={@base}
               tenant_id={@tenant_id}
-              user_id={@user_id}
-              flow_types={@flow_types}
-              form_types={@form_types}
               components={@components}
               uri={@uri}
               params={@params}
@@ -287,6 +287,8 @@ defmodule FormFlow.Web.Router do
               id="flows-new"
               base={@base}
               tenant_id={@tenant_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
               components={@components}
             />
           <% {:show, id} -> %>
@@ -320,6 +322,18 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               components={@components}
+            />
+          <% {:health, id} -> %>
+            <.live_component
+              module={Flows.Health}
+              id="flows-health"
+              flow_id={id}
+              base={@base}
+              user_id={@user_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              components={@components}
+              params={@params}
             />
           <% {:node_show, root_id, node_id} -> %>
             <.live_component
@@ -544,13 +558,19 @@ defmodule FormFlow.Web.Router do
       ["flows"] -> :index
       ["flows", "new"] -> :new
       ["flows", id] -> {:show, id}
-      ["flows", id, "edit"] -> {:edit, id}
-      ["flows", id, "overview"] -> {:overview, id}
+      ["flows", id, page] -> flow_page(id, page)
       ["flows", root_id, "nodes", node_id] -> {:node_show, root_id, node_id}
       ["flows", root_id, "nodes", node_id, "edit"] -> {:node_edit, root_id, node_id}
       _other -> nil
     end
   end
+
+  # The pages under one flow: its editor, and the two read-only views of the
+  # whole tree
+  defp flow_page(id, "edit"), do: {:edit, id}
+  defp flow_page(id, "overview"), do: {:overview, id}
+  defp flow_page(id, "health"), do: {:health, id}
+  defp flow_page(_id, _other), do: nil
 
   defp forms_route(path) do
     case segments(path) do

@@ -32,6 +32,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   import FormFlow.Web.Helpers.Paths
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
@@ -51,6 +52,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
     case Forms.update_status(socket.assigns.version, :published, preset: preset) do
       {:ok, published} ->
+        refresh_health(socket)
         # Redirects are forbidden inside update/2; handle_async is the
         # component-owned callback where they are allowed
         to = version_path(socket.assigns, published)
@@ -198,6 +200,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   def handle_event("archive", _params, socket) do
     case Forms.update_status(socket.assigns.version, :archived) do
       {:ok, archived} ->
+        refresh_health(socket)
         {:noreply, push_navigate(socket, to: version_path(socket.assigns, archived))}
 
       {:error, _changeset} ->
@@ -209,6 +212,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   def handle_event("create_draft", _params, socket) do
     case Forms.create_draft(socket.assigns.form.id, based_on: socket.assigns.version.id) do
       {:ok, draft} ->
+        refresh_health(socket)
         {:noreply, push_navigate(socket, to: edit_path(socket.assigns, draft))}
 
       {:error, _reason} ->
@@ -220,6 +224,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   def handle_event("delete_draft", _params, socket) do
     case Forms.delete_draft(socket.assigns.version) do
       {:ok, _draft} ->
+        refresh_health(socket)
         # Back to the form's default view: latest published, or the newest
         # remaining draft, or the no-versions state
         to =
@@ -456,6 +461,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   defp publish_directly(socket) do
     case Forms.update_status(socket.assigns.version, :published) do
       {:ok, published} ->
+        refresh_health(socket)
         {:noreply, push_navigate(socket, to: version_path(socket.assigns, published))}
 
       {:error, :not_draft} ->
@@ -468,6 +474,15 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   # The newest draft, or nil — `versions` is newest first
   defp latest_draft(versions), do: Enum.find(versions, &(&1.status == "draft"))
+
+  # Once, after a version changed: every root with a step on this form — one
+  # for an owned form, every user of a catalog form — recomputes its health
+  defp refresh_health(socket) do
+    Health.refresh_for_form(socket.assigns.form.id,
+      flow_types: socket.assigns.flow_types,
+      form_types: socket.assigns.form_types
+    )
+  end
 
   defp version_badge(%{status: "draft"}), do: "draft"
   defp version_badge(%{status: "published"} = v), do: "v#{v.version} · published"

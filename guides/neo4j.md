@@ -29,6 +29,13 @@ That rule is what makes the Neo4j mapping mechanical:
     relationships (the flow's, stamped at insert), and `slug` on nodes (a
     step's handle, `FormFlow.Data.Templates.Slug`). A query narrows by them
     directly.
+  * **Keys with a leading underscore are the library's own bookkeeping**,
+    not domain data, and are stripped from the projection: a flow's
+    `properties["_health_metadata"]` (`FormFlow.Data.Templates.Flows.Health`
+    — its cached status and the entries an admin ignored) is derived from
+    the graph and rebuilt on every save, so it has no place in the graph
+    itself. `form_flow_type_property_values`, a nested map, needs the same
+    treatment for a different reason: Neo4j properties are flat.
 
 ## The mapping
 

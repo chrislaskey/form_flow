@@ -109,6 +109,7 @@ defmodule FormFlow.Data.Templates.Flows do
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flow.Node
   alias FormFlow.Data.Templates.Flow.Relationship
+  alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Slug
 
   @doc """
@@ -712,17 +713,37 @@ defmodule FormFlow.Data.Templates.Flows do
 
       {:ok, copy} =
         FormFlow.Data.Templates.Flows.duplicate(flow, owner_flow_id: root.id, slug: "dla2027")
+
+  The source's health bookkeeping (`properties["_health_metadata"]` — its
+  cached status and ignored records, which name nodes the copy does not
+  have) does not come along: the copy starts as a flow never checked. Given
+  `flow_types:` and `form_types:` — the host's lists — the copy is checked
+  once and its status cached (`FormFlow.Data.Templates.Flows.Health.refresh/2`);
+  without them it is not, since a check with the library's default types
+  could cache a type warning the host's lists would not raise.
   """
   def duplicate(%Flow{} = flow, opts \\ []) do
     owner_id = Keyword.get(opts, :owner_flow_id)
 
-    Repo.transaction(fn ->
-      slug = Keyword.get(opts, :slug) || copy_slug(flow, owner_id)
-      rewrite = {root_flow(flow).slug, rewrite_prefix(owner_id, slug)}
-      copy_id = copy_flow(flow.id, owner_id, nil, slug, rewrite)
+    result =
+      Repo.transaction(fn ->
+        slug = Keyword.get(opts, :slug) || copy_slug(flow, owner_id)
+        rewrite = {root_flow(flow).slug, rewrite_prefix(owner_id, slug)}
+        copy_id = copy_flow(flow.id, owner_id, nil, slug, rewrite)
 
-      Repo.preload(Repo.get(Flow, copy_id), [:nodes, :relationships])
-    end)
+        Repo.preload(Repo.get(Flow, copy_id), [:nodes, :relationships])
+      end)
+
+    with {:ok, copy} <- result do
+      case Keyword.take(opts, [:flow_types, :form_types]) do
+        [] ->
+          {:ok, copy}
+
+        types ->
+          Health.refresh(copy, types)
+          {:ok, Repo.preload(Repo.get(Flow, copy.id), [:nodes, :relationships])}
+      end
+    end
   end
 
   # An owned copy is a subflow of the destination tree, and an owned flow has
@@ -1262,7 +1283,7 @@ defmodule FormFlow.Data.Templates.Flows do
       |> Flow.changeset(%{
         name: source.name,
         label: source.label,
-        properties: source.properties,
+        properties: Health.forget(source.properties),
         tenant_id: source.tenant_id,
         slug: slug,
         owner_flow_id: owner_id

@@ -18,6 +18,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Forms
 
   test "the admin root is a generic landing linking both indexes", %{conn: conn} do
@@ -842,6 +843,127 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert render(view) =~ "Dog License and Cat License use it. Remove those steps first."
       assert Forms.get(owner.id) != nil
     end
+  end
+
+  describe "health after a form save" do
+    # Every save a form page makes ends with one refresh of the health cached
+    # on each root using the form (`Health.refresh_for_form/2`); reuse
+    # refreshes the step's root. Publish and the edit page's save are proven
+    # in flows_crud_test; the rest here, by the badge's counts and by the
+    # check's time moving on where the counts do not.
+    test "create draft, copy definition, delete draft, archive, and reuse each refresh the flow's health",
+         %{conn: conn} do
+      {root, node} = wired_flow_with_form_node("Enrollment", "Name")
+      own = Forms.get(node.form_id)
+      [draft] = Forms.list_versions(own.id)
+      form_page = "/admin/flows/#{root.id}/nodes/#{node.id}/form"
+
+      status = fn -> Health.status(Flows.get(root.id)) end
+
+      # Nothing has been checked yet; publishing from the page checks first
+      assert status.() == nil
+
+      {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
+      view |> element("button", "Publish") |> render_click()
+      assert_redirect(view, "#{form_page}/versions/#{draft.id}")
+      assert %{level: :ok, counts: %{error: 0, info: 0}, checked_at: published_at} = status.()
+
+      # Create draft: checked again, though a draft matching the published
+      # version has nothing to report
+      {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
+      view |> element(~s(button[phx-click="create_draft"])) |> render_click()
+      new_draft = Enum.find(Forms.list_versions(own.id), &(&1.status == "draft"))
+      assert_redirect(view, "#{form_page}/versions/#{new_draft.id}/edit")
+      assert %{counts: %{info: 0}, checked_at: drafted_at} = status.()
+      assert DateTime.compare(drafted_at, published_at) == :gt
+
+      # Copy definition from a published catalog form: the draft now differs
+      # from what users see
+      {:ok, source} = Forms.create(%{name: "Source"})
+      [source_draft] = Forms.list_versions(source.id)
+
+      {:ok, source_draft} =
+        Forms.update_draft(source_draft, %{definition: %{"fields" => [%{"name" => "ssn"}]}})
+
+      {:ok, _v1} = Forms.update_status(source_draft, :published)
+
+      {:ok, view, _html} = live(conn, "#{form_page}/versions/#{new_draft.id}/edit")
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_change(%{"dynamic_form" => %{"definition_editor" => "copy"}})
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_change(%{"dynamic_form" => %{"definition_copy_source" => source.id}})
+
+      view |> element(~s(button[phx-click="copy_definition"])) |> render_click()
+      assert %{level: :info, counts: %{info: 1}} = status.()
+
+      # Delete draft: the info goes
+      view |> element(~s(button[phx-click="delete_draft"])) |> render_click()
+      assert_redirect(view, form_page)
+      assert %{level: :ok, counts: %{info: 0}} = status.()
+
+      # Archive the published version: nothing users can start
+      {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
+      view |> element(~s(button[phx-click="archive"])) |> render_click()
+      assert %{level: :error, counts: %{error: 1}} = status.()
+
+      # Reuse, from another flow's blank step: that root is checked for the
+      # first time
+      {other, other_node} = flow_with_form_node("Cat License", "Owner")
+      [other_draft] = Forms.list_versions(other_node.form_id)
+      assert Health.status(Flows.get(other.id)) == nil
+
+      {:ok, view, _html} =
+        live(
+          conn,
+          "/admin/flows/#{other.id}/nodes/#{other_node.id}/form/versions/#{other_draft.id}/edit"
+        )
+
+      view
+      |> element("input[type=radio][value=reuse]")
+      |> render_click(%{"selection" => "reuse"})
+
+      view
+      |> element("#forms-edit-chooser-reuse")
+      |> render_change(%{"source_form_id" => source.id})
+
+      view |> element(~s(button[phx-click="reuse_form"])) |> render_click()
+      assert_redirect(view, "/admin/flows/#{other.id}/nodes/#{other_node.id}/form")
+      assert %{checked_at: %DateTime{}} = Health.status(Flows.get(other.id))
+    end
+  end
+
+  # A root flow wired Start → one form step (its own form, a blank draft) → End
+  defp wired_flow_with_form_node(flow_name, form_label) do
+    {:ok, flow} = Flows.create(%{name: flow_name, nodes: Flows.starter_nodes()})
+    flow = Flows.get(flow.id)
+    start = Enum.find(flow.nodes, &("Start" in &1.labels))
+    stop = Enum.find(flow.nodes, &("End" in &1.labels))
+    step_id = Ecto.UUID.generate()
+
+    {:ok, _flow} =
+      Flows.update(flow, %{
+        nodes:
+          Enum.map(flow.nodes, &%{id: &1.id, properties: &1.properties}) ++
+            [
+              %{
+                id: step_id,
+                properties: %{
+                  "type" => "step",
+                  "data" => %{"label" => form_label, "kind" => "form"}
+                }
+              }
+            ],
+        relationships: [
+          %{source_id: start.id, target_id: step_id, label: "CONNECTS_TO"},
+          %{source_id: step_id, target_id: stop.id, label: "CONNECTS_TO"}
+        ]
+      })
+
+    {Flows.get(flow.id), Flows.get_node(step_id)}
   end
 
   # A published catalog form by name — what a step reuses

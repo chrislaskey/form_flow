@@ -10,7 +10,8 @@ form pages — now draws the same header
 `Components.Breadcrumb`). On the left, a **title**: the root flow, then,
 lighter, the subflow or form reached inside it, then what the page knows
 about it — its kind, its type, its version, its perspectives — each after
-a middle dot. Under it, smaller, the **breadcrumb**, whose first crumb is
+a middle dot — none between the root and the name reached inside it. Under
+it, smaller, the **breadcrumb**, whose first crumb is
 now **⧉ Form Flow** rather than Templates; the templates landing draws the
 same header, with that crumb alone. On the right, the page's actions
 as buttons; the Show and Edit pages' **Overview** is a button now, not a
@@ -26,12 +27,17 @@ the worst level as one word. What it lists are **entries**, each a
 **`FormFlow.Data.Templates.Flows.Health.Entry`**: a level (`:error`,
 `:warning`, `:info` — the alerts' and badges' own kinds), a stable code, one
 sentence for an admin naming the step by the way down ("Review / Check pet
-details"), and where it is (the flow, the node, the position path). An
+details"), the step or flow it is about (`subject`), a paragraph on why it
+matters (`explanation`) and a sentence on what to do (`fix`) — both per
+code, from `Entry.explanation/1` and `fix/1`, so a host drawing its own page
+has the words — and where it is (the flow, the node, the position path). An
 entry rather than a problem, because a check reads the flow's shape and can
 be wrong about what is fine on purpose. `check/2` takes a root flow's id,
 or a resolved tree (`Flows.resolve_tree/1`) for a check that touches no
 database — what the tests use, and what a check of unsaved canvas contents
-would build. Both take the host's `flow_types:` and `form_types:`.
+would build. Both take the host's `flow_types:` and `form_types:`. The
+report counts what it evaluated, in `checks_run`, so a page can say how many
+checks passed (`Health.passing/1`) beside an empty list.
 
 The checks, at every connected level: no Start, no End, Start not reaching
 End, a step whose form or subflow is missing, a form with no published
@@ -43,28 +49,64 @@ perspective — warnings. A draft with changes not yet published — info.
 What is behind an unconnected step is not checked: it is reported once,
 as unconnected.
 
+**The status is cached on the root flow**, under
+`properties["_health_metadata"]["status"]` — the level, the counts, the
+summary, `checks_run`, and when — and **`Health.status/1`** reads it off a
+flow struct with no query. **`Health.refresh/2`** recomputes it: the full
+check, written back, once, at the end of each save, by the page or the
+operation that owns the whole save — the New page's create, the flow edit
+page's canvas and identity save, a step's rename, a form's publish, archive,
+draft saved, copied, or deleted, a step deleted, a form reused — never from
+inside the context functions a save calls many times. `Flows.duplicate/2`
+leaves the source's bookkeeping behind, so a copy starts never checked, and
+checks it once when given `flow_types:` and `form_types:`. `Health.refresh_for_form/2` is the form pages' call: every root with
+a step on the form, since a catalog form's lineage is shared. A save that
+bypasses the pages leaves the badge behind; the health page brings it up to
+date, since it runs the check on every visit. The `_` prefix marks the key
+as the library's own bookkeeping beside the admin-set keys in the same map
+(see `guides/neo4j.md`). A demo database from before this change may hold
+the earlier `_health_ignored_entries` key; recreate it.
+
 **An entry can be ignored.** An admin who always sees "5 warnings" stops
 reading them. `Health.ignore/3` records an entry on the root flow — under
-`properties["_health_ignored_entries"]`, by its `code` and `path`, with
-the `user_id` and the time — and from then on the check lists it marked
-(`Entry`'s `:ignored`) but leaves it out of `level` and `counts`, so the
-badge says what is new. `Health.stop_ignoring/2` removes the record;
-records for entries the check no longer finds are dropped on the next
-write. `Health.open/1` and `Health.ignored/1` split a report the same way.
+`properties["_health_metadata"]["ignored_entries"]`, by its `code` and
+`path`, with the `user_id` and the time — and from then on the check lists
+it marked (`Entry`'s `:ignored`) but leaves it out of `level` and `counts`,
+so the badge says what is new. `Health.stop_ignoring/2` removes the record.
+Both write the status too, from the report they hold. Records for entries
+the check no longer finds are dropped on the next write, `refresh/2`
+included, so a duplicate's copy starts clean. `Health.open/1` and
+`Health.ignored/1` split a report the same way.
 
-**The flows index gains a Health column**, drawn by
-**`FormFlow.Web.Templates.Components.Health`**: an icon button with the
-count on its shoulder — a green check when nothing is open, otherwise the
-count of open entries in the colour of the worst — that opens a modal with
-the whole report. The modal describes the flow first (its kind, steps, subflows,
-forms, perspectives, and flow types — the report's new `summary`), then
-counts the open entries by level and the ignored ones, then lists every
-entry with an **Ignore** switch beside it, the same control as the flow
-pages' Show/Edit switch; an ignored entry stays listed, greyed, with who
-ignored it and when. The check runs as each row renders.
-`FormFlow.Web.Templates.Flows.Index` takes `flow_types`, `form_types`, and
-`user_id` for it, and `FormFlow.Web.router/1` passes them. Nothing gates on
-the result: saves and publishes go through as before.
+**Every flow page carries the badge**, drawn by
+**`FormFlow.Web.Templates.Components.Health`** — a function component that
+reads the cached status off the root flow it is given and links to the
+flow's health page: an icon button with the count on its shoulder — a green
+check when nothing is open, the count of open entries in the colour of the
+worst, a grey dash for a flow never checked. On the flows index per row
+(the listing runs no check), and in the Show, Edit, and Overview headers
+from any depth, always the root's; on the edit page it goes through the
+"navigate" event, so unsaved changes prompt first.
+
+**`/flows/:id/health`** is the health page, **`FormFlow.Web.Templates.Flows.Health`**,
+added to the router as the overview was. Its header names the flow — the
+trail leads back to its show page — with **Flow Overview** beside it (the
+Show and Edit pages' Overview button is named the same); under it, when it
+was checked and what the report is of (the flow's kind, steps, subflows,
+forms, perspectives, and flow types — the report's `summary`), then how it
+stands (the open entries by level, the ignored ones, and how many checks
+passed). Then two panes: on the
+left every entry as a row — a dot in its level's colour, grey once ignored,
+and where it is — and on the right the selected entry: its level, message,
+why it matters, where and which check, what to do, an **Open** button to the
+step (a form step's form page, a subflow's canvas, or the containing flow's
+editor for a Start or End node and an entry with the flow itself), and the
+**Ignore** switch, the same control as the flow pages' Show/Edit switch,
+with who ignored it and when once on. The selection rides in the URL as
+`?entry=<code>@<path>`, so a toggle keeps it and a link can name one entry;
+without it, the first open entry is selected. `FormFlow.Web.router/1`
+passes it `user_id` and `params`. Nothing gates on the result: saves and
+publishes go through as before.
 
 ### Steps have slugs; owned subflows and forms do not
 

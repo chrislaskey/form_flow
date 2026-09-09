@@ -33,6 +33,8 @@ defmodule FormFlow.Web.Templates.Flows.New do
      |> assign(assigns)
      |> assign_new(:base, fn -> "" end)
      |> assign_new(:tenant_id, fn -> nil end)
+     |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+     |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
      |> assign_new(:components, fn -> nil end)}
   end
 
@@ -49,6 +51,13 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
     case Flows.create(attrs) do
       {:ok, flow} ->
+        # The one save a new flow has had: its badge reads what it is —
+        # Start and End, unwired — rather than "not checked"
+        FormFlow.Data.Templates.Flows.Health.refresh(flow,
+          flow_types: socket.assigns.flow_types,
+          form_types: socket.assigns.form_types
+        )
+
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{flow.id}/edit")}
 
       {:error, %Ecto.Changeset{} = changeset} ->

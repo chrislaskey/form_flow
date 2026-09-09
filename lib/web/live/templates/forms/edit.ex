@@ -69,6 +69,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias Phoenix.LiveView.JS
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates.Components.Header
@@ -104,6 +105,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     case Forms.update_status(socket.assigns.version, :published, preset: preset) do
       {:ok, published} ->
+        refresh_health(socket)
         # Redirects are forbidden inside update/2; handle_async is the
         # component-owned callback where they are allowed
         to = version_show_path(socket.assigns, published)
@@ -174,6 +176,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          {:ok, form} <- Forms.update(socket.assigns.form, identity),
          {:ok, version} <-
            Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
+      refresh_health(socket)
+
       {:ok,
        assign(socket,
          form: form,
@@ -953,6 +957,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     case target && Flows.reuse_form(node, target, form_types: form_types) do
       {:ok, _node} ->
+        Health.refresh(socket.assigns.root_id, health_options(socket))
         {:noreply, push_navigate(socket, to: show_path(socket.assigns))}
 
       {:error, reason} ->
@@ -975,6 +980,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     case source_id && copy_form_content(form, version, source_id) do
       {:ok, json} ->
+        refresh_health(socket)
+
         {:noreply,
          socket
          |> assign(definition_json: json, latest_json: json, definition_editor: nil)
@@ -1001,6 +1008,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     case presence(source_id) && copy_definition_content(version, source_id) do
       {:ok, json} ->
+        refresh_health(socket)
+
         {:noreply,
          socket
          |> assign(definition_json: json, latest_json: json, definition_editor: nil)
@@ -1019,6 +1028,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def handle_event("delete_draft", _params, socket) do
     case Forms.delete_draft(socket.assigns.version) do
       {:ok, _draft} ->
+        refresh_health(socket)
         # Back to the form's default view: latest published, or the newest
         # remaining draft, or the no-versions state
         {:noreply, push_navigate(socket, to: show_path(socket.assigns))}
@@ -1034,6 +1044,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp publish_directly(socket) do
     case Forms.update_status(socket.assigns.version, :published) do
       {:ok, published} ->
+        refresh_health(socket)
         {:noreply, push_navigate(socket, to: version_show_path(socket.assigns, published))}
 
       {:error, :not_draft} ->
@@ -1042,6 +1053,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:error, _other} ->
         {:noreply, assign(socket, :error, "Could not publish. Please try again.")}
     end
+  end
+
+  # Once, after a save that changed a version or the form's identity: every
+  # root with a step on this form — one for an owned form, every user of a
+  # catalog form — recomputes its health
+  defp refresh_health(socket) do
+    Health.refresh_for_form(socket.assigns.form.id, health_options(socket))
+  end
+
+  defp health_options(socket) do
+    [flow_types: socket.assigns.flow_types, form_types: socket.assigns.form_types]
   end
 
   defp publish(payload, component_id) do

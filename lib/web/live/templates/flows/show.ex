@@ -35,6 +35,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -66,6 +67,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        flow: flow,
        data: data,
        root: root,
+       # The host's lists as given, before the page narrows its own to the
+       # flow's kind: the health check reads every level of the tree
+       host_types: [flow_types: socket.assigns.flow_types, form_types: socket.assigns.form_types],
        flow_types: flow && flow_types(socket.assigns, context),
        embedded_perspective_options:
          flow &&
@@ -144,6 +148,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
     {:ok, _node} = Flows.delete_node(node)
 
+    FormFlow.Data.Templates.Flows.Health.refresh(
+      socket.assigns.root_id,
+      socket.assigns.host_types
+    )
+
     {:noreply, push_navigate(socket, to: to)}
   end
 
@@ -204,11 +213,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           For: {Enum.join(perspective_names(assigns), ", ")}
         </:metadata>
         <:actions>
-          <%!-- The whole flow at once, every level, read-only        <div class="flex items-center gap-2">
-          <%!-- The whole flow at once, every level, read-only — the root.s,
+          <%!-- The root's health, cached, from any depth --%>
+          <Health.health base={@base} flow={@root || @flow} />
+          <%!-- The whole flow at once, every level, read-only — the root's,
                 from any depth. Show and Edit stay one level at a time. --%>
           <Core.button components={@components} navigate={overview_path(assigns)} class="btn">
-            Overview
+            Flow Overview
           </Core.button>
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)

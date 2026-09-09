@@ -7,7 +7,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
   The left side is two lines. The **title** names the thing on the page —
   the root flow, then, lighter, the subflow or form reached inside it, then
   whatever the page has to say about it as `metadata` (its kind, its type,
-  its version), each after a middle dot. Under it, smaller, the
+  its version), each of those after a middle dot. Under it, smaller, the
   **breadcrumb**: Form Flow / Flows|Forms / Root / Parent / this page, the
   trail back out. The right side is the page's `actions` — buttons, in the
   order the page lists them.
@@ -113,7 +113,6 @@ defmodule FormFlow.Web.Templates.Components.Header do
         <h2 class="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold leading-tight">
           <span>{title(assigns)}</span>
           <%= if @root && @name do %>
-            <span class="text-zinc-300">·</span>
             <span class="font-normal text-zinc-500">{@name}</span>
           <% end %>
           <%= for metadata <- @metadata do %>

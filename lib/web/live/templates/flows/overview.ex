@@ -26,6 +26,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   alias FormFlow.Web.Components.Overview
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -101,6 +102,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         <:metadata>Overview</:metadata>
         <:metadata>Connected steps only, every level at once</:metadata>
         <:actions>
+          <Health.health base={@base} flow={@flow} />
           <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
             Show
           </Core.button>

@@ -69,7 +69,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
   end
 
-  test "the index shows each flow's health, and the entries behind the badge", %{conn: conn} do
+  test "the index badge reads the cached health; the health page runs the check", %{conn: conn} do
     {:ok, flow} =
       Flows.create(%{
         name: "Enrollment",
@@ -78,97 +78,197 @@ defmodule Demo.FormFlowFlowsCrudTest do
         relationships: []
       })
 
-    badge = "#flow-health-#{flow.id} > button"
-    modal = "#flow-health-#{flow.id}-modal"
-    entries = "#{modal} li"
-
-    # Start and End, unwired: Start reaches nothing, End is not connected.
-    # The badge counts the open entries; the modal opens on click.
-    {:ok, view, _html} = live(conn, "/admin/flows")
-
-    assert has_element?(view, "#{badge} span", "2")
-    refute has_element?(view, modal)
-
-    view |> element(badge) |> render_click()
-
-    assert has_element?(view, "#{modal} h3", "Health check")
-    assert has_element?(view, "#{modal} dt", "Perspectives")
-    assert has_element?(view, "#{modal} dd", "Simple flow")
-    assert has_element?(view, entries, "This flow does not connect Start to End")
-    assert has_element?(view, entries, "“End” is not connected from Start")
-
-    # Ignoring the warning: its switch turns on, it leaves the count, stays
-    # listed with who and when, and is recorded on the flow for the next visit
-    second = "#{modal} li:nth-child(2) button[role=switch]"
-    assert has_element?(view, "#{second}[aria-checked=false]", "Ignore")
-    view |> element(second) |> render_click()
-
-    assert has_element?(view, "#{second}[aria-checked=true]", "Ignored")
-    assert has_element?(view, "#{badge} span", "1")
-    today = Date.to_iso8601(Date.utc_today())
-    assert has_element?(view, entries, "Ignored by demo-admin on #{today}")
-
-    assert [%{"code" => "unconnected", "user_id" => "demo-admin", "path" => [_end_id]}] =
-             Flows.get(flow.id).properties["_health_ignored_entries"]
-
-    {:ok, view, _html} = live(conn, "/admin/flows")
-    assert has_element?(view, "#{badge} span", "1")
-
-    view |> element(badge) |> render_click()
-    view |> element(second) |> render_click()
-
-    assert has_element?(view, "#{second}[aria-checked=false]", "Ignore")
-    assert has_element?(view, "#{badge} span", "2")
-    assert Flows.get(flow.id).properties["_health_ignored_entries"] == nil
-
-    # Closing the modal
-    view |> element("#{modal} button[aria-label=Close]") |> render_click()
-    refute has_element?(view, modal)
-
-    # Wired through a form step: the save creates the step's form as a draft,
-    # which users cannot start
     flow = Flows.get(flow.id)
+    page = "/admin/flows/#{flow.id}/health"
+    badge = ~s(a[href="#{page}"])
+    entries = "#flows-health-entries"
+    detail = "#flows-health-detail"
+    standing = "#flows-health-standing"
+
+    # Never checked: the index runs no check, so the badge says so
+    {:ok, view, _html} = live(conn, "/admin/flows")
+    assert has_element?(view, "#{badge} span", "–")
+
+    # Start and End, unwired: Start reaches nothing (an error, with the flow
+    # itself), End is not connected (a warning). The page names the flow,
+    # says what it checked, and how it stands.
+    {:ok, view, _html} = live(conn, page)
+
+    assert has_element?(view, "h2", "Enrollment")
+    assert has_element?(view, "h2", "Health check")
+    assert has_element?(view, "dt", "Checked")
+    assert has_element?(view, "#flows-health-checked", "just now")
+    assert has_element?(view, ~s(nav a[href="/admin/flows/#{flow.id}"]), "Enrollment")
+    assert has_element?(view, "nav", "Health")
+    refute has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/edit"]), "Edit")
+    assert has_element?(view, "dt", "Perspectives")
+    assert has_element?(view, "dd", "Simple flow")
+    assert has_element?(view, standing, "1 error")
+    assert has_element?(view, standing, "1 warning")
+    assert has_element?(view, standing, "checks passing")
+    assert has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/overview"]), "Flow Overview")
+
+    # Every entry as a row — where it is — the first open one selected, and
+    # its detail: the message, why, the check, what to do, where Open goes
+    assert has_element?(view, "#{entries} button[aria-current=true]", "Enrollment")
+    assert has_element?(view, "#{entries} button[aria-current=false]", "End")
+    assert has_element?(view, "#{detail} h3", "This flow does not connect Start to End")
+    assert has_element?(view, "#{detail} .badge", "error")
+    assert has_element?(view, "#{detail} code", "end_unreachable")
+    assert has_element?(view, detail, "To fix:")
+    assert has_element?(view, detail, "a path leads from Start to End")
+
+    assert has_element?(
+             view,
+             ~s(#{detail} a[href="/admin/flows/#{flow.id}/edit"]),
+             "Open Enrollment"
+           )
+
+    # The visit wrote the cache: the badge now counts what is open
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "2")
+
+    # Selecting the warning rides in the URL, and the detail follows
+    stop = Enum.find(flow.nodes, &("End" in &1.labels))
+    key = "unconnected@#{stop.id}"
+
+    view |> element(~s(#{entries} button[phx-value-entry="#{key}"])) |> render_click()
+
+    assert_patch(view, "#{page}?entry=#{key}")
+    assert has_element?(view, "#{detail} h3", "“End” is not connected from Start")
+    assert has_element?(view, "#{detail} .badge", "warning")
+    assert has_element?(view, ~s(#{detail} a[href="/admin/flows/#{flow.id}/edit"]), "Open End")
+
+    # Ignoring it: the switch turns on, it leaves the count, stays listed with
+    # who and when, and is recorded on the flow for the next visit
+    switch = "#flows-health-ignore"
+    assert has_element?(view, "#{switch}[aria-checked=false]", "Ignore")
+
+    view |> element(switch) |> render_click()
+
+    assert has_element?(view, "#{switch}[aria-checked=true]", "Ignored")
+    today = Date.to_iso8601(Date.utc_today())
+    assert has_element?(view, detail, "Ignored by demo-admin on #{today}")
+    assert has_element?(view, standing, "1 ignored")
+    assert has_element?(view, standing, "0 warnings")
+    assert has_element?(view, "#{entries} button[aria-current=true] .bg-zinc-300")
+
+    assert %{
+             "ignored_entries" => [
+               %{"code" => "unconnected", "user_id" => "demo-admin", "path" => [_end_id]}
+             ],
+             "status" => %{"level" => "error", "counts" => %{"ignored" => 1}}
+           } = Flows.get(flow.id).properties["_health_metadata"]
+
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "1")
+
+    # The URL brings the selection back; stop ignoring
+    {:ok, view, _html} = live(conn, "#{page}?entry=#{key}")
+    assert has_element?(view, "#{switch}[aria-checked=true]", "Ignored")
+
+    view |> element(switch) |> render_click()
+
+    assert has_element?(view, "#{switch}[aria-checked=false]", "Ignore")
+    refute Map.has_key?(Flows.get(flow.id).properties["_health_metadata"], "ignored_entries")
+
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "2")
+  end
+
+  test "saves through the pages refresh the badge; the health page catches up a lagging one",
+       %{conn: conn} do
+    id = create_flow(conn, "Enrollment")
+    page = "/admin/flows/#{id}/health"
+    badge = ~s(a[href="#{page}"])
+
+    # Wired through a form step from the edit page: the save creates the
+    # step's form as a draft, which users cannot start — one error — and the
+    # page's own badge (through the navigate event) reads the fresh status
+    flow = Flows.get(id)
     start = Enum.find(flow.nodes, &("Start" in &1.labels))
     stop = Enum.find(flow.nodes, &("End" in &1.labels))
-    name_id = Ecto.UUID.generate()
+
+    # The New page cached the flow's first status: Start and End, unwired
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    assert has_element?(view, ~s(button[phx-value-to="#{page}"] span), "2")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        %{
+          "id" => start.id,
+          "type" => "step",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => start.properties["data"]
+        },
+        %{
+          "id" => stop.id,
+          "type" => "step",
+          "position" => %{"x" => 900, "y" => 0},
+          "data" => stop.properties["data"]
+        },
+        %{
+          "id" => "1",
+          "type" => "step",
+          "position" => %{"x" => 450, "y" => 0},
+          "data" => %{"label" => "Name", "kind" => "form"}
+        }
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => start.id, "target" => "1"},
+        %{"id" => "e2", "source" => "1", "target" => stop.id}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    assert render(view) =~ "Saved."
+    assert has_element?(view, ~s(button[phx-value-to="#{page}"] span), "1")
+
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "1")
+
+    # The badge leaves the edit page through the navigate event, like Overview
+    view |> element(~s(button[phx-value-to="#{page}"])) |> render_click()
+    assert_redirect(view, page)
+
+    # Publishing the step's form from its page: healthy, and the show page's
+    # badge — the root's, from a drill-in — says so
+    node = Enum.find(Flows.get(id).nodes, & &1.form_id)
+    [draft] = Forms.list_versions(node.form_id)
+    form_page = "/admin/flows/#{id}/nodes/#{node.id}/form/versions/#{draft.id}"
+
+    {:ok, view, _html} = live(conn, form_page)
+    view |> element("button", "Publish") |> render_click()
+    assert_redirect(view, form_page)
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    assert has_element?(view, "#{badge} span", "✓")
+
+    {:ok, view, _html} = live(conn, page)
+    assert has_element?(view, "#flows-health-standing", "0 errors")
+    assert render(view) =~ "Nothing to report"
+
+    # A save that bypasses the pages leaves the badge behind — until the
+    # health page is opened, which writes the cache back
+    flow = Flows.get(id)
 
     {:ok, _flow} =
       Flows.update(flow, %{
-        nodes: [
-          %{id: start.id, properties: start.properties},
-          %{id: stop.id, properties: stop.properties},
-          %{
-            id: name_id,
-            properties: %{
-              "type" => "step",
-              "position" => %{"x" => 450, "y" => 0},
-              "data" => %{"label" => "Name", "kind" => "form"}
-            }
-          }
-        ],
-        relationships: [
-          %{source_id: start.id, target_id: name_id, label: "CONNECTS_TO"},
-          %{source_id: name_id, target_id: stop.id, label: "CONNECTS_TO"}
-        ]
+        nodes: Enum.map(flow.nodes, &%{id: &1.id, properties: &1.properties}),
+        relationships: []
       })
 
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "✓")
 
-    assert has_element?(view, "#{badge} span", "1")
-    view |> element(badge) |> render_click()
-    assert has_element?(view, entries, "“Name” has no published version — users cannot start it")
+    {:ok, view, _html} = live(conn, page)
+    assert has_element?(view, "#flows-health-standing", "1 error")
 
-    # Published: a green check, and a modal with nothing to report
-    %{form_id: form_id} = Flows.get_node(name_id)
-    [draft] = Forms.list_versions(form_id)
-    {:ok, _v1} = Forms.update_status(draft, :published)
-
-    {:ok, view, _html} = live(conn, "/admin/flows")
-
-    assert has_element?(view, "#{badge} span", "✓")
-    view |> element(badge) |> render_click()
-    assert has_element?(view, modal, "Nothing to report")
-    refute has_element?(view, entries)
+    {:ok, index, _html} = live(conn, "/admin/flows")
+    assert has_element?(index, "#{badge} span", "3")
   end
 
   test "editing a flow replaces its contents", %{conn: conn} do
@@ -438,12 +538,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_any_order"}})
 
     # Nothing persists until Save — a pending type is an unsaved change
-    assert Flows.get(id).properties == %{"slug" => "untitled-fl"}
+    assert Map.delete(Flows.get(id).properties, "_health_metadata") == %{"slug" => "untitled-fl"}
     assert has_element?(view, "button", "Discard changes")
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(id).properties == %{
+    # The save also caches the flow's health, under its own key
+    assert Map.delete(Flows.get(id).properties, "_health_metadata") == %{
              "form_flow_type" => "wizard_any_order",
              "slug" => "untitled-fl"
            }
@@ -463,7 +564,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    assert Flows.get(id).properties == %{"slug" => "untitled-fl"}
+    assert Map.delete(Flows.get(id).properties, "_health_metadata") == %{"slug" => "untitled-fl"}
   end
 
   test "a complex flow has no type dropdown of its own", %{conn: conn} do
@@ -1264,6 +1365,35 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element(~s(button[phx-value-to="#{overview}"])) |> render_click()
     assert_redirect(view, overview)
+  end
+
+  test "show, edit, and the overview carry the root's health badge, from any depth", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    health = "/admin/flows/#{root_id}/health"
+
+    # The edit page's save refreshed the root; every page reads that one status
+    %{counts: counts} = FormFlow.Data.Templates.Flows.Health.status(Flows.get(root_id))
+    count = to_string(counts.error + counts.warning + counts.info)
+
+    for path <- [
+          "/admin/flows/#{root_id}",
+          "/admin/flows/#{root_id}/nodes/#{node.id}",
+          "/admin/flows/#{root_id}/overview"
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      assert has_element?(view, ~s(a[href="#{health}"][title^="Health:"] span), count)
+    end
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert has_element?(view, ~s(button[phx-value-to="#{health}"] span), count)
+
+    # A subflow's own health page reports its root
+    {:ok, view, _html} = live(conn, "/admin/flows/#{node.subflow_id}/health")
+    assert has_element?(view, "h2", "Licensing")
+    assert has_element?(view, "#flows-health-entries button", "Licensing")
   end
 
   # Creates a flow the way a user would: through the new page's chooser

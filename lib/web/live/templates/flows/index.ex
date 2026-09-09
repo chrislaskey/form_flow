@@ -30,15 +30,12 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   ## Health
 
   Every row carries the flow's health as a
-  `FormFlow.Web.Templates.Components.Health` — a button with a badge, a
-  green check or the count of open entries, opening a modal with the whole
-  report and a switch to ignore each entry. That component runs the check
-  (`FormFlow.Data.Templates.Flows.Health`) over the flow's whole tree every
-  time the row renders, so a listing of ten flows loads ten trees; the
-  index is where an admin looks for what is left to do, and that is the
-  cost of answering there. `flow_types`, `form_types`, and `user_id` — the
-  host's lists and the admin's identity, the same the edit pages take — are
-  passed through to it; the router passes all three.
+  `FormFlow.Web.Templates.Components.Health` badge — a green check, the
+  count of open entries, or a dash for a flow never checked — linking to
+  the flow's health page. The badge reads the status cached on the row's
+  own struct (`FormFlow.Data.Templates.Flows.Health.status/1`), so the
+  listing runs no check: the health page does, and every save refreshes
+  the cache.
   """
 
   use Phoenix.LiveComponent
@@ -57,9 +54,6 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       |> assign_new(:base, fn -> "" end)
       |> assign_new(:tenant_id, fn -> nil end)
       |> assign_new(:components, fn -> nil end)
-      |> assign_new(:user_id, fn -> nil end)
-      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
-      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
@@ -110,15 +104,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <:column field={:nodes_count} label="Steps" />
         <:column field={:relationships_count} label="Connections" />
         <:column :let={flow} label="Health">
-          <.live_component
-            module={Health}
-            id={"flow-health-#{flow.id}"}
-            flow_id={flow.id}
-            user_id={@user_id}
-            flow_types={@flow_types}
-            form_types={@form_types}
-            components={@components}
-          />
+          <Health.health base={@base} flow={flow} />
         </:column>
         <:column :let={flow} field={:inserted_at} label="Created" sortable>
           <span class="text-xs text-zinc-500">

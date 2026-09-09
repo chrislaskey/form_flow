@@ -103,6 +103,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -155,6 +156,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        flow: flow,
        root: root,
        subflow_node: subflow_node,
+       # The host's lists as given, before the page narrows its own to the
+       # flow's kind: the health check reads every level of the tree
+       host_types: [flow_types: socket.assigns.flow_types, form_types: socket.assigns.form_types],
        flow_types: types,
        form_data: form_data(flow, subflow_node, types)
      )
@@ -506,13 +510,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
              socket.assigns.pending_name,
              socket.assigns.pending_slug
            ) do
+      # One save, one recomputation — after everything the save wrote; the
+      # root is read again for the status it now carries
+      FormFlow.Data.Templates.Flows.Health.refresh(flow, socket.assigns.host_types)
       flow = Flows.get(flow.id)
+      root = socket.assigns.root && Flows.get(socket.assigns.root.id)
       data = ReactFlow.to_data(flow)
 
       socket =
         socket
         |> assign(
           flow: flow,
+          root: root,
           subflow_node: node,
           data: data,
           current: data,
@@ -628,6 +637,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       >
         <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
         <:actions>
+          <%!-- The root's health, cached, from any depth — through the
+                "navigate" event, as below --%>
+          <Health.health base={@base} flow={@root || @flow} target={@myself} />
           <%!-- The whole flow at once, read-only — through the "navigate"
                 event like every other way off this page, so unsaved
                 changes prompt first --%>
@@ -638,7 +650,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             phx-target={@myself}
             class="btn"
           >
-            Overview
+            Flow Overview
           </Core.button>
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would
