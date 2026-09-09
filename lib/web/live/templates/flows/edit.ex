@@ -96,7 +96,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Templates.Flow
-  alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
@@ -342,7 +341,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # The raw param, like the type's: the dropdown's value as chosen
   defp pending_status(%{changeset: %{params: %{"status" => value}}}, current) do
-    if value in Templates.Flow.statuses(), do: value, else: current
+    if value in Flow.statuses(), do: value, else: current
   end
 
   defp pending_status(_payload, current), do: current

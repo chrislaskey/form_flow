@@ -376,8 +376,9 @@ defmodule FormFlow.Web.Templates.Shared do
 
   def status_summary("pre_release"),
     do:
-      "Open to the pre-release users a page names, and a draft to everyone else: they can " <>
-        "start it, continue it, and see it; nobody else sees it at all."
+      "Open to the pre-release users a page names (pre_release_user_ids, in the host's " <>
+        "code), and a draft to everyone else: they can start it, continue it, and see it; " <>
+        "nobody else sees it at all. If no page names anyone, nobody sees it."
 
   def status_summary("open"),
     do: "Offered to users: anyone the page allows can start it, continue it, and see it."
@@ -406,8 +407,7 @@ defmodule FormFlow.Web.Templates.Shared do
   def status_kind("pre_release"), do: :info
   def status_kind("open"), do: :success
   def status_kind("winding_down"), do: :warning
-  def status_kind("read_only"), do: :info
-  def status_kind(_draft_archived_or_other), do: :neutral
+  def status_kind(_draft_read_only_archived_or_other), do: :neutral
 
   @doc """
   How many instances a root flow has, and how many are still in progress —

@@ -58,6 +58,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Controllers.Downloads
   alias FormFlow.Web.Downloads.Token
@@ -125,16 +126,26 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       when socket.assigns.page_state in [:ready, :completed] do
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
-    case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
-           user_id: socket.assigns.user_id,
-           tenant_id: socket.assigns.tenant_id
-         ) do
-      {:ok, reopened} ->
-        to = Paths.form_edit_path(socket.assigns.base, flow_instance.id, reopened.path)
-        {:noreply, push_navigate(socket, to: to)}
+    # The status is the pages' rule, asked again at the click from the flow
+    # as it now is — Reopen was drawn while continuing was allowed, and the
+    # year may have closed since
+    flow = Templates.Flows.get(flow_instance.flow_id)
 
-      {:error, _changeset} ->
-        {:noreply, assign(socket, :error, "Could not reopen the form.")}
+    if match?(%Templates.Flow{}, flow) and
+         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, socket.assigns) do
+      case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
+             user_id: socket.assigns.user_id,
+             tenant_id: socket.assigns.tenant_id
+           ) do
+        {:ok, reopened} ->
+          to = Paths.form_edit_path(socket.assigns.base, flow_instance.id, reopened.path)
+          {:noreply, push_navigate(socket, to: to)}
+
+        {:error, _changeset} ->
+          {:noreply, assign(socket, :error, "Could not reopen the form.")}
+      end
+    else
+      {:noreply, assign(socket, :error, "This flow is read-only now.")}
     end
   end
 

@@ -102,7 +102,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       context: context,
       visible?: visible?,
       editable?: editable?,
-      continue_allowed?: continue_allowed?(context),
+      continue_allowed?: continue_allowed?(context, socket.assigns),
       start_error: nil,
       mount_error: nil,
       navigate_to: nil,
@@ -281,10 +281,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       not flow_in_scope?(socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available here.")
 
-      flow && not status_allows?(flow, :see, socket.assigns) ->
+      flow && not FormFlow.Web.Instances.Shared.status_allows?(flow, :see, socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available right now.")
 
-      flow && not status_allows?(flow, Keyword.get(opts, :allows, :see), socket.assigns) ->
+      flow &&
+          not FormFlow.Web.Instances.Shared.status_allows?(
+            flow,
+            Keyword.get(opts, :allows, :see),
+            socket.assigns
+          ) ->
         assign(
           socket,
           :mount_error,
@@ -308,20 +313,6 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     do: flow
 
   defp instance_flow(_assigns), do: nil
-
-  @doc """
-  Whether the flow's status lets *this viewer* `:start`, `:continue`, or
-  `:see` (`FormFlow.Data.Templates.Flow.allows?/2`), with the one rule the
-  table cannot hold because it is about a person: a `pre_release` flow is
-  open to the users the page names in `pre_release_user_ids` and a draft to
-  everyone else. The listing and the instance pages ask this; the data
-  layer, which knows no viewer, allows a pre-release flow for anyone.
-  """
-  def status_allows?(%Templates.Flow{status: "pre_release"}, _action, assigns),
-    do: assigns.user_id in (assigns[:pre_release_user_ids] || [])
-
-  def status_allows?(%Templates.Flow{} = flow, action, _assigns),
-    do: Templates.Flow.allows?(flow, action)
 
   # The page's `flows` attr is its scope: an instance is in it when its flow
   # is one of the flows the attr names. No attr, or no instance in scope
@@ -440,16 +431,18 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   defp access(type, context, assigns) do
     visible? = visible?(type, context, assigns)
 
-    {visible?, visible? and continue_allowed?(context) and editable?(type, context, assigns)}
+    {visible?,
+     visible? and continue_allowed?(context, assigns) and editable?(type, context, assigns)}
   end
 
-  # Whether the flow's status lets anyone continue — start, edit, reopen,
-  # submit — at any position (`FormFlow.Data.Templates.Flow.allows?/2`); a
-  # flow the tree no longer resolves lets nobody
-  defp continue_allowed?(%Context{flow: %Templates.Flow{} = flow}),
-    do: Templates.Flow.allows?(flow, :continue)
+  # Whether the flow's status lets this viewer continue — start, edit,
+  # reopen, submit — at any position
+  # (`FormFlow.Web.Instances.Shared.status_allows?/3`); a flow the tree no
+  # longer resolves lets nobody
+  defp continue_allowed?(%Context{flow: %Templates.Flow{} = flow}, assigns),
+    do: FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns)
 
-  defp continue_allowed?(_context), do: false
+  defp continue_allowed?(_context, _assigns), do: false
 
   defp editable?(type, context, assigns),
     do: type.module.editable?(context, assigns.callback_data)

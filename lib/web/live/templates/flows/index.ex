@@ -180,7 +180,9 @@ defmodule FormFlow.Web.Templates.Flows.Index do
 
   @impl true
   def handle_event("status_picked", %{"status" => status}, socket) do
-    {:noreply, assign(socket, :status_pending, status)}
+    if status in Flow.statuses(),
+      do: {:noreply, assign(socket, :status_pending, status)},
+      else: {:noreply, socket}
   end
 
   @impl true

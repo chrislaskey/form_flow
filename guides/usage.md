@@ -177,7 +177,7 @@ between them but the type lists — the one value that must be the same on
 every page, the admin pages included, because a type chosen on one side
 acts on the other.
 
-## Years, pilots, and closing a flow
+## Years, pre-release, and closing a flow
 
 A flow is not versioned. Dog License 2026 and Dog License 2027 are two
 flows, the second a copy of the first, and the difference between "this
@@ -245,8 +245,10 @@ data layer's: `FormFlow.Data.Instances.Flows.create/2` and
 so that your own admin and support tooling can take an appeal after the
 deadline or repair a record in an archived year without a back door. A
 route of your own that should honour the status asks
-`FormFlow.Data.Templates.Flow.allows?/2` first, as the pages do. And a
-gate or
+`FormFlow.Data.Templates.Flow.allows?/2` first — and, since `allows?/2`
+answers the table and the table says a pre-release flow is open, checks
+its own pre-release users for that one status, as the pages do through
+`FormFlow.Web.Instances.Shared.status_allows?/3`. And a gate or
 callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog

@@ -38,6 +38,20 @@ defmodule Demo.FormFlowDownloadsTest do
       assert String.starts_with?(conn.resp_body, "%PDF-1.4")
     end
 
+    test "a flow whose status hides it from users serves nothing", %{conn: conn} do
+      %{flow: flow, instance: instance, form: form} = flow_of_one()
+      complete(instance, [form.id], %{"name" => "Ada Lovelace"})
+
+      # Read-only still sees; archived does not
+      {:ok, _} = Flows.update_status(flow, "read_only", [])
+      assert get(conn, download_url(instance.id, [form.id])).status == 200
+
+      {:ok, _} = Flows.update_status(flow, "archived", [])
+      conn = get(conn, download_url(instance.id, [form.id]))
+      assert conn.status == 403
+      assert conn.resp_body =~ "This flow is not available right now."
+    end
+
     test "the file carries the question as the definition asks it, and the answer", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})

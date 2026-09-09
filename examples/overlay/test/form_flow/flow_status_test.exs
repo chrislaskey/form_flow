@@ -523,6 +523,12 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, view, _html} = live(conn, "/admin/flows/#{owned.id}/history")
       assert has_element?(view, "h2", "Dog License")
 
+      # A row written past the data layer — a seed, a host — has no log, and
+      # the page says so rather than drawing an empty list
+      {:ok, seeded} = FormFlowRepo.insert(Flow.changeset(%Flow{}, %{name: "Seeded"}))
+      {:ok, _view, html} = live(conn, "/admin/flows/#{seeded.id}/history")
+      assert html =~ "Nothing has been recorded for this flow."
+
       # Reached from the show page and the index's menu; a missing flow says so
       {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
       assert has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/history"]), "History")

@@ -77,6 +77,8 @@ defmodule FormFlow.Web.Instances.Shared do
           | :completed
           | :ready
 
+  alias FormFlow.Data.Templates
+
   @doc """
   The state of any instance page, from its assigns.
 
@@ -117,4 +119,20 @@ defmodule FormFlow.Web.Instances.Shared do
       end
     end
   end
+
+  @doc """
+  Whether a flow's status lets *this viewer* `:start`, `:continue`, or
+  `:see` (`FormFlow.Data.Templates.Flow.allows?/2`), with the one rule the
+  table cannot hold because it is about a person: a `pre_release` flow is
+  open to the users the page names in `pre_release_user_ids` and a draft to
+  everyone else — and to a viewer with no `user_id` at all, since `nil` is
+  never in the list. The listing asks at render and again at the click; the
+  instance pages ask at mount and at every write. The data layer, which
+  knows no viewer, does what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
+  """
+  def status_allows?(%Templates.Flow{status: "pre_release"}, _action, assigns),
+    do: assigns.user_id in (assigns[:pre_release_user_ids] || [])
+
+  def status_allows?(%Templates.Flow{} = flow, action, _assigns),
+    do: Templates.Flow.allows?(flow, action)
 end

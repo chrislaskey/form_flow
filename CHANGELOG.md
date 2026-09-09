@@ -18,8 +18,9 @@ keeps seeing it), **`read_only`** (nothing changes; everyone still sees,
 prints, and downloads their own), **`archived`** (put away; users see
 nothing, admins keep everything). Transitions are any-to-any:
 **`Flows.update_status/3`** moves a flow to any status the table names,
-refusing only an unknown one (`{:error, :unknown_status}`), and the same
-status again is a no-op. `Flow.allows?/2` and `Flow.statuses_allowing/1`
+refusing only an unknown one (`{:error, :unknown_status}`) or a flow
+deleted since it was loaded (`{:error, :not_found}`), and the same status
+again is a no-op. `Flow.allows?/2` and `Flow.statuses_allowing/1`
 are how pages and queries ask.
 
 Every move is logged. **`FormFlow.Data.Templates.Flow.Event`**
@@ -28,8 +29,8 @@ the third of its kind after the two instance logs and under their
 discipline — the responsible `user_id`, a free-form `snapshot`, rows never
 updated, a `:restrict` foreign key, deleted deliberately by
 `Flows.delete/1` before the flow. `Flows.create/2` (new `opts`, `user_id:`)
-writes `created` for every flow row, `Flows.copy/2` does the same for every
-row it copies (and takes `user_id:` too), and `update_status/3` writes
+writes `created` for the root it makes, `Flows.copy/2` does the same for
+the copy (and takes `user_id:` too), and `update_status/3` writes
 `status_changed` with `"from"` and `"to"`. Events are audit, not state:
 nothing reads the log to decide what a page does.
 
@@ -41,13 +42,19 @@ data layer's: `FormFlow.Data.Instances.Flows.create/2` and
 a host's admin and support tooling can repair state without a back door,
 and a host route that should honour the status asks `Flow.allows?/2`
 first, as the pages do — the listing asks again at the click, from the
-row as it now is. **`Instances.Flows.narrow_allowed/2`** narrows a
-listing query to instances of flows whose status allows `:start`,
-`:continue`, or `:see`. A read-only flow's instances are listed as View,
+row as it now is, and so do Reopen on the instance page and the form's
+show page. `Flow.allows?/2` answers the table; the pages ask
+**`FormFlow.Web.Instances.Shared.status_allows?/3`**, which adds the one
+rule about a person — who a pre-release flow's users are — and a host
+route honouring the status does the same for that status.
+**`Instances.Flows.narrow_allowed/2`** narrows a listing query to instances
+of flows whose status allows `:start`, `:continue`, or `:see`. A read-only
+flow's instances are listed as View,
 their pages open, and their form edit pages say "This flow is read-only
 now; your answers are kept as they are." — Continue and Reopen are not
 drawn, and a form type's `editable?/2` is never asked. The
-instances index offers Start only for open flows, lists a winding-down flow
+instances index offers Start for open flows — and pre-release ones, to the
+users the page names — lists a winding-down flow
 the page is about with "No longer taking new starts." in place of its
 button, applies `:see` on top of whatever it lists (the host's query
 included, the way it applies the tenant), says "No flows are open." when
@@ -117,6 +124,9 @@ links, now **Overview**, Show, and Edit; and a **Slug** column, sortable,
 between Name and Kind. The router passes the index `flow_types` and
 `form_types` for the copy's health check, and a host rendering
 `FormFlow.Web.Templates.Flows.Index` itself should too.
+`FormFlow.Web.Templates.Shared.copy_flow/3`'s third argument is now
+`opts` — the types as before, plus `user_id:` for the copy's `created`
+event.
 
 ## v0.21.0
 

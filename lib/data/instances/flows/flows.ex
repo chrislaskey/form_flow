@@ -153,9 +153,16 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @pre_release_marker %{"form_flow" => %{"pre_release" => true}}
 
+  # Merged inside the "form_flow" namespace, not over it: the next key
+  # FormFlow puts there must survive a pre-release start
   defp mark_pre_release(attrs, %Templates.Flow{status: "pre_release"}) do
     key = if Map.has_key?(attrs, "flow_id"), do: "metadata", else: :metadata
-    Map.update(attrs, key, @pre_release_marker, &Map.merge(&1 || %{}, @pre_release_marker))
+
+    Map.update(attrs, key, @pre_release_marker, fn metadata ->
+      Map.update(metadata || %{}, "form_flow", @pre_release_marker["form_flow"], fn own ->
+        Map.merge(own || %{}, @pre_release_marker["form_flow"])
+      end)
+    end)
   end
 
   defp mark_pre_release(attrs, _flow), do: attrs

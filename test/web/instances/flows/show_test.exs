@@ -21,7 +21,9 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
         %{
           __changed__: %{},
           page_state: :ready,
-          flow_instance: %Instances.Flow{id: "flow-1"},
+          # A real flow id: reopen reads the flow again at the click, and a
+          # missing one is answered without touching the repo
+          flow_instance: %Instances.Flow{id: "flow-1", flow_id: Ecto.UUID.generate()},
           flow_instance_id: "flow-1",
           user_id: "user-1",
           tenant_id: nil,
@@ -89,7 +91,8 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
 
     test "a completed row the page drew is what gets as far as the write" do
       # Same event, the one row that passes both rules: it now reaches the
-      # repo, which is absent here. That the two differ is the rules working.
+      # repo — the click's re-read of the flow's status — which is absent
+      # here. That the two differ is the rules working.
       assert_raise UndefinedFunctionError, fn ->
         Show.handle_event("reopen", %{"path" => "done"}, socket(%{}))
       end

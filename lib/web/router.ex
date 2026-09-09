@@ -213,7 +213,8 @@ defmodule FormFlow.Web.Router do
         "continued, seen — as if it were `open`; to everyone else it is a draft. " <>
         "The pages are the gate: the data layer takes a pre-release start from " <>
         "anyone and marks the journey's `metadata` (`\"form_flow\" => %{\"pre_release\" => true}`). " <>
-        "Ignored by the template pages"
+        "A viewer with no `user_id` is never listed, so a host without users has no " <>
+        "pre-release. Ignored by the template pages"
   )
 
   attr(:flows, :any,

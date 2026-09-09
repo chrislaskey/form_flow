@@ -147,7 +147,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     |> assign(:page_flows, page_flows)
     |> assign(
       :offered_flows,
-      Enum.filter(page_flows, &Shared.status_allows?(&1, :start, socket.assigns))
+      Enum.filter(
+        page_flows,
+        &FormFlow.Web.Instances.Shared.status_allows?(&1, :start, socket.assigns)
+      )
     )
     # A flow the host named that stopped taking starts is worth a line; one
     # the page merely lists among every root of the tenant is not
@@ -207,7 +210,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   defp start(socket, flow_id) do
     flow = Templates.Flows.get(flow_id)
 
-    if flow && Shared.status_allows?(flow, :start, socket.assigns) do
+    if flow && FormFlow.Web.Instances.Shared.status_allows?(flow, :start, socket.assigns) do
       attrs = %{
         flow_id: flow_id,
         user_id: socket.assigns.user_id,

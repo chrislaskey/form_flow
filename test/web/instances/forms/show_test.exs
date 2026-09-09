@@ -60,11 +60,12 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
     end
 
     test "the state is what decides it, not the assigns the write would use" do
-      # Same assigns, the state flipped: now it gets as far as the repo, which
-      # is absent here. That the two differ is the guard doing its job.
+      # Same assigns, the state flipped: now it gets as far as the repo — the
+      # click's re-read of the flow's status — which is absent here. That the
+      # two differ is the guard doing its job.
       assigns = %{
         page_state: :completed,
-        flow_instance: %Instances.Flow{id: "flow-1"},
+        flow_instance: %Instances.Flow{id: "flow-1", flow_id: Ecto.UUID.generate()},
         form_instance: %Instances.Form{id: "form-1", path: ["a"]},
         user_id: "user-1",
         tenant_id: nil,

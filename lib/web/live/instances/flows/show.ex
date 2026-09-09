@@ -123,15 +123,30 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   # message this page does not understand.
   def handle_event("reopen", %{"path" => _path}, socket), do: {:noreply, socket}
 
+  # The status is the pages' rule, asked again at the click from the flow
+  # as it now is: the page drew Reopen while the flow allowed continuing,
+  # and the year may have closed since. The data layer does what it is
+  # asked (`FormFlow.Data.Instances.Forms.update_status/4`).
   defp reopen(socket, path) do
-    case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
-           user_id: socket.assigns.user_id,
-           tenant_id: socket.assigns.tenant_id
-         ) do
-      {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
-      {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
+    flow = Templates.Flows.get(socket.assigns.flow_instance.flow_id)
+
+    if continue_allowed?(flow, socket.assigns) do
+      case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
+             user_id: socket.assigns.user_id,
+             tenant_id: socket.assigns.tenant_id
+           ) do
+        {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
+        {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
+      end
+    else
+      {:noreply, assign(socket, :error, "This flow is read-only now.")}
     end
   end
+
+  defp continue_allowed?(%Templates.Flow{} = flow, assigns),
+    do: FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns)
+
+  defp continue_allowed?(_none, _assigns), do: false
 
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
@@ -168,8 +183,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
             flow_instance: flow_instance,
             context: context,
             rows: rows,
-            continue_allowed?:
-              match?(%Templates.Flow{}, flow) and Templates.Flow.allows?(flow, :continue),
+            continue_allowed?: continue_allowed?(flow, socket.assigns),
             part_done?: part_done?(rows, flow_instance),
             stranded: Instances.Flows.list_stranded(flow_instance),
             flow_name: (flow && flow.name) || "Untitled flow",

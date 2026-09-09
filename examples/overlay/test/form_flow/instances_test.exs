@@ -504,6 +504,32 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "reopen and the flow's status" do
+    test "a reopen drawn before the year closed is refused at the click, on both pages",
+         %{conn: conn} do
+      %{flow: flow, instance: instance, form: only} = flow_of_one()
+      complete(instance, [only.id])
+
+      # The form's show page draws Reopen while continuing is allowed
+      {:ok, form_view, _html} = live(conn, form_path(instance, [only.id]))
+      assert has_element?(form_view, "button", "Reopen")
+      # So does the instance page
+      {:ok, flow_view, _html} = live(conn, flow_path(instance))
+      assert has_element?(flow_view, "button", "Reopen")
+
+      # The year closes; both clicks arrive after
+      {:ok, _} = Flows.update_status(flow, "read_only", [])
+
+      html = form_view |> element("button", "Reopen") |> render_click()
+      assert html =~ "This flow is read-only now."
+
+      html = flow_view |> element("button", "Reopen") |> render_click()
+      assert html =~ "This flow is read-only now."
+
+      assert %{status: "completed"} = instance_at(instance, [only.id])
+    end
+  end
+
   describe "what a form page draws when there are no answers to draw" do
     test "a position the flow no longer has says so", %{conn: conn} do
       %{instance: instance, forms: [_name, address]} = flow_of_two()

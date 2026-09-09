@@ -62,6 +62,14 @@ defmodule FormFlow.Web.Controllers.Downloads do
         form_flow_router_download_routes()
       end
 
+  The flow's status is checked here — a flow whose status hides it from
+  users (`FormFlow.Data.Templates.Flow.allows?/2`, `:see`) is 403 — but
+  who a `pre_release` flow's users are is a router attr this route never
+  sees, so for that one status the token is the gate: it was minted by a
+  page that did check. A leaked download URL is the one place a pre-release
+  flow is visible to someone the page did not name, for the token's
+  lifetime.
+
   Per-resource authorization — the `on_mount` gate the instance pages ask
   before they render anything, asked here too, with the request's `user_id`
   and `tenant_id` reaching the context — is the next piece of this work.
