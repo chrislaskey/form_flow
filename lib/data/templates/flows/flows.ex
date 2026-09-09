@@ -73,6 +73,37 @@ defmodule FormFlow.Data.Templates.Flows do
       pair in step from the other side (`update_node/2`). A blank or missing
       label renames nothing — names are never blanked from the canvas.
 
+  ## Pasting a step
+
+  The canvas copies one step at a time and pastes it — onto the same canvas
+  or another flow's — as a new node whose `data.copy_of_node_id` names the
+  node it was copied from. Nothing is written until the save. `update/2`
+  then, before anything else reads the nodes, copies the entity behind the
+  source for the pasted step, the way `copy/2` copies a tree: an owned form
+  as a new lineage owned by this tree (`FormFlow.Data.Templates.Forms.copy/2`,
+  with provenance), a subflow whole with its steps' slugs under this root's
+  prefix, a catalog form as the same shared reference; a Start or End has
+  nothing behind it. The marker is consumed, never stored, so a step saved
+  once is never copied again; the pasted step's label and type write
+  through to the copied entity like any step's — so the pasted node's data
+  carries the type the canvas showed on the source, since a form node saved
+  without one is set to the default type. The paste is refused —
+  the whole save, with an error on `:nodes` — when the source is gone (the
+  clipboard outlives a delete, and a step copied before it was saved was
+  never there) or belongs to another tenant, the rule `reuse_form/3`
+  applies to forms.
+
+  A `:related_form` value inside the copied entity is a path from the
+  root, so it depends on where the paste lands. A path into what was
+  copied — the source flow's prefix, then a copied node — is rebased onto
+  the destination flow's prefix with its nodes mapped: a Review pasted
+  into another flow's subflow still reviews its own copied About. Any other
+  path is kept as it is: still right pasted anywhere in the same tree,
+  where the form it names is still there, and a stale choice
+  `FormFlow.Data.Templates.Flows.Health` reports (`:related_form_missing`)
+  when pasted into another. A form step alone has nothing under it, so
+  its paths never move.
+
   ## Step slugs
 
   A step — a form or subflow node — carries a `slug`, the handle a host
@@ -736,9 +767,12 @@ defmodule FormFlow.Data.Templates.Flows do
   what refers to a node is re-pointed as the row holding it is copied: a
   relationship's ends, the path a `:related_form` property value names
   (`FormFlow.Config.Property`), and the path of an ignored health entry
-  (`FormFlow.Data.Templates.Flows.Health.for_copy/2`). A path segment that
-  is not a node of the tree — a value pointing outside it — is kept as it
-  is, and health reports it.
+  (`FormFlow.Data.Templates.Flows.Health.for_copy/2`). A path pointing
+  outside the tree is kept as it is, and health reports it. Paths are
+  rebased as a root's (see "Pasting a step"): right for a root copy and for
+  an owned flow copied as a root; a copy made owned has no embedding step
+  yet, so paths inside it are one level shallow until an admin re-picks
+  them, which health reports too.
 
   ## Where the copy lands
 
@@ -858,12 +892,19 @@ defmodule FormFlow.Data.Templates.Flows do
   # and the relationships against the plan, rolling back on the first
   # refused insert. Returns the copy's id.
   defp copy_tree(flow, destination) do
-    tree = resolve_tree(flow.id)
+    root = root_flow(flow)
+    root_tree = resolve_tree(root.id)
+    tree = if root.id == flow.id, do: root_tree, else: resolve_tree(flow.id)
 
+    # The copy has no embedding step yet, so its paths are rebased as a
+    # root's: right for a root copy, and for an owned flow copied as a root;
+    # one level shallow for a copy made owned, until an admin re-picks
     context = %{
       plan: copy_plan(tree),
       tenant_id: destination.tenant_id,
-      prefixes: destination.prefixes
+      slug_prefixes: destination.prefixes,
+      source_prefixes: flow_prefixes(root_tree, flow.id),
+      destination_prefix: []
     }
 
     copied = %{flows: %{}, forms: %{}}
@@ -913,10 +954,13 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp replace_contents(flow, attrs) do
     if contents?(attrs) do
-      {nodes_attrs, intents} = pop_canvas_intents(Map.get(attrs, :nodes, []))
       kept_slugs = current_slugs(flow)
 
-      with :ok <- validate_flavor(flow, nodes_attrs),
+      # Pasted steps first: the paste gives an id-less pasted node its id,
+      # which the intents are keyed by
+      with {:ok, nodes_attrs} <- copy_pasted_steps(flow, Map.get(attrs, :nodes, [])),
+           {nodes_attrs, intents} <- pop_canvas_intents(nodes_attrs),
+           :ok <- validate_flavor(flow, nodes_attrs),
            :ok <- clear_contents(flow),
            {:ok, nodes} <- insert_contents(flow, Node, keep_slugs(nodes_attrs, kept_slugs)),
            {:ok, nodes} <- put_step_slugs(flow, nodes),
@@ -931,6 +975,129 @@ defmodule FormFlow.Data.Templates.Flows do
     else
       {:ok, flow}
     end
+  end
+
+  @source_gone "The step it was copied from no longer exists"
+  @source_other_tenant "The step it was copied from belongs to another tenant"
+
+  # A pasted step — a node whose data names the node it was copied from (see
+  # "Pasting a step") — has its entity copied here, before anything else
+  # reads the attrs, so it reaches the insert as an ordinary node pointing at
+  # fresh entities of this tree: the stale ids the canvas round-tripped would
+  # otherwise make it share the source's, or fail the ownership check. The
+  # marker is consumed. Each paste is its own copy — two pastes of one step
+  # in a save are two steps, not one shared — and a refused paste refuses
+  # the save, an error on :nodes like the flavor and ownership rules give.
+  defp copy_pasted_steps(flow, nodes_attrs) do
+    result =
+      Enum.reduce_while(nodes_attrs, [], fn attrs, done ->
+        case pasted_step(flow, attrs) do
+          {:ok, attrs} -> {:cont, [attrs | done]}
+          {:error, message} -> {:halt, {:error, message}}
+        end
+      end)
+
+    case result do
+      {:error, message} -> {:error, nodes_error(flow, message)}
+      done -> {:ok, Enum.reverse(done)}
+    end
+  end
+
+  # The attrs as they go to the insert: a pasted step's with its marker
+  # popped and its entity copied, any other node's untouched
+  defp pasted_step(flow, attrs) do
+    case pop_data_key(node_properties(attrs), "copy_of_node_id") do
+      {source_id, properties} when is_binary(source_id) and source_id != "" ->
+        copy_pasted_step(flow, put_node_properties(attrs, properties), source_id)
+
+      _no_marker ->
+        {:ok, attrs}
+    end
+  end
+
+  defp copy_pasted_step(flow, attrs, source_id) do
+    with {:ok, source} <- pasted_source(source_id),
+         source_flow = Repo.get(Flow, source.flow_id),
+         :ok <- same_tenant_as(flow, source_flow) do
+      pasted_id = node_id(attrs) || Ecto.UUID.generate()
+      source_root = root_flow(source_flow)
+      destination_root = root_flow(flow)
+      subtree = source.subflow_id && resolve_tree(source.subflow_id)
+
+      context = %{
+        plan: Map.put(copy_plan(subtree), source.id, pasted_id),
+        tenant_id: flow.tenant_id,
+        slug_prefixes: {source_root.slug, destination_root.slug},
+        source_prefixes: flow_prefixes(resolve_tree(source_root.id), source_flow.id),
+        destination_prefix:
+          List.first(flow_prefixes(resolve_tree(destination_root.id), flow.id)) || []
+      }
+
+      {entity, _copied} =
+        copy_entity(source, subtree, destination_root.id, context, %{flows: %{}, forms: %{}})
+
+      # The columns are given outright, so the changeset does not read the
+      # source's ids off the properties copy; the copy is dropped as well
+      attrs =
+        attrs
+        |> put_node_id(pasted_id)
+        |> put_node_properties(Map.drop(node_properties(attrs), ["form_id", "subflow_id"]))
+        |> put_node_reference(:subflow_id, entity.subflow_id)
+        |> put_node_reference(:form_id, entity.form_id)
+
+      {:ok, attrs}
+    end
+  end
+
+  # The clipboard outlives its source: a step deleted since it was copied,
+  # or copied before it was ever saved, is gone by the time of the paste
+  defp pasted_source(source_id) do
+    with {:ok, id} <- Ecto.UUID.cast(source_id),
+         %Node{} = source <- Repo.get(Node, id) do
+      {:ok, source}
+    else
+      _other -> {:error, @source_gone}
+    end
+  end
+
+  defp same_tenant_as(%Flow{tenant_id: tenant}, %Flow{tenant_id: tenant}), do: :ok
+  defp same_tenant_as(_flow, _source_flow), do: {:error, @source_other_tenant}
+
+  defp nodes_error(flow, message) do
+    flow
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.add_error(:nodes, message)
+  end
+
+  # The paths at which `flow_id` sits in a resolved tree — [] for the root
+  # itself, else the node ids from the root down to each step embedding it,
+  # one per step, in the order the tree stores its nodes
+  defp flow_prefixes(nil, _flow_id), do: []
+  defp flow_prefixes(tree, flow_id), do: flow_prefixes(tree, flow_id, [])
+
+  defp flow_prefixes(nil, _flow_id, _prefix), do: []
+
+  defp flow_prefixes(tree, flow_id, prefix) do
+    own = if tree.flow.id == flow_id, do: [prefix], else: []
+
+    own ++
+      Enum.flat_map(tree.nodes, fn node ->
+        flow_prefixes(tree.subflows[node.id], flow_id, prefix ++ [node.id])
+      end)
+  end
+
+  defp node_id(attrs), do: attrs[:id] || attrs["id"]
+
+  defp put_node_id(attrs, id), do: put_node_attr(attrs, :id, id)
+
+  defp put_node_reference(attrs, key, value), do: put_node_attr(attrs, key, value)
+
+  # Atom or string keys, matching what is already there, since cast/4
+  # refuses a mix
+  defp put_node_attr(attrs, key, value) do
+    if Map.has_key?(attrs, "properties"),
+      do: Map.put(attrs, to_string(key), value),
+      else: Map.put(attrs, key, value)
   end
 
   # What a canvas save edits *through* a node rather than on it (see "Canvas
@@ -1422,7 +1589,7 @@ defmodule FormFlow.Data.Templates.Flows do
       Flow.changeset(%Flow{id: copy_id}, %{
         name: name || source.name,
         label: source.label,
-        properties: rewrite_paths(properties, context.plan),
+        properties: rewrite_paths(properties, context),
         tenant_id: context.tenant_id,
         slug: slug,
         owner_flow_id: owner_id
@@ -1447,7 +1614,8 @@ defmodule FormFlow.Data.Templates.Flows do
             id: context.plan[node.id],
             flow_id: into_id,
             tenant_id: context.tenant_id,
-            slug: Slug.available(Node, rewritten(node.slug, context.prefixes), context.tenant_id),
+            slug:
+              Slug.available(Node, rewritten(node.slug, context.slug_prefixes), context.tenant_id),
             # Explicit, even when unchanged: the source properties still carry
             # the OLD ids, and the changeset would take those copies into the
             # columns if the columns arrived nil, re-pointing the copy at the
@@ -1532,7 +1700,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp copy_form_lineage(%Templates.Form{} = owned, domain_id, context) do
     case Templates.Forms.copy(owned,
            owner_flow_id: domain_id,
-           properties: rewrite_paths(owned.properties, context.plan)
+           properties: rewrite_paths(owned.properties, context)
          ) do
       {:ok, copy} -> copy.id
       {:error, changeset} -> Repo.rollback(changeset)
@@ -1542,28 +1710,49 @@ defmodule FormFlow.Data.Templates.Flows do
   # Property values that are paths — node ids joined by "/", how a
   # :related_form value names a position (FormFlow.Config.Property) —
   # re-pointed at the copied nodes, wherever they sit in a flow's or form's
-  # properties. A segment the plan does not know is kept: the path leads
-  # outside what was copied, which is right when the copy lands in the same
-  # tree, and a stale choice health reports when it does not. A string is a
-  # path only when every segment is an id and one at least is a node being
-  # copied — nothing else in a flow's or form's data is a chain of its node
-  # ids. Lists are left alone: the health records inside a root's properties
-  # hold paths as lists, and Health.for_copy/2 is what re-points those.
-  defp rewrite_paths(properties, plan) when is_map(properties) do
-    Map.new(properties, fn {key, value} -> {key, rewrite_paths(value, plan)} end)
+  # properties. Only a path into what is being copied moves: the source
+  # flow's prefix, then a node in the plan. It is rebased onto the
+  # destination flow's prefix with the rest mapped, so a subflow pasted a
+  # level deeper still finds its own forms. Any other path is left as it is
+  # — still right when the copy lands in the same tree, a stale choice
+  # health reports when it does not. A string is a path only when every
+  # segment is an id. Lists are left alone: the health records inside a
+  # root's properties hold paths as lists, and Health.for_copy/2 is what
+  # re-points those.
+  defp rewrite_paths(properties, context) when is_map(properties) do
+    Map.new(properties, fn {key, value} -> {key, rewrite_paths(value, context)} end)
   end
 
-  defp rewrite_paths(value, plan) when is_binary(value) do
+  defp rewrite_paths(value, context) when is_binary(value) do
     segments = String.split(value, "/")
 
-    if Enum.all?(segments, &uuid?/1) and Enum.any?(segments, &Map.has_key?(plan, &1)) do
-      Enum.map_join(segments, "/", &Map.get(plan, &1, &1))
+    with true <- Enum.all?(segments, &uuid?/1),
+         rebased when is_list(rebased) <- rebase_path(segments, context) do
+      Enum.join(rebased, "/")
     else
-      value
+      _kept -> value
     end
   end
 
-  defp rewrite_paths(value, _plan), do: value
+  defp rewrite_paths(value, _context), do: value
+
+  # A source flow embedded at two positions has two prefixes; a path under
+  # either points into the copy
+  defp rebase_path(segments, context) do
+    Enum.find_value(context.source_prefixes, fn prefix ->
+      case strip_prefix(segments, prefix) do
+        [head | _rest] = rest when is_map_key(context.plan, head) ->
+          context.destination_prefix ++ Enum.map(rest, &Map.get(context.plan, &1, &1))
+
+        _elsewhere ->
+          nil
+      end
+    end)
+  end
+
+  defp strip_prefix(segments, []), do: segments
+  defp strip_prefix([same | segments], [same | prefix]), do: strip_prefix(segments, prefix)
+  defp strip_prefix(_segments, _prefix), do: :elsewhere
 
   defp uuid?(segment), do: match?({:ok, _uuid}, Ecto.UUID.cast(segment))
 

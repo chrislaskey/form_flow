@@ -574,6 +574,13 @@ defmodule Demo.FormFlowFlowsTest do
       # The source's own value is untouched
       assert Forms.get(check.form_id).properties["form_type_property_values"]["source"] ==
                "#{review_node.id}/#{about.id}"
+
+      # The subflow copied as a root of its own: the path loses the prefix
+      {:ok, promoted} = Flows.copy(Flows.get(review.id))
+      [promoted_about, promoted_check] = Enum.sort_by(promoted.nodes, &step_label_of/1)
+
+      assert Forms.get(promoted_check.form_id).properties["form_type_property_values"]["source"] ==
+               promoted_about.id
     end
 
     test "copy copies an entity two steps share once, and both copied steps point at it" do
@@ -638,6 +645,201 @@ defmodule Demo.FormFlowFlowsTest do
       assert promoted.slug == "documents"
       assert promoted.name == "Documents"
       assert [%{slug: "documents_user-inform"}] = promoted.nodes
+    end
+
+    test "a pasted form step gets its own copy of an owned form, named by its label; a catalog form stays shared" do
+      {:ok, flow} = Flows.create(%{name: "Intake"})
+      {:ok, catalog} = Forms.create(%{name: "Shared W-2"})
+
+      {:ok, _} =
+        Flows.update(flow, %{
+          nodes: [form_step("Owner"), Map.put(form_step("W-2"), :form_id, catalog.id)]
+        })
+
+      [owner, w2] = Enum.sort_by(Flows.get(flow.id).nodes, &step_label_of/1)
+
+      {:ok, _} =
+        Flows.update(Flows.get(flow.id), %{
+          nodes: [
+            form_step("Owner", owner),
+            form_step("W-2", w2),
+            paste_of(form_step("Owner again"), owner),
+            paste_of(form_step("W-2 again"), w2)
+          ]
+        })
+
+      nodes = Flows.get(flow.id).nodes
+      assert length(nodes) == 4
+      owner_again = Enum.find(nodes, &(step_label_of(&1) == "Owner again"))
+      w2_again = Enum.find(nodes, &(step_label_of(&1) == "W-2 again"))
+
+      # The owned form is copied, with provenance, and takes the pasted label
+      assert owner_again.form_id != owner.form_id
+      copied = Forms.get(owner_again.form_id)
+      assert copied.copied_from_form_id == owner.form_id
+      assert copied.owner_flow_id == flow.id
+      assert copied.name == "Owner again"
+      assert Forms.get(owner.form_id).name == "Owner"
+
+      # The catalog form is the same reference
+      assert w2_again.form_id == catalog.id
+
+      # The marker is consumed, the step has a default slug, and the
+      # properties copy names the copy, not the source
+      refute Map.has_key?(owner_again.properties["data"], "copy_of_node_id")
+      assert owner_again.slug == "intake_owner-again"
+      assert owner_again.properties["form_id"] == owner_again.form_id
+
+      # Saved again unchanged, nothing is copied twice
+      {:ok, _} =
+        Flows.update(Flows.get(flow.id), %{
+          nodes: Enum.map(nodes, &form_step(step_label_of(&1), &1))
+        })
+
+      assert length(Flows.get(flow.id).nodes) == 4
+
+      assert Forms.get(owner_again.form_id).id ==
+               Flows.get(flow.id)
+               |> Map.get(:nodes)
+               |> Enum.find(&(&1.id == owner_again.id))
+               |> Map.get(:form_id)
+    end
+
+    test "a pasted subflow step copies the subflow whole, with related-form paths rebased to where it lands" do
+      # Dog License: T "Application" → Q { O "Owner" }, S "Review" → R { A "About", C "Check" (reviews S/A), V "Verify" (reviews T/O) }
+      {:ok, dog} = Flows.create(%{name: "Dog License", label: "subflows"})
+
+      {:ok, _} =
+        Flows.update(dog, %{nodes: [subflow_step("Application"), subflow_step("Review")]})
+
+      [t, s] = Enum.sort_by(Flows.get(dog.id).nodes, &step_label_of/1)
+      q = Flows.get(t.subflow_id)
+      r = Flows.get(s.subflow_id)
+      {:ok, _} = Flows.update(q, %{nodes: [form_step("Owner")]})
+      [o] = Flows.get(q.id).nodes
+
+      {:ok, _} =
+        Flows.update(r, %{nodes: [form_step("About"), form_step("Check"), form_step("Verify")]})
+
+      [a, c, v] = Enum.sort_by(Flows.get(r.id).nodes, &step_label_of/1)
+
+      review_of = fn form_id, path ->
+        Forms.update(Forms.get(form_id), %{
+          properties: %{
+            "form_type" => "review",
+            "form_type_property_values" => %{"source" => path}
+          }
+        })
+      end
+
+      {:ok, _} = review_of.(c.form_id, "#{s.id}/#{a.id}")
+      {:ok, _} = review_of.(v.form_id, "#{t.id}/#{o.id}")
+
+      source_of = fn node ->
+        Forms.get(node.form_id).properties["form_type_property_values"]["source"]
+      end
+
+      copied_review = fn pasted ->
+        copy = Flows.get(pasted.subflow_id)
+        [a2, c2, v2] = Enum.sort_by(copy.nodes, &step_label_of/1)
+        {copy, a2, c2, v2}
+      end
+
+      # 3. Review pasted into Cat License at root level
+      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
+
+      intake_of_subflows =
+        put_in(subflow_step("Intake"), [:properties, "data", "subflow_label"], "subflows")
+
+      {:ok, _} =
+        Flows.update(cat, %{nodes: [intake_of_subflows, paste_of(subflow_step("Review"), s)]})
+
+      [intake, pasted] = Enum.sort_by(Flows.get(cat.id).nodes, &step_label_of/1)
+      {copy, a2, c2, v2} = copied_review.(pasted)
+      assert copy.owner_flow_id == cat.id
+      assert copy.id != r.id
+      assert pasted.slug == "cat-license_review"
+      assert a2.slug == "cat-license_about"
+      assert source_of.(c2) == "#{pasted.id}/#{a2.id}"
+      # Verify pointed outside what was copied: kept, stale here, for health to report
+      assert source_of.(v2) == "#{t.id}/#{o.id}"
+      assert Forms.get(c2.form_id).copied_from_form_id == c.form_id
+      # The source is untouched
+      assert source_of.(c) == "#{s.id}/#{a.id}"
+
+      # 4. Review pasted a level deeper, into Cat's Intake: the prefix is prepended
+      {:ok, _} =
+        Flows.update(Flows.get(intake.subflow_id), %{nodes: [paste_of(subflow_step("Review"), s)]})
+
+      [deep] = Flows.get(intake.subflow_id).nodes
+      {_copy, a3, c3, _v3} = copied_review.(deep)
+      assert source_of.(c3) == "#{intake.id}/#{deep.id}/#{a3.id}"
+
+      # 5. Review pasted beside itself in Dog License
+      {:ok, _} =
+        Flows.update(Flows.get(dog.id), %{
+          nodes: [
+            subflow_step("Application", t),
+            subflow_step("Review", s),
+            paste_of(subflow_step("Review 2"), s)
+          ]
+        })
+
+      beside = Enum.find(Flows.get(dog.id).nodes, &(step_label_of(&1) == "Review 2"))
+      {_copy, a4, c4, v4} = copied_review.(beside)
+      assert source_of.(c4) == "#{beside.id}/#{a4.id}"
+      assert source_of.(v4) == "#{t.id}/#{o.id}"
+
+      # 2. Check alone pasted into the sibling subflow: a form step moves no
+      # paths. The pasted node's data carries the type the canvas showed on
+      # the source — a form node saved without one is set to the default type
+      check_too = put_in(form_step("Check too"), [:properties, "data", "form_type"], "review")
+
+      {:ok, _} =
+        Flows.update(Flows.get(q.id), %{nodes: [form_step("Owner", o), paste_of(check_too, c)]})
+
+      check_too = Enum.find(Flows.get(q.id).nodes, &(step_label_of(&1) == "Check too"))
+      assert source_of.(check_too) == "#{s.id}/#{a.id}"
+    end
+
+    test "a paste is refused when its source is gone or another tenant's, and nothing is written" do
+      {:ok, flow} = Flows.create(%{name: "Intake"})
+      {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner")]})
+      [owner] = Flows.get(flow.id).nodes
+
+      pasted = fn source_id ->
+        %{
+          properties: %{
+            "type" => "step",
+            "data" => %{"label" => "Pasted", "kind" => "form", "copy_of_node_id" => source_id}
+          }
+        }
+      end
+
+      for gone <- [Ecto.UUID.generate(), "3"] do
+        assert {:error, changeset} =
+                 Flows.update(Flows.get(flow.id), %{
+                   nodes: [form_step("Owner", owner), pasted.(gone)]
+                 })
+
+        assert %{nodes: ["The step it was copied from no longer exists"]} = errors_on(changeset)
+      end
+
+      {:ok, theirs} = Flows.create(%{name: "Intake", tenant_id: "globex"})
+      {:ok, _} = Flows.update(theirs, %{nodes: [form_step("Their owner")]})
+      [their_owner] = Flows.get(theirs.id).nodes
+
+      assert {:error, changeset} =
+               Flows.update(Flows.get(flow.id), %{
+                 nodes: [form_step("Owner", owner), pasted.(their_owner.id)]
+               })
+
+      assert %{nodes: ["The step it was copied from belongs to another tenant"]} =
+               errors_on(changeset)
+
+      assert [%{id: id}] = Flows.get(flow.id).nodes
+      assert id == owner.id
+      assert length(Forms.list()) == 0
     end
 
     test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do
@@ -1145,4 +1347,9 @@ defmodule Demo.FormFlowFlowsTest do
   defp step_label(%Flow{nodes: [node]}), do: get_in(node.properties, ["data", "label"])
 
   defp step_label_of(node), do: get_in(node.properties, ["data", "label"])
+
+  # A step the canvas pasted: a new node naming the node it was copied from
+  defp paste_of(step_attrs, source_node) do
+    put_in(step_attrs, [:properties, "data", "copy_of_node_id"], source_node.id)
+  end
 end

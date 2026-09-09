@@ -33,6 +33,31 @@ root's prefix. A refused insert — a taken `slug:` — returns
 properties in place of the source's, which is how the flow copy hands
 over re-pointed values in one write.
 
+### A step can be pasted
+
+A node saved with `data.copy_of_node_id` — the id of the node it was
+copied from — is a **pasted step**: before anything else in the save reads
+the nodes, `Flows.update/2` copies the entity behind the source for it, the
+way `copy/2` copies a tree. An owned form becomes a new lineage owned by
+this tree, with provenance; a subflow is copied whole, its steps' slugs
+under this root's prefix; a catalog form stays the same shared reference.
+The marker is consumed, never stored, so nothing is copied twice; the
+pasted step's label and type write through to the copy like any step's.
+The save is refused with an error on `:nodes` when the source no longer
+exists or belongs to another tenant. The canvas side — Copy on a node,
+Paste onto a canvas — is not built yet; this is the data layer it will
+save through.
+
+A `:related_form` path inside what is copied is **rebased to where the
+paste lands**: the source flow's prefix is swapped for the destination
+flow's and the copied nodes mapped, so a Review pasted into another
+flow's subflow still reviews its own copied About. A path pointing outside
+what was copied is kept as it is — still right anywhere in the same tree,
+a stale choice health reports in another. `copy/2` rebases the same way,
+which also fixes an owned subflow copied as a root: its forms' paths lose
+the prefix they had under the old root instead of keeping a segment the
+new root does not have.
+
 ### `Core.badge` has a solid variant
 
 `variant="solid"` drops the default `badge-soft`, the way `button`'s
