@@ -23,9 +23,10 @@ defmodule FormFlow.Data.Templates.Flow do
   the same owner, so deleting the domain is one indexed operation. `nil` means
   the flow is a root flow. Every subflow — a flow another flow embeds through
   `FormFlow.Data.Templates.Flow.Node`'s `subflow_id` — is owned by the root of
-  the tree it sits in; a subflow wanted in a second tree is copied there
-  (`FormFlow.Data.Templates.Flows.copy/2`), never shared. Sharing by
-  reference is for forms alone (`FormFlow.Data.Templates.Form`).
+  the tree it sits in; a subflow wanted in a second tree is copied there by
+  pasting its step (`FormFlow.Data.Templates.Flows`, "Pasting a step"),
+  never shared. Sharing by reference is for forms alone
+  (`FormFlow.Data.Templates.Form`).
 
   ## Tenancy
 

@@ -45,6 +45,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:subflow_missing` | error | a connected subflow step points at no flow, or at one that could not be resolved |
   | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value — the Review type's "Form to review", say |
   | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches — either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
+  | `:related_form_shared` | error | a catalog form — one lineage shared by every step reusing it — has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
   | `:unconnected` | warning | a node no Start reaches; users can never get there |
   | `:dead_end` | warning | a node Start reaches that nothing follows, so End never waits for it |
   | `:no_steps` | warning | Start reaches End with no form or subflow step between them |
@@ -875,12 +876,50 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         ]
 
       {:ok, type} ->
+        shared = shared_form_results(node, form, type, values, scope)
+
+        # The shared entry says why the path is wrong here; the missing
+        # entry would say the same thing less well, so it stands down
+        properties =
+          if shared == [],
+            do: type.properties,
+            else: Enum.reject(type.properties, &(&1.type == :related_form))
+
         [:pass] ++
-          property_results(type.properties, values, opts, fn level, code, text ->
+          shared ++
+          property_results(properties, values, opts, fn level, code, text ->
             node_entry(node, scope, level, code, text)
           end)
     end
   end
+
+  # A catalog form is one lineage for every step reusing it, with one place
+  # for its type's property values, so a `:related_form` value — a position
+  # in one flow — can be right in one flow only; every other sees a stale
+  # pick, and re-picking there breaks the first. The form pages refuse the
+  # choice (`FormFlow.Web.Templates.Forms.Edit`); this catches what arrived
+  # otherwise — a copied flow whose step reuses such a form, a host writing
+  # properties directly. A type that merely declares the property, unset,
+  # points at nothing and is fine.
+  defp shared_form_results(node, %{owner_flow_id: nil}, type, values, scope) do
+    case Enum.find(type.properties, &(&1.type == :related_form and not blank?(values[&1.id]))) do
+      nil ->
+        []
+
+      property ->
+        [
+          node_entry(
+            node,
+            scope,
+            :error,
+            :related_form_shared,
+            "is a shared form that points “#{property.name}” at a step of one flow"
+          )
+        ]
+    end
+  end
+
+  defp shared_form_results(_node, _owned, _type, _values, _scope), do: []
 
   defp subflow_results(node, scope, opts) do
     case scope.tree.subflows[node.id] do

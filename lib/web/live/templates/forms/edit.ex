@@ -172,7 +172,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> put_form_name(socket.assigns.form, socket.assigns.node, name)
       |> put_form_slug(socket.assigns.node, payload.data[:slug])
 
-    with {:ok, node} <- update_step(socket.assigns.node, name, payload.data[:slug]),
+    with :ok <- shareable(socket.assigns.form, identity.properties, socket.assigns.form_types),
+         {:ok, node} <- update_step(socket.assigns.node, name, payload.data[:slug]),
          {:ok, form} <- Forms.update(socket.assigns.form, identity),
          {:ok, version} <-
            Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
@@ -198,6 +199,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
            error:
              "This draft changed under you — someone else saved it. " <>
                "Reload to pick up their version.",
+           notice: nil
+         )}
+
+      {:error, {:related_form_shared, property}} ->
+        {:ok,
+         assign(socket,
+           error:
+             "“#{socket.assigns.form.name}” is shared by every flow that uses it, so it can't " <>
+               "point “#{property.name}” at a step of one flow. Copy the form into this flow " <>
+               "instead — the Copy form choice on the step's page — or clear the choice.",
            notice: nil
          )}
 
@@ -802,6 +813,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # happened to be at save time. A type's property values are replaced whole,
   # so switching types leaves nothing of the old one behind — and a type with
   # nothing entered stores no values key at all.
+  # A catalog form is one lineage for every step reusing it, so a
+  # `:related_form` value — a position in one flow — cannot be its: the rule
+  # `reuse_form/3` applies when a step picks such a form, applied from this
+  # side when such a form picks a step. The type alone is fine; it is the
+  # choice that points somewhere. `FormFlow.Data.Templates.Flows.Health`
+  # reports the state should it arrive another way.
+  defp shareable(%{owner_flow_id: nil} = form, properties, form_types) do
+    form = %{form | properties: properties}
+    values = FormFlow.Config.Forms.Type.property_values(form)
+    property = FormFlow.Config.Forms.Type.related_form_property(form_types, form)
+
+    if property && values[property.id] not in [nil, ""],
+      do: {:error, {:related_form_shared, property}},
+      else: :ok
+  end
+
+  defp shareable(_owned, _properties, _form_types), do: :ok
+
   defp template_properties(form, nil, _values) do
     form.properties
     |> Map.delete("form_type")

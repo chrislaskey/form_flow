@@ -19,8 +19,8 @@ defmodule FormFlow.Data.Templates.Flows do
   ownership root — flat, not the immediate parent), it is cleaned up
   automatically when it stops being referenced (see `update/2`) or when its
   root is deleted, and a save refuses a subflow step pointing at a flow the
-  tree does not own. A subflow wanted elsewhere is copied there with
-  `copy/2`. Sharing by reference is for forms alone (see "Reusing a
+  tree does not own. A subflow wanted elsewhere is copied there by pasting
+  its step (see "Pasting a step"). Sharing by reference is for forms alone (see "Reusing a
   catalog form"): a form is a leaf, one lineage and one version pin per
   instance, while a subflow is a subtree — its own forms, the paths through
   it, its perspectives and type — and sharing one across trees makes every
@@ -772,31 +772,24 @@ defmodule FormFlow.Data.Templates.Flows do
   (`FormFlow.Config.Property`), and the path of an ignored health entry
   (`FormFlow.Data.Templates.Flows.Health.for_copy/2`). A path pointing
   outside the tree is kept as it is, and health reports it. Paths are
-  rebased as a root's (see "Pasting a step"): right for a root copy and for
-  an owned flow copied as a root; a copy made owned has no embedding step
-  yet, so paths inside it are one level shallow until an admin re-picks
-  them, which health reports too.
+  rebased as a root's (see "Pasting a step"), which the copy always is.
 
   ## Where the copy lands
 
-  Beside the source, as a root flow, by default. `owner_flow_id:` makes it
-  an owned subflow of that flow's tree — of the ownership root, when the
-  flow given is itself owned — which must be in the source's tenant:
+  Beside the source, as a root flow — of the source's tenant, in the
+  source's flavor. The source may itself be an owned subflow, which then
+  becomes a root of its own. A subflow wanted *inside* a tree is not made
+  here: pasting its step on that tree's canvas copies it and points a step
+  at it in one save (see "Pasting a step"), where a copy made owned with no
+  step pointing at it would be swept on the tree's next save.
 
-    * `{:error, :owner_not_found}` — no flow has that id
-    * `{:error, :other_tenant}` — the owner's root is another tenant's,
-      the rule `reuse_form/3` applies to a form
-
-  A root copy's slug is `opts[:slug]`, else the source's with a free `-N`
+  The copy's slug is `opts[:slug]`, else the source's with a free `-N`
   suffix (`FormFlow.Data.Templates.Slug.available/3`), or a default from
-  its name when the source, being owned, had none. An owned copy gets no
-  slug unless one is given, as an owned flow created from scratch does.
-  Copied steps keep the shape of their slugs: a default under the source
-  tree's root slug is rewritten under the copy's — `dla2026_user-inform`
-  under a copy slugged `dla2027` becomes `dla2027_user-inform`, and under a
-  copy made owned by `cat-license` becomes `cat-license_user-inform`, the
-  default a step made in that tree would get — and a hand-set slug gets a
-  free suffix. Owned subflows and forms have no slug to copy.
+  its name when the source, being owned, had none (`copy_slug/1`). Copied
+  steps keep the shape of their slugs: a default under the source tree's
+  root slug is rewritten under the copy's — `dla2026_user-inform` under a
+  copy slugged `dla2027` becomes `dla2027_user-inform` — and a hand-set slug
+  gets a free suffix. Owned subflows and forms have no slug to copy.
 
   `name:` names the copy; the subflows under it keep their own names, as
   their steps keep their labels. Without it the copy takes the source's
@@ -807,22 +800,19 @@ defmodule FormFlow.Data.Templates.Flows do
 
       {:ok, copy} = FormFlow.Data.Templates.Flows.copy(flow, name: "Dog License 2027", slug: "dla2027")
 
-      {:ok, copy} = FormFlow.Data.Templates.Flows.copy(flow, owner_flow_id: root.id)
-
   The source's cached health status does not come along — it describes a
   check the copy has not had — but its ignored entries do, re-pointed at
   the copied nodes: the copy has the source's shape, so the same findings
   are fine on purpose. Given both `flow_types:` and `form_types:` — the
   host's lists — the copy is checked once and its status cached
-  (`FormFlow.Data.Templates.Flows.Health.refresh/2`) — on the copy when it
-  is a root, on the destination root when the copy is made owned, since
-  health is always the root's; given one or neither it is not, since a
-  check with the library's default types for either list could cache a type
-  warning the host's lists would not raise.
+  (`FormFlow.Data.Templates.Flows.Health.refresh/2`); given one or neither
+  it is not, since a check with the library's default types for either list
+  could cache a type warning the host's lists would not raise.
   """
   def copy(%Flow{} = flow, opts \\ []) do
-    with {:ok, destination} <- copy_destination(flow, opts),
-         {:ok, copy_id} <- Repo.transaction(fn -> copy_tree(flow, destination) end) do
+    destination = copy_destination(flow, opts)
+
+    with {:ok, copy_id} <- Repo.transaction(fn -> copy_tree(flow, destination) end) do
       case {opts[:flow_types], opts[:form_types]} do
         {flow_types, form_types} when is_list(flow_types) and is_list(form_types) ->
           Health.refresh(copy_id, flow_types: flow_types, form_types: form_types)
@@ -835,41 +825,17 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # Where the copy lands — beside the source as a root, or inside a tree as
-  # an owned subflow — and what follows from that: the copy's name and slug,
-  # its tenant, and the {old, new} root prefixes its steps' default slugs
-  # are rewritten by. An owned source has no slug of its own, so the old
-  # prefix is always its root's.
+  # The copy's name and slug, and the {old, new} root prefixes its steps'
+  # default slugs are rewritten by. An owned source has no slug of its own,
+  # so the old prefix is always its root's.
   defp copy_destination(flow, opts) do
-    old_prefix = root_flow(flow).slug
-    name = Keyword.get(opts, :name) || flow.name
+    slug = Keyword.get(opts, :slug) || copy_slug(flow)
 
-    case Keyword.get(opts, :owner_flow_id) do
-      nil ->
-        slug = Keyword.get(opts, :slug) || copy_slug(flow)
-
-        {:ok,
-         %{
-           owner_id: nil,
-           name: name,
-           slug: slug,
-           tenant_id: flow.tenant_id,
-           prefixes: {old_prefix, slug}
-         }}
-
-      owner_id ->
-        with {:ok, root} <- destination_root(owner_id),
-             :ok <- same_tenant(root, flow) do
-          {:ok,
-           %{
-             owner_id: root.id,
-             name: name,
-             slug: Keyword.get(opts, :slug),
-             tenant_id: root.tenant_id,
-             prefixes: {old_prefix, root.slug}
-           }}
-        end
-    end
+    %{
+      name: Keyword.get(opts, :name) || flow.name,
+      slug: slug,
+      prefixes: {root_flow(flow).slug, slug}
+    }
   end
 
   @doc """
@@ -882,20 +848,6 @@ defmodule FormFlow.Data.Templates.Flows do
     Slug.available(Flow, flow.slug || Slug.segment(flow.name, "flow"), flow.tenant_id)
   end
 
-  # Ownership is flat: whichever flow of a tree is named, the copy is owned
-  # by the tree's root
-  defp destination_root(owner_id) do
-    with {:ok, id} <- Ecto.UUID.cast(owner_id),
-         %Flow{} = owner <- Repo.get(Flow, id) do
-      {:ok, root_flow(owner)}
-    else
-      _other -> {:error, :owner_not_found}
-    end
-  end
-
-  defp same_tenant(%Flow{tenant_id: tenant}, %Flow{tenant_id: tenant}), do: :ok
-  defp same_tenant(_root, _flow), do: {:error, :other_tenant}
-
   # The copy operation, inside the caller's transaction: plan every node's
   # new id across the whole tree, then copy the flow, everything it owns,
   # and the relationships against the plan, rolling back on the first
@@ -905,21 +857,18 @@ defmodule FormFlow.Data.Templates.Flows do
     root_tree = resolve_tree(root.id)
     tree = if root.id == flow.id, do: root_tree, else: resolve_tree(flow.id)
 
-    # The copy has no embedding step yet, so its paths are rebased as a
-    # root's: right for a root copy, and for an owned flow copied as a root;
-    # one level shallow for a copy made owned, until an admin re-picks
+    # The copy is a root, so its paths are rebased as a root's — which also
+    # drops the old root's prefix from an owned source's
     context = %{
       plan: copy_plan(tree),
-      tenant_id: destination.tenant_id,
+      tenant_id: flow.tenant_id,
       slug_prefixes: destination.prefixes,
       source_prefixes: flow_prefixes(root_tree, flow.id),
       destination_prefix: []
     }
 
     copied = %{flows: %{}, forms: %{}}
-
-    {copy_id, _copied} =
-      copy_flow(tree, destination.owner_id, destination.slug, destination.name, context, copied)
+    {copy_id, _copied} = copy_flow(tree, nil, destination.slug, destination.name, context, copied)
 
     copy_id
   end
@@ -1406,7 +1355,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # another root would be deleted out from under this one with its tree, and
   # a root flow is nobody's subflow. A step without a subflow yet gets one at
   # save (create_missing_subflows/2); the way to use a flow from elsewhere is
-  # copy/2.
+  # to paste its step (copy_pasted_steps/2).
   defp validate_subflow_ownership(flow, nodes) do
     root_id = flow.owner_flow_id || flow.id
     referenced = for %{subflow_id: id} <- nodes, is_binary(id), uniq: true, do: id
@@ -1628,9 +1577,8 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # Copies one flow and, recursively, everything it owns, against the plan.
-  # `owner_id` is nil for a root copy, else the ownership root of the tree
-  # the copy joins — and, ownership being flat, the root everything under
-  # the copy is owned by is that root, or the copy itself when it is one.
+  # `owner_id` is nil for the copy itself, a root, and — ownership being
+  # flat — that root for everything copied under it.
   # `copied` holds the subflows and owned forms copied so far by source id,
   # so an entity two steps share is copied once. Returns {copy_id, copied}.
   defp copy_flow(tree, owner_id, slug, name, context, copied) do
@@ -1638,8 +1586,8 @@ defmodule FormFlow.Data.Templates.Flows do
     copy_id = Ecto.UUID.generate()
     domain_id = owner_id || copy_id
 
-    # Health bookkeeping is the root's: a root copy carries the source's
-    # ignores re-pointed, an owned copy none — its root has its own
+    # Health bookkeeping is the root's: the copy carries the source's
+    # ignores re-pointed, a subflow copied under it none
     properties =
       case owner_id do
         nil -> Health.for_copy(source.properties, context.plan)

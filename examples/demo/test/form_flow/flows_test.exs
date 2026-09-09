@@ -528,17 +528,6 @@ defmodule Demo.FormFlowFlowsTest do
       assert second.slug == "dla2026-2"
       [second_node] = second.nodes
       assert second_node.slug == "dla2026-2_documents"
-
-      # Copied into another tree, the steps' defaults take that tree's root
-      # prefix — what a step made there would get — and the copy has no slug;
-      # the hand-set one is on its fourth holder by now
-      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
-      {:ok, into} = Flows.copy(Flows.get(documents.id), owner_flow_id: cat.id)
-      assert into.slug == nil
-      assert into.owner_flow_id == cat.id
-
-      assert Enum.sort(Enum.map(into.nodes, & &1.slug)) ==
-               ["cat-license_user-inform", "owner-contact-4"]
     end
 
     test "copy re-points related-form paths at the copied nodes, across levels" do
@@ -605,31 +594,6 @@ defmodule Demo.FormFlowFlowsTest do
       assert [copied_form_id] = copy.nodes |> Enum.map(& &1.form_id) |> Enum.uniq()
       assert copied_form_id != owner_step.form_id
       assert Forms.get(copied_form_id).copied_from_form_id == owner_step.form_id
-    end
-
-    test "copy into a tree is owned by its root, whichever flow of the tree is named" do
-      {:ok, source} = Flows.create(%{name: "Documents"})
-      {:ok, _} = Flows.update(source, %{nodes: [form_step("Proof of address")]})
-
-      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
-      {:ok, _} = Flows.update(cat, %{nodes: [subflow_step("Intake")]})
-      [intake_node] = Flows.get(cat.id).nodes
-
-      {:ok, into} = Flows.copy(Flows.get(source.id), owner_flow_id: intake_node.subflow_id)
-      assert into.owner_flow_id == cat.id
-      assert into.slug == nil
-      assert [step] = into.nodes
-      assert step.slug == "cat-license_poa"
-      assert Forms.get(step.form_id).owner_flow_id == cat.id
-
-      assert Flows.copy(Flows.get(source.id), owner_flow_id: Ecto.UUID.generate()) ==
-               {:error, :owner_not_found}
-
-      assert Flows.copy(Flows.get(source.id), owner_flow_id: "not-an-id") ==
-               {:error, :owner_not_found}
-
-      {:ok, theirs} = Flows.create(%{name: "Cat License", tenant_id: "globex"})
-      assert Flows.copy(Flows.get(source.id), owner_flow_id: theirs.id) == {:error, :other_tenant}
     end
 
     test "an owned flow copied as a root takes a slug from its name, and its steps follow" do
@@ -1045,14 +1009,19 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(root.id).nodes == []
       assert Flows.get(theirs.id).owner_flow_id == other_root.id
 
-      # Copying is the way to use it here
-      {:ok, mine} = Flows.copy(theirs, owner_flow_id: root.id)
+      # Pasting its step is the way to use it here: the copy and the step
+      # pointing at it land in one save
+      their_node = insert_subflow_node(other_root, theirs)
 
       assert {:ok, _} =
                Flows.update(Flows.get(root.id), %{
-                 nodes: [%{properties: %{"type" => "subflow", "subflow_id" => mine.id}}],
+                 nodes: [paste_of(subflow_step("Theirs"), their_node)],
                  relationships: []
                })
+
+      assert [mine] = Flows.get(root.id).nodes
+      assert mine.subflow_id != theirs.id
+      assert Flows.get(mine.subflow_id).owner_flow_id == root.id
     end
 
     test "saving contents garbage-collects unreachable owned subflows" do

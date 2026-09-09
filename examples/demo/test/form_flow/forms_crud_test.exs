@@ -437,6 +437,46 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Add element"
   end
 
+  test "a catalog form cannot be pointed at a step; the copy is the way", %{conn: conn} do
+    {:ok, shared} = Forms.create(%{name: "Check owner", properties: %{"form_type" => "review"}})
+    {:ok, flow} = Flows.create(%{name: "Intake"})
+
+    about = %{properties: %{"type" => "step", "data" => %{"label" => "About", "kind" => "form"}}}
+
+    check = %{
+      form_id: shared.id,
+      properties: %{"type" => "step", "data" => %{"label" => "Check", "kind" => "form"}}
+    }
+
+    {:ok, _} = Flows.update(flow, %{nodes: [about, check]})
+    about_node = Enum.find(Flows.get(flow.id).nodes, &(&1.form_id != shared.id))
+    check_node = Enum.find(Flows.get(flow.id).nodes, &(&1.form_id == shared.id))
+    [draft] = Forms.list_versions(shared.id)
+
+    {:ok, view, _html} =
+      live(
+        conn,
+        "/admin/flows/#{flow.id}/nodes/#{check_node.id}/form/versions/#{draft.id}/edit?start=custom"
+      )
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Check owner",
+        "form_type" => "review",
+        "property_source" => about_node.id,
+        "definition" => ~s({"elements": []})
+      }
+    })
+
+    # The save lands through send_update, so the page is read after it
+    html = render(view)
+    assert html =~ "is shared by every flow that uses it"
+    assert html =~ "Copy the form into this flow instead"
+    refute Map.has_key?(Forms.get(shared.id).properties, "form_type_property_values")
+  end
+
   test "the new page generates a slug, or keeps the one typed", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/admin/forms/new")
 
@@ -1326,7 +1366,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     start_node = build_node(root, ["Start"], "Start")
     {intake_form, _v1} = published_form()
     intake = build_node(root, ["Form"], "Intake", %{form_id: intake_form.id})
-    {review_form, _v1} = published_form()
+    # The reviewing form is the tree's own: a shared one could not point at a step
+    {review_form, _v1} = published_form(owner_flow_id: root.id)
     review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
     edge(root, start_node, intake)
     edge(root, intake, review)
@@ -1868,8 +1909,10 @@ defmodule Demo.FormFlowFormsCrudTest do
       )
   end
 
-  defp published_form do
-    {:ok, form} = Forms.create(%{name: "Form #{System.unique_integer([:positive])}"})
+  defp published_form(attrs \\ []) do
+    {:ok, form} =
+      Forms.create(Map.new([name: "Form #{System.unique_integer([:positive])}"] ++ attrs))
+
     [draft] = Forms.list_versions(form.id)
     {:ok, v1} = Forms.update_status(draft, :published)
     {form, v1}

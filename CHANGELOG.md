@@ -53,6 +53,25 @@ stored order (`inserted_at`, then `id`), which the save's "canvas order"
 rules — which of two same-named steps takes the bare slug, which position a
 pasted path is rebased to — relied on without asking.
 
+### A shared form cannot point at a step
+
+A catalog form is one lineage for every step reusing it, with one place
+for its type's property values, so a `:related_form` value — a position in
+one flow — can be right in one flow only. `reuse_form/3` already refused
+picking such a form for a step; now the form's own edit page refuses the
+choice from the other side, naming the fix (copy the form into the flow,
+or clear the choice), and **`FormFlow.Data.Templates.Flows.Health`**
+reports the state as **`:related_form_shared`** should it arrive another
+way — a copied flow whose step reuses such a form, a host writing
+properties directly. The type alone, its property unset, is fine.
+
+**Breaking:** `Flows.copy/2` no longer takes `owner_flow_id:`. A copy is
+always a root flow beside its source; a subflow wanted inside a tree is
+copied by pasting its step, which makes the copy and the step pointing at
+it in one save — where a copy made owned with no step pointing at it was
+swept on the tree's next save. An owned subflow can still be copied out
+as a root of its own.
+
 ### A step can be pasted
 
 A node saved with `data.copy_of_node_id` — the id of the node it was

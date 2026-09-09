@@ -44,13 +44,20 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     build_node(["Subflow"], subflow_id: subflow_id, label: label)
   end
 
+  # Owned by some tree, as a step's form normally is; catalog_form/2 is the
+  # shared kind
   defp published_form(name, properties \\ %{}) do
     %Form{
       id: Ecto.UUID.generate(),
       name: name,
+      owner_flow_id: Ecto.UUID.generate(),
       properties: properties,
       versions: [%Version{status: "published", version: 1, definition: %{"a" => 1}}]
     }
+  end
+
+  defp catalog_form(name, properties \\ %{}) do
+    %{published_form(name, properties) | owner_flow_id: nil}
   end
 
   defp draft_only_form(name) do
@@ -278,6 +285,54 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert message == "“Check” points “Form to review” at a form that is no longer in this flow"
   end
 
+  test "a shared form pointing at a step is an error of its own; the type alone is fine" do
+    about = form_node("About")
+
+    shared_review = fn values ->
+      form_node("Check",
+        form:
+          catalog_form("Check", %{
+            "form_type" => "review",
+            "form_type_property_values" => values
+          })
+      )
+    end
+
+    # Pointing at a step this tree has: still wrong, since the same value
+    # serves every flow using the form — and the one entry says so, the
+    # missing-position entry standing down
+    health = Health.check(chain([about, shared_review.(%{"source" => about.id})]))
+    assert [%Entry{code: :related_form_shared, level: :error, message: message}] = health.entries
+
+    assert message ==
+             "“Check” is a shared form that points “Form to review” at a step of one flow"
+
+    # Pointing at a step this tree lacks — a copied flow's shared form: the
+    # same one entry, not two
+    health = Health.check(chain([about, shared_review.(%{"source" => Ecto.UUID.generate()})]))
+    assert codes(health) == [:related_form_shared]
+
+    # The type alone points at nothing: only the required-property entry the
+    # review type has anyway
+    assert codes(Health.check(chain([about, shared_review.(%{})]))) == [:property_missing]
+
+    # The same choice on an owned form is what the property is for
+    assert Health.ok?(
+             Health.check(
+               chain([
+                 about,
+                 form_node("Check",
+                   form:
+                     published_form("Check", %{
+                       "form_type" => "review",
+                       "form_type_property_values" => %{"source" => about.id}
+                     })
+                 )
+               ])
+             )
+           )
+  end
+
   test "a related form the tree has but no Start reaches is as missing as one deleted" do
     # The runtime looks the related form up among the connected positions,
     # so the reviewer would find nothing; the message says which fix applies
@@ -475,7 +530,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       assert Entry.fix(code) != Entry.fix(:not_a_code)
     end
 
-    assert length(Entry.codes()) == 14
+    assert length(Entry.codes()) == 15
   end
 
   test "the checks emit every listed code, and no code the list lacks" do
@@ -501,6 +556,15 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
           })
       )
 
+    shared =
+      form_node("Shared",
+        form:
+          catalog_form("Shared", %{
+            "form_type" => "review",
+            "form_type_property_values" => %{"source" => Ecto.UUID.generate()}
+          })
+      )
+
     dangling = subflow_node("Dangling", Ecto.UUID.generate())
     dead = form_node("Dead")
 
@@ -508,7 +572,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     stop = end_node()
 
     %{nodes: nodes, relationships: edges} =
-      chain([unpublished, drafted, no_form, stale_type, review, pointing])
+      chain([unpublished, drafted, no_form, stale_type, review, pointing, shared])
 
     review_flow = %FormFlow.Config.Flows.Type{
       id: "review_flow",

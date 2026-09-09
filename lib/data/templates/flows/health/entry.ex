@@ -55,6 +55,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
     :subflow_missing,
     :property_missing,
     :related_form_missing,
+    :related_form_shared,
     :unconnected,
     :dead_end,
     :no_steps,
@@ -159,6 +160,13 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
       "reads its answers would find none."
   end
 
+  def explanation(:related_form_shared) do
+    "A form from the catalog is one form shared by every flow that uses it, with one place " <>
+      "to keep its settings. This one points at a step by its position in a flow, which can " <>
+      "be right in one flow only: every other flow sees a form that is not there, and " <>
+      "choosing again from that flow breaks the first."
+  end
+
   def explanation(:unconnected) do
     "Progress follows the connections forward from Start. A step nothing leads to can never " <>
       "be reached, so users never see it and its form is never filled in."
@@ -217,6 +225,11 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   def fix(:related_form_missing),
     do: "Point the property at a form Start reaches, or connect or add the form it names."
+
+  def fix(:related_form_shared),
+    do:
+      "Give this flow its own copy of the form — the Copy form choice on the step's form " <>
+        "page — or clear the choice on the form's own page."
 
   def fix(:unconnected),
     do: "Connect a step that Start reaches to this one, or delete it if it is not needed."

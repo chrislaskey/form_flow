@@ -254,11 +254,6 @@ defmodule Demo.FormFlowHealthTest do
 
     assert %{level: :error, counts: %{error: 1, warning: 0, ignored: 1}} = Health.status(typed)
 
-    # An owned copy carries none: health is the root's
-    {:ok, owner} = Flows.create(%{name: "Owner", label: "subflows"})
-    {:ok, owned} = Flows.copy(Flows.get(flow.id), owner_flow_id: owner.id)
-    refute Map.has_key?(owned.properties, "_health_metadata")
-
     # The source keeps its own
     assert %{counts: %{ignored: 1}} = Health.status(Flows.get(flow.id))
   end
