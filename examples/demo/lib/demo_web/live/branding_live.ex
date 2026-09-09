@@ -2,13 +2,16 @@ defmodule DemoWeb.BrandingLive do
   @moduledoc """
   Scratch page for trying `Layouts.logo_mark` as an actual logo — solid vs.
   gradient strokes, on light and dark — and, below that, directions for the
-  demo's user switcher (see `DemoWeb.BrandingLive.UserSwitchers`).
+  demo's user switcher (see `DemoWeb.BrandingLive.UserSwitchers`) and for
+  the flow health check's trigger and modal
+  (see `DemoWeb.BrandingLive.HealthChecks`).
 
   Mounted on `live "/branding", BrandingLive`.
   """
 
   use DemoWeb, :live_view
 
+  alias DemoWeb.BrandingLive.HealthChecks
   alias DemoWeb.BrandingLive.UserSwitchers
 
   # The two lists are kept in matching order so the light/dark columns line
@@ -137,6 +140,10 @@ defmodule DemoWeb.BrandingLive do
      |> assign(:logo_variations_light, @logo_variations_light)
      |> assign(:logo_variations_dark, @logo_variations_dark)
      |> assign(:directions, UserSwitchers.directions())
+     |> assign(:health_triggers, HealthChecks.triggers())
+     |> assign(:health_modals, HealthChecks.modals())
+     |> assign(:health_states, HealthChecks.states())
+     |> assign(:health_icons, HealthChecks.icon_variants())
      |> assign(:selected, %{})
      |> assign(:menus_open, false)}
   end
@@ -280,8 +287,102 @@ defmodule DemoWeb.BrandingLive do
             </div>
           </div>
         </section>
+
+        <section id="health-checks" class="space-y-10 border-t border-gray-200 pt-10">
+          <header class="space-y-2">
+            <h2 class="text-2xl font-semibold">Health check directions</h2>
+            <p class="text-base-content/70">
+              The trigger an admin sees on the flows index (and later in a page
+              header), then the modal it opens. Hardcoded data: one Dog License
+              flow with two errors, two warnings, one info, one of them ignored.
+              Nothing here is wired up.
+            </p>
+          </header>
+
+          <div class="space-y-8">
+            <h3 class="text-lg font-semibold text-gray-900">Triggers</h3>
+            <div :for={d <- @health_triggers} class="space-y-3">
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h4 class="font-semibold text-gray-900">{d.title}</h4>
+                <p class="text-sm text-gray-500">{d.note}</p>
+              </div>
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div
+                  :for={s <- @health_states}
+                  class="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4"
+                >
+                  <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    {s.label}
+                  </p>
+                  <div class="flex min-h-10 items-center">
+                    <HealthChecks.trigger direction={d.id} state={s} />
+                  </div>
+                </div>
+              </div>
+              <div
+                :if={d.id == :icon_badge}
+                class="flex flex-wrap items-start gap-x-6 gap-y-4 rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div :for={v <- @health_icons} class="flex w-16 flex-col items-center gap-2">
+                  <HealthChecks.icon_badge variant={v} state={Enum.at(@health_states, 1)} />
+                  <span class="text-center text-[10px] leading-tight text-gray-500">{v.label}</span>
+                </div>
+              </div>
+              <.mock_actions>
+                <HealthChecks.trigger direction={d.id} state={Enum.at(@health_states, 1)} />
+              </.mock_actions>
+            </div>
+          </div>
+
+          <div class="space-y-8">
+            <h3 class="text-lg font-semibold text-gray-900">Modal content</h3>
+            <div :for={m <- @health_modals} class="space-y-3">
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h4 class="font-semibold text-gray-900">{m.title}</h4>
+                <p class="text-sm text-gray-500">{m.note}</p>
+              </div>
+              <div class="flex justify-center rounded-xl bg-gray-200/70 px-6 py-10">
+                <HealthChecks.modal direction={m.id} />
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </Layouts.app>
+    """
+  end
+
+  # A page header's action row, as the flow edit page draws it, with the
+  # trigger among the buttons
+  slot :inner_block, required: true
+
+  defp mock_actions(assigns) do
+    ~H"""
+    <div class="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-6 py-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="text-lg font-semibold text-gray-900">
+            Dog License <span class="text-gray-300">·</span>
+            <span class="font-normal text-gray-500">Review</span>
+            <span class="text-gray-300">·</span>
+            <span class="text-sm font-normal text-gray-500">Simple flow</span>
+          </p>
+          <p class="text-xs text-gray-500">⧉ Form Flow / Flows / Dog License / Review</p>
+        </div>
+        <div class="flex items-center gap-2">
+          {render_slot(@inner_block)}
+          <span class="btn">Overview</span>
+          <span class="flex items-center gap-1.5 text-xs">
+            <span class="text-gray-500">Show</span>
+            <span class="relative inline-flex h-6 w-11 items-center rounded-full bg-cyan-600">
+              <span class="inline-block size-5 translate-x-5 rounded-full bg-white shadow" />
+            </span>
+            <span class="font-semibold text-gray-900">Edit</span>
+          </span>
+          <span class="btn btn-primary">Save</span>
+        </div>
+      </div>
+    </div>
     """
   end
 

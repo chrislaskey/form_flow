@@ -71,7 +71,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
-  alias FormFlow.Web.Templates.Components.Breadcrumb
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Builder
@@ -1155,19 +1155,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def render(%{awaiting_start?: true} = assigns) do
     ~H"""
     <div>
-      <div class="mb-2 h-14 flex items-center">
-        <Breadcrumb.breadcrumb
-          base={@base}
-          section="forms"
-          root={@root}
-          parent_node={@parent_node}
-          mode={@params["mode"]}
-          components={@components}
-        >
+      <Header.header
+        base={@base}
+        section="forms"
+        root={@root}
+        parent_node={@parent_node}
+        name={@form.name}
+        mode={@params["mode"]}
+        components={@components}
+      >
+        <:metadata>draft</:metadata>
+        <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
-          <span class="ml-1 text-xs font-normal text-zinc-500">draft</span>
-        </Breadcrumb.breadcrumb>
-      </div>
+        </:crumb>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
@@ -1286,19 +1287,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <Breadcrumb.breadcrumb
-          base={@base}
-          section="forms"
-          root={@root}
-          parent_node={@parent_node}
-          mode={@params["mode"]}
-          components={@components}
-        >
+      <Header.header
+        base={@base}
+        section="forms"
+        root={@root}
+        parent_node={@parent_node}
+        name={@form.name}
+        mode={@params["mode"]}
+        components={@components}
+      >
+        <:metadata>draft</:metadata>
+        <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
-          <span class="ml-1 text-xs font-normal text-zinc-500">draft</span>
-        </Breadcrumb.breadcrumb>
-        <div class="flex items-center gap-2">
+        </:crumb>
+        <:actions>
           <Core.button
             :if={length(@versions) > 1}
             components={@components}
@@ -1332,8 +1334,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           >
             Publish
           </Core.button>
-        </div>
-      </div>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <Core.alert :if={@notice} kind={:success} components={@components} class="my-3">

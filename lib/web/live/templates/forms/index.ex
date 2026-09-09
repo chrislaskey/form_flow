@@ -31,12 +31,11 @@ defmodule FormFlow.Web.Templates.Forms.Index do
 
   use Phoenix.LiveComponent
 
-  import FormFlow.Web.Helpers.Paths
-
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -63,16 +62,13 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 flex items-center justify-between gap-4">
-        <div class="text-sm font-semibold">
-          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
-          <span class="text-zinc-400">/</span>
-          Forms
-        </div>
-        <Core.button components={@components} navigate={"#{@base}/forms/new"} variant="primary">
-          New form
-        </Core.button>
-      </div>
+      <Header.header base={@base} section="forms" components={@components}>
+        <:actions>
+          <Core.button components={@components} navigate={"#{@base}/forms/new"} variant="primary">
+            New form
+          </Core.button>
+        </:actions>
+      </Header.header>
 
       <Core.alert :if={@empty?} components={@components}>
         No forms yet — create the first one.

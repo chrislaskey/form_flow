@@ -18,10 +18,9 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
   use Phoenix.LiveComponent
 
-  import FormFlow.Web.Helpers.Paths
-
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
 
@@ -78,22 +77,13 @@ defmodule FormFlow.Web.Templates.Forms.New do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 flex items-center justify-between gap-4">
-        <div class="text-sm font-semibold">
-          <.link navigate={templates_path(@base)} class="hover:underline">Templates</.link>
-          <span class="text-zinc-400">/</span>
-          <.link navigate={"#{@base}/forms"} class="hover:underline">Forms</.link>
-          <span class="text-zinc-400">/</span>
-          New form
-        </div>
-        <Core.button
-          components={@components}
-          navigate={"#{@base}/forms"}
-          class="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-zinc-400"
-        >
-          Cancel
-        </Core.button>
-      </div>
+      <Header.header base={@base} section="forms" name="New form" components={@components}>
+        <:actions>
+          <Core.button components={@components} navigate={"#{@base}/forms"} class="btn">
+            Cancel
+          </Core.button>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 

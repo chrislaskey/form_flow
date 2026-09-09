@@ -33,7 +33,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
-  alias FormFlow.Web.Templates.Components.Breadcrumb
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
@@ -284,30 +284,21 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <Breadcrumb.breadcrumb
-          base={@base}
-          section="forms"
-          root={@root}
-          parent_node={@parent_node}
-          mode={@params["mode"]}
-          components={@components}
-        >
-          {@form.name}
-          <span :if={@version} class="ml-1 text-xs font-normal text-zinc-500">
-            {version_badge(@version)}
-          </span>
-          <span :if={form_type_label(assigns)} class="text-xs font-normal text-zinc-500">
-            · {form_type_label(assigns)}
-          </span>
-          <span
-            :for={{property, value} <- type_property_values(assigns)}
-            class="text-xs font-normal text-zinc-500"
-          >
-            · {property.name}: {Shared.display_value(property, value)}
-          </span>
-        </Breadcrumb.breadcrumb>
-        <div :if={@version} class="flex items-center gap-2">
+      <Header.header
+        base={@base}
+        section="forms"
+        root={@root}
+        parent_node={@parent_node}
+        name={@form.name}
+        mode={@params["mode"]}
+        components={@components}
+      >
+        <:metadata :if={@version}>{version_badge(@version)}</:metadata>
+        <:metadata :if={form_type_label(assigns)}>{form_type_label(assigns)}</:metadata>
+        <:metadata :for={{property, value} <- type_property_values(assigns)}>
+          {property.name}: {Shared.display_value(property, value)}
+        </:metadata>
+        <:actions :if={@version}>
           <Core.button
             :if={@version.status == "draft" && length(@versions) > 1}
             components={@components}
@@ -372,8 +363,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           >
             Delete
           </Core.button>
-        </div>
-      </div>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 

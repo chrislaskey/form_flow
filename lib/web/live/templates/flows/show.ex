@@ -34,7 +34,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
-  alias FormFlow.Web.Templates.Components.Breadcrumb
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -186,33 +186,30 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <Breadcrumb.breadcrumb base={@base} section="flows" root={@root} components={@components}>
-          {@flow.name || "Untitled"}
-          <span class="ml-1 text-xs font-normal text-zinc-500">
-            {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
-          </span>
-          <%!-- Show mode renders the stored type as plain text; the Edit
-                page is where it becomes a dropdown --%>
-          <span :if={type_label(assigns)} class="text-xs font-normal text-zinc-500">
-            · {type_label(assigns)}
-          </span>
-          <span
-            :for={{property, value} <- type_property_values(assigns)}
-            class="text-xs font-normal text-zinc-500"
-          >
-            · {property.name}: {Shared.display_value(property, value)}
-          </span>
-          <span :if={perspective_names(assigns) != []} class="text-xs font-normal text-zinc-500">
-            · For: {Enum.join(perspective_names(assigns), ", ")}
-          </span>
-        </Breadcrumb.breadcrumb>
-        <div class="flex items-center gap-2">
+      <Header.header
+        base={@base}
+        section="flows"
+        root={@root}
+        name={@flow.name || "Untitled"}
+        components={@components}
+      >
+        <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
+        <%!-- Show mode renders the stored type as plain text; the Edit
+              page is where it becomes a dropdown --%>
+        <:metadata :if={type_label(assigns)}>{type_label(assigns)}</:metadata>
+        <:metadata :for={{property, value} <- type_property_values(assigns)}>
+          {property.name}: {Shared.display_value(property, value)}
+        </:metadata>
+        <:metadata :if={perspective_names(assigns) != []}>
+          For: {Enum.join(perspective_names(assigns), ", ")}
+        </:metadata>
+        <:actions>
+          <%!-- The whole flow at once, every level, read-only        <div class="flex items-center gap-2">
           <%!-- The whole flow at once, every level, read-only — the root.s,
                 from any depth. Show and Edit stay one level at a time. --%>
-          <.link navigate={overview_path(assigns)} class="text-xs link link-primary">
+          <Core.button components={@components} navigate={overview_path(assigns)} class="btn">
             Overview
-          </.link>
+          </Core.button>
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)
                 side, so unlike there, nothing here needs to intercept the
@@ -244,8 +241,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Delete
           </Core.button>
-        </div>
-      </div>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 

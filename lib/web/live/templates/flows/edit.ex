@@ -102,7 +102,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
-  alias FormFlow.Web.Templates.Components.Breadcrumb
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -612,38 +612,34 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           }
         }
       </script>
-      <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <%!-- Breadcrumbs stay in edit mode: backing out of a subflow lands
-              on the parent's editor, not its show page (`mode="edit"`).
-              They navigate through the "navigate" event rather than a bare
-              <.link> (`target={@myself}`), so unsaved changes get the same
-              save-first prompt as Open. --%>
-        <Breadcrumb.breadcrumb
-          base={@base}
-          section="flows"
-          root={@root}
-          mode="edit"
-          target={@myself}
-          components={@components}
-        >
-          <span>{@flow.name || "Untitled"}</span>
-          <span class="text-xs font-normal text-zinc-500">
-            {if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}
-          </span>
-        </Breadcrumb.breadcrumb>
-        <div class="flex items-center gap-2">
+      <%!-- Breadcrumbs stay in edit mode: backing out of a subflow lands
+            on the parent's editor, not its show page (`mode="edit"`).
+            They navigate through the "navigate" event rather than a bare
+            <.link> (`target={@myself}`), so unsaved changes get the same
+            save-first prompt as Open. --%>
+      <Header.header
+        base={@base}
+        section="flows"
+        root={@root}
+        name={@flow.name || "Untitled"}
+        mode="edit"
+        target={@myself}
+        components={@components}
+      >
+        <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
+        <:actions>
           <%!-- The whole flow at once, read-only — through the "navigate"
                 event like every other way off this page, so unsaved
                 changes prompt first --%>
-          <button
-            type="button"
+          <Core.button
+            components={@components}
             phx-click="navigate"
             phx-value-to={overview_path(assigns)}
             phx-target={@myself}
-            class="text-xs link link-primary"
+            class="btn"
           >
             Overview
-          </button>
+          </Core.button>
           <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
                 visual state on click regardless of the server, which would
                 desync from reality when unsaved changes turn this click into
@@ -681,8 +677,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           >
             Save
           </Core.button>
-        </div>
-      </div>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>

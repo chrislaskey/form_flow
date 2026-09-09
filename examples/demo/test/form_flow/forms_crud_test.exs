@@ -24,6 +24,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, html} = live(conn, "/admin")
 
     assert html =~ "Templates"
+    assert has_element?(view, "h2", "Form Flow")
     assert has_element?(view, ~s(a[href="/admin/flows"]), "Flows")
     assert has_element?(view, ~s(a[href="/admin/forms"]), "Forms")
   end
@@ -32,8 +33,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     for path <- ["/admin/forms", "/admin/flows", "/admin/forms/new", "/admin/flows/new"] do
       {:ok, view, _html} = live(conn, path)
 
-      assert has_element?(view, ~s(a[href="/admin"]), "Templates"),
-             "missing Templates root crumb on #{path}"
+      assert has_element?(view, ~s(a[href="/admin"]), "Form Flow"),
+             "missing Form Flow root crumb on #{path}"
     end
   end
 

@@ -69,7 +69,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
   end
 
-  test "the index shows each flow's health, and the problems behind the badge", %{conn: conn} do
+  test "the index shows each flow's health, and the entries behind the badge", %{conn: conn} do
     {:ok, flow} =
       Flows.create(%{
         name: "Enrollment",
@@ -79,41 +79,51 @@ defmodule Demo.FormFlowFlowsCrudTest do
       })
 
     badge = "#flow-health-#{flow.id} > button"
-    problems = "#flow-health-#{flow.id} li"
+    modal = "#flow-health-#{flow.id}-modal"
+    entries = "#{modal} li"
 
     # Start and End, unwired: Start reaches nothing, End is not connected.
-    # The badge counts; the list opens on click.
+    # The badge counts the open entries; the modal opens on click.
     {:ok, view, _html} = live(conn, "/admin/flows")
 
-    assert has_element?(view, badge, "1 error, 1 warning")
-    refute has_element?(view, problems)
+    assert has_element?(view, "#{badge} span", "2")
+    refute has_element?(view, modal)
 
     view |> element(badge) |> render_click()
 
-    assert has_element?(view, problems, "This flow does not connect Start to End")
-    assert has_element?(view, problems, "“End” is not connected from Start")
+    assert has_element?(view, "#{modal} h3", "Health check")
+    assert has_element?(view, "#{modal} dt", "Perspectives")
+    assert has_element?(view, "#{modal} dd", "Simple flow")
+    assert has_element?(view, entries, "This flow does not connect Start to End")
+    assert has_element?(view, entries, "“End” is not connected from Start")
 
-    # Ignoring the warning: it leaves the count, stays listed with who and
-    # when, and is recorded on the flow for the next visit
-    second = "#flow-health-#{flow.id} li:nth-child(2) button"
-    view |> element(second, "Ignore") |> render_click()
+    # Ignoring the warning: its switch turns on, it leaves the count, stays
+    # listed with who and when, and is recorded on the flow for the next visit
+    second = "#{modal} li:nth-child(2) button[role=switch]"
+    assert has_element?(view, "#{second}[aria-checked=false]", "Ignore")
+    view |> element(second) |> render_click()
 
-    assert has_element?(view, badge, "1 error, 1 ignored")
+    assert has_element?(view, "#{second}[aria-checked=true]", "Ignored")
+    assert has_element?(view, "#{badge} span", "1")
     today = Date.to_iso8601(Date.utc_today())
-    assert has_element?(view, problems, "Ignored by demo-admin on #{today}")
-    assert has_element?(view, second, "Stop ignoring")
+    assert has_element?(view, entries, "Ignored by demo-admin on #{today}")
 
     assert [%{"code" => "unconnected", "user_id" => "demo-admin", "path" => [_end_id]}] =
-             Flows.get(flow.id).properties["ignored_problems"]
+             Flows.get(flow.id).properties["_health_ignored_entries"]
 
     {:ok, view, _html} = live(conn, "/admin/flows")
-    assert has_element?(view, badge, "1 error, 1 ignored")
+    assert has_element?(view, "#{badge} span", "1")
 
     view |> element(badge) |> render_click()
-    view |> element(second, "Stop ignoring") |> render_click()
+    view |> element(second) |> render_click()
 
-    assert has_element?(view, badge, "1 error, 1 warning")
-    assert Flows.get(flow.id).properties["ignored_problems"] == nil
+    assert has_element?(view, "#{second}[aria-checked=false]", "Ignore")
+    assert has_element?(view, "#{badge} span", "2")
+    assert Flows.get(flow.id).properties["_health_ignored_entries"] == nil
+
+    # Closing the modal
+    view |> element("#{modal} button[aria-label=Close]") |> render_click()
+    refute has_element?(view, modal)
 
     # Wired through a form step: the save creates the step's form as a draft,
     # which users cannot start
@@ -144,21 +154,21 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/admin/flows")
 
-    assert has_element?(view, badge, "1 error")
-    refute has_element?(view, badge, "warning")
-
+    assert has_element?(view, "#{badge} span", "1")
     view |> element(badge) |> render_click()
-    assert has_element?(view, problems, "“Name” has no published version — users cannot start it")
+    assert has_element?(view, entries, "“Name” has no published version — users cannot start it")
 
-    # Published: nothing left to report
+    # Published: a green check, and a modal with nothing to report
     %{form_id: form_id} = Flows.get_node(name_id)
     [draft] = Forms.list_versions(form_id)
     {:ok, _v1} = Forms.update_status(draft, :published)
 
     {:ok, view, _html} = live(conn, "/admin/flows")
 
-    assert has_element?(view, "#flow-health-#{flow.id}", "OK")
-    refute has_element?(view, badge)
+    assert has_element?(view, "#{badge} span", "✓")
+    view |> element(badge) |> render_click()
+    assert has_element?(view, modal, "Nothing to report")
+    refute has_element?(view, entries)
   end
 
   test "editing a flow replaces its contents", %{conn: conn} do

@@ -1,14 +1,18 @@
 defmodule FormFlow.Data.Templates.Flows.Health do
   @moduledoc """
-  `FormFlow.Data.Templates.Flows.Health` checks a root flow and reports what
-  is wrong with it — the whole tree, subflows included — as a list of
-  `FormFlow.Data.Templates.Flows.Health.Problem` structs sorted worst first,
-  with the worst level as the one-word answer.
+  `FormFlow.Data.Templates.Flows.Health` checks a root flow — the whole
+  tree, subflows included — and reports what it finds as a list of
+  `FormFlow.Data.Templates.Flows.Health.Entry` structs sorted worst first,
+  with the worst level as the one-word answer. A health check, in prose;
+  what it lists are **entries**, not entries, because a check reads the
+  flow's shape and can be wrong about what is fine on purpose — see
+  "Ignoring an entry" below.
 
   The pages draw it: the flows index shows a badge per root flow with the
-  problems under it. Nothing here writes anything, and nothing refuses a
-  save on it — the checks describe a flow as it stands, so an admin building
-  one sees what is left to do, and a finished flow shows none.
+  entries under it. Nothing here writes anything but an ignore, and nothing
+  refuses a save on it — the checks describe a flow as it stands, so an
+  admin building one sees what is left to do, and a finished flow shows
+  none.
 
   ## Two ways in
 
@@ -52,7 +56,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   node following relationships forward. Checks on what a step points at —
   its form, its subflow, their types — run for connected steps only. An
   unconnected step is reported once, as unconnected; whatever is behind it
-  is not a user's problem until it is wired in, and reporting it too would
+  is not a user's concern until it is wired in, and reporting it too would
   bury the one thing to do.
 
   ## Levels
@@ -60,21 +64,21 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   `:error` — a user cannot work the flow as it stands. `:warning` — the
   flow works, but part of it does not take part. `:info` — nothing changes
   for users, but an admin may want to know. See
-  `FormFlow.Data.Templates.Flows.Health.Problem`.
+  `FormFlow.Data.Templates.Flows.Health.Entry`.
 
-  ## Ignoring a problem
+  ## Ignoring an entry
 
   A check cannot know what is fine on purpose — a step left unwired for a
   later phase, a draft kept beside the published version. An admin who
-  keeps seeing "5 warnings" stops reading them, and misses the sixth. So a
-  problem can be **ignored**: `ignore/3` records it on the root flow, under
-  `properties["ignored_problems"]`, with who ignored it and when; from then
-  on `check/2` still lists it — marked, in `Problem`'s `:ignored` — but it
-  no longer counts toward `level` and `counts`, so the badge says what is
-  new. `stop_ignoring/2` removes the record. A problem is matched by its
-  `code` and `path`, both stable across saves (the canvas keeps node ids),
-  and a record whose problem has gone — the step was wired, or deleted —
-  is dropped the next time either function writes.
+  keeps seeing "5 warnings" stops reading them, and misses the sixth. So an
+  entry can be **ignored**: `ignore/3` records it on the root flow, under
+  `properties["_health_ignored_entries"]`, with who ignored it and when;
+  from then on `check/2` still lists it — marked, in `Entry`'s `:ignored` —
+  but it no longer counts toward `level` and `counts`, so the badge says
+  what is new. `stop_ignoring/2` removes the record. An entry is matched by
+  its `code` and `path`, both stable across saves (the canvas keeps node
+  ids), and a record whose entry has gone — the step was wired, or deleted
+  — is dropped the next time either function writes.
 
   The record lives in the flow's `properties`, beside its type and
   perspectives, because that is the flow's own open map and it travels with
@@ -87,28 +91,41 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   alias FormFlow.Config.Property
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Flows
-  alias FormFlow.Data.Templates.Flows.Health.Problem
+  alias FormFlow.Data.Templates.Flows.Health.Entry
 
-  @ignored_key "ignored_problems"
+  @ignored_key "_health_ignored_entries"
   @empty_counts %{error: 0, warning: 0, info: 0, ignored: 0}
 
-  defstruct [:flow_id, level: :ok, problems: [], counts: @empty_counts]
+  defstruct [:flow_id, level: :ok, entries: [], counts: @empty_counts, summary: %{}]
 
   @typedoc """
-  `level` is the worst level among the problems not ignored, `:ok` when
+  `level` is the worst level among the entries not ignored, `:ok` when
   none; `counts` counts those by level, and the ignored ones under
-  `:ignored`; `problems` has every problem, ignored included, the open
-  ones first and worst first within each.
+  `:ignored`; `entries` has every entry, worst first, an ignored one in
+  its place — ignoring changes what counts, not where it is listed, so
+  a list an admin is working down does not reorder under them. `summary` describes the flow
+  that was checked, whole tree, for a page to say what the report is of:
+  its `label`, how many `steps` (form and subflow nodes), `subflows`, and
+  distinct `forms` it has, and the `perspectives` and `form_flow_types`
+  (ids; `nil` for a "forms" flow that never chose) its flows name.
   """
   @type t :: %__MODULE__{
           flow_id: Ecto.UUID.t() | nil,
-          level: Problem.level() | :ok,
-          problems: [Problem.t()],
+          level: Entry.level() | :ok,
+          entries: [Entry.t()],
           counts: %{
             error: non_neg_integer(),
             warning: non_neg_integer(),
             info: non_neg_integer(),
             ignored: non_neg_integer()
+          },
+          summary: %{
+            label: String.t() | nil,
+            steps: non_neg_integer(),
+            subflows: non_neg_integer(),
+            forms: non_neg_integer(),
+            perspectives: [String.t()],
+            form_flow_types: [String.t() | nil]
           }
         }
 
@@ -116,7 +133,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   Checks a root flow, by id or as a resolved tree — see the moduledoc.
 
       FormFlow.Data.Templates.Flows.Health.check(flow.id, form_types: form_types)
-      #=> %FormFlow.Data.Templates.Flows.Health{level: :error, problems: [...]}
+      #=> %FormFlow.Data.Templates.Flows.Health{level: :error, entries: [...]}
 
       flow.id |> Flows.resolve_tree() |> Health.check()
 
@@ -141,75 +158,111 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       form_paths: form_paths(tree, [])
     }
 
-    problems =
+    entries =
       tree
-      |> flow_problems([], [], opts)
+      |> flow_entries([], [], opts)
       |> mark_ignored(ignored_records(flow))
-      |> Enum.sort_by(&{not is_nil(&1.ignored), Problem.rank(&1.level)})
+      |> Enum.sort_by(&Entry.rank(&1.level))
 
-    open = Enum.reject(problems, & &1.ignored)
+    open = Enum.reject(entries, & &1.ignored)
 
     %__MODULE__{
       flow_id: flow.id,
       level: worst(open),
-      problems: problems,
+      entries: entries,
       counts:
         @empty_counts
         |> Map.merge(Enum.frequencies_by(open, & &1.level))
-        |> Map.put(:ignored, length(problems) - length(open))
+        |> Map.put(:ignored, length(entries) - length(open)),
+      summary: summary(tree)
     }
   end
 
-  @doc "Whether nothing is left to act on — no problem at any level that is not ignored."
+  # What the report is of: the tree's steps counted at every level,
+  # connected or not — this describes the flow as built, not as reachable
+  defp summary(tree) do
+    nodes = all_nodes(tree)
+    flows = all_flows(tree)
+
+    %{
+      label: tree.flow.label,
+      steps: Enum.count(nodes, &(kind(&1) in [:form, :subflow])),
+      subflows: Enum.count(nodes, &(kind(&1) == :subflow)),
+      forms:
+        nodes
+        |> Enum.filter(&(kind(&1) == :form))
+        |> Enum.uniq_by(&(&1.form_id || &1.id))
+        |> length(),
+      perspectives: flows |> Enum.flat_map(&Perspective.ids/1) |> Enum.uniq(),
+      form_flow_types:
+        for(%{label: "forms"} = flow <- flows, uniq: true, do: flow.properties["form_flow_type"])
+    }
+  end
+
+  # Subtrees in the order their steps are stored, not the order of the
+  # subflows map's keys, so the summary's lists come out the same every time
+  defp all_nodes(nil), do: []
+
+  defp all_nodes(tree) do
+    tree.nodes ++ Enum.flat_map(tree.nodes, &all_nodes(tree.subflows[&1.id]))
+  end
+
+  defp all_flows(nil), do: []
+
+  defp all_flows(tree) do
+    [tree.flow | Enum.flat_map(tree.nodes, &all_flows(tree.subflows[&1.id]))]
+  end
+
+  @doc "Whether nothing is left to act on — no entry at any level that is not ignored."
   @spec ok?(t()) :: boolean()
-  def ok?(%__MODULE__{problems: problems}), do: Enum.all?(problems, & &1.ignored)
+  def ok?(%__MODULE__{entries: entries}), do: Enum.all?(entries, & &1.ignored)
 
-  @doc "The problems not ignored, worst first."
-  @spec open(t()) :: [Problem.t()]
-  def open(%__MODULE__{problems: problems}), do: Enum.reject(problems, & &1.ignored)
+  @doc "The entries not ignored, worst first."
+  @spec open(t()) :: [Entry.t()]
+  def open(%__MODULE__{entries: entries}), do: Enum.reject(entries, & &1.ignored)
 
-  @doc "The problems an admin has ignored."
-  @spec ignored(t()) :: [Problem.t()]
-  def ignored(%__MODULE__{problems: problems}), do: Enum.filter(problems, & &1.ignored)
+  @doc "The entries an admin has ignored."
+  @spec ignored(t()) :: [Entry.t()]
+  def ignored(%__MODULE__{entries: entries}), do: Enum.filter(entries, & &1.ignored)
 
-  @doc "The problems not ignored at one level."
-  @spec at(t(), Problem.level()) :: [Problem.t()]
+  @doc "The entries not ignored at one level."
+  @spec at(t(), Entry.level()) :: [Entry.t()]
   def at(%__MODULE__{} = health, level), do: Enum.filter(open(health), &(&1.level == level))
 
   defp worst([]), do: :ok
-  defp worst([%Problem{level: level} | _rest]), do: level
+  defp worst([%Entry{level: level} | _rest]), do: level
 
   # --- ignoring ----------------------------------------------------------------
 
   @doc """
-  Records `problem` as ignored on the root flow `health` was checked, by
+  Records `entry` as ignored on the root flow `health` was checked, by
   `user_id` (the host's opaque identity, as the instance events carry it)
-  and now. Returns the updated root flow. Records for problems the check no
+  and now. Returns the updated root flow. Records for entries the check no
   longer finds are dropped on the way.
   """
-  @spec ignore(t(), Problem.t(), String.t() | nil) ::
+  @spec ignore(t(), Entry.t(), String.t() | nil) ::
           {:ok, FormFlow.Data.Templates.Flow.t()} | {:error, Ecto.Changeset.t()}
-  def ignore(%__MODULE__{} = health, %Problem{} = problem, user_id) do
+  def ignore(%__MODULE__{} = health, %Entry{} = entry, user_id) do
     record = %{
-      "code" => Atom.to_string(problem.code),
-      "path" => problem.path,
+      "code" => Atom.to_string(entry.code),
+      "path" => entry.path,
       "user_id" => user_id,
       "ignored_at" => DateTime.to_iso8601(DateTime.utc_now())
     }
 
     write_ignored(health, fn records ->
-      Enum.reject(records, &same_problem?(&1, problem)) ++ [record]
+      Enum.reject(records, &same_entry?(&1, entry)) ++ [record]
     end)
   end
 
   @doc """
-  Removes `problem`'s ignored record from the root flow `health` was checked,
+  Removes `entry`'s ignored record from the root flow `health` was checked,
   so it counts again. Returns the updated root flow.
   """
-  @spec stop_ignoring(t(), Problem.t()) ::
+  @spec stop_ignoring(t(), Entry.t()) ::
           {:ok, FormFlow.Data.Templates.Flow.t()} | {:error, Ecto.Changeset.t()}
-  def stop_ignoring(%__MODULE__{} = health, %Problem{} = problem) do
-    write_ignored(health, fn records -> Enum.reject(records, &same_problem?(&1, problem)) end)
+  def stop_ignoring(%__MODULE__{} = health, %Entry{} = entry) do
+    write_ignored(health, fn records -> Enum.reject(records, &same_entry?(&1, entry)) end)
   end
 
   # The root flow's records, current ones only, through `change`, written
@@ -221,7 +274,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     records =
       root
       |> ignored_records()
-      |> Enum.filter(fn record -> Enum.any?(health.problems, &same_problem?(record, &1)) end)
+      |> Enum.filter(fn record -> Enum.any?(health.entries, &same_entry?(record, &1)) end)
       |> change.()
 
     properties =
@@ -240,21 +293,21 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end
   end
 
-  defp same_problem?(record, %Problem{} = problem) do
-    record["code"] == Atom.to_string(problem.code) and record["path"] == problem.path
+  defp same_entry?(record, %Entry{} = entry) do
+    record["code"] == Atom.to_string(entry.code) and record["path"] == entry.path
   end
 
-  defp mark_ignored(problems, []), do: problems
+  defp mark_ignored(entries, []), do: entries
 
-  defp mark_ignored(problems, records) do
-    Enum.map(problems, fn problem ->
-      case Enum.find(records, &same_problem?(&1, problem)) do
+  defp mark_ignored(entries, records) do
+    Enum.map(entries, fn entry ->
+      case Enum.find(records, &same_entry?(&1, entry)) do
         nil ->
-          problem
+          entry
 
         record ->
           %{
-            problem
+            entry
             | ignored: %{user_id: record["user_id"], ignored_at: parse_at(record["ignored_at"])}
           }
       end
@@ -313,12 +366,12 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   # `prefix` is the path of the subflow node embedding this flow ([] for the
   # root); `ancestors` the subflow nodes on the way down, for the messages.
-  defp flow_problems(tree, prefix, ancestors, opts) do
+  defp flow_entries(tree, prefix, ancestors, opts) do
     scope = scope(tree, prefix, ancestors)
 
-    structure_problems(scope) ++
-      flow_type_problems(scope, opts) ++
-      Enum.flat_map(connected_nodes(scope), &node_problems(&1, scope, opts))
+    structure_entries(scope) ++
+      flow_type_entries(scope, opts) ++
+      Enum.flat_map(connected_nodes(scope), &node_entries(&1, scope, opts))
   end
 
   defp scope(tree, prefix, ancestors) do
@@ -342,18 +395,18 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     Enum.filter(scope.tree.nodes, &MapSet.member?(scope.reachable, &1.id))
   end
 
-  defp structure_problems(scope) do
+  defp structure_entries(scope) do
     end_reached? = Enum.any?(scope.ends, &MapSet.member?(scope.reachable, &1))
 
     [
-      if(scope.starts == [], do: flow_problem(scope, :error, :no_start, "has no Start node")),
-      if(scope.ends == [], do: flow_problem(scope, :error, :no_end, "has no End node")),
+      if(scope.starts == [], do: flow_entry(scope, :error, :no_start, "has no Start node")),
+      if(scope.ends == [], do: flow_entry(scope, :error, :no_end, "has no End node")),
       if(scope.starts != [] and scope.ends != [] and not end_reached?,
-        do: flow_problem(scope, :error, :end_unreachable, "does not connect Start to End")
+        do: flow_entry(scope, :error, :end_unreachable, "does not connect Start to End")
       ),
       if(end_reached? and not Enum.any?(connected_nodes(scope), &(kind(&1) in [:form, :subflow])),
         do:
-          flow_problem(
+          flow_entry(
             scope,
             :warning,
             :no_steps,
@@ -362,39 +415,39 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       )
     ]
     |> Enum.reject(&is_nil/1)
-    |> Kernel.++(if scope.starts != [], do: unconnected_problems(scope), else: [])
-    |> Kernel.++(if end_reached?, do: dead_end_problems(scope), else: [])
+    |> Kernel.++(if scope.starts != [], do: unconnected_entries(scope), else: [])
+    |> Kernel.++(if end_reached?, do: dead_end_entries(scope), else: [])
   end
 
   # Without a Start nothing is connected, and the one error says so; naming
   # every node as unconnected on top would bury it
-  defp unconnected_problems(scope) do
+  defp unconnected_entries(scope) do
     for node <- scope.tree.nodes, not MapSet.member?(scope.reachable, node.id) do
-      node_problem(node, scope, :warning, :unconnected, "is not connected from Start")
+      node_entry(node, scope, :warning, :unconnected, "is not connected from Start")
     end
   end
 
   # A reachable node nothing follows, End aside: a user can work it, but End
   # completes without waiting for it (FlowProgress's AND-join counts
   # predecessors only)
-  defp dead_end_problems(scope) do
+  defp dead_end_entries(scope) do
     for node <- connected_nodes(scope),
         kind(node) != :end,
         not Map.has_key?(scope.outgoing, node.id) do
-      node_problem(node, scope, :warning, :dead_end, "leads nowhere — nothing follows it")
+      node_entry(node, scope, :warning, :dead_end, "leads nowhere — nothing follows it")
     end
   end
 
   # --- the flow's type -------------------------------------------------------
 
   # Flow types apply to "forms" flows; a "subflows" flow has none
-  defp flow_type_problems(%{flow: %{label: "forms"} = flow} = scope, opts) do
+  defp flow_type_entries(%{flow: %{label: "forms"} = flow} = scope, opts) do
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
     case stored_type(opts.flow_types, flow.properties["form_flow_type"]) do
       {:unknown, id} ->
         [
-          flow_problem(
+          flow_entry(
             scope,
             :warning,
             :unknown_type,
@@ -403,22 +456,22 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         ]
 
       {:ok, type} ->
-        property_problems(type.properties, values, opts, fn level, code, text ->
-          flow_problem(scope, level, code, text)
-        end) ++ perspective_problems(scope, type)
+        property_entries(type.properties, values, opts, fn level, code, text ->
+          flow_entry(scope, level, code, text)
+        end) ++ perspective_entries(scope, type)
     end
   end
 
-  defp flow_type_problems(_scope, _opts), do: []
+  defp flow_type_entries(_scope, _opts), do: []
 
-  defp perspective_problems(scope, type) do
+  defp perspective_entries(scope, type) do
     case Perspective.stale_ids(scope.flow, type.perspectives) do
       [] ->
         []
 
       stale ->
         [
-          flow_problem(
+          flow_entry(
             scope,
             :warning,
             :stale_perspectives,
@@ -430,28 +483,28 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   # --- one connected node ----------------------------------------------------
 
-  defp node_problems(node, scope, opts) do
+  defp node_entries(node, scope, opts) do
     case kind(node) do
-      :form -> form_problems(node, scope, opts)
-      :subflow -> subflow_problems(node, scope, opts)
+      :form -> form_entries(node, scope, opts)
+      :subflow -> subflow_entries(node, scope, opts)
       _start_end_or_other -> []
     end
   end
 
-  defp form_problems(node, scope, opts) do
+  defp form_entries(node, scope, opts) do
     case node.form do
       %Ecto.Association.NotLoaded{} ->
         []
 
       nil ->
-        [node_problem(node, scope, :error, :form_missing, "has no form")]
+        [node_entry(node, scope, :error, :form_missing, "has no form")]
 
       form ->
-        version_problems(node, form, scope) ++ form_type_problems(node, form, scope, opts)
+        version_entries(node, form, scope) ++ form_type_entries(node, form, scope, opts)
     end
   end
 
-  defp version_problems(node, %{versions: versions}, scope) when is_list(versions) do
+  defp version_entries(node, %{versions: versions}, scope) when is_list(versions) do
     published =
       versions
       |> Enum.filter(&(&1.status == "published"))
@@ -460,7 +513,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     cond do
       is_nil(published) ->
         [
-          node_problem(
+          node_entry(
             node,
             scope,
             :error,
@@ -471,7 +524,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
       Enum.any?(versions, &(&1.status == "draft" and &1.definition != published.definition)) ->
         [
-          node_problem(
+          node_entry(
             node,
             scope,
             :info,
@@ -486,15 +539,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   # Versions not loaded — a hand-built tree that says nothing about them
-  defp version_problems(_node, _form, _scope), do: []
+  defp version_entries(_node, _form, _scope), do: []
 
-  defp form_type_problems(node, form, scope, opts) do
+  defp form_type_entries(node, form, scope, opts) do
     values = FormFlow.Config.Forms.Type.property_values(form)
 
     case stored_type(opts.form_types, (form.properties || %{})["form_type"]) do
       {:unknown, id} ->
         [
-          node_problem(
+          node_entry(
             node,
             scope,
             :warning,
@@ -504,19 +557,19 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         ]
 
       {:ok, type} ->
-        property_problems(type.properties, values, opts, fn level, code, text ->
-          node_problem(node, scope, level, code, text)
+        property_entries(type.properties, values, opts, fn level, code, text ->
+          node_entry(node, scope, level, code, text)
         end)
     end
   end
 
-  defp subflow_problems(node, scope, opts) do
+  defp subflow_entries(node, scope, opts) do
     case scope.tree.subflows[node.id] do
       nil ->
-        [node_problem(node, scope, :error, :subflow_missing, "has no subflow behind it")]
+        [node_entry(node, scope, :error, :subflow_missing, "has no subflow behind it")]
 
       subtree ->
-        flow_problems(subtree, scope.prefix ++ [node.id], scope.ancestors ++ [node], opts)
+        flow_entries(subtree, scope.prefix ++ [node.id], scope.ancestors ++ [node], opts)
     end
   end
 
@@ -539,22 +592,22 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end
   end
 
-  # `problem` builds the struct with the right subject — the flow or the
+  # `entry` builds the struct with the right subject — the flow or the
   # node — so this can serve both
-  defp property_problems(properties, values, opts, problem) do
+  defp property_entries(properties, values, opts, entry) do
     Enum.flat_map(properties, fn %Property{} = property ->
       value = values[property.id]
 
       cond do
         blank?(value) and property.required ->
-          [problem.(:error, :property_missing, "needs “#{property.name}” set")]
+          [entry.(:error, :property_missing, "needs “#{property.name}” set")]
 
         blank?(value) ->
           []
 
         property.type == :related_form and not MapSet.member?(opts.form_paths, split_path(value)) ->
           [
-            problem.(
+            entry.(
               :error,
               :related_form_missing,
               "points “#{property.name}” at a form that is no longer in this flow"
@@ -585,12 +638,12 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end)
   end
 
-  # --- building problems -----------------------------------------------------
+  # --- building entries -----------------------------------------------------
 
-  # A problem with the flow itself. The subject is the subflows on the way
+  # A entry with the flow itself. The subject is the subflows on the way
   # down — "Review does not connect Start to End" — or "This flow" for the
   # root, which the listing already names.
-  defp flow_problem(scope, level, code, text) do
+  defp flow_entry(scope, level, code, text) do
     subject =
       case scope.ancestors do
         [] -> "This flow"
@@ -599,7 +652,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
     message = "#{subject} #{text}"
 
-    %Problem{
+    %Entry{
       level: level,
       code: code,
       message: message,
@@ -609,12 +662,12 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     }
   end
 
-  # A problem with one node, named the way the user-facing pages name a
+  # A entry with one node, named the way the user-facing pages name a
   # position: "Review / Check pet details has no published version"
-  defp node_problem(node, scope, level, code, text) do
+  defp node_entry(node, scope, level, code, text) do
     subject = Enum.map_join(scope.ancestors ++ [node], " / ", &node_label/1)
 
-    %Problem{
+    %Entry{
       level: level,
       code: code,
       message: "“#{subject}” #{text}",

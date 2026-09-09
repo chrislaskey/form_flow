@@ -14,7 +14,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
   alias FormFlow.Config.Property
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows.Health
-  alias FormFlow.Data.Templates.Flows.Health.Problem
+  alias FormFlow.Data.Templates.Flows.Health.Entry
   alias FormFlow.Data.Templates.Form
   alias FormFlow.Data.Templates.Form.Version
 
@@ -92,14 +92,14 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     tree(nodes, edges, opts)
   end
 
-  defp codes(%Health{problems: problems}), do: Enum.map(problems, & &1.code)
+  defp codes(%Health{entries: entries}), do: Enum.map(entries, & &1.code)
 
   # --- a healthy flow ----------------------------------------------------------
 
   test "a connected flow of published forms has nothing to report" do
     health = Health.check(chain([form_node("Name"), form_node("Address")]))
 
-    assert %Health{level: :ok, problems: [], counts: %{error: 0, warning: 0, info: 0}} = health
+    assert %Health{level: :ok, entries: [], counts: %{error: 0, warning: 0, info: 0}} = health
     assert Health.ok?(health)
   end
 
@@ -127,13 +127,13 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert codes(health) == [:end_unreachable, :unconnected]
 
     assert [
-             %Problem{message: "This flow does not connect Start to End", node_id: nil, path: []}
+             %Entry{message: "This flow does not connect Start to End", node_id: nil, path: []}
              | _
            ] =
-             health.problems
+             health.entries
 
     # End itself is what is unconnected — not the chain leading towards it
-    assert [%Problem{code: :unconnected, node_id: end_id}] = Health.at(health, :warning)
+    assert [%Entry{code: :unconnected, node_id: end_id}] = Health.at(health, :warning)
     assert end_id == stop.id
   end
 
@@ -143,8 +143,8 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     health = Health.check(tree(nodes ++ [loose], edges))
 
-    assert [%Problem{level: :warning, code: :unconnected, node_id: node_id, path: [path_id]}] =
-             health.problems
+    assert [%Entry{level: :warning, code: :unconnected, node_id: node_id, path: [path_id]}] =
+             health.entries
 
     assert node_id == loose.id and path_id == loose.id
     assert health.level == :warning
@@ -157,8 +157,8 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     health = Health.check(tree(nodes ++ [aside], edges ++ [edge(start, aside)]))
 
-    assert [%Problem{code: :dead_end, message: "“Aside” leads nowhere — nothing follows it"}] =
-             health.problems
+    assert [%Entry{code: :dead_end, message: "“Aside” leads nowhere — nothing follows it"}] =
+             health.entries
   end
 
   test "Start wired straight to End is a warning" do
@@ -171,12 +171,12 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     health = Health.check(chain([form_node("Name", form: draft_only_form("Name"))]))
 
     assert [
-             %Problem{
+             %Entry{
                level: :error,
                code: :form_not_published,
                message: "“Name” has no published version — users cannot start it"
              }
-           ] = health.problems
+           ] = health.entries
   end
 
   test "a form step pointing at nothing is an error" do
@@ -205,7 +205,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
         chain([form_node("Name", form: %{form | versions: form.versions ++ [changed]})])
       )
 
-    assert [%Problem{level: :info, code: :unpublished_changes}] = health.problems
+    assert [%Entry{level: :info, code: :unpublished_changes}] = health.entries
     assert health.level == :info
   end
 
@@ -226,19 +226,19 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     form = published_form("Name", %{"form_type" => "gone"})
 
     assert [
-             %Problem{
+             %Entry{
                code: :unknown_type,
                message: "“Name” uses the form type “gone”, which is not offered"
              }
            ] =
-             Health.check(chain([form_node("Name", form: form)])).problems
+             Health.check(chain([form_node("Name", form: form)])).entries
   end
 
   test "a required form property left unset is an error — the Review type's source" do
     form = published_form("Check", %{"form_type" => "review"})
 
-    assert [%Problem{code: :property_missing, message: "“Check” needs “Form to review” set"}] =
-             Health.check(chain([form_node("Check", form: form)])).problems
+    assert [%Entry{code: :property_missing, message: "“Check” needs “Form to review” set"}] =
+             Health.check(chain([form_node("Check", form: form)])).entries
   end
 
   test "a related form pointing at a position the tree has is fine; one it lacks is an error" do
@@ -256,8 +256,8 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     assert Health.ok?(Health.check(chain([about, review_of.(about.id)])))
 
-    assert [%Problem{code: :related_form_missing}] =
-             Health.check(chain([about, review_of.(Ecto.UUID.generate())])).problems
+    assert [%Entry{code: :related_form_missing}] =
+             Health.check(chain([about, review_of.(Ecto.UUID.generate())])).entries
   end
 
   test "a related form resolves across subflows, by path" do
@@ -301,12 +301,12 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       )
 
     assert [
-             %Problem{
+             %Entry{
                code: :stale_perspectives,
                message: "This flow is for “auditor”, which its type no longer declares"
              }
            ] =
-             health.problems
+             health.entries
   end
 
   test "a required flow property left unset is an error" do
@@ -346,22 +346,22 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
   # --- subflows ----------------------------------------------------------------
 
-  test "problems inside a subflow are found, named by the way down, and carry the subflow's id and the path" do
+  test "entries inside a subflow are found, named by the way down, and carry the subflow's id and the path" do
     inner = chain([form_node("Check", form: draft_only_form("Check"))], name: "Review")
     step = subflow_node("Review", inner.flow.id)
     outer = chain([step], label: "subflows", subflows: %{step.id => inner})
 
     health = Health.check(outer)
 
-    assert [%Problem{code: :form_not_published, message: message, flow_id: flow_id, path: path}] =
-             health.problems
+    assert [%Entry{code: :form_not_published, message: message, flow_id: flow_id, path: path}] =
+             health.entries
 
     assert message == "“Review / Check” has no published version — users cannot start it"
     assert flow_id == inner.flow.id
     assert path == [step.id, Enum.at(inner.nodes, 1).id]
   end
 
-  test "a flow-level problem inside a subflow names the subflow, and carries the step's path" do
+  test "a flow-level entry inside a subflow names the subflow, and carries the step's path" do
     start = start_node()
     stop = end_node()
     inner = tree([start, stop], [], name: "Review")
@@ -371,7 +371,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     health = Health.check(outer)
 
     assert [
-             %Problem{
+             %Entry{
                code: :end_unreachable,
                message: "Review does not connect Start to End",
                path: path,
@@ -379,7 +379,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              }
              | _
            ] =
-             health.problems
+             health.entries
 
     assert path == [step.id]
   end
@@ -400,7 +400,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
   # --- the summary -------------------------------------------------------------
 
-  test "problems sort worst first and are counted by level" do
+  test "entries sort worst first and are counted by level" do
     loose = form_node("Loose")
     changed = %Version{status: "draft", definition: %{"changed" => true}}
     form = published_form("Name")
@@ -410,14 +410,54 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     health = Health.check(tree(nodes ++ [loose], edges))
 
-    assert Enum.map(health.problems, & &1.level) == [:error, :warning, :info]
+    assert Enum.map(health.entries, & &1.level) == [:error, :warning, :info]
     assert health.counts == %{error: 1, warning: 1, info: 1, ignored: 0}
     assert health.level == :error
   end
 
-  # --- ignored problems --------------------------------------------------------
+  # --- the summary -------------------------------------------------------------
 
-  test "an ignored problem is listed last, marked, and left out of the level and counts" do
+  test "the summary describes the whole tree: steps, subflows, distinct forms, perspectives, types" do
+    shared = published_form("Owner contact")
+
+    inner =
+      chain([form_node("About"), form_node("Owner", form: shared)],
+        name: "Application",
+        properties: %{"perspectives" => ["applicant"], "form_flow_type" => "wizard_in_order"}
+      )
+
+    review =
+      chain([form_node("Owner again", form: shared)],
+        name: "Review",
+        properties: %{"perspectives" => ["reviewer"]}
+      )
+
+    application = subflow_node("Application", inner.flow.id)
+    review_step = subflow_node("Review", review.flow.id)
+    loose = form_node("Loose")
+    %{nodes: nodes, relationships: edges} = chain([application, review_step], label: "subflows")
+
+    health =
+      Health.check(
+        tree(nodes ++ [loose], edges,
+          label: "subflows",
+          subflows: %{application.id => inner, review_step.id => review}
+        )
+      )
+
+    assert health.summary == %{
+             label: "subflows",
+             steps: 6,
+             subflows: 2,
+             forms: 3,
+             perspectives: ["applicant", "reviewer"],
+             form_flow_types: ["wizard_in_order", nil]
+           }
+  end
+
+  # --- ignored entries --------------------------------------------------------
+
+  test "an ignored entry stays in its place, marked, and left out of the level and counts" do
     loose = form_node("Loose")
     unpublished = form_node("New", form: draft_only_form("New"))
     %{nodes: nodes, relationships: edges} = chain([unpublished])
@@ -430,43 +470,49 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     }
 
     health =
-      Health.check(tree(nodes ++ [loose], edges, properties: %{"ignored_problems" => [ignored]}))
+      Health.check(
+        tree(nodes ++ [loose], edges, properties: %{"_health_ignored_entries" => [ignored]})
+      )
 
+    # Level order as before: the ignored error keeps its place at the top
     assert [
-             %Problem{code: :unconnected, ignored: nil},
-             %Problem{
+             %Entry{
                code: :form_not_published,
                ignored: %{user_id: "demo-admin", ignored_at: at}
-             }
-           ] = health.problems
+             },
+             %Entry{code: :unconnected, ignored: nil}
+           ] = health.entries
 
     assert at == ~U[2026-09-08 10:00:00Z]
     assert health.level == :warning
     assert health.counts == %{error: 0, warning: 1, info: 0, ignored: 1}
-    assert [%Problem{code: :unconnected}] = Health.open(health)
-    assert [%Problem{code: :form_not_published}] = Health.ignored(health)
+    assert [%Entry{code: :unconnected}] = Health.open(health)
+    assert [%Entry{code: :form_not_published}] = Health.ignored(health)
     assert Health.at(health, :error) == []
     refute Health.ok?(health)
   end
 
-  test "a flow whose every problem is ignored is ok" do
+  test "a flow whose every entry is ignored is ok" do
     unpublished = form_node("New", form: draft_only_form("New"))
     ignored = %{"code" => "form_not_published", "path" => [unpublished.id], "user_id" => nil}
 
-    health = Health.check(chain([unpublished], properties: %{"ignored_problems" => [ignored]}))
+    health =
+      Health.check(chain([unpublished], properties: %{"_health_ignored_entries" => [ignored]}))
 
     assert Health.ok?(health)
     assert health.level == :ok
-    assert [%Problem{ignored: %{user_id: nil, ignored_at: nil}}] = health.problems
+    assert [%Entry{ignored: %{user_id: nil, ignored_at: nil}}] = health.entries
   end
 
-  test "a record for a problem the check no longer finds marks nothing" do
+  test "a record for a entry the check no longer finds marks nothing" do
     stale = %{"code" => "unconnected", "path" => [Ecto.UUID.generate()]}
 
     health =
-      Health.check(chain([form_node("Name")], properties: %{"ignored_problems" => [stale]}))
+      Health.check(
+        chain([form_node("Name")], properties: %{"_health_ignored_entries" => [stale]})
+      )
 
-    assert health.problems == []
+    assert health.entries == []
     assert health.counts.ignored == 0
   end
 end

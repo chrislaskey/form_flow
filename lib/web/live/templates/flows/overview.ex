@@ -25,7 +25,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Overview
   alias FormFlow.Web.Helpers.ReactFlow
-  alias FormFlow.Web.Templates.Components.Breadcrumb
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -92,21 +92,27 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   def render(assigns) do
     ~H"""
     <div>
-      <div class="mb-2 h-14 flex items-center justify-between gap-4">
-        <Breadcrumb.breadcrumb base={@base} section="flows" components={@components}>
-          {@flow.name || "Untitled"}
-          <span class="ml-1 text-xs font-normal text-zinc-500">Overview</span>
-        </Breadcrumb.breadcrumb>
-        <div class="flex items-center gap-4 text-xs">
-          <span class="text-zinc-500">Connected steps only, every level at once.</span>
-          <.link navigate={"#{@base}/flows/#{@flow.id}"} class="link link-primary">
+      <Header.header
+        base={@base}
+        section="flows"
+        name={@flow.name || "Untitled"}
+        components={@components}
+      >
+        <:metadata>Overview</:metadata>
+        <:metadata>Connected steps only, every level at once</:metadata>
+        <:actions>
+          <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
             Show
-          </.link>
-          <.link navigate={"#{@base}/flows/#{@flow.id}/edit"} class="link link-primary">
+          </Core.button>
+          <Core.button
+            components={@components}
+            navigate={"#{@base}/flows/#{@flow.id}/edit"}
+            class="btn"
+          >
             Edit
-          </.link>
-        </div>
-      </div>
+          </Core.button>
+        </:actions>
+      </Header.header>
 
       <Overview.overview
         id={"#{@id}-overview"}

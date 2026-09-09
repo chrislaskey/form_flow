@@ -1,7 +1,9 @@
-defmodule FormFlow.Data.Templates.Flows.Health.Problem do
+defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   @moduledoc """
-  One thing `FormFlow.Data.Templates.Flows.Health` found wrong, or worth
-  knowing, about a root flow.
+  One entry in a `FormFlow.Data.Templates.Flows.Health` report: something a
+  check found about a root flow. An entry, not a entry — a check judges a
+  flow from its shape and can be wrong about what is fine on purpose, which
+  is why an admin can ignore one (`FormFlow.Data.Templates.Flows.Health.ignore/3`).
 
   ## Fields
 
@@ -14,24 +16,24 @@ defmodule FormFlow.Data.Templates.Flows.Health.Problem do
       with unpublished changes. The three names are the ones the pages'
       alerts and badges already use for their `kind`.
     * `:code` — a stable atom naming the check that failed, for a caller
-      that acts on one kind of problem (`:end_unreachable`,
+      that acts on one kind of entry (`:end_unreachable`,
       `:form_not_published`, …). The full list is in
       `FormFlow.Data.Templates.Flows.Health`'s moduledoc.
     * `:message` — one sentence for an admin, complete on its own: it
       names the step or flow, qualified by the subflows on the way down
       the way the user-facing pages do ("Review / Check pet details").
-    * `:flow_id` — the flow the problem is in: the root, or the owned
+    * `:flow_id` — the flow the entry is in: the root, or the owned
       subflow the step sits in.
-    * `:node_id` — the node the problem is about, or `nil` for a problem
+    * `:node_id` — the node the entry is about, or `nil` for a entry
       with the flow itself (no End, Start does not reach End).
     * `:path` — where in the tree: the node ids from the root flow down,
       the same path `FormFlow.Data.Instances.FormProgress` addresses a
-      position by. For a flow-level problem it is the path of the subflow
+      position by. For a flow-level entry it is the path of the subflow
       node embedding that flow — `[]` for the root. `:code` and `:path`
-      together are what identifies a problem from one check to the next.
-    * `:ignored` — `nil`, or who set this problem aside and when
+      together are what identifies a entry from one check to the next.
+    * `:ignored` — `nil`, or who set this entry aside and when
       (`FormFlow.Data.Templates.Flows.Health.ignore/3`): `%{user_id:,
-      ignored_at:}`. An ignored problem is listed but not counted.
+      ignored_at:}`. An ignored entry is listed but not counted.
   """
 
   @levels [:error, :warning, :info]

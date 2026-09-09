@@ -12,6 +12,7 @@ defmodule FormFlow.Web.Router do
   use Phoenix.Component
 
   alias FormFlow.Web.Instances
+  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Flows
   alias FormFlow.Web.Templates.Forms
 
@@ -247,7 +248,9 @@ defmodule FormFlow.Web.Router do
               makes /admin this landing, /admin/flows and /admin/forms the
               indexes. --%>
         <div :if={segments(@path) == []} class="mb-6">
-          <h2 class="mb-2 text-base font-semibold">Templates</h2>
+          <Header.header base={@base} components={@components}>
+            <:metadata>Templates</:metadata>
+          </Header.header>
           <ul class="divide-y divide-base-300 text-base">
             <li class="py-3">
               <.link navigate={"#{@base}/flows"} class="link link-primary font-medium">
