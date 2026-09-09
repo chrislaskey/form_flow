@@ -56,6 +56,11 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   alias FormFlow.Web.Templates.Shared
 
   @impl true
+  def mount(socket) do
+    {:ok, assign(socket, error: nil)}
+  end
+
+  @impl true
   def update(assigns, socket) do
     socket =
       socket
@@ -68,8 +73,12 @@ defmodule FormFlow.Web.Templates.Flows.Health do
       |> assign_new(:params, fn -> %{} end)
 
     # Once per visit: a patch that changes the selection re-renders the
-    # component with the report it already has
-    socket = if Map.has_key?(socket.assigns, :health), do: socket, else: refresh(socket)
+    # component with the report it already has; a patch to another flow's
+    # page does not
+    socket =
+      if socket.assigns[:checked_for] == socket.assigns.flow_id,
+        do: socket,
+        else: refresh(socket)
 
     {:ok, select(socket, socket.assigns.params["entry"])}
   end
@@ -77,7 +86,12 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   # The check, written back as the cached status, and the root it was of
   defp refresh(socket) do
     health = Health.refresh(socket.assigns.flow_id, check_options(socket.assigns))
-    assign(socket, health: health, flow: health && Flows.get(health.flow_id))
+
+    assign(socket,
+      health: health,
+      flow: health && Flows.get(health.flow_id),
+      checked_for: socket.assigns.flow_id
+    )
   end
 
   defp check_options(assigns) do
@@ -95,19 +109,30 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   def handle_event("toggle_ignore", %{"entry" => key}, socket) do
     health = socket.assigns.health
 
-    case find_entry(health, key) do
-      %Entry{ignored: nil} = entry -> Health.ignore(health, entry, socket.assigns.user_id)
-      %Entry{} = entry -> Health.stop_ignoring(health, entry)
-      nil -> :gone
-    end
+    written =
+      case find_entry(health, key) do
+        %Entry{ignored: nil} = entry -> Health.ignore(health, entry, socket.assigns.user_id)
+        %Entry{} = entry -> Health.stop_ignoring(health, entry)
+        nil -> {:error, :not_found}
+      end
+
+    error =
+      case written do
+        {:ok, _root} ->
+          nil
+
+        {:error, :not_found} ->
+          "That entry could not be saved — the flow may have changed. The report below is current."
+      end
 
     # The toggle wrote the status from the report it held; reading the flow
-    # again picks up the marks, and the report as it stands now
+    # again picks up the marks, and the report as it stands now — or that
+    # the flow is gone
     health = Health.check(socket.assigns.flow.id, check_options(socket.assigns))
 
     {:noreply,
      socket
-     |> assign(health: health, flow: Flows.get(socket.assigns.flow.id))
+     |> assign(health: health, flow: health && Flows.get(health.flow_id), error: error)
      |> select(key)}
   end
 
@@ -208,6 +233,8 @@ defmodule FormFlow.Web.Templates.Flows.Health do
         </:actions>
       </Header.header>
 
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
       <%!-- When, and what the report is of --%>
       <dl class="mb-4 grid grid-cols-2 gap-x-8 gap-y-4 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <.fact :if={checked_at(@flow)} label="Checked">
@@ -281,6 +308,8 @@ defmodule FormFlow.Web.Templates.Flows.Health do
         <%!-- The selected entry --%>
         <div :if={@selected} id={"#{@id}-detail"} class="space-y-5 p-6">
           <div>
+            <%!-- Solid, not Core.badge's badge-soft: the level is the one
+                  thing on the pane that must read at a glance --%>
             <div class="flex flex-wrap items-center gap-2">
               <span class={["badge badge-sm", level_badge(@selected.level)]}>{@selected.level}</span>
               <span :if={@selected.ignored} class="badge badge-sm badge-neutral">ignored</span>
@@ -411,11 +440,10 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   defp plural(1, noun), do: "1 #{noun}"
   defp plural(count, noun), do: "#{count} #{noun}s"
 
-  # Solid badges, one colour per level; ignored is neutral
+  # Solid badges, one colour per level
   defp level_badge(:error), do: "badge-error"
   defp level_badge(:warning), do: "badge-warning"
   defp level_badge(:info), do: "badge-info"
-  defp level_badge(:ignored), do: "badge-neutral"
 
   defp dot(:error), do: "bg-error"
   defp dot(:warning), do: "bg-warning"

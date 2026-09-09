@@ -515,10 +515,37 @@ defmodule FormFlow.Data.Templates.Flows do
   domain that are no longer reachable through subflow references are deleted,
   with everything under them. Removing a subflow node from the canvas is how
   an owned subflow (and its whole private subtree) goes away.
+
+  `properties` keys with a leading underscore are the library's own
+  bookkeeping — `FormFlow.Data.Templates.Flows.Health`'s cached status and
+  ignored records — written by the library between a page's loads. A caller
+  saving the map it holds is saving a copy from before those writes, so its
+  underscore keys are ignored and the stored ones kept; nothing a caller
+  passes can set or clear them (see `guides/neo4j.md`).
   """
   def update(%Flow{} = flow, attrs) do
-    save(Flow.changeset(flow, attrs), attrs, &Repo.update/1, sweep?: true)
+    save(Flow.changeset(flow, keep_bookkeeping(flow, attrs)), attrs, &Repo.update/1, sweep?: true)
   end
+
+  defp keep_bookkeeping(flow, attrs) do
+    case Enum.find([:properties, "properties"], &Map.has_key?(attrs, &1)) do
+      nil ->
+        attrs
+
+      key ->
+        stored = (Repo.get(Flow, flow.id) || flow).properties || %{}
+        caller = attrs[key] || %{}
+
+        properties =
+          caller
+          |> Map.reject(fn {name, _value} -> bookkeeping?(name) end)
+          |> Map.merge(Map.filter(stored, fn {name, _value} -> bookkeeping?(name) end))
+
+        Map.put(attrs, key, properties)
+    end
+  end
+
+  defp bookkeeping?(name), do: is_binary(name) and String.starts_with?(name, "_")
 
   @doc """
   Deletes a root flow, everything it owns, and their nodes and relationships.
@@ -718,9 +745,11 @@ defmodule FormFlow.Data.Templates.Flows do
   cached status and ignored records, which name nodes the copy does not
   have) does not come along: the copy starts as a flow never checked. Given
   `flow_types:` and `form_types:` — the host's lists — the copy is checked
-  once and its status cached (`FormFlow.Data.Templates.Flows.Health.refresh/2`);
-  without them it is not, since a check with the library's default types
-  could cache a type warning the host's lists would not raise.
+  once and its status cached (`FormFlow.Data.Templates.Flows.Health.refresh/2`)
+  — on the copy when it is a root, on the destination root when the copy is
+  made owned, since health is always the root's; without them it is not,
+  since a check with the library's default types could cache a type warning
+  the host's lists would not raise.
   """
   def duplicate(%Flow{} = flow, opts \\ []) do
     owner_id = Keyword.get(opts, :owner_flow_id)

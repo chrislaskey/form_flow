@@ -272,8 +272,35 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     assert Health.ok?(Health.check(chain([about, review_of.(about.id)])))
 
-    assert [%Entry{code: :related_form_missing}] =
+    assert [%Entry{code: :related_form_missing, message: message}] =
              Health.check(chain([about, review_of.(Ecto.UUID.generate())])).entries
+
+    assert message == "“Check” points “Form to review” at a form that is no longer in this flow"
+  end
+
+  test "a related form the tree has but no Start reaches is as missing as one deleted" do
+    # The runtime looks the related form up among the connected positions,
+    # so the reviewer would find nothing; the message says which fix applies
+    loose = form_node("About")
+
+    check =
+      form_node("Check",
+        form:
+          published_form("Check", %{
+            "form_type" => "review",
+            "form_type_property_values" => %{"source" => loose.id}
+          })
+      )
+
+    %{nodes: nodes, relationships: edges} = chain([check])
+    health = Health.check(tree(nodes ++ [loose], edges))
+
+    assert [
+             %Entry{code: :related_form_missing, message: message},
+             %Entry{code: :unconnected}
+           ] = health.entries
+
+    assert message == "“Check” points “Form to review” at a form no Start reaches"
   end
 
   test "a related form resolves across subflows, by path" do
@@ -438,26 +465,17 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       assert entry.fix == Entry.fix(entry.code)
     end
 
-    # Words for every code, so a page never has a blank
-    for code <- [
-          :no_start,
-          :no_end,
-          :end_unreachable,
-          :form_missing,
-          :form_not_published,
-          :subflow_missing,
-          :property_missing,
-          :related_form_missing,
-          :unconnected,
-          :dead_end,
-          :no_steps,
-          :unknown_type,
-          :stale_perspectives,
-          :unpublished_changes
-        ] do
+    # Words of its own for every code — not the general sentence an unlisted
+    # code falls back to, which keeps a save from refusing over a missing
+    # paragraph
+    for code <- Entry.codes() do
       assert String.length(Entry.explanation(code)) > 40
+      assert Entry.explanation(code) != Entry.explanation(:not_a_code)
       assert String.ends_with?(Entry.fix(code), ".")
+      assert Entry.fix(code) != Entry.fix(:not_a_code)
     end
+
+    assert length(Entry.codes()) == 14
   end
 
   # --- ordering and counts -----------------------------------------------------

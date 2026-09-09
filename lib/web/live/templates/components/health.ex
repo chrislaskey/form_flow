@@ -3,10 +3,14 @@ defmodule FormFlow.Web.Templates.Components.Health do
   `FormFlow.Web.Templates.Components.Health` function component draws one
   root flow's health as a badge that links to its health page
   (`FormFlow.Web.Templates.Flows.Health`): a bordered icon button with a
-  count on its shoulder — a green check when nothing is open, the count of
-  open entries in the colour of the worst level when something is, and a
-  grey dash for a flow never checked. The heart is drawn inline, so a host
-  needs no icon set for it.
+  mark on its shoulder — the count of open **errors and warnings** in the
+  colour of the worst, a check when there are none, and a grey dash for a
+  flow never checked. The check is green when nothing at all is open, and in
+  the info colour when only `:info` entries are — a draft with unpublished
+  changes is the normal state of a form being worked on, and a flow with
+  nothing wrong should read as healthy while that work goes on; the tooltip
+  says "healthy · 2 to review", and the page lists them. The heart is drawn
+  inline, so a host needs no icon set for it.
 
   It reads the **cached status** off the flow struct it is given
   (`FormFlow.Data.Templates.Flows.Health.status/1`) and runs nothing: the
@@ -95,10 +99,15 @@ defmodule FormFlow.Web.Templates.Components.Health do
   end
 
   # The shoulder: a dash for a flow never checked, a check for one with
-  # nothing open, else the count of what is open
+  # nothing wrong, else the count of what is
   defp mark(nil), do: "–"
-  defp mark(%{level: :ok}), do: "✓"
-  defp mark(status), do: to_look_at(status)
+
+  defp mark(status) do
+    case to_look_at(status) do
+      0 -> "✓"
+      count -> count
+    end
+  end
 
   # The badges' colours, solid, in the worst open level's; grey for none
   defp colors(nil), do: "bg-zinc-200 text-zinc-600"
@@ -110,7 +119,10 @@ defmodule FormFlow.Web.Templates.Components.Health do
   # For the button's label, since the icon says nothing on its own
   defp words(nil), do: "not checked yet — open to check"
   defp words(%{level: :ok}), do: "healthy"
+  defp words(%{level: :info, counts: counts}), do: "healthy · #{counts.info} to review"
   defp words(status), do: "#{to_look_at(status)} to look at"
 
-  defp to_look_at(%{counts: counts}), do: counts.error + counts.warning + counts.info
+  # What is wrong: errors and warnings. Info entries describe work in
+  # progress, not a flow left in a bad state, and stay off the count.
+  defp to_look_at(%{counts: counts}), do: counts.error + counts.warning
 end

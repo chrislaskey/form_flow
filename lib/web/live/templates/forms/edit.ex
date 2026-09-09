@@ -179,7 +179,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       refresh_health(socket)
 
       {:ok,
-       assign(socket,
+       socket
+       |> assign(
          form: form,
          node: node,
          version: version,
@@ -188,7 +189,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          dirty?: false,
          error: nil,
          notice: "Saved."
-       )}
+       )
+       |> assign_breadcrumb(node)}
     else
       {:error, :stale} ->
         {:ok,
@@ -1190,6 +1192,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
         </:crumb>
+        <:actions :if={@root}>
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+        </:actions>
       </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
@@ -1322,6 +1327,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
         </:crumb>
+        <%!-- Reached through a flow: that flow's health, which the save
+              below refreshes --%>
+        <:actions :if={@root}>
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+        </:actions>
         <:actions>
           <Core.button
             :if={length(@versions) > 1}

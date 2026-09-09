@@ -44,7 +44,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:form_not_published` | error | a connected form step's form has no published version — users cannot start it (`FormFlow.Data.Instances.Forms` pins the latest published version) |
   | `:subflow_missing` | error | a connected subflow step points at no flow, or at one that could not be resolved |
   | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value — the Review type's "Form to review", say |
-  | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has |
+  | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches — either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
   | `:unconnected` | warning | a node no Start reaches; users can never get there |
   | `:dead_end` | warning | a node Start reaches that nothing follows, so End never waits for it |
   | `:no_steps` | warning | Start reaches End with no form or subflow step between them |
@@ -93,6 +93,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   calls many times. A missed caller means a badge that lags, never a page
   that is wrong: the health page runs the check on every visit and writes
   the cache back. A flow never checked has no status, and its badge says so.
+  The write touches the `properties` column alone: a check is derived from
+  the flow and does not move its `updated_at`, and a caller's own save
+  cannot clobber it (`FormFlow.Data.Templates.Flows.update/2` keeps the
+  stored `_` keys over whatever map the caller holds).
 
   The `_` prefix marks the key as the library's own bookkeeping beside the
   admin-set keys in the same map; see `guides/neo4j.md`.
@@ -119,6 +123,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   describe — with the source's node ids, which the copy does not have, so
   they match nothing there and the copy's refresh drops them.
   """
+
+  import Ecto.Query, only: [from: 2]
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Config.Property
@@ -217,7 +223,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     opts = %{
       flow_types: Keyword.get(opts, :flow_types, FormFlow.Config.Flows.Type.defaults()),
       form_types: Keyword.get(opts, :form_types, FormFlow.Config.Forms.Type.defaults()),
-      form_paths: form_paths(tree, [])
+      form_paths: form_paths(tree, [], :all),
+      connected_form_paths: form_paths(tree, [], :connected)
     }
 
     # Every check evaluated yields one result: an entry, or :pass
@@ -262,11 +269,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       label: tree.flow.label,
       steps: Enum.count(nodes, &(kind(&1) in [:form, :subflow])),
       subflows: Enum.count(nodes, &(kind(&1) == :subflow)),
-      forms:
-        nodes
-        |> Enum.filter(&(kind(&1) == :form))
-        |> Enum.uniq_by(&(&1.form_id || &1.id))
-        |> length(),
+      forms: nodes |> Enum.map(& &1.form_id) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> length(),
       perspectives: flows |> Enum.flat_map(&Perspective.ids/1) |> Enum.uniq(),
       form_flow_types:
         for(%{label: "forms"} = flow <- flows, uniq: true, do: flow.properties["form_flow_type"])
@@ -346,7 +349,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   owned subflow, whose root is found through `owner_flow_id` — and caches
   the result on the root (`status/1`), dropping ignored records that match
   no entry any more. Returns the report, or `nil` for a flow that no longer
-  exists. Takes `check/2`'s options.
+  exists — including one deleted between the check and the write. Takes
+  `check/2`'s options.
 
   Call it **once, at the end of a save**, from the page or the operation
   that owns the whole save — never from inside a function a save calls per
@@ -370,13 +374,17 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         nil
 
       health ->
-        write_metadata(root.id, fn metadata ->
-          metadata
-          |> put_records(current_records(metadata, health))
-          |> Map.put("status", encode_status(health))
-        end)
+        written =
+          write_metadata(root.id, fn metadata ->
+            metadata
+            |> put_records(current_records(metadata, health))
+            |> Map.put("status", encode_status(health))
+          end)
 
-        health
+        case written do
+          {:ok, _root} -> health
+          {:error, :not_found} -> nil
+        end
     end
   end
 
@@ -420,11 +428,11 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   Records `entry` as ignored on the root flow `health` was checked, by
   `user_id` (the host's opaque identity, as the instance events carry it)
   and now, and caches the status as it now stands. Returns the updated root
-  flow. Records for entries the check no longer finds are dropped on the
+  flow, or `{:error, :not_found}` when the flow has been deleted since the
+  check. Records for entries the check no longer finds are dropped on the
   way.
   """
-  @spec ignore(t(), Entry.t(), String.t() | nil) ::
-          {:ok, Flow.t()} | {:error, Ecto.Changeset.t()}
+  @spec ignore(t(), Entry.t(), String.t() | nil) :: {:ok, Flow.t()} | {:error, :not_found}
   def ignore(%__MODULE__{} = health, %Entry{} = entry, user_id) do
     record = %{
       "code" => Atom.to_string(entry.code),
@@ -439,9 +447,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   @doc """
   Removes `entry`'s ignored record from the root flow `health` was checked,
   so it counts again, and caches the status as it now stands. Returns the
-  updated root flow.
+  updated root flow, or `{:error, :not_found}` when the flow has been
+  deleted since the check.
   """
-  @spec stop_ignoring(t(), Entry.t()) :: {:ok, Flow.t()} | {:error, Ecto.Changeset.t()}
+  @spec stop_ignoring(t(), Entry.t()) :: {:ok, Flow.t()} | {:error, :not_found}
   def stop_ignoring(%__MODULE__{} = health, %Entry{} = entry) do
     toggle(health, fn records -> Enum.reject(records, &same_entry?(&1, entry)) end)
   end
@@ -462,17 +471,32 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   # Read-modify-write of the one key, the root re-read inside the
   # transaction right before: a concurrent identity save changes other keys
-  # of the same map, and neither may clobber the other
+  # of the same map, and neither may clobber the other. The one column is
+  # written, not the changeset: bookkeeping derived from the flow does not
+  # move the flow's own `updated_at`. A root deleted underneath is an error,
+  # not a crash — the page it came from may be open in another tab.
   defp write_metadata(root_id, change) do
     Repo.transaction(fn ->
-      root = Repo.get(Flow, root_id)
-      properties = Map.put(root.properties || %{}, @metadata_key, change.(metadata(root)))
+      case Repo.get(Flow, root_id) do
+        nil ->
+          Repo.rollback(:not_found)
 
-      case Repo.update(Flow.changeset(root, %{properties: properties})) do
-        {:ok, root} -> root
-        {:error, changeset} -> Repo.rollback(changeset)
+        root ->
+          write_properties(
+            root,
+            Map.put(root.properties || %{}, @metadata_key, change.(metadata(root)))
+          )
       end
     end)
+  end
+
+  defp write_properties(root, properties) do
+    query = from(f in Flow, where: f.id == ^root.id)
+
+    case Repo.update_all(query, set: [properties: properties]) do
+      {1, _rows} -> %{root | properties: properties}
+      {0, _rows} -> Repo.rollback(:not_found)
+    end
   end
 
   defp metadata(%{properties: properties}) do
@@ -842,12 +866,9 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         blank?(value) ->
           :pass
 
-        property.type == :related_form and not MapSet.member?(opts.form_paths, split_path(value)) ->
-          entry.(
-            :error,
-            :related_form_missing,
-            "points “#{property.name}” at a form that is no longer in this flow"
-          )
+        property.type == :related_form and
+            not MapSet.member?(opts.connected_form_paths, split_path(value)) ->
+          entry.(:error, :related_form_missing, related_form_text(property, value, opts))
 
         true ->
           :pass
@@ -855,21 +876,37 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end)
   end
 
+  # The runtime resolves a related form among the connected positions only,
+  # so a form the tree has but no Start reaches is as absent as one deleted
+  # — the message says which, since the fix differs
+  defp related_form_text(property, value, opts) do
+    if MapSet.member?(opts.form_paths, split_path(value)),
+      do: "points “#{property.name}” at a form no Start reaches",
+      else: "points “#{property.name}” at a form that is no longer in this flow"
+  end
+
   defp blank?(value), do: value in [nil, "", []]
 
   defp split_path(value) when is_binary(value), do: String.split(value, "/")
   defp split_path(value), do: value
 
-  # Every form position in the tree, as the paths a :related_form value
-  # names — connected or not, since the value was picked from what the flow
-  # had, and an unconnected form is already reported as such
-  defp form_paths(nil, _prefix), do: MapSet.new()
+  # The form positions in the tree, as the paths a :related_form value
+  # names: `:all` of them, or the `:connected` ones — those a Start reaches
+  # at every level down, which is where the runtime looks
+  # (`FormFlow.Config.Forms.Type.related_form/2` over the progress list)
+  defp form_paths(nil, _prefix, _which), do: MapSet.new()
 
-  defp form_paths(tree, prefix) do
-    own = for node <- tree.nodes, kind(node) == :form, into: MapSet.new(), do: prefix ++ [node.id]
+  defp form_paths(tree, prefix, which) do
+    nodes =
+      case which do
+        :all -> tree.nodes
+        :connected -> connected_nodes(scope(tree, prefix, []))
+      end
 
-    Enum.reduce(tree.subflows, own, fn {node_id, subtree}, paths ->
-      MapSet.union(paths, form_paths(subtree, prefix ++ [node_id]))
+    own = for node <- nodes, kind(node) == :form, into: MapSet.new(), do: prefix ++ [node.id]
+
+    Enum.reduce(nodes, own, fn node, paths ->
+      MapSet.union(paths, form_paths(tree.subflows[node.id], prefix ++ [node.id], which))
     end)
   end
 

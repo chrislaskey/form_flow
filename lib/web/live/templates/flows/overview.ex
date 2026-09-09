@@ -93,14 +93,18 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   def render(assigns) do
     ~H"""
     <div>
+      <%!-- The flow as the root, so the title reads "Flow  Overview" and the
+            trail walks Flows / Flow (its show page) / Overview, as the health
+            page's does --%>
       <Header.header
         base={@base}
         section="flows"
-        name={@flow.name || "Untitled"}
+        root={@flow}
+        name="Overview"
         components={@components}
       >
-        <:metadata>Overview</:metadata>
         <:metadata>Connected steps only, every level at once</:metadata>
+        <:crumb>Overview</:crumb>
         <:actions>
           <Health.health base={@base} flow={@flow} />
           <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">

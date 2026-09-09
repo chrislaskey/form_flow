@@ -303,6 +303,11 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         <:metadata :for={{property, value} <- type_property_values(assigns)}>
           {property.name}: {Shared.display_value(property, value)}
         </:metadata>
+        <%!-- Reached through a flow: that flow's health, which a publish
+              here is the usual way to mend --%>
+        <:actions :if={@root}>
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+        </:actions>
         <:actions :if={@version}>
           <Core.button
             :if={@version.status == "draft" && length(@versions) > 1}

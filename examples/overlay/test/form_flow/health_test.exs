@@ -69,6 +69,61 @@ defmodule Demo.FormFlowHealthTest do
     assert %{level: :warning, counts: %{error: 0, warning: 1}} = Health.status(Flows.get(flow.id))
   end
 
+  test "a save from a stale copy of the properties keeps the ignored records" do
+    flow = starter_flow()
+    stale = Flows.get(flow.id)
+
+    health = Health.refresh(flow.id)
+    [unconnected] = Health.at(health, :warning)
+    {:ok, _root} = Health.ignore(health, unconnected, "demo-admin")
+
+    # An identity save from a page loaded before the ignore: its map has no
+    # bookkeeping, and must not take the stored bookkeeping with it
+    {:ok, saved} =
+      Flows.update(stale, %{properties: Map.put(stale.properties, "form_flow_type", "default")})
+
+    assert saved.properties["form_flow_type"] == "default"
+
+    assert [%{"code" => "unconnected"}] =
+             saved.properties["_health_metadata"]["ignored_entries"]
+
+    # And a caller cannot set bookkeeping of its own through a save
+    {:ok, saved} =
+      Flows.update(saved, %{properties: %{"_health_metadata" => %{}, "_mine" => true}})
+
+    assert [%{"code" => "unconnected"}] =
+             saved.properties["_health_metadata"]["ignored_entries"]
+
+    refute Map.has_key?(saved.properties, "_mine")
+  end
+
+  test "a check does not move the flow's updated_at" do
+    flow = starter_flow()
+    Health.refresh(flow.id)
+    before = Flows.get(flow.id)
+
+    Process.sleep(1_100)
+    health = Health.refresh(flow.id)
+    [unconnected] = Health.at(health, :warning)
+    {:ok, _root} = Health.ignore(health, unconnected, nil)
+
+    after_checks = Flows.get(flow.id)
+    assert after_checks.updated_at == before.updated_at
+    assert after_checks.properties["_health_metadata"] != before.properties["_health_metadata"]
+  end
+
+  test "a flow deleted under a report refuses the toggle and the refresh, without raising" do
+    flow = starter_flow()
+    health = Health.refresh(flow.id)
+    [unconnected] = Health.at(health, :warning)
+
+    {:ok, _flow} = Flows.delete(Flows.get(flow.id))
+
+    assert Health.ignore(health, unconnected, "demo-admin") == {:error, :not_found}
+    assert Health.stop_ignoring(health, unconnected) == {:error, :not_found}
+    assert Health.refresh(flow.id) == nil
+  end
+
   test "refresh writes only its own key, leaving the admin's beside it" do
     flow = starter_flow()
 

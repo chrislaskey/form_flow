@@ -864,9 +864,14 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert status.() == nil
 
       {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
+      # Reached through a flow, the form page carries the flow's badge
+      assert has_element?(view, ~s(a[href="/admin/flows/#{root.id}/health"] span), "–")
       view |> element("button", "Publish") |> render_click()
       assert_redirect(view, "#{form_page}/versions/#{draft.id}")
       assert %{level: :ok, counts: %{error: 0, info: 0}, checked_at: published_at} = status.()
+
+      {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
+      assert has_element?(view, ~s(a[href="/admin/flows/#{root.id}/health"] span), "✓")
 
       # Create draft: checked again, though a draft matching the published
       # version has nothing to report
@@ -899,6 +904,11 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       view |> element(~s(button[phx-click="copy_definition"])) |> render_click()
       assert %{level: :info, counts: %{info: 1}} = status.()
+
+      # Info is work in progress, not something wrong: the badge stays a
+      # check, in the info colour, and the tooltip says what there is to review
+      assert has_element?(view, ~s(a[href="/admin/flows/#{root.id}/health"].bg-white span), "✓")
+      assert has_element?(view, ~s(a[title="Health: healthy · 1 to review"]))
 
       # Delete draft: the info goes
       view |> element(~s(button[phx-click="delete_draft"])) |> render_click()

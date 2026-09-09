@@ -176,6 +176,20 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(index, "#{badge} span", "2")
   end
 
+  test "the health page says so when the flow is deleted under it", %{conn: conn} do
+    {:ok, flow} =
+      Flows.create(%{name: "Gone", nodes: Flows.starter_nodes(), relationships: []})
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/health")
+    assert has_element?(view, "#flows-health-ignore")
+
+    {:ok, _flow} = Flows.delete(Flows.get(flow.id))
+
+    view |> element("#flows-health-ignore") |> render_click()
+
+    assert render(view) =~ "Flow not found."
+  end
+
   test "saves through the pages refresh the badge; the health page catches up a lagging one",
        %{conn: conn} do
     id = create_flow(conn, "Enrollment")

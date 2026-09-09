@@ -4,6 +4,10 @@
 
 ### The admin pages share one header
 
+The Overview and Health pages pass the flow as the header's `root` and
+their own name as the page's, so the title reads "Flow  Overview" and the
+trail walks Flows / Flow (a link to its show page) / Overview.
+
 Every templates page — the two indexes, New, Show, Edit, Overview, the
 form pages — now draws the same header
 (**`FormFlow.Web.Templates.Components.Header`**, replacing
@@ -42,8 +46,9 @@ checks passed (`Health.passing/1`) beside an empty list.
 The checks, at every connected level: no Start, no End, Start not reaching
 End, a step whose form or subflow is missing, a form with no published
 version, a type property the type requires left unset, a related form
-pointing at a position the tree no longer has — all errors, since a user
-cannot work the flow. A node no Start reaches, a node nothing follows,
+pointing at a position the tree no longer has or one no Start reaches (the
+runtime looks it up among the connected positions) — all errors, since a
+user cannot work the flow. A node no Start reaches, a node nothing follows,
 Start wired straight to End, a type the host no longer offers, a stale
 perspective — warnings. A draft with changes not yet published — info.
 What is behind an unconnected step is not checked: it is reported once,
@@ -62,9 +67,14 @@ leaves the source's bookkeeping behind, so a copy starts never checked, and
 checks it once when given `flow_types:` and `form_types:`. `Health.refresh_for_form/2` is the form pages' call: every root with
 a step on the form, since a catalog form's lineage is shared. A save that
 bypasses the pages leaves the badge behind; the health page brings it up to
-date, since it runs the check on every visit. The `_` prefix marks the key
-as the library's own bookkeeping beside the admin-set keys in the same map
-(see `guides/neo4j.md`). A demo database from before this change may hold
+date, since it runs the check on every visit. The write touches the
+`properties` column alone, so a check never moves the flow's `updated_at`,
+and a root deleted under an open report answers `{:error, :not_found}`
+rather than raising. The `_` prefix marks the key as the library's own
+bookkeeping beside the admin-set keys in the same map (see
+`guides/neo4j.md`), and **`Flows.update/2` keeps the stored `_` keys** over
+whatever map a caller passes — a page saving the copy of `properties` it
+loaded cannot take the bookkeeping written since with it. A demo database from before this change may hold
 the earlier `_health_ignored_entries` key; recreate it.
 
 **An entry can be ignored.** An admin who always sees "5 warnings" stops
@@ -81,12 +91,16 @@ included, so a duplicate's copy starts clean. `Health.open/1` and
 **Every flow page carries the badge**, drawn by
 **`FormFlow.Web.Templates.Components.Health`** — a function component that
 reads the cached status off the root flow it is given and links to the
-flow's health page: an icon button with the count on its shoulder — a green
-check when nothing is open, the count of open entries in the colour of the
-worst, a grey dash for a flow never checked. On the flows index per row
-(the listing runs no check), and in the Show, Edit, and Overview headers
-from any depth, always the root's; on the edit page it goes through the
-"navigate" event, so unsaved changes prompt first.
+flow's health page: an icon button with a mark on its shoulder — the count
+of open **errors and warnings** in the colour of the worst, a check when
+there are none (green, or in the info colour when only info entries are
+open: a draft with unpublished changes is the normal state of a form being
+worked on, so the tooltip reads "healthy · 2 to review" and the flow reads
+as healthy), a grey dash for a flow never checked. On the flows index per
+row (the listing runs no check), in the Show, Edit, and Overview headers
+from any depth, and on a form page reached through a flow — always the
+root's; on the edit page it goes through the "navigate" event, so unsaved
+changes prompt first.
 
 **`/flows/:id/health`** is the health page, **`FormFlow.Web.Templates.Flows.Health`**,
 added to the router as the overview was. Its header names the flow — the

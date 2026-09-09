@@ -443,7 +443,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # click — landing here is the same as landing here from the read-only
   # canvas (`FormFlow.Web.Templates.Flows.Show`). `mode=edit` is the one
   # thing that does cross the boundary: it tells the form pages' own
-  # breadcrumb (`FormFlow.Web.Templates.Components.Breadcrumb`) that Root
+  # header (`FormFlow.Web.Templates.Components.Header`) that Root
   # and Parent should route back to their editors, not their show pages,
   # since that's where this click came from.
   #

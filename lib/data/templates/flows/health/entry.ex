@@ -46,6 +46,23 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   @levels [:error, :warning, :info]
 
+  @codes [
+    :no_start,
+    :no_end,
+    :end_unreachable,
+    :form_missing,
+    :form_not_published,
+    :subflow_missing,
+    :property_missing,
+    :related_form_missing,
+    :unconnected,
+    :dead_end,
+    :no_steps,
+    :unknown_type,
+    :stale_perspectives,
+    :unpublished_changes
+  ]
+
   @enforce_keys [:level, :code, :message, :flow_id]
   defstruct [
     :level,
@@ -84,9 +101,19 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   def rank(level), do: Enum.find_index(@levels, &(&1 == level))
 
   @doc """
+  Every code a check can produce — the list `explanation/1` and `fix/1` have
+  words for, and the list the tests hold them to. A code added to the checks
+  goes here too.
+  """
+  @spec codes() :: [atom()]
+  def codes, do: @codes
+
+  @doc """
   Why an entry with `code` matters: what a user meets when the flow is left
   this way. Written for an admin reading one entry, without the subject —
-  `:message` names that.
+  `:message` names that. A code without words of its own gets a general
+  sentence rather than an error: the check runs inside every save, and a
+  missing paragraph must not refuse one.
   """
   @spec explanation(atom()) :: String.t()
   def explanation(:no_start) do
@@ -126,9 +153,10 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   end
 
   def explanation(:related_form_missing) do
-    "The property names a form by its position in the flow, and that position is no longer " <>
-      "there — the step was removed, or moved into another subflow. Whatever reads the " <>
-      "related form's answers would find none."
+    "The property names a form by its position in the flow, and no user can reach that " <>
+      "position — the step was removed, moved into another subflow, or is not connected from " <>
+      "Start. The related form is looked up among the steps a user can reach, so whatever " <>
+      "reads its answers would find none."
   end
 
   def explanation(:unconnected) do
@@ -165,6 +193,8 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
       "version keeps working. The draft's changes reach users only when it is published."
   end
 
+  def explanation(_code), do: "A check found something about this step worth a look."
+
   @doc "What to do about an entry with `code`, in one sentence."
   @spec fix(atom()) :: String.t()
   def fix(:no_start), do: "Add a Start node to the flow and connect it to the first step."
@@ -186,7 +216,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   def fix(:property_missing), do: "Open the flow's or form's settings and set the property."
 
   def fix(:related_form_missing),
-    do: "Point the property at a form the flow still has, or add the form back."
+    do: "Point the property at a form Start reaches, or connect or add the form it names."
 
   def fix(:unconnected),
     do: "Connect a step that Start reaches to this one, or delete it if it is not needed."
@@ -202,4 +232,6 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   def fix(:unpublished_changes),
     do: "Publish the draft when it is ready, or delete it if the changes are not wanted."
+
+  def fix(_code), do: "Open the step and review it."
 end
