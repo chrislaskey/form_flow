@@ -120,8 +120,9 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   # The editor round-trips properties untouched, so a saved subflow or form
   # node arrives with only the properties copy — the column takes its value
   # from it. `put_new`, not `put`: a reference already in the attributes wins
-  # over the copy (copy_flow relies on this: it passes the *new* id so a stale
-  # property copy can't re-point a copied node at the original).
+  # over the copy (`FormFlow.Data.Templates.Flows.copy/2` relies on this: it
+  # passes the *new* id so a stale property copy can't re-point a copied node
+  # at the original).
   defp put_new_from_properties(changeset, field, key) do
     properties = get_field(changeset, :properties) || %{}
 
@@ -140,8 +141,8 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   # Labels categorize what a node *is*, Neo4j-style. The editor never sets
   # them — they are derived from the ReactFlow `kind`/`type` already in
   # properties, so every node gets one without the client needing to know the
-  # mapping. Only kicks in when nothing already set labels explicitly (e.g.
-  # copy_flow, which carries a source node's labels forward as-is).
+  # mapping. Only kicks in when nothing already set labels explicitly (a flow
+  # copy carries a source node's labels forward as-is).
   defp derive_labels_from_kind(changeset) do
     case get_field(changeset, :labels) do
       [] ->

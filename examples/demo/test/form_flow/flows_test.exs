@@ -286,12 +286,12 @@ defmodule Demo.FormFlowFlowsTest do
       assert form.properties["tenant_id"] == "acme"
     end
 
-    test "duplicate carries the tenant into the copy and everything it owns" do
+    test "copy carries the tenant into the copy and everything it owns" do
       {:ok, root} = Flows.create(%{tenant_id: "acme"})
       {:ok, child} = Flows.create(%{owner_flow_id: root.id, tenant_id: "acme"})
       insert_subflow_node(root, child)
 
-      {:ok, copy} = Flows.duplicate(root)
+      {:ok, copy} = Flows.copy(root)
 
       assert copy.tenant_id == "acme"
       assert copy.properties["tenant_id"] == "acme"
@@ -336,8 +336,8 @@ defmodule Demo.FormFlowFlowsTest do
       assert relationship.tenant_id == "acme"
       assert relationship.properties["tenant_id"] == "acme"
 
-      # A duplicate's rows carry it too
-      {:ok, copy} = Flows.duplicate(flow)
+      # A copy's rows carry it too
+      {:ok, copy} = Flows.copy(flow)
       %{nodes: nodes, relationships: [relationship]} = Flows.get(copy.id)
       assert Enum.all?(nodes, &(&1.tenant_id == "acme"))
       assert relationship.tenant_id == "acme"
@@ -495,7 +495,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert fresh.slug == "intake_owner-conta"
     end
 
-    test "duplicate rewrites copied steps' defaults under the copy's slug; hand-set ones get a suffix" do
+    test "copy rewrites copied steps' defaults under the copy's slug; hand-set ones get a suffix" do
       {:ok, root} = Flows.create(%{name: "Dog License Application 2026", label: "subflows"})
       {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Documents")]})
       [node] = Flows.get(root.id).nodes
@@ -509,7 +509,7 @@ defmodule Demo.FormFlowFlowsTest do
           ]
         })
 
-      {:ok, copy} = Flows.duplicate(Flows.get(root.id), slug: "dla2027")
+      {:ok, copy} = Flows.copy(Flows.get(root.id), slug: "dla2027")
       assert copy.slug == "dla2027"
       [copied_node] = copy.nodes
       assert copied_node.slug == "dla2027_documents"
@@ -524,7 +524,7 @@ defmodule Demo.FormFlowFlowsTest do
 
       # Without a slug the copy takes the next free suffix of the source's,
       # and the steps' defaults follow it
-      {:ok, second} = Flows.duplicate(Flows.get(root.id))
+      {:ok, second} = Flows.copy(Flows.get(root.id))
       assert second.slug == "dla2026-2"
       [second_node] = second.nodes
       assert second_node.slug == "dla2026-2_documents"
@@ -533,12 +533,111 @@ defmodule Demo.FormFlowFlowsTest do
       # prefix — what a step made there would get — and the copy has no slug;
       # the hand-set one is on its fourth holder by now
       {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
-      {:ok, into} = Flows.duplicate(Flows.get(documents.id), owner_flow_id: cat.id)
+      {:ok, into} = Flows.copy(Flows.get(documents.id), owner_flow_id: cat.id)
       assert into.slug == nil
       assert into.owner_flow_id == cat.id
 
       assert Enum.sort(Enum.map(into.nodes, & &1.slug)) ==
                ["cat-license_user-inform", "owner-contact-4"]
+    end
+
+    test "copy re-points related-form paths at the copied nodes, across levels" do
+      {:ok, root} = Flows.create(%{name: "Dog License", label: "subflows"})
+      {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Review")]})
+      [review_node] = Flows.get(root.id).nodes
+      review = Flows.get(review_node.subflow_id)
+
+      {:ok, _} = Flows.update(review, %{nodes: [form_step("About"), form_step("Check")]})
+      [about, check] = Enum.sort_by(Flows.get(review.id).nodes, &step_label_of/1)
+
+      # The path a :related_form value names: node ids from the root down
+      {:ok, _} =
+        Forms.update(Forms.get(check.form_id), %{
+          properties: %{
+            "form_type" => "review",
+            "form_type_property_values" => %{
+              "source" => "#{review_node.id}/#{about.id}",
+              "note" => "unchanged text"
+            }
+          }
+        })
+
+      {:ok, copy} = Flows.copy(Flows.get(root.id))
+      [copied_review_node] = copy.nodes
+      copied_review = Flows.get(copied_review_node.subflow_id)
+      [copied_about, copied_check] = Enum.sort_by(copied_review.nodes, &step_label_of/1)
+
+      values = Forms.get(copied_check.form_id).properties["form_type_property_values"]
+      assert values["source"] == "#{copied_review_node.id}/#{copied_about.id}"
+      assert values["note"] == "unchanged text"
+
+      # The source's own value is untouched
+      assert Forms.get(check.form_id).properties["form_type_property_values"]["source"] ==
+               "#{review_node.id}/#{about.id}"
+    end
+
+    test "copy copies an entity two steps share once, and both copied steps point at it" do
+      {:ok, flow} = Flows.create(%{name: "Intake"})
+      {:ok, _} = Flows.update(flow, %{nodes: [form_step("Owner")]})
+      [owner_step] = Flows.get(flow.id).nodes
+
+      # The canvas duplicated the step: a second node on the same owned form
+      {:ok, _} =
+        Flows.update(Flows.get(flow.id), %{
+          nodes: [
+            form_step("Owner", owner_step),
+            form_step("Owner again", %{"form_id" => owner_step.form_id})
+          ]
+        })
+
+      assert [_, _] = Flows.get(flow.id).nodes
+      assert Flows.get(flow.id).nodes |> Enum.map(& &1.form_id) |> Enum.uniq() |> length() == 1
+
+      {:ok, copy} = Flows.copy(Flows.get(flow.id))
+
+      assert [copied_form_id] = copy.nodes |> Enum.map(& &1.form_id) |> Enum.uniq()
+      assert copied_form_id != owner_step.form_id
+      assert Forms.get(copied_form_id).copied_from_form_id == owner_step.form_id
+    end
+
+    test "copy into a tree is owned by its root, whichever flow of the tree is named" do
+      {:ok, source} = Flows.create(%{name: "Documents"})
+      {:ok, _} = Flows.update(source, %{nodes: [form_step("Proof of address")]})
+
+      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
+      {:ok, _} = Flows.update(cat, %{nodes: [subflow_step("Intake")]})
+      [intake_node] = Flows.get(cat.id).nodes
+
+      {:ok, into} = Flows.copy(Flows.get(source.id), owner_flow_id: intake_node.subflow_id)
+      assert into.owner_flow_id == cat.id
+      assert into.slug == nil
+      assert [step] = into.nodes
+      assert step.slug == "cat-license_poa"
+      assert Forms.get(step.form_id).owner_flow_id == cat.id
+
+      assert Flows.copy(Flows.get(source.id), owner_flow_id: Ecto.UUID.generate()) ==
+               {:error, :owner_not_found}
+
+      assert Flows.copy(Flows.get(source.id), owner_flow_id: "not-an-id") ==
+               {:error, :owner_not_found}
+
+      {:ok, theirs} = Flows.create(%{name: "Cat License", tenant_id: "globex"})
+      assert Flows.copy(Flows.get(source.id), owner_flow_id: theirs.id) == {:error, :other_tenant}
+    end
+
+    test "an owned flow copied as a root takes a slug from its name, and its steps follow" do
+      {:ok, root} = Flows.create(%{name: "Dog License Application 2026", label: "subflows"})
+      {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Documents")]})
+      [node] = Flows.get(root.id).nodes
+      documents = Flows.get(node.subflow_id)
+      {:ok, _} = Flows.update(documents, %{nodes: [form_step("User Information")]})
+      assert [%{slug: "dla2026_user-inform"}] = Flows.get(documents.id).nodes
+
+      {:ok, promoted} = Flows.copy(Flows.get(documents.id))
+      assert promoted.owner_flow_id == nil
+      assert promoted.slug == "documents"
+      assert promoted.name == "Documents"
+      assert [%{slug: "documents_user-inform"}] = promoted.nodes
     end
 
     test "get_by_slug/2 looks up by slug, scoped to a tenant when asked" do
@@ -607,7 +706,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(child.id) != nil
     end
 
-    test "duplicate copies the identity: name, label, and properties" do
+    test "copy copies the identity: name, label, and properties — or the name given" do
       {:ok, root} =
         Flows.create(%{
           name: "Onboarding",
@@ -615,23 +714,33 @@ defmodule Demo.FormFlowFlowsTest do
           properties: %{"form_flow_type" => "wizard_any_order"}
         })
 
-      {:ok, copy} = Flows.duplicate(root)
+      {:ok, copy} = Flows.copy(root)
 
       assert copy.name == "Onboarding"
       assert copy.label == "subflows"
       assert copy.properties["form_flow_type"] == "wizard_any_order"
       assert copy.slug == "onboarding-2"
       assert copy.properties["slug"] == "onboarding-2"
+
+      {:ok, named} = Flows.copy(root, name: "Onboarding 2027", slug: "onboarding-2027")
+      assert named.name == "Onboarding 2027"
+      assert named.slug == "onboarding-2027"
+
+      # A taken slug is an error, not a crash, and nothing is written
+      before = length(Flows.list())
+      assert {:error, changeset} = Flows.copy(root, slug: "onboarding-2027")
+      assert %{slug: [_taken]} = errors_on(changeset)
+      assert length(Flows.list()) == before
     end
 
-    test "duplicate deep-copies the subflows" do
+    test "copy deep-copies the subflows" do
       {:ok, root} = Flows.create()
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
 
       form = insert_node(owned, ["Step"], %{"label" => "Inside"})
       insert_subflow_node(root, owned)
 
-      assert {:ok, copy} = Flows.duplicate(Flows.get(root.id))
+      assert {:ok, copy} = Flows.copy(Flows.get(root.id))
 
       assert copy.id != root.id
 
@@ -712,7 +821,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(theirs.id).owner_flow_id == other_root.id
 
       # Copying is the way to use it here
-      {:ok, mine} = Flows.duplicate(theirs, owner_flow_id: root.id)
+      {:ok, mine} = Flows.copy(theirs, owner_flow_id: root.id)
 
       assert {:ok, _} =
                Flows.update(Flows.get(root.id), %{
@@ -1034,4 +1143,6 @@ defmodule Demo.FormFlowFlowsTest do
   end
 
   defp step_label(%Flow{nodes: [node]}), do: get_in(node.properties, ["data", "label"])
+
+  defp step_label_of(node), do: get_in(node.properties, ["data", "label"])
 end

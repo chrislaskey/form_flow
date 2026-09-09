@@ -332,6 +332,18 @@ defmodule Demo.FormFlowFormsTest do
 
       assert copy.properties["form_type"] == "review"
       assert copy.properties["form_type_property_values"] == %{"source" => "node-a/node-b"}
+
+      # Or the properties given, when the caller has re-pointed them
+      assert {:ok, repointed} =
+               Forms.copy(form,
+                 owner_flow_id: owner.id,
+                 properties: %{
+                   "form_type" => "review",
+                   "form_type_property_values" => %{"source" => "node-c"}
+                 }
+               )
+
+      assert repointed.properties["form_type_property_values"] == %{"source" => "node-c"}
       # An owned copy has no slug — its step's is the handle — and the
       # dual-written copy of the source's did not come along
       assert copy.slug == nil
@@ -435,12 +447,12 @@ defmodule Demo.FormFlowFormsTest do
       assert message =~ "still has submitted data"
     end
 
-    test "duplicate copies owned forms into the new domain, with provenance" do
+    test "copy copies owned forms into the new domain, with provenance" do
       {:ok, flow} = Flows.create()
       {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("W-2 Details")]})
       [source_node] = Flows.get(flow.id).nodes
 
-      {:ok, copy} = Flows.duplicate(Flows.get(flow.id))
+      {:ok, copy} = Flows.copy(Flows.get(flow.id))
       [copied_node] = copy.nodes
 
       assert copied_node.form_id != source_node.form_id
@@ -454,7 +466,7 @@ defmodule Demo.FormFlowFormsTest do
       assert copied_node.properties["form_id"] == copied_node.form_id
     end
 
-    test "duplicate keeps catalog forms as shared references" do
+    test "copy keeps catalog forms as shared references" do
       {:ok, catalog_form} = Forms.create(%{name: "Shared W-2"})
       {:ok, flow} = Flows.create()
 
@@ -465,7 +477,7 @@ defmodule Demo.FormFlowFormsTest do
 
       {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
 
-      {:ok, copy} = Flows.duplicate(Flows.get(flow.id))
+      {:ok, copy} = Flows.copy(Flows.get(flow.id))
       [copied_node] = copy.nodes
 
       assert copied_node.form_id == catalog_form.id

@@ -145,8 +145,11 @@ defmodule FormFlow.Data.Templates.Forms do
   of an unpublished thing is an unpublished thing.
 
   The copy carries the source's `properties` — its form type and that
-  type's property values — so a rolled-over form behaves as the source did.
-  A `:related_form` value is a step path in the source's tree; in the
+  type's property values — so a rolled-over form behaves as the source did;
+  `properties:` replaces them, which is how a flow copy hands over the
+  values with their step paths re-pointed at the copied tree
+  (`FormFlow.Data.Templates.Flows.copy/2`). Copied on its own, a
+  `:related_form` value stays a step path in the source's tree; in the
   copy's it resolves to nothing, and the form's edit page says so
   (`FormFlow.Web.Templates.Shared.fill_related_forms/4`).
 
@@ -167,7 +170,7 @@ defmodule FormFlow.Data.Templates.Forms do
         |> Form.changeset(%{
           name: form.name,
           description: form.description,
-          properties: form.properties,
+          properties: Keyword.get(opts, :properties, form.properties),
           tenant_id: form.tenant_id,
           slug: Keyword.get(opts, :slug) || copy_slug(form, owner_flow_id),
           owner_flow_id: owner_flow_id

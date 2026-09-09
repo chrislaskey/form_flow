@@ -223,28 +223,41 @@ defmodule Demo.FormFlowHealthTest do
     assert after_publish == error - 1
   end
 
-  test "a duplicate starts never checked; given the host's types, it is checked once" do
+  test "a copy starts never checked, with the source's ignores re-pointed; given the host's types, it is checked once" do
     flow = starter_flow()
     health = Health.refresh(flow.id)
     [unconnected] = Health.at(health, :warning)
     {:ok, _root} = Health.ignore(health, unconnected, "demo-admin")
 
-    # The source's status and records describe the source's nodes, so the
-    # copy carries neither — and a check with the library's default types is
-    # not run for it, since the host's could differ
-    {:ok, copy} = Flows.duplicate(Flows.get(flow.id))
-    refute Map.has_key?(copy.properties, "_health_metadata")
+    # The source's status describes a check the copy has not had, so it does
+    # not come along — nor is a check with the library's default types run,
+    # since the host's could differ. The ignore does, naming the copied node.
+    {:ok, copy} = Flows.copy(Flows.get(flow.id))
     assert Health.status(copy) == nil
     assert copy.properties["slug"] == copy.slug
 
+    assert [record] = copy.properties["_health_metadata"]["ignored_entries"]
+    assert record["code"] == "unconnected"
+    assert record["user_id"] == "demo-admin"
+    [copied_node_id] = record["path"]
+    assert copied_node_id != hd(unconnected.path)
+    assert Enum.any?(copy.nodes, &(&1.id == copied_node_id))
+
+    # Checked, the copy counts the ignore as the source did
+    assert %{counts: %{warning: 0, ignored: 1}} = Health.refresh(copy.id)
+
     {:ok, typed} =
-      Flows.duplicate(Flows.get(flow.id),
+      Flows.copy(Flows.get(flow.id),
         flow_types: FormFlow.Config.Flows.Type.defaults(),
         form_types: FormFlow.Config.Forms.Type.defaults()
       )
 
-    assert %{level: :error, counts: %{error: 1, warning: 1, ignored: 0}} = Health.status(typed)
-    refute Map.has_key?(typed.properties["_health_metadata"], "ignored_entries")
+    assert %{level: :error, counts: %{error: 1, warning: 0, ignored: 1}} = Health.status(typed)
+
+    # An owned copy carries none: health is the root's
+    {:ok, owner} = Flows.create(%{name: "Owner", label: "subflows"})
+    {:ok, owned} = Flows.copy(Flows.get(flow.id), owner_flow_id: owner.id)
+    refute Map.has_key?(owned.properties, "_health_metadata")
 
     # The source keeps its own
     assert %{counts: %{ignored: 1}} = Health.status(Flows.get(flow.id))

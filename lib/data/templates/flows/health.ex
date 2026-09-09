@@ -128,9 +128,9 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   The records live in the flow's `properties`, beside its type and
   perspectives, because that is the flow's own open map and it travels with
-  the flow: a `duplicate/2` copies the ignores along with the shape they
-  describe — with the source's node ids, which the copy does not have, so
-  they match nothing there and the copy's refresh drops them.
+  the flow: `FormFlow.Data.Templates.Flows.copy/2` carries the ignores along
+  with the shape they describe, re-pointed at the copied nodes
+  (`for_copy/2`), since the same findings are fine on purpose in a copy.
   """
 
   import Ecto.Query, only: [from: 2]
@@ -426,9 +426,45 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   @doc """
-  `properties` without the health bookkeeping — what a copy of a flow starts
-  with (`FormFlow.Data.Templates.Flows.duplicate/2`), since the status and
-  the ignored records describe the source's nodes, not the copy's.
+  `properties` as a root copy of the flow starts with them
+  (`FormFlow.Data.Templates.Flows.copy/2`): without the cached status, which
+  describes a check the copy has not had, and with the ignored records
+  re-pointed through `plan` — the copy's id for each of the source's node
+  ids — since the copy has the source's shape, and what was fine on purpose
+  there is fine on purpose here. A record naming a node the plan does not
+  know is dropped: it describes a step the copy does not have.
+  """
+  @spec for_copy(map() | nil, %{optional(Ecto.UUID.t()) => Ecto.UUID.t()}) :: map()
+  def for_copy(properties, plan) do
+    properties = properties || %{}
+
+    records =
+      %{properties: properties}
+      |> metadata()
+      |> records()
+      |> Enum.flat_map(&repoint(&1, plan))
+
+    case records do
+      [] -> Map.delete(properties, @metadata_key)
+      records -> Map.put(properties, @metadata_key, %{"ignored_entries" => records})
+    end
+  end
+
+  defp repoint(record, plan) do
+    case record["path"] do
+      path when is_list(path) ->
+        copied = Enum.map(path, &plan[&1])
+        if Enum.all?(copied), do: [Map.put(record, "path", copied)], else: []
+
+      _other ->
+        []
+    end
+  end
+
+  @doc """
+  `properties` without the health bookkeeping — what an owned copy of a
+  flow starts with (`FormFlow.Data.Templates.Flows.copy/2`), since health
+  is the root's and the tree it joins has its own.
   """
   @spec forget(map() | nil) :: map()
   def forget(properties), do: Map.delete(properties || %{}, @metadata_key)

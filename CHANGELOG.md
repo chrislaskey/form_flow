@@ -2,6 +2,37 @@
 
 ## v0.21.0
 
+### A flow is copied by `Flows.copy/2`, and the copy is whole
+
+**Breaking:** `FormFlow.Data.Templates.Flows.duplicate/2` is now
+**`FormFlow.Data.Templates.Flows.copy/2`** — the word `Forms.copy/2` and
+the prose already used. The copy now plans every node's new id across the
+whole tree before writing anything, and what refers to a node is
+re-pointed as it is copied: a `:related_form` property value — a step path
+— in a copied owned form's properties now names the copied steps rather
+than the source's (it used to point into the source tree, where health
+reported it missing); an ignored health entry comes along re-pointed at
+the copied node (**`Health.for_copy/2`**; the cached status still does
+not, and an owned copy carries no bookkeeping at all — `Health.forget/1`
+is for those); and an entity two steps share — a step the canvas
+duplicated, on one owned form or one subflow — is copied once and shared
+by both copied steps, where it used to become two.
+
+`copy/2` takes **`name:`** for the copy's name (subflows under it keep
+theirs). `owner_flow_id:` is now checked: an id no flow has is
+`{:error, :owner_not_found}`, a flow of another tenant's tree is
+`{:error, :other_tenant}` (the rule `reuse_form/3` applies to forms), and
+naming an owned subflow as the owner makes the copy owned by that
+subflow's root, since ownership is flat. An owned flow copied as a root
+takes a slug from its name, as `create/1` would, and its steps are
+rewritten under it — it used to get none, and its steps kept the old
+root's prefix. A refused insert — a taken `slug:` — returns
+`{:error, changeset}` with nothing written, where it raised.
+
+`FormFlow.Data.Templates.Forms.copy/2` takes **`properties:`**, the copy's
+properties in place of the source's, which is how the flow copy hands
+over re-pointed values in one write.
+
 ### `Core.badge` has a solid variant
 
 `variant="solid"` drops the default `badge-soft`, the way `button`'s
