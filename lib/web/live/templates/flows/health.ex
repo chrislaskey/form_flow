@@ -308,11 +308,26 @@ defmodule FormFlow.Web.Templates.Flows.Health do
         <%!-- The selected entry --%>
         <div :if={@selected} id={"#{@id}-detail"} class="space-y-5 p-6">
           <div>
-            <%!-- Solid, not Core.badge's badge-soft: the level is the one
-                  thing on the pane that must read at a glance --%>
+            <%!-- Solid: the level is the one thing on the pane that must
+                  read at a glance --%>
             <div class="flex flex-wrap items-center gap-2">
-              <span class={["badge badge-sm", level_badge(@selected.level)]}>{@selected.level}</span>
-              <span :if={@selected.ignored} class="badge badge-sm badge-neutral">ignored</span>
+              <Core.badge
+                components={@components}
+                kind={@selected.level}
+                variant="solid"
+                class="badge-sm"
+              >
+                {@selected.level}
+              </Core.badge>
+              <Core.badge
+                :if={@selected.ignored}
+                components={@components}
+                kind={:neutral}
+                variant="solid"
+                class="badge-sm"
+              >
+                ignored
+              </Core.badge>
             </div>
             <h3 class={["mt-2 text-base font-semibold text-zinc-900", @selected.ignored && "line-through text-zinc-500"]}>
               {@selected.message}
@@ -439,11 +454,6 @@ defmodule FormFlow.Web.Templates.Flows.Health do
 
   defp plural(1, noun), do: "1 #{noun}"
   defp plural(count, noun), do: "#{count} #{noun}s"
-
-  # Solid badges, one colour per level
-  defp level_badge(:error), do: "badge-error"
-  defp level_badge(:warning), do: "badge-warning"
-  defp level_badge(:info), do: "badge-info"
 
   defp dot(:error), do: "bg-error"
   defp dot(:warning), do: "bg-warning"

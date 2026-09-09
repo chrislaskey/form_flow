@@ -50,6 +50,7 @@ defmodule FormFlow.Web.Components.Core do
 
   attr(:components, :atom, default: nil)
   attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:variant, :string, default: nil, values: [nil, "solid"])
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)

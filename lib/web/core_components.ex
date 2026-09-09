@@ -405,32 +405,42 @@ defmodule FormFlow.Web.CoreComponents do
   Not part of the Phoenix-generated `CoreComponents` set — see
   `FormFlow.Web.ComponentResolver` — but resolved the same way.
 
-  `kind` picks the palette; `class` takes the daisyUI size and style
-  modifiers (`badge-lg`, `badge-outline`) a caller wants on top.
+  `kind` picks the palette; `variant` its weight — soft by default, `"solid"`
+  where the badge is the one thing that must read at a glance, as `button`'s
+  `"primary"` is; `class` takes the daisyUI size and style modifiers
+  (`badge-lg`, `badge-outline`) a caller wants on top.
 
   ## Examples
 
       <.badge kind={:success}>Done</.badge>
       <.badge kind={:warning} class="badge-lg">In progress</.badge>
+      <.badge kind={:error} variant="solid" class="badge-sm">error</.badge>
   """
   attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
+  attr(:variant, :string, default: nil, values: [nil, "solid"])
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
   def badge(assigns) do
     kinds = %{
-      neutral: nil,
+      neutral: "badge-neutral",
       info: "badge-info",
       success: "badge-success",
       warning: "badge-warning",
       error: "badge-error"
     }
 
-    assigns = assign(assigns, :kind_class, Map.fetch!(kinds, assigns.kind))
+    variants = %{"solid" => nil, nil => "badge-soft"}
+
+    assigns =
+      assign(assigns,
+        kind_class: Map.fetch!(kinds, assigns.kind),
+        variant_class: Map.fetch!(variants, assigns.variant)
+      )
 
     ~H"""
-    <span class={["badge badge-soft", @kind_class, @class]} {@rest}>
+    <span class={["badge", @variant_class, @kind_class, @class]} {@rest}>
       {render_slot(@inner_block)}
     </span>
     """

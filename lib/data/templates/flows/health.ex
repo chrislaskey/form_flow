@@ -78,6 +78,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   for users, but an admin may want to know. See
   `FormFlow.Data.Templates.Flows.Health.Entry`.
 
+  Two questions follow, and both have a function so a host's badge answers
+  them the way the library's does: `ok?/1` — is **nothing** open, info
+  included; and `healthy?/1` — is nothing **wrong**, meaning no open error
+  or warning, with `wrong/1` the count of those. The badge draws `healthy?/1`
+  (a check, in the info colour when only info entries remain), since a draft
+  with unpublished changes is the normal state of a form being worked on and
+  should not make a sound flow read as unwell. Both take a report or a
+  cached status (`status/1`).
+
   ## The cached status
 
   Running the check means loading the whole tree, which a listing of ten
@@ -306,6 +315,18 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   @spec at(t(), Entry.level()) :: [Entry.t()]
   def at(%__MODULE__{} = health, level), do: Enum.filter(open(health), &(&1.level == level))
 
+  @doc """
+  How many open entries say something is wrong with the flow: the errors and
+  the warnings. Info entries are left out — they describe work in progress,
+  not a flow left in a bad state. Takes a report or a cached status.
+  """
+  @spec wrong(t() | status()) :: non_neg_integer()
+  def wrong(%{counts: counts}), do: counts.error + counts.warning
+
+  @doc "Whether nothing is wrong — no open error or warning. Info may remain; see `ok?/1`."
+  @spec healthy?(t() | status()) :: boolean()
+  def healthy?(%{counts: _counts} = report), do: wrong(report) == 0
+
   @doc "How many checks passed: those run, less those that produced an entry."
   @spec passing(t()) :: non_neg_integer()
   def passing(%__MODULE__{checks_run: run, entries: entries}), do: run - length(entries)
@@ -470,11 +491,13 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   # Read-modify-write of the one key, the root re-read inside the
-  # transaction right before: a concurrent identity save changes other keys
-  # of the same map, and neither may clobber the other. The one column is
-  # written, not the changeset: bookkeeping derived from the flow does not
-  # move the flow's own `updated_at`. A root deleted underneath is an error,
-  # not a crash — the page it came from may be open in another tab.
+  # transaction right before, so an identity save made while a page was open
+  # is not undone by the page's toggle (the row is not locked: two toggles in
+  # the same instant could still lose one, a race narrow enough to accept).
+  # The one column is written, not the changeset: bookkeeping derived from
+  # the flow does not move the flow's own `updated_at`. A root deleted
+  # underneath is an error, not a crash — the page it came from may be open
+  # in another tab.
   defp write_metadata(root_id, change) do
     Repo.transaction(fn ->
       case Repo.get(Flow, root_id) do

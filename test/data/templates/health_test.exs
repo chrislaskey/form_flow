@@ -478,6 +478,64 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert length(Entry.codes()) == 14
   end
 
+  test "the checks emit every listed code, and no code the list lacks" do
+    # One tree per code the other tests build alone; the set of codes that
+    # come out of all of them is the set `Entry.codes/0` names, so a check
+    # added without its code — which would take the fallback words — fails
+    # here, and so does a listed code no check produces
+    loose = form_node("Loose")
+    unpublished = form_node("New", form: draft_only_form("New"))
+    changed = %Version{status: "draft", definition: %{"changed" => true}}
+    drafted = published_form("Drafted")
+    drafted = form_node("Drafted", form: %{drafted | versions: drafted.versions ++ [changed]})
+    no_form = build_node(["Form"], label: "Empty", form: nil)
+    stale_type = form_node("Typed", form: published_form("Typed", %{"form_type" => "gone"}))
+    review = form_node("Check", form: published_form("Check", %{"form_type" => "review"}))
+
+    pointing =
+      form_node("Pointing",
+        form:
+          published_form("Pointing", %{
+            "form_type" => "review",
+            "form_type_property_values" => %{"source" => Ecto.UUID.generate()}
+          })
+      )
+
+    dangling = subflow_node("Dangling", Ecto.UUID.generate())
+    dead = form_node("Dead")
+
+    start = start_node()
+    stop = end_node()
+
+    %{nodes: nodes, relationships: edges} =
+      chain([unpublished, drafted, no_form, stale_type, review, pointing])
+
+    review_flow = %FormFlow.Config.Flows.Type{
+      id: "review_flow",
+      name: "Review",
+      properties: [%Property{id: "source", name: "Form to review", required: true}],
+      perspectives: []
+    }
+
+    trees = [
+      tree([form_node("Alone")], []),
+      tree([start, stop], []),
+      tree([start, stop], [edge(start, stop)], label: "subflows"),
+      tree([start, stop, dead], [edge(start, stop), edge(start, dead)]),
+      tree(nodes ++ [loose], edges),
+      chain([dangling], label: "subflows"),
+      chain([], properties: %{"form_flow_type" => "gone"}),
+      chain([], properties: %{"form_flow_type" => "review_flow", "perspectives" => ["nobody"]})
+    ]
+
+    emitted =
+      trees
+      |> Enum.flat_map(fn tree -> tree |> Health.check(flow_types: [review_flow]) |> codes() end)
+      |> MapSet.new()
+
+    assert MapSet.equal?(emitted, MapSet.new(Entry.codes()))
+  end
+
   # --- ordering and counts -----------------------------------------------------
 
   test "entries sort worst first and are counted by level" do

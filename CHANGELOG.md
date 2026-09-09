@@ -2,6 +2,12 @@
 
 ## v0.21.0
 
+### `Core.badge` has a solid variant
+
+`variant="solid"` drops the default `badge-soft`, the way `button`'s
+`variant="primary"` drops its soft style, for a badge that must read at a
+glance; a host's `components` override reaches it as before.
+
 ### The admin pages share one header
 
 The Overview and Health pages pass the flow as the header's `root` and
@@ -86,7 +92,10 @@ so the badge says what is new. `Health.stop_ignoring/2` removes the record.
 Both write the status too, from the report they hold. Records for entries
 the check no longer finds are dropped on the next write, `refresh/2`
 included, so a duplicate's copy starts clean. `Health.open/1` and
-`Health.ignored/1` split a report the same way.
+`Health.ignored/1` split a report the same way; `Health.healthy?/1` and
+`Health.wrong/1` answer the badge's question — is anything wrong, meaning an
+open error or warning — for a report or a cached status, beside `ok?/1`'s
+"is anything open at all".
 
 **Every flow page carries the badge**, drawn by
 **`FormFlow.Web.Templates.Components.Health`** — a function component that

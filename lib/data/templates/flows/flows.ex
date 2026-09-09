@@ -520,8 +520,11 @@ defmodule FormFlow.Data.Templates.Flows do
   bookkeeping — `FormFlow.Data.Templates.Flows.Health`'s cached status and
   ignored records — written by the library between a page's loads. A caller
   saving the map it holds is saving a copy from before those writes, so its
-  underscore keys are ignored and the stored ones kept; nothing a caller
-  passes can set or clear them (see `guides/neo4j.md`).
+  underscore keys are ignored and the ones stored at the time of the save
+  kept: a caller cannot set or clear them by passing a map (see
+  `guides/neo4j.md`). The stored keys are read as the changeset is built, not
+  under a lock, so a bookkeeping write in the same instant as the save can
+  still be lost — a race far narrower than the tab-open window this closes.
   """
   def update(%Flow{} = flow, attrs) do
     save(Flow.changeset(flow, keep_bookkeeping(flow, attrs)), attrs, &Repo.update/1, sweep?: true)
