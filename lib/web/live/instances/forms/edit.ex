@@ -176,7 +176,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       flow_instance ->
         socket = socket |> assign(:flow_instance, flow_instance) |> Shared.assigns()
 
-        Shared.on_mount(socket, &Shared.start/1)
+        Shared.on_mount(socket, &Shared.start/1, allows: :continue)
     end
   end
 

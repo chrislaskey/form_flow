@@ -102,6 +102,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       context: context,
       visible?: visible?,
       editable?: editable?,
+      continue_allowed?: continue_allowed?(context),
       start_error: nil,
       mount_error: nil,
       navigate_to: nil,
@@ -273,31 +274,40 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   allows everything. Host code, deliberately not rescued: an exception here
   fails closed rather than falling through to the page.
   """
-  def on_mount(socket, on_ok \\ & &1) do
+  def on_mount(socket, on_ok \\ & &1, opts \\ []) do
     cond do
       not flow_in_scope?(socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available here.")
 
-      not flow_allows_seeing?(socket.assigns) ->
+      not flow_allows?(socket.assigns, :see) ->
         assign(socket, :mount_error, "This flow is not available right now.")
+
+      not flow_allows?(socket.assigns, Keyword.get(opts, :allows, :see)) ->
+        assign(
+          socket,
+          :mount_error,
+          "This flow is read-only now; your answers are kept as they are."
+        )
 
       true ->
         host_on_mount(socket, on_ok)
     end
   end
 
-  # The flow's status is the second rule before the host's gate: an instance
-  # of a flow whose status lets nobody see it (a draft —
-  # `FormFlow.Data.Templates.Flow.allows?/2`) is refused on every instance
-  # page, whoever is looking. The listing has no instance and passes.
-  defp flow_allows_seeing?(%{flow_instance: %{flow_id: flow_id}}) do
+  # The flow's status is the second rule before the host's gate
+  # (`FormFlow.Data.Templates.Flow.allows?/2`): an instance of a flow whose
+  # status lets nobody see it (a draft, an archived one) is refused on every
+  # instance page, whoever is looking; the edit page asks for `:continue` as
+  # well (`opts[:allows]`), so a read-only flow refuses it with the sentence
+  # that says why. The listing has no instance and passes.
+  defp flow_allows?(%{flow_instance: %{flow_id: flow_id}}, action) do
     case Templates.Flows.get(flow_id) do
-      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, :see)
+      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, action)
       nil -> false
     end
   end
 
-  defp flow_allows_seeing?(_assigns), do: true
+  defp flow_allows?(_assigns, _action), do: true
 
   # The page's `flows` attr is its scope: an instance is in it when its flow
   # is one of the flows the attr names. No attr, or no instance in scope
@@ -416,8 +426,16 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   defp access(type, context, assigns) do
     visible? = visible?(type, context, assigns)
 
-    {visible?, visible? and editable?(type, context, assigns)}
+    {visible?, visible? and continue_allowed?(context) and editable?(type, context, assigns)}
   end
+
+  # Whether the flow's status lets anyone continue — start, edit, reopen,
+  # submit — at any position (`FormFlow.Data.Templates.Flow.allows?/2`); a
+  # flow the tree no longer resolves lets nobody
+  defp continue_allowed?(%Context{flow: %Templates.Flow{} = flow}),
+    do: Templates.Flow.allows?(flow, :continue)
+
+  defp continue_allowed?(_context), do: false
 
   defp editable?(type, context, assigns),
     do: type.module.editable?(context, assigns.callback_data)

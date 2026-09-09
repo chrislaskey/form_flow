@@ -105,9 +105,25 @@ defmodule FormFlow.Data.Instances.Forms do
 
   def update_status(%Instances.Flow{} = journey, path, status, opts)
       when is_list(path) and path != [] and status in [:in_progress, :completed] do
-    journey
-    |> find_instance(path)
-    |> apply_status(status, journey, path, opts)
+    if continue_allowed?(journey) do
+      journey
+      |> find_instance(path)
+      |> apply_status(status, journey, path, opts)
+    else
+      {:error, :read_only}
+    end
+  end
+
+  # Starting, reopening, and submitting are all "continuing" the journey, and
+  # the flow's status says whether a user may (`FormFlow.Data.Templates.Flow`'s
+  # table): a read-only or archived flow refuses every one of them here, at
+  # the data layer, so a host's own route gets the rule. A journey whose flow
+  # row is gone fails further down, as before.
+  defp continue_allowed?(%Instances.Flow{flow_id: flow_id}) do
+    case Repo.get(Templates.Flow, flow_id) do
+      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, :continue)
+      nil -> true
+    end
   end
 
   defp find_instance(journey, path) do

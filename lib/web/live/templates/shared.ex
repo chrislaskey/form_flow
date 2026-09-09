@@ -378,6 +378,16 @@ defmodule FormFlow.Web.Templates.Shared do
       "No longer taking new starts. Anyone who already has an instance can continue and " <>
         "can see it."
 
+  def status_summary("read_only"),
+    do:
+      "Nothing changes: nobody can start or continue. Everyone can still see their own " <>
+        "instances, and download or print them."
+
+  def status_summary("archived"),
+    do:
+      "Put away. Users see nothing of it — not even their own instances — while admins " <>
+        "keep the flow, its instances, and its history."
+
   def status_summary(_unknown), do: nil
 
   @doc """
@@ -386,7 +396,8 @@ defmodule FormFlow.Web.Templates.Shared do
   """
   def status_kind("open"), do: :success
   def status_kind("winding_down"), do: :warning
-  def status_kind(_draft_or_other), do: :neutral
+  def status_kind("read_only"), do: :info
+  def status_kind(_draft_archived_or_other), do: :neutral
 
   @doc """
   How many instances a root flow has, and how many are still in progress —

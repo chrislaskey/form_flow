@@ -188,16 +188,25 @@ keeps about what users may do with it.
 | `draft` | no | no | no |
 | `open` | yes | yes | yes |
 | `winding_down` | no | yes | yes |
+| `read_only` | no | no | yes |
+| `archived` | no | no | no |
 
 A flow is born a **draft**: built, checked, and never offered — a user with
 `flows={["dog-license-2027"]}` sees nothing of it, not even an instance
-they somehow have. An admin opens it from the flow's edit page (the Status
-field under the canvas, saved with everything else). **Open** is the
-normal state. **Winding down** is a deadline that has passed: the listing
-names the flow with "No longer taking new starts." where its Start button
-was, and everyone already in it finishes and keeps seeing their record.
-Any status can move to any other; every move is logged with who made it
-(`FormFlow.Data.Templates.Flow.Event`).
+they somehow have. An admin opens it from the flow's show page (the status
+badge in the header opens a dialog), from the flows index (the row's ⋮
+menu), or from the edit page (the Status field under the canvas, saved with
+everything else). **Open** is the normal state. **Winding down** is a
+deadline that has passed: the listing names the flow with "No longer taking
+new starts." where its Start button was, and everyone already in it
+finishes and keeps seeing their record. **Read-only** is the year over:
+nobody starts or continues — the edit page says "This flow is read-only
+now; your answers are kept as they are." — but everyone still sees, prints,
+and downloads their own. **Archived** puts it away: users see nothing of
+it, admins keep the flow, its instances, and its history. Draft and
+archived allow the same nothing; they differ in meaning, never opened and
+put away. Any status can move to any other; every move is logged with who
+made it (`FormFlow.Data.Templates.Flow.Event`).
 
 So the year rolls over like this:
 
@@ -220,8 +229,11 @@ once more as the real thing. A rule change from a date — "filings after
 original winds down.
 
 Two things follow for host code. `FormFlow.Data.Instances.Flows.create/2`
-refuses a flow that is not open with `{:error, :not_open}`, so a route of
-your own that starts instances gets the rule without asking. And a gate or
+refuses a flow that is not open with `{:error, :not_open}`, and
+`FormFlow.Data.Instances.Forms.update_status/4` refuses to start, reopen,
+or submit a form in a flow that is read-only or archived with
+`{:error, :read_only}`, so a route of your own gets both rules without
+asking. And a gate or
 callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog

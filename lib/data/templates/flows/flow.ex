@@ -115,23 +115,28 @@ defmodule FormFlow.Data.Templates.Flow do
   #                                        reopens
   #   open            ✓       ✓       ✓    taking starts; the normal state
   #   winding_down    –       ✓       ✓    no new starts; anyone in it finishes
-  #   read_only       –       –       ✓    (planned) nothing changes; users can
-  #                                        still look at their own
-  #   archived        –       –       –    (planned) users see nothing; admins
-  #                                        keep the flow, its instances, its log
+  #   read_only       –       –       ✓    nothing changes; users can still look
+  #                                        at their own
+  #   archived        –       –       –    users see nothing; admins keep the
+  #                                        flow, its instances, its log
   #
-  # Only the first three exist as values today; the last two are named here so
-  # they are not renamed when they arrive. Transitions are any-to-any — real
+  # Draft and archived allow the same nothing; they differ in meaning — never
+  # opened, and put away — and in what the admin's badge says. A `pre_release`
+  # rung after draft, for testing with some users before opening to all, has
+  # been floated and not decided (`archive/plans/flow-status.md` §6). Transitions
+  # are any-to-any — real
   # programs go sideways and get fixed in unexpected ways, and the event log
   # (`FormFlow.Data.Templates.Flow.Event`) is what makes trusting the admin
   # safe. The admin side is not decided by status: the canvas is editable at
   # every one. An owned subflow carries the default and is never read — status
   # is the root's, as health is.
-  @statuses ~w(draft open winding_down)
+  @statuses ~w(draft open winding_down read_only archived)
   @allowed %{
     "draft" => [],
     "open" => [:start, :continue, :see],
-    "winding_down" => [:continue, :see]
+    "winding_down" => [:continue, :see],
+    "read_only" => [:see],
+    "archived" => []
   }
 
   @doc "The statuses a flow can have, in the order the dropdown offers them."

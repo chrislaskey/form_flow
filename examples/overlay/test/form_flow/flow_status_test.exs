@@ -62,7 +62,23 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert length(events(flow)) == 1
 
       assert {:error, :unknown_status} = Flows.update_status(flow, "closed", [])
-      assert {:error, :unknown_status} = Flows.update_status(flow, "archived", [])
+    end
+
+    test "a read-only or archived flow refuses every way of continuing, at the data layer" do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2025", status: "open"})
+      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "u"})
+
+      for status <- ["read_only", "archived"] do
+        {:ok, _} = Flows.update_status(flow, status, [])
+
+        assert {:error, :not_open} = Instances.Flows.create(%{flow_id: flow.id, user_id: "u"})
+
+        assert {:error, :read_only} =
+                 Instances.Forms.update_status(instance, [Ecto.UUID.generate()], :in_progress)
+
+        assert {:error, :read_only} =
+                 Instances.Forms.update_status(instance, [Ecto.UUID.generate()], :completed)
+      end
     end
 
     test "a copy is a draft whatever the source is, with its own created event" do
@@ -179,6 +195,32 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, _view, html} = live(conn, "/users/#{instance.id}")
       assert html =~ "Dog License 2025"
     end
+
+    test "a read-only flow's instances are seen but not continued; an archived one's vanish",
+         %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2024", status: "open"})
+      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+
+      {:ok, _} = Flows.update_status(flow, "read_only", [])
+
+      # Listed, as View — there is nothing to continue
+      {:ok, view, html} = live(conn, "/users")
+      assert html =~ instance.id
+      assert has_element?(view, ~s(a[href="/users/#{instance.id}"]), "View")
+      refute has_element?(view, ~s(a[href="/users/#{instance.id}"]), "Continue")
+
+      # The instance page opens; a form's edit page says why it will not
+      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      assert html =~ "Dog License 2024"
+      {:ok, _view, html} = live(conn, "/users/#{instance.id}/forms/#{Ecto.UUID.generate()}/edit")
+      assert html =~ "This flow is read-only now; your answers are kept as they are."
+
+      {:ok, _} = Flows.update_status(flow, "archived", [])
+      {:ok, _view, html} = live(conn, "/users")
+      refute html =~ instance.id
+      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      assert html =~ "This flow is not available right now."
+    end
   end
 
   # ── the admin pages ─────────────────────────────────────────────────────
@@ -250,6 +292,73 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/edit")
 
       assert html =~ "2 instances started, 1 still in progress."
+    end
+
+    test "the show page's badge opens a dialog that changes the status and logs it", %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License"})
+
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+
+      html = view |> element("button[phx-click=request_status]") |> render_click()
+      assert html =~ "Change the status of “Dog License”"
+      assert html =~ "Not offered to users"
+      assert has_element?(view, "option[value=read_only]", "Read only")
+      assert has_element?(view, "option[value=archived]", "Archived")
+
+      # Picking redraws the summary; Cancel closes without a write
+      html =
+        view
+        |> element("form[phx-submit=save_status]")
+        |> render_change(%{"status" => "read_only"})
+
+      assert html =~ "Nothing changes: nobody can start or continue."
+      refute view |> element("button", "Cancel") |> render_click() =~ "Change the status"
+      assert Flows.get(flow.id).status == "draft"
+
+      # Save writes it, signed by the page's admin, and the badge follows
+      view |> element("button[phx-click=request_status]") |> render_click()
+
+      html =
+        view
+        |> element("form[phx-submit=save_status]")
+        |> render_submit(%{"status" => "open"})
+
+      refute html =~ "Change the status"
+      assert has_element?(view, ".badge", "Open")
+      assert Flows.get(flow.id).status == "open"
+
+      assert [
+               %{event: "created"},
+               %{event: "status_changed", user_id: "demo-admin", snapshot: snapshot}
+             ] =
+               events(flow)
+
+      assert snapshot == %{"from" => "draft", "to" => "open"}
+    end
+
+    test "the index's row menu changes the status too, and the listing follows", %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
+      menu = "#flow-#{flow.id}-actions"
+
+      {:ok, view, _html} = live(conn, "/admin/flows")
+
+      html = view |> element("#{menu} button", "Change status") |> render_click()
+      assert html =~ "Change the status of “Dog License”"
+      assert html =~ "Offered to users"
+
+      view
+      |> element("form[phx-submit=save_status]")
+      |> render_submit(%{"status" => "winding_down"})
+
+      {path, _flash} = assert_redirect(view)
+      assert path =~ "/admin/flows"
+      assert Flows.get(flow.id).status == "winding_down"
+
+      assert [%{event: "created"}, %{event: "status_changed", user_id: "demo-admin"}] =
+               events(flow)
+
+      {:ok, view, _html} = live(conn, path)
+      assert has_element?(view, ".badge", "Winding down")
     end
 
     test "an owned subflow has no status field: status is the root's", %{conn: conn} do

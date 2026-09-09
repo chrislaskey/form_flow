@@ -287,7 +287,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             navigate={Paths.flow_path(@base, flow_instance.id)}
             variant="primary"
           >
-            {if flow_instance.status == "completed", do: "View", else: "Continue"}
+            {if flow_instance.status == "completed" or
+                  not Templates.Flow.allows?(flow_instance.flow, :continue),
+                do: "View",
+                else: "Continue"}
           </Core.button>
         </:column>
         <:pagination per_page={10} />

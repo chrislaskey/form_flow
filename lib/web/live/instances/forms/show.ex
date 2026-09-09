@@ -349,6 +349,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           Submitted {Calendar.strftime(@form_instance.completed_at, "%Y-%m-%d %H:%M")} UTC.
         </span>
         <Core.button
+          :if={@continue_allowed?}
           components={@components}
           phx-click="reopen"
           phx-target={@myself}
@@ -358,7 +359,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         </Core.button>
       </Core.alert>
 
-      <p :if={@form_instance.status != "completed"} class="mb-4">
+      <p :if={@form_instance.status != "completed" and @continue_allowed?} class="mb-4">
         <.link
           navigate={Paths.form_edit_path(@base, @flow_instance.id, @path)}
           class="link link-primary"

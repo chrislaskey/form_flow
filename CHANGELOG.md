@@ -1,17 +1,18 @@
 # Changelog
 
-## v0.21.0
+## v0.22.0
 
 ### A flow has a status, and a log of how it got there
 
 **`FormFlow.Data.Templates.Flow.status`** says what users may do with a
 flow — three facts: may they **start** a new instance, **continue** one
 already started, **see** their instances at all — and a status is the set
-it allows. Three values today, two more named for later on the schema's
-table: **`draft`** (born this way; not offered, and hidden — nobody starts,
-continues, or sees), **`open`** (the normal state), **`winding_down`** (no
-new starts; anyone in it finishes and keeps seeing it). `read_only` and
-`archived` are planned, not accepted yet. Transitions are any-to-any:
+it allows. Five values, the schema's table: **`draft`** (born this way; not
+offered, and hidden — nobody starts, continues, or sees), **`open`** (the
+normal state), **`winding_down`** (no new starts; anyone in it finishes and
+keeps seeing it), **`read_only`** (nothing changes; everyone still sees,
+prints, and downloads their own), **`archived`** (put away; users see
+nothing, admins keep everything). Transitions are any-to-any:
 **`Flows.update_status/3`** moves a flow to any status the table names,
 refusing only an unknown one (`{:error, :unknown_status}`), and the same
 status again is a no-op. `Flow.allows?/2` and `Flow.statuses_allowing/1`
@@ -31,10 +32,16 @@ nothing reads the log to decide what a page does.
 **A copy is a draft**, whatever its source's status.
 
 **On the user-facing side**, `FormFlow.Data.Instances.Flows.create/2`
-refuses a flow that is not open with **`{:error, :not_open}`** — at the
-data layer, so a host's own route gets the rule — and
-**`Instances.Flows.narrow_allowed/2`** narrows a listing query to instances
-of flows whose status allows `:start`, `:continue`, or `:see`. The
+refuses a flow that is not open with **`{:error, :not_open}`**, and
+`FormFlow.Data.Instances.Forms.update_status/4` refuses to start, reopen,
+or submit a form in a flow that allows no continuing with
+**`{:error, :read_only}`** — both at the data layer, so a host's own route
+gets the rules — and **`Instances.Flows.narrow_allowed/2`** narrows a
+listing query to instances of flows whose status allows `:start`,
+`:continue`, or `:see`. A read-only flow's instances are listed as View,
+their pages open, and their form edit pages say "This flow is read-only
+now; your answers are kept as they are." — Continue and Reopen are not
+drawn, and a form type's `editable?/2` is never asked. The
 instances index offers Start only for open flows, lists a winding-down flow
 the page is about with "No longer taking new starts." in place of its
 button, applies `:see` on top of whatever it lists (the host's query
@@ -52,7 +59,11 @@ function) — redrawn as the choice is made, the way the form edit page
 explains its type. A changed status is an unsaved edit like any other and
 is written by Save through `update_status/3`, signed by the page's
 `user_id`; an unchanged one writes nothing. The Show page's header and the
-flows index draw the status as a badge whose title is the same summary.
+flows index draw the status as a badge whose title is the same summary —
+and both change it too: the header's badge opens a dialog
+(**`FormFlow.Web.Templates.Flows.Components.StatusDialog`**), the index's
+⋮ row menu has **Change status**, each a dropdown with the same summary
+and counts under it, saved on the click through `update_status/3`.
 The router now passes **`user_id`** to every flows template component,
 so the event has an author wherever it is written; a host rendering the
 components itself should pass it too.
@@ -60,6 +71,25 @@ components itself should pass it too.
 **Schema:** `form_flow_flows.status` (not null, default `draft`) and the
 `form_flow_flow_events` table are in **v01**, edited in place — the project
 is pre-release; recreate the development database.
+
+### Duplicate Flow, from the show page and the flows index
+
+The flow copy's button says **Duplicate Flow**: the canvas's ⋮ node menu
+already has a Copy that means "to the clipboard, paste later", and one word
+with two behaviours in one UI is one too many. In code — `copy/2`,
+`CopyDialog`, the `copy` event, the "(copy)" name default — the word stays
+*copy*. The button sits beside Flow Overview on a root flow's Show page,
+and is gone from the Edit page: a copy is of what is saved, and the page
+for what is saved is Show (the dialog's saved-version note went with it).
+
+The flows index gained a **⋮ menu** on every row for actions that do
+something rather than go somewhere — Duplicate Flow today — beside its
+links, now **Overview**, Show, and Edit; and a **Slug** column, sortable,
+between Name and Kind. The router passes the index `flow_types` and
+`form_types` for the copy's health check, and a host rendering
+`FormFlow.Web.Templates.Flows.Index` itself should too.
+
+## v0.21.0
 
 ### A flow is copied by `Flows.copy/2`, and the copy is whole
 
@@ -92,25 +122,20 @@ root's prefix. A refused insert — a taken `slug:` — returns
 properties in place of the source's, which is how the flow copy hands
 over re-pointed values in one write.
 
-### A flow is copied from its show page and the flows index
+### A flow is copied from its pages
 
-**Duplicate Flow**, beside Flow Overview on a root flow's Show page, opens a
-dialog (**`FormFlow.Web.Templates.Flows.Components.CopyDialog`**) prefilled
-with the copy's name — the source's with "(copy)" after it — and the slug
+**Copy**, on a root flow's Show and Edit pages, opens a dialog
+(**`FormFlow.Web.Templates.Flows.Components.CopyDialog`**) prefilled with
+the copy's name — the source's with "(copy)" after it — and the slug
 `copy/2` would pick (**`Flows.copy_slug/1`**, new), calls `copy/2` with the
 host's types so the copy's health is cached, and lands on the copy's show
 page. A refused slug keeps the dialog open with the reason and what was
-typed; a blank name takes the one offered. The flows index offers the same
-from a **⋮ menu** on every row, beside its **Overview** (new there), Show,
-and Edit links; the router passes the index `flow_types` and `form_types`
-for it, and a host rendering `FormFlow.Web.Templates.Flows.Index` itself
-should too. The index also gained a **Slug** column, sortable, between Name
-and Kind. The Edit page has no Duplicate Flow — a copy is of what is saved,
-and the page for what is saved is Show — and an owned subflow's pages have
-none: a subflow is copied by pasting its step. On screen the word is
-*Duplicate*, because the canvas's ⋮ node menu already has a Copy that means
-"to the clipboard, paste later"; in code — `copy/2`, `CopyDialog`, the
-`copy` event — the word stays *copy*.
+typed; a blank name takes the one offered. On the Edit page with unsaved
+edits the dialog says the copy is made now from the last saved version, and
+the page stays open with the edits after copying, saying where the copy
+went — the link leaves through the same save-first prompt as every other
+way off the page. An owned subflow's pages have no Copy: a subflow is
+copied by pasting its step.
 
 `FormFlow.Data.Templates.Flow` preloads its nodes and relationships in
 stored order (`inserted_at`, then `id`), which the save's "canvas order"

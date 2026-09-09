@@ -43,10 +43,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   ## The row menu
 
   Beside Overview, Show, and Edit, every row has a ⋮ menu for the actions
-  that do something rather than go somewhere — Duplicate Flow today (the
-  label is *Duplicate* because the canvas's Copy means "to the clipboard";
-  the code stays `copy`, see `FormFlow.Web.Templates.Flows.Show`). It
-  opens the same dialog the show page does
+  that do something rather than go somewhere — Duplicate Flow (the label is
+  *Duplicate* because the canvas's Copy means "to the clipboard"; the code
+  stays `copy`, see `FormFlow.Web.Templates.Flows.Show`) and Change status
+  (`FormFlow.Web.Templates.Flows.Components.StatusDialog`, the show page's
+  dialog, saving through `Flows.update_status/3` signed by `user_id` and
+  reloading the listing). Duplicate Flow opens the same dialog the show
+  page does
   (`FormFlow.Web.Templates.Flows.Components.CopyDialog`),
   prefilled for that row's flow, and lands on the copy's show page — the
   row is loaded whole for it (`FormFlow.Data.Templates.Flows.get/1`), since
@@ -64,13 +67,23 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
+  alias FormFlow.Web.Templates.Flows.Components.StatusDialog
   alias FormFlow.Web.Templates.Shared
   alias Phoenix.LiveView.JS
 
   @impl true
   def mount(socket) do
     {:ok,
-     assign(socket, error: nil, copying: nil, copy_name: nil, copy_slug: nil, copy_error: nil)}
+     assign(socket,
+       error: nil,
+       copying: nil,
+       copy_name: nil,
+       copy_slug: nil,
+       copy_error: nil,
+       changing_status: nil,
+       status_pending: nil,
+       status_error: nil
+     )}
   end
 
   @impl true
@@ -85,6 +98,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
+      |> assign_new(:user_id, fn -> nil end)
 
     query = Flows.roots_query(tenant_id: socket.assigns.tenant_id)
 
@@ -139,6 +153,53 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     end
   end
 
+  # The status dialog for a row: the same three events as the show page's,
+  # and Save reloads the listing so the badge follows
+  @impl true
+  def handle_event("request_status", %{"id" => id}, socket) do
+    case listed_flow(id, socket.assigns.tenant_id) do
+      %Flow{} = flow ->
+        {:noreply,
+         assign(socket, changing_status: flow, status_pending: flow.status, status_error: nil)}
+
+      nil ->
+        {:noreply, assign(socket, :error, "That flow is no longer listed here.")}
+    end
+  end
+
+  @impl true
+  def handle_event("status_picked", %{"status" => status}, socket) do
+    {:noreply, assign(socket, :status_pending, status)}
+  end
+
+  @impl true
+  def handle_event("cancel_status", _params, socket) do
+    {:noreply, assign(socket, changing_status: nil, status_error: nil)}
+  end
+
+  @impl true
+  def handle_event("save_status", %{"status" => status}, socket) do
+    case Flows.update_status(socket.assigns.changing_status, status,
+           user_id: socket.assigns.user_id
+         ) do
+      {:ok, _flow} ->
+        {:noreply, push_navigate(socket, to: current_path(socket.assigns))}
+
+      {:error, _reason} ->
+        {:noreply,
+         assign(socket, :status_error, "Could not change the status. Please try again.")}
+    end
+  end
+
+  # This page again, sort and page kept, so a write shows in the listing
+  defp current_path(%{uri: uri, base: base}) do
+    case uri && URI.parse(uri) do
+      %URI{path: path, query: nil} when is_binary(path) -> path
+      %URI{path: path, query: query} when is_binary(path) -> path <> "?" <> query
+      _none -> "#{base}/flows"
+    end
+  end
+
   defp listed_flow(id, tenant_id) do
     case Flows.get(id) do
       %Flow{owner_flow_id: nil} = flow when is_nil(tenant_id) or flow.tenant_id == tenant_id ->
@@ -173,6 +234,16 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         name={@copy_name}
         slug={@copy_slug}
         error={@copy_error}
+        target={@myself}
+        components={@components}
+      />
+
+      <StatusDialog.status_dialog
+        :if={@changing_status}
+        flow={@changing_status}
+        status={@status_pending}
+        counts={Shared.instance_counts(@changing_status)}
+        error={@status_error}
         target={@myself}
         components={@components}
       />
@@ -262,6 +333,19 @@ defmodule FormFlow.Web.Templates.Flows.Index do
                     phx-target={@myself}
                   >
                     Duplicate Flow
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    phx-click={
+                      JS.remove_attribute("open", to: "#flow-#{flow.id}-actions")
+                      |> JS.push("request_status", value: %{id: flow.id})
+                    }
+                    phx-target={@myself}
+                  >
+                    Change status
                   </button>
                 </li>
               </ul>

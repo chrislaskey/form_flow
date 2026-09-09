@@ -141,7 +141,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
       refute changeset.valid?
       assert {"is invalid", _opts} = changeset.errors[:status]
 
-      assert Flow.statuses() == ~w(draft open winding_down)
+      assert Flow.statuses() == ~w(draft open winding_down read_only archived)
     end
 
     test "status is immutable through the plain changeset — update_status/3 moves it" do
@@ -165,12 +165,21 @@ defmodule FormFlow.Data.Templates.FlowTest do
       refute Flow.allows?("draft", :continue)
       refute Flow.allows?("draft", :see)
 
+      refute Flow.allows?("read_only", :start)
+      refute Flow.allows?("read_only", :continue)
+      assert Flow.allows?("read_only", :see)
+
+      refute Flow.allows?("archived", :start)
+      refute Flow.allows?("archived", :continue)
+      refute Flow.allows?("archived", :see)
+
       # The struct works too, and an unknown status allows nothing
       assert Flow.allows?(%Flow{status: "open"}, :start)
       refute Flow.allows?("closed", :see)
 
       assert Flow.statuses_allowing(:start) == ["open"]
-      assert Flow.statuses_allowing(:see) == ["open", "winding_down"]
+      assert Flow.statuses_allowing(:continue) == ["open", "winding_down"]
+      assert Flow.statuses_allowing(:see) == ["open", "winding_down", "read_only"]
     end
   end
 end

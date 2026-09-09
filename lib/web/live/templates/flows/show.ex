@@ -47,12 +47,22 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
+  alias FormFlow.Web.Templates.Flows.Components.StatusDialog
   alias FormFlow.Web.Templates.Shared
 
   @impl true
   def mount(socket) do
     {:ok,
-     assign(socket, error: nil, copying?: false, copy_name: nil, copy_slug: nil, copy_error: nil)}
+     assign(socket,
+       error: nil,
+       copying?: false,
+       copy_name: nil,
+       copy_slug: nil,
+       copy_error: nil,
+       changing_status?: false,
+       status_pending: nil,
+       status_error: nil
+     )}
   end
 
   @impl true
@@ -67,6 +77,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
       |> assign_new(:components, fn -> nil end)
+      |> assign_new(:user_id, fn -> nil end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -178,6 +189,46 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     end
   end
 
+  # The status dialog: the badge in the header opens it on a root flow; the
+  # pick redraws its summary; Save writes through `Flows.update_status/3`,
+  # signed by the page's admin, and the header follows.
+  @impl true
+  def handle_event("request_status", _params, socket) do
+    {:noreply,
+     assign(socket,
+       changing_status?: true,
+       status_pending: socket.assigns.flow.status,
+       status_error: nil
+     )}
+  end
+
+  @impl true
+  def handle_event("status_picked", %{"status" => status}, socket) do
+    {:noreply, assign(socket, :status_pending, status)}
+  end
+
+  @impl true
+  def handle_event("cancel_status", _params, socket) do
+    {:noreply, assign(socket, changing_status?: false, status_error: nil)}
+  end
+
+  @impl true
+  def handle_event("save_status", %{"status" => status}, socket) do
+    case Flows.update_status(socket.assigns.flow, status, user_id: socket.assigns.user_id) do
+      {:ok, _flow} ->
+        {:noreply,
+         assign(socket,
+           flow: Flows.get(socket.assigns.flow.id),
+           changing_status?: false,
+           status_error: nil
+         )}
+
+      {:error, _reason} ->
+        {:noreply,
+         assign(socket, :status_error, "Could not change the status. Please try again.")}
+    end
+  end
+
   @impl true
   def handle_event("request_copy", _params, socket) do
     {:noreply,
@@ -247,13 +298,18 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         <%!-- What users may do with it (FormFlow.Data.Templates.Flow's status
               table); the root's, so a drill-in page says nothing --%>
         <:metadata :if={is_nil(@flow.owner_flow_id)}>
-          <Core.badge
-            components={@components}
-            kind={Shared.status_kind(@flow.status)}
-            title={Shared.status_summary(@flow.status)}
+          <button
+            type="button"
+            phx-click="request_status"
+            phx-target={@myself}
+            class="cursor-pointer"
+            title={"#{Shared.status_summary(@flow.status)} Click to change."}
+            aria-label={"Status: #{Shared.status_label(@flow.status)}. Change status"}
           >
-            {Shared.status_label(@flow.status)}
-          </Core.badge>
+            <Core.badge components={@components} kind={Shared.status_kind(@flow.status)}>
+              {Shared.status_label(@flow.status)} ▾
+            </Core.badge>
+          </button>
         </:metadata>
         <%!-- Show mode renders the stored type as plain text; the Edit
               page is where it becomes a dropdown --%>
@@ -325,6 +381,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         name={@copy_name}
         slug={@copy_slug}
         error={@copy_error}
+        target={@myself}
+        components={@components}
+      />
+
+      <StatusDialog.status_dialog
+        :if={@changing_status?}
+        flow={@flow}
+        status={@status_pending}
+        counts={Shared.instance_counts(@flow)}
+        error={@status_error}
         target={@myself}
         components={@components}
       />

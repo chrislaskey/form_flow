@@ -128,6 +128,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
            tenant_id: socket.assigns.tenant_id
          ) do
       {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
+      {:error, :read_only} -> {:noreply, assign(socket, :error, "This flow is read-only now.")}
       {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
     end
   end
@@ -167,6 +168,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
             flow_instance: flow_instance,
             context: context,
             rows: rows,
+            continue_allowed?:
+              match?(%Templates.Flow{}, flow) and Templates.Flow.allows?(flow, :continue),
             part_done?: part_done?(rows, flow_instance),
             stranded: Instances.Flows.list_stranded(flow_instance),
             flow_name: (flow && flow.name) || "Untitled flow",
@@ -300,7 +303,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               Start
             </Core.button>
             <Core.button
-              :if={row.form.status == :in_progress && row.form.instance}
+              :if={row.form.status == :in_progress && row.form.instance && @continue_allowed?}
               components={@components}
               navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
             >
@@ -315,7 +318,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               View
             </Core.button>
             <Core.button
-              :if={row.form.status == :completed && row.form.instance}
+              :if={row.form.status == :completed && row.form.instance && @continue_allowed?}
               components={@components}
               phx-click="reopen"
               phx-value-path={Enum.join(row.form.path, ",")}
