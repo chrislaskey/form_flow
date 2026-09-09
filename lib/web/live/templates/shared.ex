@@ -318,6 +318,44 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
+  The name the copy dialog prefills for a copy of `flow`: the source's with
+  "(copy)" after it, so two rows on the index never read the same. The word
+  is what most tools say of a copy; an admin naming a new year types over it.
+  """
+  def copy_name(%Templates.Flow{name: name}), do: "#{name || "Untitled"} (copy)"
+
+  @doc """
+  The copy dialog's submit: `FormFlow.Data.Templates.Flows.copy/2` of `flow`
+  with the dialog's `name` and `slug` — a blank one leaves the choice to
+  `copy/2` — and the host's `types` (`flow_types:`, `form_types:`) so the
+  copy's health is checked once and cached. Returns the copy, or the message
+  the dialog shows: a refused slug by name, anything else as a retry.
+  """
+  def copy_flow(%Templates.Flow{} = flow, params, types) do
+    opts = [name: blank_to_nil(params["name"]), slug: blank_to_nil(params["slug"])] ++ types
+
+    case Templates.Flows.copy(flow, opts) do
+      {:ok, copy} ->
+        {:ok, copy}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, save_error(changeset, "Could not copy the flow. Please try again.")}
+
+      {:error, _reason} ->
+        {:error, "Could not copy the flow. Please try again."}
+    end
+  end
+
+  defp blank_to_nil(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp blank_to_nil(_value), do: nil
+
+  @doc """
   The message a failed template save shows. A slug the changeset refused —
   taken, or malformed — is named, since it is the one field an admin can
   fix by typing; anything else is the generic retry.

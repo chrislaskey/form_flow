@@ -33,6 +33,19 @@ root's prefix. A refused insert — a taken `slug:` — returns
 properties in place of the source's, which is how the flow copy hands
 over re-pointed values in one write.
 
+### A flow is copied from its pages
+
+**Copy**, on a root flow's Show and Edit pages, opens a dialog
+(**`FormFlow.Web.Templates.Flows.Components.CopyDialog`**) prefilled with
+the copy's name — the source's with "(copy)" after it — and the slug
+`copy/2` would pick (**`Flows.copy_slug/1`**, new), calls `copy/2` with the
+host's types so the copy's health is cached, and lands on the copy's show
+page. A refused slug keeps the dialog open with the reason. On the Edit
+page with unsaved edits the dialog says the copy is of the last saved
+version, and leaving for the copy goes through the same save-first prompt
+as every other way off the page. A subflow's pages have no Copy: a subflow
+is copied by pasting its step.
+
 ### A step can be pasted
 
 A node saved with `data.copy_of_node_id` — the id of the node it was
@@ -44,9 +57,18 @@ under this root's prefix; a catalog form stays the same shared reference.
 The marker is consumed, never stored, so nothing is copied twice; the
 pasted step's label and type write through to the copy like any step's.
 The save is refused with an error on `:nodes` when the source no longer
-exists or belongs to another tenant. The canvas side — Copy on a node,
-Paste onto a canvas — is not built yet; this is the data layer it will
-save through.
+exists or belongs to another tenant.
+
+On the canvas, a form or subflow step's ⋮ menu has **Copy** — disabled
+until the step has been saved, since the save copies from the source by its
+real id — and the toolbar shows **Paste “<step>”** beside the add buttons
+whenever the clipboard holds a step that fits this canvas: a subflow step
+on a "subflows" canvas, a form step on a "forms" one. The clipboard is the
+browser's `localStorage`, so a step copied on one flow's canvas can be
+pasted on another's, or in another tab; a copy older than a day is ignored
+and dropped. Paste adds the copied node's snapshot as a new node wearing a
+**Copy** mark until Save, when the server copies the entity behind it and
+the mark goes with the marker. Nothing is written before Save.
 
 A `:related_form` path inside what is copied is **rebased to where the
 paste lands**: the source flow's prefix is swapped for the destination

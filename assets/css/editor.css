@@ -140,10 +140,32 @@
   background: #fef2f2;
 }
 
+.ff-node__menu-item:disabled,
+.ff-node__menu-item:disabled:hover {
+  background: none;
+  color: #a1a1aa;
+  cursor: default;
+}
+
 .ff-node__meta {
   margin-top: 2px;
   font-size: 11px;
   color: #71717a;
+}
+
+/* The mark a pasted step wears until it is saved */
+.ff-node__copy {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  color: #92400e;
+  vertical-align: 1px;
 }
 
 .ff-panel button {
@@ -158,6 +180,19 @@
 .ff-panel button:hover {
   border-color: #0891b2;
   color: #0891b2;
+}
+
+/* Paste stands apart from the add buttons: it is about something already made */
+.ff-panel .ff-panel__paste {
+  margin-left: 6px;
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.ff-panel .ff-panel__paste:hover {
+  border-color: #d97706;
+  color: #78350f;
 }
 
 .ff-node--subflow {

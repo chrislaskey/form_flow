@@ -840,7 +840,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
     case Keyword.get(opts, :owner_flow_id) do
       nil ->
-        slug = Keyword.get(opts, :slug) || root_copy_slug(flow)
+        slug = Keyword.get(opts, :slug) || copy_slug(flow)
 
         {:ok,
          %{
@@ -866,10 +866,13 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # A root copy keeps the source's slug with a suffix — or, when the source
-  # is owned and has none, takes the default a root created from its name
-  # would get (create/1)
-  defp root_copy_slug(flow) do
+  @doc """
+  The slug a root copy of `flow` takes when `copy/2` is given none: the
+  source's with a free `-N` suffix, or — when the source is owned and has
+  none — the default a root created from its name would get (`create/1`).
+  What the copy dialog prefills, so an admin sees the slug before making it.
+  """
+  def copy_slug(%Flow{} = flow) do
     Slug.available(Flow, flow.slug || Slug.segment(flow.name, "flow"), flow.tenant_id)
   end
 

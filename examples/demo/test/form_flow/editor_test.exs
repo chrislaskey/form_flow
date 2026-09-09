@@ -30,6 +30,13 @@ defmodule Demo.FormFlowEditorTest do
       # itself can't run here)
       assert conn.resp_body =~ "ff-node__menu"
       assert conn.resp_body =~ "ff-node__title-input"
+
+      # Copy and paste: the localStorage clipboard, the marker the save reads
+      # (FormFlow.Data.Templates.Flows, "Pasting a step"), and the mark a
+      # pasted step wears
+      assert conn.resp_body =~ "form_flow:clipboard"
+      assert conn.resp_body =~ "copy_of_node_id"
+      assert conn.resp_body =~ "ff-node__copy"
     end
 
     test "is cached immutably, since the path carries a content hash", %{conn: conn} do

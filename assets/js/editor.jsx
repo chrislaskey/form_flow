@@ -127,8 +127,9 @@ function NodeTitleInput({ id, label }) {
 // is ours: `items` is a list of {label, destructive?, confirm?, onSelect} —
 // node types compose it from the shared entries (useNodeMenuItems) plus their
 // own. An item with `confirm` asks before acting, so a misclick in a growing
-// menu can't fire anything destructive. Renders nothing with no items, e.g.
-// read-only canvases today.
+// menu can't fire anything destructive; one with `disabled` stays listed
+// with its `title` saying why. Renders nothing with no items, e.g. read-only
+// canvases today.
 function NodeMenu({ items }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -179,6 +180,8 @@ function NodeMenu({ items }) {
               type="button"
               role="menuitem"
               className={`ff-node__menu-item ${item.destructive ? "is-destructive" : ""}`}
+              disabled={item.disabled}
+              title={item.title}
               onClick={(event) => {
                 event.stopPropagation();
                 setOpen(false);
@@ -198,15 +201,33 @@ function NodeMenu({ items }) {
 }
 
 // The menu entries every node type shares; specific node types concat their
-// own after these. Delete goes through ReactFlow's deleteElements — the same
-// path as the Backspace key — so connected edges cascade, deletable: false is
-// respected, and the removal reaches the server through the ordinary
+// own after these. Copy puts a snapshot of the step on the clipboard (see
+// "clipboard" below) — offered on form and subflow steps, and disabled until
+// the step has been saved, since the save copies from the source by its real
+// id. Delete goes through ReactFlow's deleteElements — the same path as the
+// Backspace key — so connected edges cascade, deletable: false is respected,
+// and the removal reaches the server through the ordinary
 // onNodesChange/onEdgesChange reports.
 function useNodeMenuItems(id, deletable) {
   const { editable } = useContext(EditorContext);
-  const { deleteElements } = useReactFlow();
+  const { deleteElements, getNode } = useReactFlow();
 
   const items = [];
+  const node = getNode(id);
+
+  if (editable && node && copyableKind(node)) {
+    const saved = isSaved(node);
+
+    items.push({
+      label: "Copy",
+      disabled: !saved,
+      title: saved ? "Copy this step, to paste onto this or another canvas" : "Save before copying",
+      onSelect: () => {
+        const current = getNode(id);
+        if (current) writeClipboard(current);
+      },
+    });
+  }
 
   if (editable && deletable !== false) {
     items.push({
@@ -218,6 +239,17 @@ function useNodeMenuItems(id, deletable) {
   }
 
   return items;
+}
+
+// A pasted step wears this until it is saved: the save copies the step it
+// came from for it and drops the mark, so the fresh data the server pushes
+// back draws the node without it
+function CopyMark() {
+  return (
+    <span className="ff-node__copy" title="A pasted step. Saving makes it a copy of its own.">
+      Copy
+    </span>
+  );
 }
 
 // isConnectable must be passed through to every Handle: it is how ReactFlow
@@ -245,7 +277,10 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
       <div className="ff-node__title">
         {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
       </div>
-      <div className="ff-node__meta">{(data.labels ?? []).join(", ")}</div>
+      <div className="ff-node__meta">
+        {(data.labels ?? []).join(", ")}
+        {data.copy_of_node_id && <CopyMark />}
+      </div>
       {data.kind === "form" &&
         (editable ? (
           <select
@@ -306,6 +341,7 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
       </div>
       <div className="ff-node__meta">
         {data.subflow_label === "subflows" ? "Complex subflow" : "Form subflow"}
+        {data.copy_of_node_id && <CopyMark />}
       </div>
       {isFormSubflow &&
         (editable ? (
@@ -362,6 +398,139 @@ function nextId(nodes) {
   while (used.has(String(candidate))) candidate += 1;
 
   return String(candidate);
+}
+
+// Where an added or pasted node lands: to the right of the last one
+function nextPosition(nodes) {
+  const last = nodes[nodes.length - 1];
+
+  return {
+    x: (last?.position.x ?? 240) + 220,
+    y: last?.position.y ?? 120,
+  };
+}
+
+/* -------------------------------------------------------------- clipboard -- */
+
+// Copy and paste of one step at a time, across canvases and across tabs. The
+// clipboard is the browser's localStorage, not anything on the server: the
+// editor is a LiveComponent inside the host's LiveView, whose state does not
+// survive navigating to another flow's canvas — which is exactly the paste
+// we want — and nothing is written until Save. What is stored is a snapshot
+// of the ReactFlow node as it was when copied, and when. Paste adds the
+// snapshot as a new node whose data.copy_of_node_id names the source; the
+// save copies the entity behind the source for it and never stores the
+// marker (FormFlow.Data.Templates.Flows, "Pasting a step"), so the mark
+// goes away with the fresh data the server pushes back. The snapshot's
+// stale form_id/subflow_id copies ride along like any node's and are
+// dropped by the save. A snapshot older than a day is ignored and removed:
+// the step it names has likely moved on, and a save whose source is gone is
+// refused.
+const CLIPBOARD_KEY = "form_flow:clipboard";
+const CLIPBOARD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CLIPBOARD_EVENT = "form_flow:clipboard";
+
+function readClipboard() {
+  try {
+    const raw = window.localStorage.getItem(CLIPBOARD_KEY);
+    if (!raw) return null;
+
+    const entry = JSON.parse(raw);
+    if (!entry?.node?.id || typeof entry.copied_at !== "number") return null;
+
+    if (Date.now() - entry.copied_at > CLIPBOARD_MAX_AGE_MS) {
+      window.localStorage.removeItem(CLIPBOARD_KEY);
+      return null;
+    }
+
+    return entry;
+  } catch {
+    // Storage unavailable (private mode, disabled) or unreadable: no clipboard
+    return null;
+  }
+}
+
+function writeClipboard(node) {
+  try {
+    window.localStorage.setItem(CLIPBOARD_KEY, JSON.stringify({ node, copied_at: Date.now() }));
+    // storage events reach *other* documents only; tell this one as well
+    window.dispatchEvent(new Event(CLIPBOARD_EVENT));
+  } catch {
+    // The copy did not take; nothing to undo
+  }
+}
+
+// The clipboard entry as it stands, following copies made here, in another
+// tab (storage), or while this tab was in the background (focus)
+function useClipboard() {
+  const [entry, setEntry] = useState(readClipboard);
+
+  useEffect(() => {
+    const refresh = () => setEntry(readClipboard());
+
+    window.addEventListener("storage", refresh);
+    window.addEventListener(CLIPBOARD_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(CLIPBOARD_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  return entry;
+}
+
+// Stored nodes carry the server's UUIDs; a node added since the last save
+// has a temporary id (nextId) and nothing behind it yet to copy
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isSaved(node) {
+  return UUID.test(node.id);
+}
+
+// Form steps and subflow steps have an entity behind them to copy; Start and
+// End do not
+function copyableKind(node) {
+  return node.type === "subflow" || node.data?.kind === "form";
+}
+
+// Whether the clipboard's step fits this canvas: a subflow step on a
+// "subflows" canvas, a form step on a "forms" one. The server's flavor rule
+// refuses the rest at save; this keeps the button from offering it.
+function fitsCanvas(entry, flowLabel) {
+  if (!entry) return false;
+
+  return flowLabel === "subflows"
+    ? entry.node.type === "subflow"
+    : entry.node.type === "step" && entry.node.data?.kind === "form";
+}
+
+// The pasted node: the snapshot's data marked as a copy of its source, under
+// a fresh id at the given position. The snapshot's placement, selection, and
+// measurements stay behind.
+function pastedNode(entry, id, position) {
+  const { position: _position, selected: _selected, dragging: _dragging, measured: _measured, ...node } =
+    entry.node;
+
+  return {
+    ...node,
+    id,
+    position,
+    origin: NODE_ORIGIN,
+    data: { ...node.data, copy_of_node_id: entry.node.id },
+  };
+}
+
+function copiedAgo(entry) {
+  const minutes = Math.round((Date.now() - entry.copied_at) / 60000);
+
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.round(minutes / 60);
+  return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
 }
 
 // What the add actions create. In a "forms" flow the only kind is a form
@@ -549,15 +718,12 @@ function FlowEditor({
     (subflowLabel) => {
       setState((current) => {
         const id = nextId(current.nodes);
-        const last = current.nodes[current.nodes.length - 1];
-        const position = {
-          x: (last?.position.x ?? 240) + 220,
-          y: last?.position.y ?? 120,
-        };
 
         const next = {
           ...current,
-          nodes: current.nodes.concat(newNode(flowLabel, subflowLabel, id, position)),
+          nodes: current.nodes.concat(
+            newNode(flowLabel, subflowLabel, id, nextPosition(current.nodes)),
+          ),
         };
 
         setFocusId(id);
@@ -567,6 +733,26 @@ function FlowEditor({
     },
     [flowLabel, report],
   );
+
+  // The clipboard as the Paste button shows it; the paste itself reads again,
+  // since the entry may have expired while the button was on screen
+  const clipboard = useClipboard();
+
+  const pasteNode = useCallback(() => {
+    const entry = readClipboard();
+    if (!fitsCanvas(entry, flowLabel)) return;
+
+    setState((current) => {
+      const id = nextId(current.nodes);
+      const next = {
+        ...current,
+        nodes: current.nodes.concat(pastedNode(entry, id, nextPosition(current.nodes))),
+      };
+
+      report(next);
+      return next;
+    });
+  }, [flowLabel, report]);
 
   return (
     <EditorContext.Provider
@@ -620,6 +806,16 @@ function FlowEditor({
           ) : (
             <button type="button" onClick={() => addNode(null)}>
               + Form
+            </button>
+          )}
+          {fitsCanvas(clipboard, flowLabel) && (
+            <button
+              type="button"
+              className="ff-panel__paste"
+              title={`Paste a copy of “${clipboard.node.data?.label ?? "this step"}”, copied ${copiedAgo(clipboard)}`}
+              onClick={pasteNode}
+            >
+              Paste “{clipboard.node.data?.label ?? "step"}”
             </button>
           )}
         </Panel>

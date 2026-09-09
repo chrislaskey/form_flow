@@ -104,12 +104,21 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
+  alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Shared
 
   @impl true
   def mount(socket) do
     {:ok,
-     assign(socket, error: nil, notice: nil, pending_navigation: nil, confirming_discard?: false)}
+     assign(socket,
+       error: nil,
+       notice: nil,
+       pending_navigation: nil,
+       confirming_discard?: false,
+       copying?: false,
+       copy_slug: nil,
+       copy_error: nil
+     )}
   end
 
   # DynamicForm's on_change routed back through send_update: the flow form's
@@ -403,6 +412,41 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
+  def handle_event("request_copy", _params, socket) do
+    {:noreply,
+     assign(socket,
+       copying?: true,
+       copy_slug: Flows.copy_slug(socket.assigns.flow),
+       copy_error: nil
+     )}
+  end
+
+  @impl true
+  def handle_event("cancel_copy", _params, socket) do
+    {:noreply, assign(socket, copying?: false, copy_error: nil)}
+  end
+
+  # The copy is of the last saved version (the dialog says so when edits are
+  # pending). Leaving for the copy's page goes through the same save-first
+  # prompt as every other way off this page, so pending edits are not lost
+  # to the click that made the copy.
+  @impl true
+  def handle_event("copy", params, socket) do
+    case Shared.copy_flow(socket.assigns.flow, params, socket.assigns.host_types) do
+      {:ok, copy} ->
+        to = "#{socket.assigns.base}/flows/#{copy.id}"
+        socket = assign(socket, copying?: false, copy_error: nil)
+
+        if unsaved_changes?(socket.assigns),
+          do: {:noreply, assign(socket, :pending_navigation, {:path, to})},
+          else: {:noreply, push_navigate(socket, to: to)}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :copy_error, message)}
+    end
+  end
+
+  @impl true
   def handle_event("request_discard", _params, socket) do
     {:noreply, assign(socket, :confirming_discard?, true)}
   end
@@ -672,6 +716,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </button>
+          <%!-- A root flow is copied whole from here; a subflow is copied
+                by pasting its step on a canvas --%>
+          <Core.button
+            :if={is_nil(@node_id)}
+            components={@components}
+            phx-click="request_copy"
+            phx-target={@myself}
+            class="btn"
+          >
+            Copy
+          </Core.button>
           <Core.button
             :if={unsaved_changes?(assigns)}
             components={@components}
@@ -694,6 +749,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
+
+      <CopyDialog.copy_dialog
+        :if={@copying?}
+        flow={@flow}
+        name={Shared.copy_name(@flow)}
+        slug={@copy_slug}
+        error={@copy_error}
+        saved_note={unsaved_changes?(assigns)}
+        target={@myself}
+        components={@components}
+      />
 
       <Editor.editor
         id={"#{@id}-editor"}

@@ -6,6 +6,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   read-only in the editor canvas (see `FormFlow.Web.Components.Editor`) — pan
   and zoom work, but changing anything means clicking through to the edit
   page. The delete button removes the flow and navigates back to the index.
+  Copy, on a root flow, opens a dialog for the copy's name and slug
+  (`FormFlow.Web.Templates.Flows.Components.CopyDialog`) and lands on the
+  copy's show page; an owned subflow is copied by pasting its step on a
+  canvas instead (see `FormFlow.Data.Templates.Flows`, "Pasting a step").
 
   Two addressing modes, matching the router:
 
@@ -36,11 +40,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
+  alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Shared
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, error: nil)}
+    {:ok, assign(socket, error: nil, copying?: false, copy_slug: nil, copy_error: nil)}
   end
 
   @impl true
@@ -166,6 +171,32 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     end
   end
 
+  @impl true
+  def handle_event("request_copy", _params, socket) do
+    {:noreply,
+     assign(socket,
+       copying?: true,
+       copy_slug: Flows.copy_slug(socket.assigns.flow),
+       copy_error: nil
+     )}
+  end
+
+  @impl true
+  def handle_event("cancel_copy", _params, socket) do
+    {:noreply, assign(socket, copying?: false, copy_error: nil)}
+  end
+
+  @impl true
+  def handle_event("copy", params, socket) do
+    case Shared.copy_flow(socket.assigns.flow, params, socket.assigns.host_types) do
+      {:ok, copy} ->
+        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{copy.id}")}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :copy_error, message)}
+    end
+  end
+
   # The context's refusal, as a sentence: it says why on `:id`, prefixed
   # "cannot be deleted: " — a subflow deleted on its own, a flow with
   # instances, an owned form with submitted data
@@ -237,6 +268,17 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
+          <%!-- A root flow is copied whole from here; a subflow is copied
+                by pasting its step on a canvas --%>
+          <Core.button
+            :if={is_nil(@node_id)}
+            components={@components}
+            phx-click="request_copy"
+            phx-target={@myself}
+            class="btn"
+          >
+            Copy
+          </Core.button>
           <Core.button
             components={@components}
             phx-click="delete"
@@ -255,6 +297,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <CopyDialog.copy_dialog
+        :if={@copying?}
+        flow={@flow}
+        name={Shared.copy_name(@flow)}
+        slug={@copy_slug}
+        error={@copy_error}
+        target={@myself}
+        components={@components}
+      />
 
       <Editor.editor
         id={"#{@id}-editor"}
