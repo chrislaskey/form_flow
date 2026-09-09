@@ -85,7 +85,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "the start-a-flow picker is a plain list beside the table", %{conn: conn} do
-    {:ok, flow} = Flows.create(%{name: "Startable"})
+    {:ok, flow} = Flows.create(%{name: "Startable", status: "open"})
 
     {:ok, view, _html} = live(conn, "/users")
 
@@ -98,7 +98,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   defp row_link(instance), do: "a[href='/users/#{instance.id}']"
 
   defp start_flow(name, user_id) do
-    {:ok, flow} = Flows.create(%{name: name})
+    {:ok, flow} = Flows.create(%{name: name, status: "open"})
     {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: user_id})
 
     instance

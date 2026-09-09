@@ -2,9 +2,10 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
-  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — summary
-  counts and timestamps, with show and edit actions per row and a link to create a
-  new flow. The editor itself lives on those pages, so this one never loads
+  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — name
+  and slug, status (`FormFlow.Data.Templates.Flow`'s table, as a badge whose
+  title says what it means), summary counts and timestamps, with Overview,
+  Show, and Edit actions per row and a link to create a new flow. The editor itself lives on those pages, so this one never loads
   the ReactFlow bundle. Slab runs in query mode against the host app's repo,
   so sorting and pagination come from the URL: pass the current `uri` and
   `params` from `handle_params/3` (the `FormFlow.Web.Router` component
@@ -15,6 +16,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         id="flows-index"
         uri={@uri}
         params={@params}
+        flow_types={@flow_types}
+        form_types={@form_types}
       />
 
   Without a `sort` param the table sorts by creation time, matching
@@ -36,15 +39,39 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   own struct (`FormFlow.Data.Templates.Flows.Health.status/1`), so the
   listing runs no check: the health page does, and every save refreshes
   the cache.
+
+  ## The row menu
+
+  Beside Overview, Show, and Edit, every row has a ⋮ menu for the actions
+  that do something rather than go somewhere — Duplicate Flow today (the
+  label is *Duplicate* because the canvas's Copy means "to the clipboard";
+  the code stays `copy`, see `FormFlow.Web.Templates.Flows.Show`). It
+  opens the same dialog the show page does
+  (`FormFlow.Web.Templates.Flows.Components.CopyDialog`),
+  prefilled for that row's flow, and lands on the copy's show page — the
+  row is loaded whole for it (`FormFlow.Data.Templates.Flows.get/1`), since
+  the listing's rows carry counts, not contents. `flow_types` and
+  `form_types` are the host's lists, passed so the copy's health is checked
+  once and cached, as the show page does.
   """
 
   use Phoenix.LiveComponent
 
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
+  alias FormFlow.Web.Templates.Flows.Components.CopyDialog
+  alias FormFlow.Web.Templates.Shared
+  alias Phoenix.LiveView.JS
+
+  @impl true
+  def mount(socket) do
+    {:ok,
+     assign(socket, error: nil, copying: nil, copy_name: nil, copy_slug: nil, copy_error: nil)}
+  end
 
   @impl true
   def update(assigns, socket) do
@@ -56,6 +83,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       |> assign_new(:components, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
+      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
+      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
 
     query = Flows.roots_query(tenant_id: socket.assigns.tenant_id)
 
@@ -63,7 +92,61 @@ defmodule FormFlow.Web.Templates.Flows.Index do
      socket
      |> assign(:query, query)
      |> assign(:empty?, not Repo.exists?(query))
-     |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))}
+     |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))
+     |> assign(
+       :host_types,
+       flow_types: socket.assigns.flow_types,
+       form_types: socket.assigns.form_types
+     )}
+  end
+
+  # The row's flow, loaded whole, is what the dialog and `copy/2` take; a row
+  # that has gone since the listing drew — deleted, or another tenant's id
+  # sent by hand — is refused with a message rather than copied.
+  @impl true
+  def handle_event("request_copy", %{"id" => id}, socket) do
+    case listed_flow(id, socket.assigns.tenant_id) do
+      %Flow{} = flow ->
+        {:noreply,
+         assign(socket,
+           copying: flow,
+           copy_name: Shared.copy_name(flow),
+           copy_slug: Flows.copy_slug(flow),
+           copy_error: nil,
+           error: nil
+         )}
+
+      nil ->
+        {:noreply, assign(socket, :error, "That flow is no longer listed here.")}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_copy", _params, socket) do
+    {:noreply, assign(socket, copying: nil, copy_error: nil)}
+  end
+
+  @impl true
+  def handle_event("copy", params, socket) do
+    case Shared.copy_flow(socket.assigns.copying, params, socket.assigns.host_types) do
+      {:ok, copy} ->
+        {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{copy.id}")}
+
+      {:error, message} ->
+        # The dialog redraws with what was typed, not the prefill
+        {:noreply,
+         assign(socket, copy_error: message, copy_name: params["name"], copy_slug: params["slug"])}
+    end
+  end
+
+  defp listed_flow(id, tenant_id) do
+    case Flows.get(id) do
+      %Flow{owner_flow_id: nil} = flow when is_nil(tenant_id) or flow.tenant_id == tenant_id ->
+        flow
+
+      _ ->
+        nil
+    end
   end
 
   @impl true
@@ -78,9 +161,21 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         </:actions>
       </Header.header>
 
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
       <Core.alert :if={@empty?} components={@components}>
         No flows yet — create the first one.
       </Core.alert>
+
+      <CopyDialog.copy_dialog
+        :if={@copying}
+        flow={@copying}
+        name={@copy_name}
+        slug={@copy_slug}
+        error={@copy_error}
+        target={@myself}
+        components={@components}
+      />
 
       <Slab.table
         :if={!@empty?}
@@ -95,6 +190,18 @@ defmodule FormFlow.Web.Templates.Flows.Index do
             {flow.name || "Untitled"}
           </.link>
           <span class="block font-mono text-[10px] text-zinc-400">{flow.id}</span>
+        </:column>
+        <:column :let={flow} field={:slug} label="Slug" sortable>
+          <code :if={flow.slug} class="text-xs text-zinc-600">{flow.slug}</code>
+        </:column>
+        <:column :let={flow} field={:status} label="Status" sortable>
+          <Core.badge
+            components={@components}
+            kind={Shared.status_kind(flow.status)}
+            title={Shared.status_summary(flow.status)}
+          >
+            {Shared.status_label(flow.status)}
+          </Core.badge>
         </:column>
         <:column :let={flow} field={:label} label="Kind">
           <span class="text-xs text-zinc-500">
@@ -112,15 +219,54 @@ defmodule FormFlow.Web.Templates.Flows.Index do
           </span>
         </:column>
         <:column :let={flow} label="Actions">
-          <.link navigate={"#{@base}/flows/#{flow.id}"} class="text-cyan-600 hover:underline">
-            Show
-          </.link>
-          <.link
-            navigate={"#{@base}/flows/#{flow.id}/edit"}
-            class="ml-3 text-cyan-600 hover:underline"
-          >
-            Edit
-          </.link>
+          <div class="flex items-center gap-3">
+            <.link
+              navigate={"#{@base}/flows/#{flow.id}/overview"}
+              class="text-cyan-600 hover:underline"
+            >
+              Overview
+            </.link>
+            <.link navigate={"#{@base}/flows/#{flow.id}"} class="text-cyan-600 hover:underline">
+              Show
+            </.link>
+            <.link navigate={"#{@base}/flows/#{flow.id}/edit"} class="text-cyan-600 hover:underline">
+              Edit
+            </.link>
+            <%!-- A <details> dropdown, as the demo's user switcher: open and
+                  close are the browser's, click-away closes it, and choosing
+                  an item closes it before the event goes out --%>
+            <details
+              id={"flow-#{flow.id}-actions"}
+              class="dropdown dropdown-end"
+              phx-click-away={JS.remove_attribute("open")}
+            >
+              <summary
+                class="btn btn-ghost btn-xs cursor-pointer list-none px-1.5 text-base leading-none text-zinc-500 select-none [&::-webkit-details-marker]:hidden"
+                aria-label={"More actions for #{flow.name || "Untitled"}"}
+                aria-haspopup="menu"
+              >
+                ⋮
+              </summary>
+              <ul
+                class="dropdown-content menu menu-sm z-30 mt-1 w-44 rounded-md border border-zinc-300 bg-white p-1 shadow-lg"
+                role="menu"
+              >
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    phx-click={
+                      JS.remove_attribute("open", to: "#flow-#{flow.id}-actions")
+                      |> JS.push("request_copy", value: %{id: flow.id})
+                    }
+                    phx-target={@myself}
+                  >
+                    Duplicate Flow
+                  </button>
+                </li>
+              </ul>
+            </details>
+          </div>
         </:column>
         <:pagination per_page={10} />
       </Slab.table>

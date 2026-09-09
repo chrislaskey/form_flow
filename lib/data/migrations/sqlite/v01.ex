@@ -19,6 +19,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
       add(:slug, :string)
+      add(:status, :string, null: false, default: "draft")
       add(:properties, :map, null: false, default: %{})
       add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :delete_all))
 
@@ -27,6 +28,18 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_flows, [:owner_flow_id]))
     create_if_not_exists(index(:form_flow_flows, [:tenant_id]))
+
+    create_if_not_exists table(:form_flow_flow_events, primary_key: false) do
+      add(:id, :uuid, primary_key: true)
+      add(:flow_id, references(:form_flow_flows, type: :uuid, on_delete: :restrict), null: false)
+      add(:event, :string, null: false)
+      add(:snapshot, :map, null: false)
+      add(:user_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_flow_events, [:flow_id]))
 
     create_if_not_exists(
       unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
@@ -286,6 +299,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     drop_if_exists(table(:form_flow_instance_flows))
     drop_if_exists(table(:form_flow_template_form_versions))
     drop_if_exists(table(:form_flow_template_forms))
+    drop_if_exists(table(:form_flow_flow_events))
     drop_if_exists(table(:form_flow_flows))
   end
 end

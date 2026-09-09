@@ -104,7 +104,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
-  alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Shared
 
   @impl true
@@ -114,12 +113,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        error: nil,
        notice: nil,
        pending_navigation: nil,
-       confirming_discard?: false,
-       copying?: false,
-       copy_name: nil,
-       copy_slug: nil,
-       copy_error: nil,
-       copied: nil
+       confirming_discard?: false
      )}
   end
 
@@ -139,6 +133,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      |> assign(:pending_perspectives, pending_perspectives(payload, pending_type, socket.assigns))
      |> assign(:pending_type, pending_type)
      |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
+     |> assign(:pending_status, pending_status(payload, socket.assigns.pending_status))
      |> reset_form_data_on_switch(pending_type)
      |> assign(:notice, nil)}
   end
@@ -154,6 +149,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
       |> assign_new(:components, fn -> nil end)
+      |> assign_new(:user_id, fn -> nil end)
 
     subflow_node = socket.assigns.node_id && Flows.get_node(socket.assigns.node_id)
     flow = resolve_flow(socket.assigns, subflow_node)
@@ -171,7 +167,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        # flow's kind: the health check reads every level of the tree
        host_types: [flow_types: socket.assigns.flow_types, form_types: socket.assigns.form_types],
        flow_types: types,
-       form_data: form_data(flow, subflow_node, types)
+       form_data: form_data(flow, subflow_node, types),
+       instance_counts: flow && Shared.instance_counts(flow)
      )
      |> assign(pending(flow, subflow_node))
      |> assign(page(socket.assigns, flow, root))}
@@ -185,7 +182,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       pending_slug: flow && step_slug(flow, node),
       pending_perspectives: Perspective.ids(flow),
       pending_type: flow && flow.properties["form_flow_type"],
-      pending_property_values: FormFlow.Config.Flows.Type.property_values(flow)
+      pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
+      pending_status: flow && flow.status
     }
   end
 
@@ -251,6 +249,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       Shared.properties(types, type_id),
       values
     )
+    |> Map.merge(form_data_status(%{flow: flow}))
   end
 
   defp form_data(name, slug, perspectives, type_id, properties, values) do
@@ -259,6 +258,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       Shared.field_data(properties, values)
     )
   end
+
+  # The status a root flow's fields form shows; an owned flow has no field
+  defp form_data_status(%{flow: %{owner_flow_id: nil, status: status}}), do: %{status: status}
+  defp form_data_status(_assigns), do: %{}
 
   # The page's flow types for a flow in this context. Empty means the flow
   # has no type of its own, and no dropdown.
@@ -283,7 +286,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         flow: flow,
         pending_name: name,
         pending_slug: slug,
-        pending_perspectives: perspectives
+        pending_perspectives: perspectives,
+        pending_status: status
       } = socket.assigns
 
       saved_type = Shared.effective_type(types, flow.properties["form_flow_type"])
@@ -304,6 +308,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           Shared.properties(types, shown_type),
           values
         )
+        |> Map.merge(form_data_status(%{flow: %{flow | status: status}}))
       )
     end
   end
@@ -333,6 +338,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp pending_type(_payload, current), do: current
+
+  # The raw param, like the type's: the dropdown's value as chosen
+  defp pending_status(%{changeset: %{params: %{"status" => value}}}, _current)
+       when is_binary(value) and value != "",
+       do: value
+
+  defp pending_status(_payload, current), do: current
 
   defp presence(""), do: nil
   defp presence(value), do: value
@@ -414,47 +426,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   @impl true
-  def handle_event("request_copy", _params, socket) do
-    {:noreply,
-     assign(socket,
-       copying?: true,
-       copy_name: Shared.copy_name(socket.assigns.flow),
-       copy_slug: Flows.copy_slug(socket.assigns.flow),
-       copy_error: nil,
-       copied: nil
-     )}
-  end
-
-  @impl true
-  def handle_event("cancel_copy", _params, socket) do
-    {:noreply, assign(socket, copying?: false, copy_error: nil)}
-  end
-
-  # The copy is of the last saved version (the dialog says so when edits are
-  # pending), and it is made here, on the click. With nothing unsaved the
-  # copy's page is next. With edits pending this page stays — the copy is
-  # done, and what is open is the edits' fate, not the copy's — and says
-  # where the copy went; its link leaves through the same save-first prompt
-  # as every other way off this page.
-  @impl true
-  def handle_event("copy", params, socket) do
-    case Shared.copy_flow(socket.assigns.flow, params, socket.assigns.host_types) do
-      {:ok, copy} ->
-        to = "#{socket.assigns.base}/flows/#{copy.id}"
-        socket = assign(socket, copying?: false, copy_error: nil)
-
-        if unsaved_changes?(socket.assigns),
-          do: {:noreply, assign(socket, :copied, %{name: copy.name, to: to})},
-          else: {:noreply, push_navigate(socket, to: to)}
-
-      {:error, message} ->
-        # The dialog redraws with what was typed, not the prefill
-        {:noreply,
-         assign(socket, copy_error: message, copy_name: params["name"], copy_slug: params["slug"])}
-    end
-  end
-
-  @impl true
   def handle_event("request_discard", _params, socket) do
     {:noreply, assign(socket, :confirming_discard?, true)}
   end
@@ -478,7 +449,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       assigns.pending_slug != step_slug(assigns.flow, assigns.subflow_node) or
       assigns.pending_perspectives != Perspective.ids(assigns.flow) or
       assigns.pending_type != assigns.flow.properties["form_flow_type"] or
-      assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow)
+      assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow) or
+      assigns.pending_status != assigns.flow.status
   end
 
   defp navigate_to_node(socket, node_id) do
@@ -556,6 +528,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       )
 
     with {:ok, flow} <- Flows.update(socket.assigns.flow, attrs),
+         {:ok, flow} <- update_status(flow, socket.assigns),
          {:ok, node} <-
            update_step(
              socket.assigns.subflow_node,
@@ -582,7 +555,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           pending_perspectives: Perspective.ids(flow),
           pending_type: flow.properties["form_flow_type"],
           pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
+          pending_status: flow.status,
           form_data: form_data(flow, node, socket.assigns.flow_types),
+          instance_counts: Shared.instance_counts(flow),
           error: nil
         )
         |> push_event("form_flow:set_flow", %{flow: data})
@@ -724,17 +699,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </button>
-          <%!-- A root flow is copied whole from here; an owned subflow is
-                copied by pasting its step on a canvas --%>
-          <Core.button
-            :if={is_nil(@flow.owner_flow_id)}
-            components={@components}
-            phx-click="request_copy"
-            phx-target={@myself}
-            class="btn"
-          >
-            Copy
-          </Core.button>
           <Core.button
             :if={unsaved_changes?(assigns)}
             components={@components}
@@ -757,33 +721,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
-      <%!-- Where the copy went, when this page stayed for its unsaved edits;
-            the link goes through "navigate", so those edits prompt first --%>
-      <p :if={@copied} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">
-        Copied to
-        <button
-          type="button"
-          phx-click="navigate"
-          phx-value-to={@copied.to}
-          phx-target={@myself}
-          class="link link-primary"
-        >
-          “{@copied.name}”
-        </button>
-        — this page stayed open for your unsaved edits.
-      </p>
-
-      <CopyDialog.copy_dialog
-        :if={@copying?}
-        flow={@flow}
-        name={@copy_name}
-        slug={@copy_slug}
-        error={@copy_error}
-        saved_note={unsaved_changes?(assigns)}
-        target={@myself}
-        components={@components}
-      />
-
       <Editor.editor
         id={"#{@id}-editor"}
         data={@data}
@@ -821,6 +758,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             label={slug_label(assigns)}
             description={slug_description(assigns)}
           />
+          <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
+                status table), on a root flow only — an owned subflow's is
+                its root's. The summary under it redraws for the pending
+                choice, the way the form edit page explains its type, and
+                says how many instances the choice reaches. --%>
+          <:field
+            :if={is_nil(@flow.owner_flow_id)}
+            type="dropdown"
+            name="status"
+            label="Status"
+            options={Shared.status_options()}
+            required
+          />
+          <:field :if={is_nil(@flow.owner_flow_id)} type="html" name="status_summary">
+            <.status_callout status={@pending_status} counts={@instance_counts} />
+          </:field>
           <:field
             :if={@flow_types != []}
             type="dropdown"
@@ -953,6 +906,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp update_step(nil, _name, _slug), do: {:ok, nil}
   defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
 
+  # The status is saved with everything else but written by its own function,
+  # so the change has its event — with the admin at this page as its author —
+  # and an unchanged status writes none (`update_status/3` is a no-op then).
+  # Only a root flow has one to move.
+  defp update_status(%{owner_flow_id: nil} = flow, %{pending_status: status, user_id: user_id})
+       when is_binary(status) do
+    Flows.update_status(flow, status, user_id: user_id)
+  end
+
+  defp update_status(flow, _assigns), do: {:ok, flow}
+
   defp name_label(%{node_id: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"
 
@@ -968,6 +932,20 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     do:
       "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
         "It does not follow a rename."
+
+  defp status_callout(%{status: nil} = assigns), do: ~H""
+
+  defp status_callout(assigns) do
+    ~H"""
+    <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+      <div class="font-medium text-zinc-800">{Shared.status_label(@status)}</div>
+      <p class="mt-0.5 text-xs text-zinc-600">{Shared.status_summary(@status)}</p>
+      <p :if={Shared.instance_counts_sentence(@counts)} class="mt-0.5 text-xs text-zinc-600">
+        {Shared.instance_counts_sentence(@counts)}
+      </p>
+    </div>
+    """
+  end
 
   defp changed(payload, component_id) do
     Phoenix.LiveView.send_update(__MODULE__, %{

@@ -141,6 +141,7 @@ defmodule FormFlow.Data.Templates.Flows do
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Flow.Event
   alias FormFlow.Data.Templates.Flow.Node
   alias FormFlow.Data.Templates.Flow.Relationship
   alias FormFlow.Data.Templates.Flows.Health
@@ -519,10 +520,87 @@ defmodule FormFlow.Data.Templates.Flows do
   (`FormFlow.Data.Templates.Slug`); an owned flow gets none unless one is
   given — its step's slug is the handle.
   """
-  def create(attrs \\ %{}) do
+  def create(attrs \\ %{}, opts \\ []) do
     attrs = Slug.put_default(attrs, default_slug(attrs))
 
-    save(Flow.changeset(%Flow{}, attrs), attrs, &Repo.insert/1, sweep?: false)
+    Repo.transaction(fn ->
+      with {:ok, flow} <-
+             save(Flow.changeset(%Flow{}, attrs), attrs, &Repo.insert/1, sweep?: false),
+           {:ok, _event} <- insert_event(flow, "created", opts) do
+        flow
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc """
+  Moves a flow's status — one of `FormFlow.Data.Templates.Flow.statuses/0` —
+  and writes the `status_changed` event that says who did it and from what,
+  in one transaction. `opts[:user_id]` is the admin's identity for the
+  event; `opts[:snapshot]` adds to the event's map beside `"from"` and
+  `"to"`.
+
+  Any status may move to any other: real programs go sideways and get fixed
+  in unexpected ways, and the log is what makes trusting the admin safe.
+  The same status again is a no-op — `{:ok, flow}` and no event. A status
+  the flow cannot have is `{:error, :unknown_status}`. What each status
+  lets a user do is the table on `FormFlow.Data.Templates.Flow`.
+
+      {:ok, flow} = Flows.update_status(flow, "open", user_id: admin_id)
+  """
+  def update_status(%Flow{status: status} = flow, status, _opts), do: {:ok, flow}
+
+  def update_status(%Flow{} = flow, status, opts) when is_binary(status) do
+    if status in Flow.statuses() do
+      Repo.transaction(fn ->
+        snapshot =
+          Map.merge(Keyword.get(opts, :snapshot, %{}), %{"from" => flow.status, "to" => status})
+
+        with {:ok, updated} <- Repo.update(Flow.status_changeset(flow, status)),
+             {:ok, _event} <-
+               insert_event(updated, "status_changed", Keyword.put(opts, :snapshot, snapshot)) do
+          updated
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    else
+      {:error, :unknown_status}
+    end
+  end
+
+  def update_status(%Flow{} = flow, status, opts) when is_atom(status),
+    do: update_status(flow, Atom.to_string(status), opts)
+
+  @doc """
+  How many instances a root flow has, by their status — the same shape as
+  `FormFlow.Data.Templates.Forms.instance_counts/1`: `"in_progress"` and
+  `"completed"` counts, zero when none. What the status field on the edit
+  page says a change reaches.
+  """
+  def instance_counts(%Flow{id: id}) do
+    rows =
+      Repo.all(
+        from(i in Instances.Flow,
+          where: i.flow_id == ^id,
+          group_by: i.status,
+          select: {i.status, count(i.id)}
+        )
+      )
+
+    Map.merge(%{"in_progress" => 0, "completed" => 0}, Map.new(rows))
+  end
+
+  defp insert_event(%Flow{} = flow, event, opts) do
+    Repo.insert(
+      Event.changeset(%Event{}, %{
+        flow_id: flow.id,
+        event: event,
+        snapshot: Keyword.get(opts, :snapshot, %{}),
+        user_id: Keyword.get(opts, :user_id)
+      })
+    )
   end
 
   # An owned flow — a subflow — has no slug of its own; its step's is the handle
@@ -793,7 +871,10 @@ defmodule FormFlow.Data.Templates.Flows do
 
   `name:` names the copy; the subflows under it keep their own names, as
   their steps keep their labels. Without it the copy takes the source's
-  name.
+  name. The copy is a **draft** whatever the source's status — not offered
+  to users until an admin opens it — and every flow row written gets a
+  `created` event (`FormFlow.Data.Templates.Flow.Event`) carrying
+  `user_id:`, the admin copying, when given.
 
   A slug already taken, or any other refused insert, returns
   `{:error, changeset}` with nothing written.
@@ -834,7 +915,8 @@ defmodule FormFlow.Data.Templates.Flows do
     %{
       name: Keyword.get(opts, :name) || flow.name,
       slug: slug,
-      prefixes: {root_flow(flow).slug, slug}
+      prefixes: {root_flow(flow).slug, slug},
+      user_id: Keyword.get(opts, :user_id)
     }
   end
 
@@ -864,7 +946,8 @@ defmodule FormFlow.Data.Templates.Flows do
       tenant_id: flow.tenant_id,
       slug_prefixes: destination.prefixes,
       source_prefixes: flow_prefixes(root_tree, flow.id),
-      destination_prefix: []
+      destination_prefix: [],
+      user_id: destination.user_id
     }
 
     copied = %{flows: %{}, forms: %{}}
@@ -989,7 +1072,9 @@ defmodule FormFlow.Data.Templates.Flows do
         tenant_id: flow.tenant_id,
         slug_prefixes: {source_root.slug, destination_root.slug},
         source_prefixes: flow_prefixes(resolve_tree(source_root.id), source_flow.id),
-        destination_prefix: destination_prefix(resolve_tree(destination_root.id), flow.id)
+        destination_prefix: destination_prefix(resolve_tree(destination_root.id), flow.id),
+        # A paste is part of a save, which has no author of its own yet
+        user_id: nil
       }
 
       {entity, _copied} =
@@ -1570,6 +1655,9 @@ defmodule FormFlow.Data.Templates.Flows do
   # nodes first (removing every subflow reference; their relationships cascade),
   # then the flow rows themselves.
   defp delete_flows(ids) do
+    # Events first: their foreign key restricts, so a flow cannot go while
+    # its log stands — the log is deleted on purpose, here, never by cascade
+    Repo.delete_all(from(e in Event, where: e.flow_id in ^ids))
     Repo.delete_all(from(n in Node, where: n.flow_id in ^ids))
     Repo.delete_all(from(f in Flow, where: f.id in ^ids))
 
@@ -1594,16 +1682,24 @@ defmodule FormFlow.Data.Templates.Flows do
         _root -> Health.forget(source.properties)
       end
 
-    insert_or_rollback(
-      Flow.changeset(%Flow{id: copy_id}, %{
-        name: name || source.name,
-        label: source.label,
-        properties: rewrite_paths(properties, context),
-        tenant_id: context.tenant_id,
-        slug: slug,
-        owner_flow_id: owner_id
-      })
-    )
+    # A copy is born a draft, whatever the source's status: it is by
+    # definition not yet what the admin wants, and opening it is one choice
+    copy =
+      insert_or_rollback(
+        Flow.changeset(%Flow{id: copy_id}, %{
+          name: name || source.name,
+          label: source.label,
+          properties: rewrite_paths(properties, context),
+          tenant_id: context.tenant_id,
+          slug: slug,
+          owner_flow_id: owner_id
+        })
+      )
+
+    case insert_event(copy, "created", user_id: context.user_id) do
+      {:ok, _event} -> :ok
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
 
     {copy_id, copy_contents(tree, copy_id, domain_id, context, copied)}
   end

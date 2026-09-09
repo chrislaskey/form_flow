@@ -6,10 +6,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   read-only in the editor canvas (see `FormFlow.Web.Components.Editor`) — pan
   and zoom work, but changing anything means clicking through to the edit
   page. The delete button removes the flow and navigates back to the index.
-  Copy, on a root flow, opens a dialog for the copy's name and slug
-  (`FormFlow.Web.Templates.Flows.Components.CopyDialog`) and lands on the
-  copy's show page; an owned subflow is copied by pasting its step on a
-  canvas instead (see `FormFlow.Data.Templates.Flows`, "Pasting a step").
+  Duplicate Flow, on a root flow, opens a dialog for the copy's name and
+  slug (`FormFlow.Web.Templates.Flows.Components.CopyDialog`) and lands on
+  the copy's show page — the same dialog the flows index opens from a row's
+  menu. The button says *Duplicate* where the code says *copy*
+  (`FormFlow.Data.Templates.Flows.copy/2`) because the canvas already has a
+  Copy, in its ⋮ node menu, meaning "to the clipboard, paste later"; this
+  one makes the flow on the click. An owned subflow is copied by pasting
+  its step on a canvas instead (see `FormFlow.Data.Templates.Flows`,
+  "Pasting a step"), and the Edit page has no Duplicate Flow: a copy is of
+  what is saved, and the page for what is saved is this one.
 
   Two addressing modes, matching the router:
 
@@ -238,6 +244,17 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         components={@components}
       >
         <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
+        <%!-- What users may do with it (FormFlow.Data.Templates.Flow's status
+              table); the root's, so a drill-in page says nothing --%>
+        <:metadata :if={is_nil(@flow.owner_flow_id)}>
+          <Core.badge
+            components={@components}
+            kind={Shared.status_kind(@flow.status)}
+            title={Shared.status_summary(@flow.status)}
+          >
+            {Shared.status_label(@flow.status)}
+          </Core.badge>
+        </:metadata>
         <%!-- Show mode renders the stored type as plain text; the Edit
               page is where it becomes a dropdown --%>
         <:metadata :if={type_label(assigns)}>{type_label(assigns)}</:metadata>
@@ -254,6 +271,17 @@ defmodule FormFlow.Web.Templates.Flows.Show do
                 from any depth. Show and Edit stay one level at a time. --%>
           <Core.button components={@components} navigate={overview_path(assigns)} class="btn">
             Flow Overview
+          </Core.button>
+          <%!-- A root flow is copied whole from here; an owned subflow is
+                copied by pasting its step on a canvas --%>
+          <Core.button
+            :if={is_nil(@flow.owner_flow_id)}
+            components={@components}
+            phx-click="request_copy"
+            phx-target={@myself}
+            class="btn"
+          >
+            Duplicate Flow
           </Core.button>
           <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
                 opposite position: this page is always the "off" (Show)
@@ -272,17 +300,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
-          <%!-- A root flow is copied whole from here; an owned subflow is
-                copied by pasting its step on a canvas --%>
-          <Core.button
-            :if={is_nil(@flow.owner_flow_id)}
-            components={@components}
-            phx-click="request_copy"
-            phx-target={@myself}
-            class="btn"
-          >
-            Copy
-          </Core.button>
           <Core.button
             components={@components}
             phx-click="delete"

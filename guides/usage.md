@@ -176,6 +176,57 @@ between them but the type lists — the one value that must be the same on
 every page, the admin pages included, because a type chosen on one side
 acts on the other.
 
+## Years, pilots, and closing a flow
+
+A flow is not versioned. Dog License 2026 and Dog License 2027 are two
+flows, the second a copy of the first, and the difference between "this
+year's" and "last year's" is each flow's **status** — the one fact a flow
+keeps about what users may do with it.
+
+| Status | Start a new instance | Continue one | See their instances |
+|---|---|---|---|
+| `draft` | no | no | no |
+| `open` | yes | yes | yes |
+| `winding_down` | no | yes | yes |
+
+A flow is born a **draft**: built, checked, and never offered — a user with
+`flows={["dog-license-2027"]}` sees nothing of it, not even an instance
+they somehow have. An admin opens it from the flow's edit page (the Status
+field under the canvas, saved with everything else). **Open** is the
+normal state. **Winding down** is a deadline that has passed: the listing
+names the flow with "No longer taking new starts." where its Start button
+was, and everyone already in it finishes and keeps seeing their record.
+Any status can move to any other; every move is logged with who made it
+(`FormFlow.Data.Templates.Flow.Event`).
+
+So the year rolls over like this:
+
+1. On Dog License 2026's show page, **Duplicate Flow**: name it "Dog
+   License 2027", slug `dog-license-2027`. The copy is a draft, whole —
+   steps, connections, subflows, its own forms — with fresh ids.
+2. Edit the copy, publish its forms, read its health.
+3. Point the applicants' page at it — `flows={["dog-license-2027"]}` — or,
+   if the page names both years, leave 2026 in the list: a user with a 2026
+   instance still sees it there.
+4. Open 2027. Move 2026 to winding down on the deadline, or the day the
+   new one opens.
+
+A pilot is the same shape with a different audience: duplicate, keep the
+copy open only on a page whose `flows=` names it and whose `on_mount`
+admits the pilot users, and when it has proved itself either open it to
+everyone (rename the slug, or point the main page at it) or duplicate it
+once more as the real thing. A rule change from a date — "filings after
+1 July need a certificate" — is a copy opened on the date while the
+original winds down.
+
+Two things follow for host code. `FormFlow.Data.Instances.Flows.create/2`
+refuses a flow that is not open with `{:error, :not_open}`, so a route of
+your own that starts instances gets the rule without asking. And a gate or
+callback that keys on `context.form_node.slug` sees the copy's prefix
+(`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
+after the `_`, or on `context.form.slug` when the step reuses a catalog
+form, which is the same lineage in both years.
+
 ## Taking the answers away
 
 A user looking at a form they have filled in can save it as a PDF or open it

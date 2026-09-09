@@ -307,7 +307,7 @@ defmodule Demo.FormFlowInstancesTest do
     # Licensing: Start → Application (for applicants: Intake) → Review (for
     # reviewers: Review) → End
     defp licensing do
-      {:ok, root} = Flows.create(%{name: "Licensing", label: "subflows"})
+      {:ok, root} = Flows.create(%{name: "Licensing", label: "subflows", status: "open"})
 
       application = owned_forms_flow(root, "Application", ["applicant"], "Intake")
       review = owned_forms_flow(root, "Review", ["reviewer"], "Review")
@@ -600,7 +600,7 @@ defmodule Demo.FormFlowInstancesTest do
 
   describe "several flows in one instance" do
     test "each subflow's own type answers for its own forms", %{conn: conn} do
-      {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows"})
+      {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows", status: "open"})
 
       %{flow: documents, forms: [doc_first, doc_second]} =
         owned_flow_of_two(root, "Documents", "wizard_in_order")
@@ -678,7 +678,7 @@ defmodule Demo.FormFlowInstancesTest do
   describe "the library's review form type" do
     test "shows the related form's answers read-only beside the editable form", %{conn: conn} do
       # Start → Intake → Review; Review's form is a "review" of Intake
-      {:ok, flow} = Flows.create(%{name: "Application"})
+      {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
       first_node = build_node(flow, ["Start"], "Start")
       intake = build_form_node(flow, "Intake")
 
@@ -706,7 +706,7 @@ defmodule Demo.FormFlowInstancesTest do
 
     test "a source that doesn't resolve is one error, however it came about", %{conn: conn} do
       for values <- [%{}, %{"source" => ""}, %{"source" => "gone"}] do
-        {:ok, flow} = Flows.create(%{name: "Application"})
+        {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
         first_node = build_node(flow, ["Start"], "Start")
         review_form = published_form("Review", form_type: "review", property_values: values)
         review = build_node(flow, ["Form"], "Review", %{form_id: review_form.id})
@@ -754,9 +754,9 @@ defmodule Demo.FormFlowInstancesTest do
 
   describe "the flows attr picks the flows to start" do
     test "by default every root of the tenant is offered", %{conn: conn} do
-      {:ok, dog} = Flows.create(%{name: "Dog License"})
-      {:ok, cat} = Flows.create(%{name: "Cat License"})
-      {:ok, acme} = Flows.create(%{name: "Elsewhere", tenant_id: "acme"})
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
+      {:ok, acme} = Flows.create(%{name: "Elsewhere", tenant_id: "acme", status: "open"})
 
       {:ok, view, _html} = isolated(conn, [])
 
@@ -770,8 +770,8 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "a host offers what it names; the page refuses to start anything else", %{conn: conn} do
-      {:ok, dog} = Flows.create(%{name: "Dog License"})
-      {:ok, cat} = Flows.create(%{name: "Cat License"})
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
 
       {:ok, view, _html} = isolated(conn, [], %{"offer" => "dog-license"})
 
@@ -791,7 +791,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "a flow of another tenant is never offered, whatever the host says", %{conn: conn} do
-      {:ok, acme} = Flows.create(%{name: "Dog License", tenant_id: "acme"})
+      {:ok, acme} = Flows.create(%{name: "Dog License", tenant_id: "acme", status: "open"})
 
       {:ok, view, _html} = isolated(conn, [], %{"offer" => "dog-license"}, "globex")
 
@@ -800,7 +800,7 @@ defmodule Demo.FormFlowInstancesTest do
 
     test "the instance pages refuse an instance of a flow the page did not name", %{conn: conn} do
       %{instance: cat_instance, form: only} = flow_of_one(nil, name: "Cat License")
-      {:ok, _dog} = Flows.create(%{name: "Dog License"})
+      {:ok, _dog} = Flows.create(%{name: "Dog License", status: "open"})
 
       pages = [
         [cat_instance.id],
@@ -826,8 +826,8 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "the flows a host names are also the flows the listing shows", %{conn: conn} do
-      {:ok, dog} = Flows.create(%{name: "Dog License"})
-      {:ok, cat} = Flows.create(%{name: "Cat License"})
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
       {:ok, dog_instance} = Instances.Flows.create(%{flow_id: dog.id, user_id: "demo-user"})
       {:ok, cat_instance} = Instances.Flows.create(%{flow_id: cat.id, user_id: "demo-user"})
 
@@ -852,15 +852,19 @@ defmodule Demo.FormFlowInstancesTest do
 
   describe "Instances.Flows.list_query/1 narrows by flow" do
     test "by struct, id, or slug, alone or in a list; [] matches nothing" do
-      {:ok, dog} = Flows.create(%{name: "Dog License"})
-      {:ok, cat} = Flows.create(%{name: "Cat License"})
-      {:ok, acme_dog} = Flows.create(%{name: "Dog License", tenant_id: "acme"})
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
+      {:ok, acme_dog} = Flows.create(%{name: "Dog License", tenant_id: "acme", status: "open"})
       {:ok, d} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
       {:ok, c} = Instances.Flows.create(%{flow_id: cat.id, user_id: "u"})
       {:ok, a} = Instances.Flows.create(%{flow_id: acme_dog.id, user_id: "u", tenant_id: "acme"})
 
       ids = fn opts ->
-        opts |> Instances.Flows.list_query() |> FormFlowRepo.all() |> Enum.map(& &1.id) |> Enum.sort()
+        opts
+        |> Instances.Flows.list_query()
+        |> FormFlowRepo.all()
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
       end
 
       assert ids.(flow: dog) == [d.id]
@@ -1052,7 +1056,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert path == intake.id
 
-      {:ok, flow} = Flows.create(%{name: "Application"})
+      {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
       first_node = build_node(flow, ["Start"], "Start")
 
       review_form =
@@ -1092,6 +1096,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
       assert html =~ "Intake was submitted again on"
+
       assert html =~
                ~r/<td[^>]*>\s*Name\s*<\/td>\s*<td[^>]*><span[^>]*>Ada<\/span><\/td>\s*<td[^>]*><span[^>]*>Grace<\/span><\/td>/
 
@@ -1103,6 +1108,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert html =~
                ~r/Name\s*<\/td>\s*<td[^>]*><span[^>]*>Ada<\/span><\/td>\s*<td[^>]*><span[^>]*>Grace/
+
       # Still editable: resubmitting is how the review becomes current again
       assert has_element?(view, "button[type='submit']")
     end
@@ -1212,7 +1218,11 @@ defmodule Demo.FormFlowInstancesTest do
     # of the same flow did the same with its own Intake.
     defp reviewed_journeys do
       {:ok, flow} =
-        Flows.create(%{name: "Application", properties: properties("wizard_any_order")})
+        Flows.create(%{
+          name: "Application",
+          properties: properties("wizard_any_order"),
+          status: "open"
+        })
 
       first_node = build_node(flow, ["Start"], "Start")
       intake = build_form_node(flow, "Intake")
@@ -1359,7 +1369,8 @@ defmodule Demo.FormFlowInstancesTest do
 
   # Start → Name → Address → End, one "forms" flow of the given type
   defp flow_of_two(type \\ nil) do
-    {:ok, flow} = Flows.create(%{name: "Application", properties: properties(type)})
+    {:ok, flow} =
+      Flows.create(%{name: "Application", properties: properties(type), status: "open"})
 
     first_node = build_node(flow, ["Start"], "Start")
     name = build_form_node(flow, "Name")
@@ -1376,7 +1387,7 @@ defmodule Demo.FormFlowInstancesTest do
   # `name:` names the flow; the rest of `opts` shapes its one form
   defp flow_of_one(type \\ nil, opts \\ []) do
     {name, opts} = Keyword.pop(opts, :name, "Single")
-    {:ok, flow} = Flows.create(%{name: name, properties: properties(type)})
+    {:ok, flow} = Flows.create(%{name: name, properties: properties(type), status: "open"})
 
     first_node = build_node(flow, ["Start"], "Start")
     only = build_form_node(flow, "Only", opts)
@@ -1389,7 +1400,7 @@ defmodule Demo.FormFlowInstancesTest do
   # The same, with the form left in draft: the position exists and the flow's
   # type allows work there, but there is no version to pin
   defp flow_of_one_unpublished do
-    {:ok, flow} = Flows.create(%{name: "Unpublished"})
+    {:ok, flow} = Flows.create(%{name: "Unpublished", status: "open"})
 
     {:ok, form} = Forms.create(%{name: "Draft #{System.unique_integer([:positive])}"})
 
@@ -1404,7 +1415,7 @@ defmodule Demo.FormFlowInstancesTest do
   # One subflow node wrapping a two-form child flow, so its positions are two
   # segments deep
   defp nested_flow do
-    {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows"})
+    {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows", status: "open"})
 
     %{flow: documents, forms: forms} = owned_flow_of_two(root, "Documents")
 
@@ -1470,7 +1481,12 @@ defmodule Demo.FormFlowInstancesTest do
   # Start → Intake → Review → End, any order; Review's form is a "review" of
   # Intake
   defp review_flow do
-    {:ok, flow} = Flows.create(%{name: "Application", properties: properties("wizard_any_order")})
+    {:ok, flow} =
+      Flows.create(%{
+        name: "Application",
+        properties: properties("wizard_any_order"),
+        status: "open"
+      })
 
     first_node = build_node(flow, ["Start"], "Start")
     intake = build_form_node(flow, "Intake")

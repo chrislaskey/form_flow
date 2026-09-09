@@ -114,6 +114,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
       add(:slug, :string)
+      add(:status, :string, null: false, default: "draft")
       add(:properties, :map, null: false, default: %{})
 
       add(
@@ -126,6 +127,30 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(index(:form_flow_flows, [:owner_flow_id], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_flows, [:tenant_id], prefix: context.prefix))
+
+    # The flow template's append-only audit (`FormFlow.Data.Templates.Flow.Event`),
+    # the same discipline as the two instance logs below: `:restrict`, deleted
+    # deliberately by `Flows.delete/1` before the flow.
+    create_if_not_exists table(:form_flow_flow_events,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :flow_id,
+        references(:form_flow_flows, type: :uuid, on_delete: :restrict, prefix: context.prefix),
+        null: false
+      )
+
+      add(:event, :string, null: false)
+      add(:snapshot, :map, null: false, default: %{})
+      add(:user_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_flow_events, [:flow_id], prefix: context.prefix))
 
     create_if_not_exists(
       unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
@@ -529,6 +554,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     drop_if_exists(table(:form_flow_instance_flows, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_form_versions, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_forms, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_flow_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_flows, prefix: context.prefix))
   end
 end

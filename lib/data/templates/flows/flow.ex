@@ -75,6 +75,10 @@ defmodule FormFlow.Data.Templates.Flow do
     field(:tenant_id, :string)
     field(:slug, :string)
 
+    # What users may do with the flow — see `statuses/0`. A flow is born a
+    # draft; `FormFlow.Data.Templates.Flows.update_status/3` moves it.
+    field(:status, :string, default: "draft")
+
     # Open domain data in the Neo4j property-graph style, like a node's
     # properties. Carries "form_flow_type" for "forms" flows — the id of the
     # `FormFlow.Config.Flows.Type` deciding how the flow's forms are presented
@@ -97,24 +101,89 @@ defmodule FormFlow.Data.Templates.Flow do
     timestamps(type: :utc_datetime_usec)
   end
 
+  # The statuses a root flow can have, and what each lets a user do. Three
+  # facts per status — may a user START a new instance, CONTINUE one already
+  # started (the form edit page), SEE their instances at all (the listing,
+  # the instance and form pages, Download and Print) — and a status is the
+  # set of those it allows. The table, built and planned
+  # (`archive/plans/flow-status.md` §3):
+  #
+  #   status        start  continue  see   meaning
+  #   draft           –       –       –    being built; not offered, and nobody
+  #                                        sees it — a flow pulled back to draft
+  #                                        disappears from its users until it
+  #                                        reopens
+  #   open            ✓       ✓       ✓    taking starts; the normal state
+  #   winding_down    –       ✓       ✓    no new starts; anyone in it finishes
+  #   read_only       –       –       ✓    (planned) nothing changes; users can
+  #                                        still look at their own
+  #   archived        –       –       –    (planned) users see nothing; admins
+  #                                        keep the flow, its instances, its log
+  #
+  # Only the first three exist as values today; the last two are named here so
+  # they are not renamed when they arrive. Transitions are any-to-any — real
+  # programs go sideways and get fixed in unexpected ways, and the event log
+  # (`FormFlow.Data.Templates.Flow.Event`) is what makes trusting the admin
+  # safe. The admin side is not decided by status: the canvas is editable at
+  # every one. An owned subflow carries the default and is never read — status
+  # is the root's, as health is.
+  @statuses ~w(draft open winding_down)
+  @allowed %{
+    "draft" => [],
+    "open" => [:start, :continue, :see],
+    "winding_down" => [:continue, :see]
+  }
+
+  @doc "The statuses a flow can have, in the order the dropdown offers them."
+  def statuses, do: @statuses
+
+  @doc """
+  Whether a flow's status lets a user `:start` a new instance, `:continue`
+  one already started, or `:see` their instances at all. Takes the flow or
+  its status.
+  """
+  def allows?(%__MODULE__{status: status}, action), do: allows?(status, action)
+  def allows?(status, action) when is_binary(status), do: action in Map.get(@allowed, status, [])
+
+  @doc "The statuses that allow `action` — for a query's `where status in`."
+  def statuses_allowing(action), do: Enum.filter(@statuses, &allows?(&1, action))
+
   @doc """
   Builds a changeset for a flow.
 
   `:name`, `:slug`, `:properties`, and `:owner_flow_id` are castable;
-  `:label` and `:tenant_id` are castable at creation and immutable afterwards — the
-  declared flavor is a commitment (the escape hatch is wrapping in a new
-  parent flow, not converting), and a template never changes tenants.
+  `:label`, `:tenant_id`, and `:status` are castable at creation and
+  immutable afterwards — the declared flavor is a commitment (the escape
+  hatch is wrapping in a new parent flow, not converting), a template never
+  changes tenants, and a status moves only through
+  `FormFlow.Data.Templates.Flows.update_status/3`, which writes the event
+  that goes with it (`status_changeset/2`). A status at creation is for
+  seeds and tests; the pages create drafts.
   """
   def changeset(flow, attrs \\ %{}) do
     flow
-    |> cast(attrs, [:name, :label, :tenant_id, :slug, :properties, :owner_flow_id])
+    |> cast(attrs, [:name, :label, :tenant_id, :slug, :properties, :owner_flow_id, :status])
     |> validate_inclusion(:label, ~w(forms subflows))
+    |> validate_inclusion(:status, @statuses)
     |> validate_immutable(:label)
     |> validate_immutable(:tenant_id)
+    |> validate_immutable(:status)
     |> Slug.validate_slug(:form_flow_flows_slug_tenant_index)
     |> copy_into_properties(:tenant_id, "tenant_id")
     |> copy_into_properties(:slug, "slug")
     |> foreign_key_constraint(:owner_flow_id)
+  end
+
+  @doc """
+  The one changeset that moves `status` on a persisted flow. Callers go
+  through `FormFlow.Data.Templates.Flows.update_status/3`, which pairs the
+  write with its `status_changed` event.
+  """
+  def status_changeset(flow, status) do
+    flow
+    |> cast(%{status: status}, [:status])
+    |> validate_required([:status])
+    |> validate_inclusion(:status, @statuses)
   end
 
   defp validate_immutable(changeset, field) do

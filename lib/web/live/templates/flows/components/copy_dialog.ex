@@ -1,9 +1,12 @@
 defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Components.CopyDialog` function component
-  renders the copy dialog shared by the flow Show and Edit pages: the copy's
-  name and slug, prefilled with what `FormFlow.Data.Templates.Flows.copy/2`
-  would pick, and one sentence on what comes along.
+  renders the copy dialog shared by the flow Show page and the flows index:
+  the copy's name and slug, prefilled with what
+  `FormFlow.Data.Templates.Flows.copy/2` would pick, and one sentence on what
+  comes along. On screen the action is *Duplicate* — the canvas's Copy means
+  "to the clipboard" — while the code, the events, and this module keep the
+  word `copy` (see `FormFlow.Web.Templates.Flows.Show`).
 
   The caller owns the flow around it: opening, the `copy` event the form
   submits to `target` with `name` and `slug`, the `cancel_copy` event the
@@ -23,23 +26,14 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   attr(:error, :string, default: nil, doc: "why the last attempt was refused")
   attr(:components, :atom, default: nil)
 
-  attr(:saved_note, :boolean,
-    default: false,
-    doc: "warn that the copy is of the last saved version (the Edit page with unsaved changes)"
-  )
-
   def copy_dialog(assigns) do
     ~H"""
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-1 text-sm font-semibold text-zinc-900">Copy this flow?</p>
+        <p class="mb-1 text-sm font-semibold text-zinc-900">Duplicate this flow?</p>
         <p class="mb-3 text-xs text-zinc-500">
-          A copy of “{@flow.name}” with its steps, connections, subflows, and forms.
+          A duplicate of “{@flow.name}” with its steps, connections, subflows, and forms.
           Forms from the catalog stay shared; the rest is the copy's own.
-        </p>
-        <p :if={@saved_note} class="mb-3 text-xs text-amber-700">
-          The copy is made now, from the last saved version — unsaved edits are not included,
-          and this page stays open with them. Save first to bring them along.
         </p>
 
         <form phx-submit="copy" phx-target={@target} class="space-y-3">
@@ -66,7 +60,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
               Cancel
             </Core.button>
             <Core.button components={@components} type="submit" variant="primary">
-              Copy flow
+              Duplicate flow
             </Core.button>
           </div>
         </form>

@@ -524,7 +524,7 @@ defmodule Demo.FormFlowFormsTest do
 
   # A root "forms" flow whose one step points at the catalog form
   defp flow_reusing(form, name) do
-    {:ok, flow} = Flows.create(%{name: name})
+    {:ok, flow} = Flows.create(%{name: name, status: "open"})
 
     node_attrs = %{
       form_id: form.id,

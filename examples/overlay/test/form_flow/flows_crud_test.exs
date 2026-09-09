@@ -67,6 +67,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "a", "New flow")
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}"]), "Show")
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
+    assert has_element?(view, ~s(a[href="/admin/flows/#{id}/overview"]), "Overview")
+    assert has_element?(view, "code", Flows.get(id).slug)
   end
 
   test "the index badge reads the cached health; the health page runs the check", %{conn: conn} do
@@ -1251,8 +1253,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
 
     # The dialog prefills what a copy would get by default
-    html = view |> element("button", "Copy") |> render_click()
-    assert html =~ "Copy this flow?"
+    html = view |> element("button", "Duplicate Flow") |> render_click()
+    assert html =~ "Duplicate this flow?"
     assert html =~ ~s|value="Dog License (copy)"|
     assert html =~ ~s|value="dog-license-2"|
 
@@ -1286,14 +1288,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     before = length(Flows.list())
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
-    view |> element("button", "Copy") |> render_click()
+    view |> element("button", "Duplicate Flow") |> render_click()
 
     html =
       view
       |> element("form[phx-submit=copy]")
       |> render_submit(%{"name" => "Dog License (copy)", "slug" => "dog-license"})
 
-    assert html =~ "Copy this flow?"
+    assert html =~ "Duplicate this flow?"
     assert html =~ "The slug has already been taken."
     assert length(Flows.list()) == before
 
@@ -1302,57 +1304,55 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ ~s|value="Dog License (copy)"|
 
     # Cancel closes it
-    refute view |> element("button", "Cancel") |> render_click() =~ "Copy this flow?"
+    refute view |> element("button", "Cancel") |> render_click() =~ "Duplicate this flow?"
   end
 
-  test "copying from the edit page copies the saved version and, with unsaved edits, stays",
-       %{conn: conn} do
+  test "the index copies a flow from its row menu, and lands on the copy", %{conn: conn} do
+    id = create_flow(conn, "Dog License", "forms")
+    save_form_node(conn, id)
+    menu = "#flow-#{id}-actions"
+
+    {:ok, view, _html} = live(conn, "/admin/flows")
+
+    # The dialog prefills for that row's flow
+    html = view |> element("#{menu} button", "Duplicate Flow") |> render_click()
+    assert html =~ "Duplicate this flow?"
+    assert html =~ ~s|value="Dog License (copy)"|
+    assert html =~ ~s|value="dog-license-2"|
+
+    # A blank name is the one offered
+    view
+    |> element("form[phx-submit=copy]")
+    |> render_submit(%{"name" => "", "slug" => "dl-copy"})
+
+    {path, _flash} = assert_redirect(view)
+    assert "/admin/flows/" <> copy_id = path
+    copy = Flows.get(copy_id)
+    assert copy.name == "Dog License (copy)"
+    assert copy.slug == "dl-copy"
+    assert [_step] = copy.nodes
+    assert FormFlow.Data.Templates.Flows.Health.status(copy) != nil
+
+    # Cancel closes the dialog without a copy
+    {:ok, view, _html} = live(conn, "/admin/flows")
+    before = length(Flows.list())
+    view |> element("#{menu} button", "Duplicate Flow") |> render_click()
+    refute view |> element("button", "Cancel") |> render_click() =~ "Duplicate this flow?"
+    assert length(Flows.list()) == before
+  end
+
+  test "the edit page has no Duplicate Flow: a copy is of what is saved", %{conn: conn} do
     id = create_flow(conn, "Dog License", "forms")
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    refute has_element?(view, "button", "Duplicate Flow")
 
-    # An unsaved edit: the dialog says the copy will not have it
-    view
-    |> element("#flows-edit-flow-form-form")
-    |> render_change(%{"dynamic_form" => %{"name" => "Dog License renamed"}})
-
-    html = view |> element("button", "Copy") |> render_click()
-    assert html =~ "unsaved edits are not included"
-
-    html =
-      view
-      |> element("form[phx-submit=copy]")
-      |> render_submit(%{"name" => "", "slug" => "dl-copy"})
-
-    # The copy exists, of the saved version, under the name the dialog
-    # offered for a blank one; the page stays with its edits and says where
-    # the copy went
-    copy = Flows.get_by_slug("dl-copy")
-    assert copy.name == "Dog License (copy)"
-    assert html =~ "Copied to"
-    assert html =~ "Dog License (copy)"
-    refute html =~ "Copy this flow?"
-    assert has_element?(view, "button", "Discard changes")
-
-    # Following the link is leaving the page: the save-first prompt applies
-    html = view |> element(~s(button[phx-value-to="/admin/flows/#{copy.id}"])) |> render_click()
-    assert html =~ "This flow has unsaved changes. Save before continuing?"
-    view |> element("button", "Keep editing") |> render_click()
-
-    # With nothing unsaved, the copy is a plain navigation
-    view |> element("button", "Save") |> render_click()
-    view |> element("button", "Copy") |> render_click()
-
-    view
-    |> element("form[phx-submit=copy]")
-    |> render_submit(%{"name" => "Another", "slug" => ""})
-
-    {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> another_id = path
-    assert Flows.get(another_id).name == "Another"
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    assert has_element?(view, "button", "Duplicate Flow")
   end
 
-  test "a subflow's pages have no Copy: a subflow is copied by pasting its step", %{conn: conn} do
+  test "a subflow's show page has no Duplicate Flow: a subflow is copied by pasting its step",
+       %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
@@ -1361,16 +1361,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # ownership, not the route
     for path <- [
           "/admin/flows/#{root_id}/nodes/#{node.id}",
-          "/admin/flows/#{root_id}/nodes/#{node.id}/edit",
-          "/admin/flows/#{node.subflow_id}",
-          "/admin/flows/#{node.subflow_id}/edit"
+          "/admin/flows/#{node.subflow_id}"
         ] do
       {:ok, view, _html} = live(conn, path)
-      refute has_element?(view, "button", "Copy")
+      refute has_element?(view, "button", "Duplicate Flow")
     end
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
-    assert has_element?(view, "button", "Copy")
+    assert has_element?(view, "button", "Duplicate Flow")
   end
 
   test "a step pasted on the canvas is copied at save; a source that is gone refuses the save with the reason",

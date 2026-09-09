@@ -3,9 +3,10 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
   Start, asked directly.
 
   This page builds its listing *inside* the gate's `on_ok`, so a refused
-  viewer has no `:page_flows` at all — which is what made the event a crash
-  rather than a check. The state is the first of its two rules; the flows
-  the page offered are the second.
+  viewer has no `:offered_flows` at all — which is what made the event a
+  crash rather than a check. The state is the first of its two rules; the
+  flows the page offered — those the page is about whose status takes a
+  start — are the second.
   """
 
   use ExUnit.Case, async: true
@@ -19,7 +20,8 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
         %{
           __changed__: %{},
           page_state: :ready,
-          page_flows: [%Templates.Flow{id: "flow-1"}],
+          page_flows: [%Templates.Flow{id: "flow-1", status: "open"}],
+          offered_flows: [%Templates.Flow{id: "flow-1", status: "open"}],
           user_id: "user-1",
           tenant_id: nil,
           base: "",
@@ -33,10 +35,11 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
 
   describe "start" do
     test "refuses when the gate refused the page, and does not look for a listing" do
-      # A refusal means `load/1` never ran, so `:page_flows` is not there —
+      # A refusal means `load/1` never ran, so `:offered_flows` is not there —
       # reading it is the KeyError the guard replaces
       socket =
-        socket(%{page_state: :refused}) |> Map.update!(:assigns, &Map.delete(&1, :page_flows))
+        socket(%{page_state: :refused})
+        |> Map.update!(:assigns, &Map.drop(&1, [:page_flows, :offered_flows]))
 
       assert {:noreply, ^socket} = Index.handle_event("start", %{"flow-id" => "flow-1"}, socket)
     end
@@ -59,6 +62,14 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
       assert {:noreply, socket} =
                Index.handle_event("start", %{"flow-id" => "another"}, socket(%{}))
 
+      assert socket.assigns.error == "That flow is not available here."
+    end
+
+    test "a flow the page is about but does not offer — one not taking starts — is refused too" do
+      winding = %Templates.Flow{id: "flow-2", status: "winding_down"}
+      socket = socket(%{page_flows: [winding], offered_flows: []})
+
+      assert {:noreply, socket} = Index.handle_event("start", %{"flow-id" => "flow-2"}, socket)
       assert socket.assigns.error == "That flow is not available here."
     end
 

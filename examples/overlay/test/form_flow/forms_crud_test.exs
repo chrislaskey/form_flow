@@ -858,6 +858,8 @@ defmodule Demo.FormFlowFormsCrudTest do
       {owner, v1} = published_catalog("Owner contact")
       {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
       {cat, cat_node} = flow_with_catalog_form_node("Cat License", owner)
+      {:ok, dog} = Flows.update_status(dog, "open", [])
+      {:ok, cat} = Flows.update_status(cat, "open", [])
       start_at(dog, dog_node)
       start_at(cat, cat_node)
 

@@ -125,4 +125,52 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert %{related: FormFlow.Data.Templates.Flow.Relationship, related_key: :flow_id} =
              Flow.__schema__(:association, :relationships)
   end
+
+  describe "status" do
+    test "a flow is born a draft, and a status can be given at creation for seeds and tests" do
+      assert %Flow{}.status == "draft"
+
+      changeset = Flow.changeset(%Flow{}, %{status: "open"})
+      assert changeset.valid?
+      assert changeset.changes.status == "open"
+    end
+
+    test "only the statuses the table names are accepted" do
+      changeset = Flow.changeset(%Flow{}, %{status: "closed"})
+
+      refute changeset.valid?
+      assert {"is invalid", _opts} = changeset.errors[:status]
+
+      assert Flow.statuses() == ~w(draft open winding_down)
+    end
+
+    test "status is immutable through the plain changeset — update_status/3 moves it" do
+      persisted = %Flow{status: "draft"} |> Ecto.put_meta(state: :loaded)
+
+      refute Flow.changeset(persisted, %{status: "open"}).valid?
+      assert Flow.status_changeset(persisted, "open").valid?
+      refute Flow.status_changeset(persisted, "closed").valid?
+    end
+
+    test "what each status lets a user do: start, continue, see" do
+      assert Flow.allows?("open", :start)
+      assert Flow.allows?("open", :continue)
+      assert Flow.allows?("open", :see)
+
+      refute Flow.allows?("winding_down", :start)
+      assert Flow.allows?("winding_down", :continue)
+      assert Flow.allows?("winding_down", :see)
+
+      refute Flow.allows?("draft", :start)
+      refute Flow.allows?("draft", :continue)
+      refute Flow.allows?("draft", :see)
+
+      # The struct works too, and an unknown status allows nothing
+      assert Flow.allows?(%Flow{status: "open"}, :start)
+      refute Flow.allows?("closed", :see)
+
+      assert Flow.statuses_allowing(:start) == ["open"]
+      assert Flow.statuses_allowing(:see) == ["open", "winding_down"]
+    end
+  end
 end

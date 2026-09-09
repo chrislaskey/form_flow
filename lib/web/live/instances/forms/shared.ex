@@ -274,12 +274,30 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   fails closed rather than falling through to the page.
   """
   def on_mount(socket, on_ok \\ & &1) do
-    if flow_in_scope?(socket.assigns) do
-      host_on_mount(socket, on_ok)
-    else
-      assign(socket, :mount_error, "This flow is not available here.")
+    cond do
+      not flow_in_scope?(socket.assigns) ->
+        assign(socket, :mount_error, "This flow is not available here.")
+
+      not flow_allows_seeing?(socket.assigns) ->
+        assign(socket, :mount_error, "This flow is not available right now.")
+
+      true ->
+        host_on_mount(socket, on_ok)
     end
   end
+
+  # The flow's status is the second rule before the host's gate: an instance
+  # of a flow whose status lets nobody see it (a draft —
+  # `FormFlow.Data.Templates.Flow.allows?/2`) is refused on every instance
+  # page, whoever is looking. The listing has no instance and passes.
+  defp flow_allows_seeing?(%{flow_instance: %{flow_id: flow_id}}) do
+    case Templates.Flows.get(flow_id) do
+      %Templates.Flow{} = flow -> Templates.Flow.allows?(flow, :see)
+      nil -> false
+    end
+  end
+
+  defp flow_allows_seeing?(_assigns), do: true
 
   # The page's `flows` attr is its scope: an instance is in it when its flow
   # is one of the flows the attr names. No attr, or no instance in scope

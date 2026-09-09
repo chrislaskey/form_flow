@@ -276,7 +276,10 @@ defmodule FormFlow.Web.Router do
               module={Flows.Index}
               id="flows-index"
               base={@base}
+              user_id={@user_id}
               tenant_id={@tenant_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
               components={@components}
               uri={@uri}
               params={@params}
@@ -286,6 +289,7 @@ defmodule FormFlow.Web.Router do
               module={Flows.New}
               id="flows-new"
               base={@base}
+              user_id={@user_id}
               tenant_id={@tenant_id}
               flow_types={@flow_types}
               form_types={@form_types}
@@ -297,6 +301,7 @@ defmodule FormFlow.Web.Router do
               id="flows-show"
               flow_id={id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -308,6 +313,7 @@ defmodule FormFlow.Web.Router do
               id="flows-edit"
               flow_id={id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -319,6 +325,7 @@ defmodule FormFlow.Web.Router do
               id="flows-overview"
               flow_id={id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               components={@components}
@@ -342,6 +349,7 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -354,6 +362,7 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
@@ -369,6 +378,7 @@ defmodule FormFlow.Web.Router do
               module={Forms.Index}
               id="forms-index"
               base={@base}
+              user_id={@user_id}
               tenant_id={@tenant_id}
               components={@components}
               uri={@uri}
@@ -379,6 +389,7 @@ defmodule FormFlow.Web.Router do
               module={Forms.New}
               id="forms-new"
               base={@base}
+              user_id={@user_id}
               tenant_id={@tenant_id}
               components={@components}
             />
@@ -389,6 +400,7 @@ defmodule FormFlow.Web.Router do
               form_id={form_id}
               version_id={version_id}
               base={@base}
+              user_id={@user_id}
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}

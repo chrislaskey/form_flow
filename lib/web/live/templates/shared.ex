@@ -348,6 +348,70 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
+  @doc """
+  A flow status as the badge and the dropdown say it: the atom's words,
+  capitalised once (`"winding_down"` → "Winding down").
+  """
+  def status_label(status) when is_binary(status) do
+    status |> String.replace("_", " ") |> String.capitalize()
+  end
+
+  @doc "The status dropdown's options, in `FormFlow.Data.Templates.Flow.statuses/0` order."
+  def status_options, do: Enum.map(Templates.Flow.statuses(), &{status_label(&1), &1})
+
+  @doc """
+  What a status means for users, in one or two sentences — drawn under the
+  dropdown on the flow edit page as the choice is made, and as a badge's
+  title. The three facts of `FormFlow.Data.Templates.Flow.allows?/2` — start,
+  continue, see — said as what a user can do.
+  """
+  def status_summary("draft"),
+    do:
+      "Not offered to users, and hidden from them: nobody can start it, and anyone who " <>
+        "already has an instance cannot continue or see it until the flow is opened."
+
+  def status_summary("open"),
+    do: "Offered to users: anyone the page allows can start it, continue it, and see it."
+
+  def status_summary("winding_down"),
+    do:
+      "No longer taking new starts. Anyone who already has an instance can continue and " <>
+        "can see it."
+
+  def status_summary(_unknown), do: nil
+
+  @doc """
+  The badge kind a status draws in: a draft is quiet, an open flow is the
+  good state, a winding-down one is worth a glance.
+  """
+  def status_kind("open"), do: :success
+  def status_kind("winding_down"), do: :warning
+  def status_kind(_draft_or_other), do: :neutral
+
+  @doc """
+  How many instances a root flow has, and how many are still in progress —
+  the sentence under the status dropdown, so an admin reads who a change
+  reaches before making it. `nil` for an owned flow, whose instances are
+  the root's.
+  """
+  def instance_counts(%Templates.Flow{owner_flow_id: nil} = flow),
+    do: Templates.Flows.instance_counts(flow)
+
+  def instance_counts(_owned), do: nil
+
+  @doc "The counts as a sentence, or nothing when there is nothing to say."
+  def instance_counts_sentence(nil), do: nil
+
+  def instance_counts_sentence(%{"in_progress" => in_progress, "completed" => completed}) do
+    case in_progress + completed do
+      0 -> "Nobody has started this flow yet."
+      started -> "#{count(started, "instance")} started, #{in_progress} still in progress."
+    end
+  end
+
+  defp count(1, noun), do: "1 #{noun}"
+  defp count(n, noun), do: "#{n} #{noun}s"
+
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do
       "" -> nil

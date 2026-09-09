@@ -71,6 +71,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
+  alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -129,14 +130,21 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
     page_flows = Shared.resolve_flows(socket.assigns.flows, tenant_id)
 
+    # The flow's status is applied on top of everything, like the tenant:
+    # instances of a flow nobody may see (a draft) are listed for nobody,
+    # and only a flow taking starts is offered
+    # (`FormFlow.Data.Templates.Flow.allows?/2`)
     query =
       (socket.assigns.instances || own_query(user_id, socket.assigns.flows, page_flows))
       |> Instances.Flows.narrow_tenant(tenant_id)
+      |> Instances.Flows.narrow_allowed(:see)
 
     socket
     |> assign(:query, query)
     |> assign(:empty?, not Repo.exists?(query))
     |> assign(:page_flows, page_flows)
+    |> assign(:offered_flows, Enum.filter(page_flows, &Templates.Flow.allows?(&1, :start)))
+    |> assign(:winding_down_flows, Enum.filter(page_flows, &(&1.status == "winding_down")))
     |> assign(:table_params, table_params(socket.assigns.params))
   end
 
@@ -159,7 +167,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   @impl true
   def handle_event("start", %{"flow-id" => flow_id}, socket)
       when socket.assigns.page_state == :ready do
-    if Enum.any?(socket.assigns.page_flows, &(&1.id == flow_id)) do
+    if Enum.any?(socket.assigns.offered_flows, &(&1.id == flow_id)) do
       start(socket, flow_id)
     else
       {:noreply, assign(socket, :error, "That flow is not available here.")}
@@ -185,6 +193,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       {:ok, flow_instance} ->
         to = Paths.flow_path(socket.assigns.base, flow_instance.id)
         {:noreply, push_navigate(socket, to: to)}
+
+      {:error, :not_open} ->
+        # The flow stopped taking starts since the page drew
+        {:noreply, assign(socket, :error, "That flow is no longer taking new starts.")}
 
       {:error, _changeset} ->
         {:noreply, assign(socket, :error, "Could not start the flow. Please try again.")}
@@ -282,11 +294,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       </Slab.table>
 
       <h3 class="mb-2 mt-8 text-base font-semibold">Start a new flow</h3>
-      <Core.alert :if={@page_flows == []} components={@components}>
-        No flows have been published yet.
+      <Core.alert :if={@offered_flows == [] and @winding_down_flows == []} components={@components}>
+        No flows are open.
       </Core.alert>
       <ul class="divide-y divide-base-300 text-base">
-        <li :for={flow <- @page_flows} class="flex flex-wrap items-center justify-between gap-3 py-3">
+        <li
+          :for={flow <- @offered_flows}
+          class="flex flex-wrap items-center justify-between gap-3 py-3"
+        >
           <span>{flow.name || "Untitled flow"}</span>
           <Core.button
             components={@components}
@@ -297,6 +312,15 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           >
             Start
           </Core.button>
+        </li>
+        <%!-- A flow the page is about that stopped taking starts: named, so
+              a user looking for it learns why there is no Start --%>
+        <li
+          :for={flow <- @winding_down_flows}
+          class="flex flex-wrap items-center justify-between gap-3 py-3 text-zinc-500"
+        >
+          <span>{flow.name || "Untitled flow"}</span>
+          <span class="text-sm">No longer taking new starts.</span>
         </li>
       </ul>
     </div>

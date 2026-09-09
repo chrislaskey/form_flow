@@ -87,6 +87,21 @@ defmodule FormFlow.Data.Instances.Flows do
   """
   def narrow_tenant(query, tenant_id), do: narrow(query, :tenant_id, tenant_id)
 
+  @doc """
+  `query` — one over `FormFlow.Data.Instances.Flow` — narrowed to instances
+  of flows whose status allows `action` (`:start`, `:continue`, or `:see`;
+  `FormFlow.Data.Templates.Flow.allows?/2`). The listing page applies
+  `:see` on top of whatever it lists, the host's query included, the way it
+  applies the tenant: a draft flow's instances are nobody's to see on the
+  user-facing side.
+  """
+  def narrow_allowed(query, action) do
+    statuses = Templates.Flow.statuses_allowing(action)
+    templates = from(f in Templates.Flow, where: f.status in ^statuses, select: f.id)
+
+    from(i in query, where: i.flow_id in subquery(templates))
+  end
+
   defp narrow(query, _field, nil), do: query
   defp narrow(query, field, value), do: from(i in query, where: field(i, ^field) == ^value)
 
@@ -96,16 +111,29 @@ defmodule FormFlow.Data.Instances.Flows do
   The journey's own `user_id` (the owner) and `tenant_id` come from
   `attrs`; the event's `user_id` (the actor of this creation) defaults to
   the owner and can be overridden with `opts[:user_id]`.
+
+  Only a flow whose status allows a start takes one
+  (`FormFlow.Data.Templates.Flow.allows?/2` — `open`, today); any other is
+  `{:error, :not_open}`, here at the data layer so a host's own route gets
+  the rule too. A `flow_id` no flow has fails as before, on the changeset.
   """
   def create(attrs \\ %{}, opts \\ []) do
-    Repo.transaction(fn ->
-      with {:ok, instance} <- Repo.insert(Instances.Flow.changeset(%Instances.Flow{}, attrs)),
-           {:ok, _event} <- insert_event(instance, "created", opts) do
-        instance
-      else
-        {:error, changeset} -> Repo.rollback(changeset)
-      end
-    end)
+    flow_id = attrs[:flow_id] || attrs["flow_id"]
+
+    flow = flow_id && Repo.get(Templates.Flow, flow_id)
+
+    if flow && not Templates.Flow.allows?(flow, :start) do
+      {:error, :not_open}
+    else
+      Repo.transaction(fn ->
+        with {:ok, instance} <- Repo.insert(Instances.Flow.changeset(%Instances.Flow{}, attrs)),
+             {:ok, _event} <- insert_event(instance, "created", opts) do
+          instance
+        else
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end
   end
 
   @doc """

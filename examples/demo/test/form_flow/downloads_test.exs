@@ -203,7 +203,7 @@ defmodule Demo.FormFlowDownloadsTest do
   defp scrub(pdf), do: String.replace(pdf, ~r/\/CreationDate \(D:[^)]*\)/, "")
 
   defp flow_of_one do
-    {:ok, flow} = Flows.create(%{name: "Application"})
+    {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
 
     start = build_node(flow, ["Start"], "Start")
     only = build_node(flow, ["Form"], "Only", %{form_id: published_form("Only").id})
