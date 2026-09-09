@@ -80,8 +80,12 @@ defmodule FormFlow.Data.Templates.Flow do
     # to a user filling them out; absent means the default applies.
     field(:properties, :map, default: %{})
 
-    has_many(:nodes, Node)
-    has_many(:relationships, Relationship)
+    # In the order they were stored: what "canvas order" means to
+    # `FormFlow.Data.Templates.Flows` — which of two same-named steps takes
+    # the bare slug, which position of a twice-embedded subflow a pasted
+    # path is rebased to — and what a bare preload would not promise
+    has_many(:nodes, Node, preload_order: [asc: :inserted_at, asc: :id])
+    has_many(:relationships, Relationship, preload_order: [asc: :inserted_at, asc: :id])
 
     belongs_to(:owner_flow, __MODULE__, foreign_key: :owner_flow_id)
 

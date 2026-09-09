@@ -38,8 +38,8 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
           Forms from the catalog stay shared; the rest is the copy's own.
         </p>
         <p :if={@saved_note} class="mb-3 text-xs text-amber-700">
-          The copy is of the last saved version — unsaved edits are not included. Save first
-          to bring them along.
+          The copy is made now, from the last saved version — unsaved edits are not included,
+          and this page stays open with them. Save first to bring them along.
         </p>
 
         <form phx-submit="copy" phx-target={@target} class="space-y-3">
@@ -49,7 +49,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
             <Core.input components={@components} type="text" name="slug" label="Slug" value={@slug} />
             <span class="mt-1 block text-xs text-zinc-500">
               A stable name for looking the copy up in code — lowercase letters, numbers, _ and -.
-              Left blank, the flow's slug with a free suffix.
+              Left blank, the flow's slug with a free suffix; a blank name is the one offered.
             </span>
           </div>
 

@@ -326,13 +326,15 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The copy dialog's submit: `FormFlow.Data.Templates.Flows.copy/2` of `flow`
-  with the dialog's `name` and `slug` — a blank one leaves the choice to
-  `copy/2` — and the host's `types` (`flow_types:`, `form_types:`) so the
-  copy's health is checked once and cached. Returns the copy, or the message
-  the dialog shows: a refused slug by name, anything else as a retry.
+  with the dialog's `name` and `slug` — a blank name is the one the dialog
+  offered (`copy_name/1`), a blank slug leaves the choice to `copy/2` — and
+  the host's `types` (`flow_types:`, `form_types:`) so the copy's health is
+  checked once and cached. Returns the copy, or the message the dialog
+  shows: a refused slug by name, anything else as a retry.
   """
   def copy_flow(%Templates.Flow{} = flow, params, types) do
-    opts = [name: blank_to_nil(params["name"]), slug: blank_to_nil(params["slug"])] ++ types
+    name = blank_to_nil(params["name"]) || copy_name(flow)
+    opts = [name: name, slug: blank_to_nil(params["slug"])] ++ types
 
     case Templates.Flows.copy(flow, opts) do
       {:ok, copy} ->
@@ -358,12 +360,28 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc """
   The message a failed template save shows. A slug the changeset refused —
   taken, or malformed — is named, since it is the one field an admin can
-  fix by typing; anything else is the generic retry.
+  fix by typing. A refusal on `:nodes` — a step pasted from a source that is
+  gone, a step the tree does not own, a removed form that still has data —
+  is already a sentence saying what to do, and is shown as it is; anything
+  else is the generic retry.
   """
   def save_error(%Ecto.Changeset{errors: errors}, fallback) do
-    case Keyword.get(errors, :slug) do
-      {message, _opts} -> "The slug #{message}."
-      nil -> fallback
+    cond do
+      message = error_message(errors, :slug) -> "The slug #{message}."
+      message = error_message(errors, :nodes) -> sentence(message)
+      true -> fallback
     end
+  end
+
+  defp error_message(errors, key) do
+    case Keyword.get(errors, key) do
+      {message, _opts} -> message
+      nil -> nil
+    end
+  end
+
+  defp sentence(message) do
+    {first, rest} = String.split_at(message, 1)
+    String.upcase(first) <> rest <> "."
   end
 end

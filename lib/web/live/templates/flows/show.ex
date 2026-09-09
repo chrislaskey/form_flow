@@ -45,7 +45,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, error: nil, copying?: false, copy_slug: nil, copy_error: nil)}
+    {:ok,
+     assign(socket, error: nil, copying?: false, copy_name: nil, copy_slug: nil, copy_error: nil)}
   end
 
   @impl true
@@ -176,6 +177,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     {:noreply,
      assign(socket,
        copying?: true,
+       copy_name: Shared.copy_name(socket.assigns.flow),
        copy_slug: Flows.copy_slug(socket.assigns.flow),
        copy_error: nil
      )}
@@ -193,7 +195,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         {:noreply, push_navigate(socket, to: "#{socket.assigns.base}/flows/#{copy.id}")}
 
       {:error, message} ->
-        {:noreply, assign(socket, :copy_error, message)}
+        # The dialog redraws with what was typed, not the prefill
+        {:noreply,
+         assign(socket, copy_error: message, copy_name: params["name"], copy_slug: params["slug"])}
     end
   end
 
@@ -268,10 +272,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             </span>
             <span class="text-zinc-500">Edit</span>
           </.link>
-          <%!-- A root flow is copied whole from here; a subflow is copied
-                by pasting its step on a canvas --%>
+          <%!-- A root flow is copied whole from here; an owned subflow is
+                copied by pasting its step on a canvas --%>
           <Core.button
-            :if={is_nil(@node_id)}
+            :if={is_nil(@flow.owner_flow_id)}
             components={@components}
             phx-click="request_copy"
             phx-target={@myself}
@@ -301,7 +305,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       <CopyDialog.copy_dialog
         :if={@copying?}
         flow={@flow}
-        name={Shared.copy_name(@flow)}
+        name={@copy_name}
         slug={@copy_slug}
         error={@copy_error}
         target={@myself}

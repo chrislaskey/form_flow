@@ -1297,11 +1297,15 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ "The slug has already been taken."
     assert length(Flows.list()) == before
 
+    # The dialog redraws with what was typed, so the fix is one edit away
+    assert html =~ ~s|value="dog-license"|
+    assert html =~ ~s|value="Dog License (copy)"|
+
     # Cancel closes it
     refute view |> element("button", "Cancel") |> render_click() =~ "Copy this flow?"
   end
 
-  test "copying from the edit page copies the saved version and prompts before leaving",
+  test "copying from the edit page copies the saved version and, with unsaved edits, stays",
        %{conn: conn} do
     id = create_flow(conn, "Dog License", "forms")
 
@@ -1320,14 +1324,20 @@ defmodule Demo.FormFlowFlowsCrudTest do
       |> element("form[phx-submit=copy]")
       |> render_submit(%{"name" => "", "slug" => "dl-copy"})
 
-    # The copy exists, of the saved version, and the page asks about the
-    # unsaved edit before leaving for it
+    # The copy exists, of the saved version, under the name the dialog
+    # offered for a blank one; the page stays with its edits and says where
+    # the copy went
     copy = Flows.get_by_slug("dl-copy")
-    assert copy.name == "Dog License"
-    assert html =~ "This flow has unsaved changes. Save before continuing?"
-
-    view |> element("button", "Keep editing") |> render_click()
+    assert copy.name == "Dog License (copy)"
+    assert html =~ "Copied to"
+    assert html =~ "Dog License (copy)"
+    refute html =~ "Copy this flow?"
     assert has_element?(view, "button", "Discard changes")
+
+    # Following the link is leaving the page: the save-first prompt applies
+    html = view |> element(~s(button[phx-value-to="/admin/flows/#{copy.id}"])) |> render_click()
+    assert html =~ "This flow has unsaved changes. Save before continuing?"
+    view |> element("button", "Keep editing") |> render_click()
 
     # With nothing unsaved, the copy is a plain navigation
     view |> element("button", "Save") |> render_click()
@@ -1347,14 +1357,79 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
-    refute has_element?(view, "button", "Copy")
-
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
-    refute has_element?(view, "button", "Copy")
+    # Drilled in, or addressed by the owned flow's own id: the guard is
+    # ownership, not the route
+    for path <- [
+          "/admin/flows/#{root_id}/nodes/#{node.id}",
+          "/admin/flows/#{root_id}/nodes/#{node.id}/edit",
+          "/admin/flows/#{node.subflow_id}",
+          "/admin/flows/#{node.subflow_id}/edit"
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      refute has_element?(view, "button", "Copy")
+    end
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
     assert has_element?(view, "button", "Copy")
+  end
+
+  test "a step pasted on the canvas is copied at save; a source that is gone refuses the save with the reason",
+       %{conn: conn} do
+    id = create_flow(conn, "Intake", "forms")
+    save_form_node(conn, id)
+    [source] = Flows.get(id).nodes
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    # The pasted node as the canvas reports it: the source's snapshot — its
+    # stale form_id copy included — under a temp id, with the marker in data
+    pasted = %{
+      "id" => "2",
+      "type" => "step",
+      "form_id" => source.form_id,
+      "position" => %{"x" => 300, "y" => 0},
+      "data" => %{"label" => "Intake again", "kind" => "form", "copy_of_node_id" => source.id}
+    }
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [form_node_attrs(source, %{}), pasted],
+      "edges" => []
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    nodes = Flows.get(id).nodes
+    assert length(nodes) == 2
+    again = Enum.find(nodes, &(get_in(&1.properties, ["data", "label"]) == "Intake again"))
+    assert again.form_id != source.form_id
+    assert Forms.get(again.form_id).copied_from_form_id == source.form_id
+    assert Forms.get(again.form_id).name == "Intake again"
+    refute Map.has_key?(again.properties["data"], "copy_of_node_id")
+
+    # A marker naming a step that no longer exists: the save is refused, and
+    # the page says so in the words the data layer chose
+    gone = %{
+      pasted
+      | "id" => "3",
+        "data" => Map.put(pasted["data"], "copy_of_node_id", Ecto.UUID.generate())
+    }
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        form_node_attrs(source, %{}),
+        form_node_attrs(again, %{"label" => "Intake again"}),
+        gone
+      ],
+      "edges" => []
+    })
+
+    html = view |> element("button", "Save") |> render_click()
+    assert html =~ "The step it was copied from no longer exists."
+    assert length(Flows.get(id).nodes) == 2
   end
 
   test "show, edit, and the overview handle a flow that does not exist", %{conn: conn} do

@@ -116,8 +116,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        pending_navigation: nil,
        confirming_discard?: false,
        copying?: false,
+       copy_name: nil,
        copy_slug: nil,
-       copy_error: nil
+       copy_error: nil,
+       copied: nil
      )}
   end
 
@@ -416,8 +418,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     {:noreply,
      assign(socket,
        copying?: true,
+       copy_name: Shared.copy_name(socket.assigns.flow),
        copy_slug: Flows.copy_slug(socket.assigns.flow),
-       copy_error: nil
+       copy_error: nil,
+       copied: nil
      )}
   end
 
@@ -427,9 +431,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # The copy is of the last saved version (the dialog says so when edits are
-  # pending). Leaving for the copy's page goes through the same save-first
-  # prompt as every other way off this page, so pending edits are not lost
-  # to the click that made the copy.
+  # pending), and it is made here, on the click. With nothing unsaved the
+  # copy's page is next. With edits pending this page stays — the copy is
+  # done, and what is open is the edits' fate, not the copy's — and says
+  # where the copy went; its link leaves through the same save-first prompt
+  # as every other way off this page.
   @impl true
   def handle_event("copy", params, socket) do
     case Shared.copy_flow(socket.assigns.flow, params, socket.assigns.host_types) do
@@ -438,11 +444,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         socket = assign(socket, copying?: false, copy_error: nil)
 
         if unsaved_changes?(socket.assigns),
-          do: {:noreply, assign(socket, :pending_navigation, {:path, to})},
+          do: {:noreply, assign(socket, :copied, %{name: copy.name, to: to})},
           else: {:noreply, push_navigate(socket, to: to)}
 
       {:error, message} ->
-        {:noreply, assign(socket, :copy_error, message)}
+        # The dialog redraws with what was typed, not the prefill
+        {:noreply,
+         assign(socket, copy_error: message, copy_name: params["name"], copy_slug: params["slug"])}
     end
   end
 
@@ -716,10 +724,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             </span>
             <span class="font-semibold text-zinc-900">Edit</span>
           </button>
-          <%!-- A root flow is copied whole from here; a subflow is copied
-                by pasting its step on a canvas --%>
+          <%!-- A root flow is copied whole from here; an owned subflow is
+                copied by pasting its step on a canvas --%>
           <Core.button
-            :if={is_nil(@node_id)}
+            :if={is_nil(@flow.owner_flow_id)}
             components={@components}
             phx-click="request_copy"
             phx-target={@myself}
@@ -749,11 +757,26 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
       <p :if={@notice} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">{@notice}</p>
+      <%!-- Where the copy went, when this page stayed for its unsaved edits;
+            the link goes through "navigate", so those edits prompt first --%>
+      <p :if={@copied} class="bg-green-50 p-6 rounded-lg w-full my-3 text-sm">
+        Copied to
+        <button
+          type="button"
+          phx-click="navigate"
+          phx-value-to={@copied.to}
+          phx-target={@myself}
+          class="link link-primary"
+        >
+          “{@copied.name}”
+        </button>
+        — this page stayed open for your unsaved edits.
+      </p>
 
       <CopyDialog.copy_dialog
         :if={@copying?}
         flow={@flow}
-        name={Shared.copy_name(@flow)}
+        name={@copy_name}
         slug={@copy_slug}
         error={@copy_error}
         saved_note={unsaved_changes?(assigns)}

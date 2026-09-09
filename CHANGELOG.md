@@ -40,11 +40,18 @@ over re-pointed values in one write.
 the copy's name — the source's with "(copy)" after it — and the slug
 `copy/2` would pick (**`Flows.copy_slug/1`**, new), calls `copy/2` with the
 host's types so the copy's health is cached, and lands on the copy's show
-page. A refused slug keeps the dialog open with the reason. On the Edit
-page with unsaved edits the dialog says the copy is of the last saved
-version, and leaving for the copy goes through the same save-first prompt
-as every other way off the page. A subflow's pages have no Copy: a subflow
-is copied by pasting its step.
+page. A refused slug keeps the dialog open with the reason and what was
+typed; a blank name takes the one offered. On the Edit page with unsaved
+edits the dialog says the copy is made now from the last saved version, and
+the page stays open with the edits after copying, saying where the copy
+went — the link leaves through the same save-first prompt as every other
+way off the page. An owned subflow's pages have no Copy: a subflow is
+copied by pasting its step.
+
+`FormFlow.Data.Templates.Flow` preloads its nodes and relationships in
+stored order (`inserted_at`, then `id`), which the save's "canvas order"
+rules — which of two same-named steps takes the bare slug, which position a
+pasted path is rebased to — relied on without asking.
 
 ### A step can be pasted
 
@@ -57,9 +64,16 @@ under this root's prefix; a catalog form stays the same shared reference.
 The marker is consumed, never stored, so nothing is copied twice; the
 pasted step's label and type write through to the copy like any step's.
 The save is refused with an error on `:nodes` when the source no longer
-exists or belongs to another tenant.
+exists or belongs to another tenant — and the page shows that sentence:
+**`FormFlow.Web.Templates.Shared.save_error/2`** now surfaces a `:nodes`
+refusal (a pasted step whose source is gone, a step the tree does not own,
+a removed form that still has data) where it used to show the generic
+retry. Where the pasted node's data names no type, the source entity's
+fills in, so a copy never lands on the default type with its property
+values dropped.
 
-On the canvas, a form or subflow step's ⋮ menu has **Copy** — disabled
+On the canvas, a form or subflow step's ⋮ menu — on the read-only canvas
+too, since copying writes nothing — has **Copy** — disabled
 until the step has been saved, since the save copies from the source by its
 real id — and the toolbar shows **Paste “<step>”** beside the add buttons
 whenever the clipboard holds a step that fits this canvas: a subflow step

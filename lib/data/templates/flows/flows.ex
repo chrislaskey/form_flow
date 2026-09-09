@@ -84,10 +84,13 @@ defmodule FormFlow.Data.Templates.Flows do
   with provenance), a subflow whole with its steps' slugs under this root's
   prefix, a catalog form as the same shared reference; a Start or End has
   nothing behind it. The marker is consumed, never stored, so a step saved
-  once is never copied again; the pasted step's label and type write
-  through to the copied entity like any step's — so the pasted node's data
-  carries the type the canvas showed on the source, since a form node saved
-  without one is set to the default type. The paste is refused —
+  once is never copied again. The pasted step is a new step: it takes the
+  default slug for its label under this root's prefix (a slug hand-set on
+  the source is not carried), and its label and type write through to the
+  copied entity like any step's — the canvas puts the source's type in the
+  pasted node's data, and where a payload names none the source entity's
+  fills in, since a step saved with no type is set to the default and loses
+  its property values. The paste is refused —
   the whole save, with an error on `:nodes` — when the source is gone (the
   clipboard outlives a delete, and a step copied before it was saved was
   never there) or belongs to another tenant, the rule `reuse_form/3`
@@ -809,20 +812,23 @@ defmodule FormFlow.Data.Templates.Flows do
   The source's cached health status does not come along — it describes a
   check the copy has not had — but its ignored entries do, re-pointed at
   the copied nodes: the copy has the source's shape, so the same findings
-  are fine on purpose. Given `flow_types:` and `form_types:` — the host's
-  lists — the copy is checked once and its status cached
+  are fine on purpose. Given both `flow_types:` and `form_types:` — the
+  host's lists — the copy is checked once and its status cached
   (`FormFlow.Data.Templates.Flows.Health.refresh/2`) — on the copy when it
   is a root, on the destination root when the copy is made owned, since
-  health is always the root's; without them it is not, since a check with
-  the library's default types could cache a type warning the host's lists
-  would not raise.
+  health is always the root's; given one or neither it is not, since a
+  check with the library's default types for either list could cache a type
+  warning the host's lists would not raise.
   """
   def copy(%Flow{} = flow, opts \\ []) do
     with {:ok, destination} <- copy_destination(flow, opts),
          {:ok, copy_id} <- Repo.transaction(fn -> copy_tree(flow, destination) end) do
-      case Keyword.take(opts, [:flow_types, :form_types]) do
-        [] -> :ok
-        types -> Health.refresh(copy_id, types)
+      case {opts[:flow_types], opts[:form_types]} do
+        {flow_types, form_types} when is_list(flow_types) and is_list(form_types) ->
+          Health.refresh(copy_id, flow_types: flow_types, form_types: form_types)
+
+        _one_or_none ->
+          :ok
       end
 
       {:ok, get(copy_id)}
@@ -928,6 +934,8 @@ defmodule FormFlow.Data.Templates.Flows do
     Enum.reduce(tree.nodes, %{}, fn node, plan ->
       plan
       |> Map.put_new(node.id, Ecto.UUID.generate())
+      # A subflow at two positions is planned at both; the first plan's ids
+      # stand and the second's are dropped, so the one copy has one set
       |> Map.merge(copy_plan(tree.subflows[node.id]), fn _id, planned, _again -> planned end)
     end)
   end
@@ -1032,8 +1040,7 @@ defmodule FormFlow.Data.Templates.Flows do
         tenant_id: flow.tenant_id,
         slug_prefixes: {source_root.slug, destination_root.slug},
         source_prefixes: flow_prefixes(resolve_tree(source_root.id), source_flow.id),
-        destination_prefix:
-          List.first(flow_prefixes(resolve_tree(destination_root.id), flow.id)) || []
+        destination_prefix: destination_prefix(resolve_tree(destination_root.id), flow.id)
       }
 
       {entity, _copied} =
@@ -1041,16 +1048,66 @@ defmodule FormFlow.Data.Templates.Flows do
 
       # The columns are given outright, so the changeset does not read the
       # source's ids off the properties copy; the copy is dropped as well
+      properties =
+        attrs
+        |> node_properties()
+        |> Map.drop(["form_id", "subflow_id"])
+        |> put_new_type(source_type(source))
+
       attrs =
         attrs
         |> put_node_id(pasted_id)
-        |> put_node_properties(Map.drop(node_properties(attrs), ["form_id", "subflow_id"]))
+        |> put_node_properties(properties)
         |> put_node_reference(:subflow_id, entity.subflow_id)
         |> put_node_reference(:form_id, entity.form_id)
 
       {:ok, attrs}
     end
   end
+
+  # The first position of the flow being pasted into, in stored order — a
+  # flow at two positions has two, one has to be chosen, and health reports
+  # the paths if it was the other. nil for a flow no step embeds, which
+  # rebases nothing rather than rebasing as a root.
+  defp destination_prefix(tree, flow_id) do
+    case flow_prefixes(tree, flow_id) do
+      [] -> nil
+      [first | _others] -> first
+    end
+  end
+
+  # The type the write-through applies to the copied entity is read off the
+  # pasted node's data, where the canvas carries the source's. A caller that
+  # sends none — a hand-built payload — would otherwise set the copy to the
+  # default type and lose its property values, so the source entity's fills
+  # in where the data names none.
+  defp put_new_type(properties, nil), do: properties
+
+  defp put_new_type(properties, {key, type}) do
+    Map.update(properties, "data", %{key => type}, &Map.put_new(&1, key, type))
+  end
+
+  defp source_type(%Node{form_id: form_id}) when is_binary(form_id) do
+    case Repo.get(Templates.Form, form_id) do
+      %Templates.Form{properties: %{"form_type" => type}} when is_binary(type) ->
+        {"form_type", type}
+
+      _untyped_or_gone ->
+        nil
+    end
+  end
+
+  defp source_type(%Node{subflow_id: subflow_id}) when is_binary(subflow_id) do
+    case Repo.get(Flow, subflow_id) do
+      %Flow{properties: %{"form_flow_type" => type}} when is_binary(type) ->
+        {"form_flow_type", type}
+
+      _untyped_or_gone ->
+        nil
+    end
+  end
+
+  defp source_type(_node), do: nil
 
   # The clipboard outlives its source: a step deleted since it was copied,
   # or copied before it was ever saved, is gone by the time of the paste
@@ -1064,6 +1121,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   defp same_tenant_as(%Flow{tenant_id: tenant}, %Flow{tenant_id: tenant}), do: :ok
+  defp same_tenant_as(_flow, nil), do: {:error, @source_gone}
   defp same_tenant_as(_flow, _source_flow), do: {:error, @source_other_tenant}
 
   defp nodes_error(flow, message) do
@@ -1074,7 +1132,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # The paths at which `flow_id` sits in a resolved tree — [] for the root
   # itself, else the node ids from the root down to each step embedding it,
-  # one per step, in the order the tree stores its nodes
+  # one per step, in the order the nodes were stored (`Flow`'s preload order)
   defp flow_prefixes(nil, _flow_id), do: []
   defp flow_prefixes(tree, flow_id), do: flow_prefixes(tree, flow_id, [])
 
@@ -1741,6 +1799,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # A source flow embedded at two positions has two prefixes; a path under
   # either points into the copy
+  defp rebase_path(_segments, %{destination_prefix: nil}), do: nil
+
   defp rebase_path(segments, context) do
     Enum.find_value(context.source_prefixes, fn prefix ->
       case strip_prefix(segments, prefix) do

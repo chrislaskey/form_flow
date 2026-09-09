@@ -791,15 +791,38 @@ defmodule Demo.FormFlowFlowsTest do
       assert source_of.(v4) == "#{t.id}/#{o.id}"
 
       # 2. Check alone pasted into the sibling subflow: a form step moves no
-      # paths. The pasted node's data carries the type the canvas showed on
-      # the source — a form node saved without one is set to the default type
-      check_too = put_in(form_step("Check too"), [:properties, "data", "form_type"], "review")
-
+      # paths. The pasted data names no type, so the source's fills in and
+      # the copy keeps its review type and the values that go with it
       {:ok, _} =
-        Flows.update(Flows.get(q.id), %{nodes: [form_step("Owner", o), paste_of(check_too, c)]})
+        Flows.update(Flows.get(q.id), %{
+          nodes: [form_step("Owner", o), paste_of(form_step("Check too"), c)]
+        })
 
       check_too = Enum.find(Flows.get(q.id).nodes, &(step_label_of(&1) == "Check too"))
       assert source_of.(check_too) == "#{s.id}/#{a.id}"
+      assert Forms.get(check_too.form_id).properties["form_type"] == "review"
+    end
+
+    test "a pasted subflow step with no type in its data keeps the source's type and values" do
+      {:ok, dog} = Flows.create(%{name: "Dog License", label: "subflows"})
+      {:ok, _} = Flows.update(dog, %{nodes: [subflow_step("Review")]})
+      [s] = Flows.get(dog.id).nodes
+
+      {:ok, _} =
+        Flows.update(Flows.get(s.subflow_id), %{
+          properties: %{
+            "form_flow_type" => "wizard_any_order",
+            "form_flow_type_property_values" => %{"note" => "kept"}
+          }
+        })
+
+      {:ok, cat} = Flows.create(%{name: "Cat License", label: "subflows"})
+      {:ok, _} = Flows.update(cat, %{nodes: [paste_of(subflow_step("Review"), s)]})
+      [pasted] = Flows.get(cat.id).nodes
+
+      copy = Flows.get(pasted.subflow_id)
+      assert copy.properties["form_flow_type"] == "wizard_any_order"
+      assert copy.properties["form_flow_type_property_values"] == %{"note" => "kept"}
     end
 
     test "a paste is refused when its source is gone or another tenant's, and nothing is written" do

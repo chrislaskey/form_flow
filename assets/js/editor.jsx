@@ -128,8 +128,8 @@ function NodeTitleInput({ id, label }) {
 // node types compose it from the shared entries (useNodeMenuItems) plus their
 // own. An item with `confirm` asks before acting, so a misclick in a growing
 // menu can't fire anything destructive; one with `disabled` stays listed
-// with its `title` saying why. Renders nothing with no items, e.g. read-only
-// canvases today.
+// with its `title` saying why. Renders nothing with no items, e.g. a Start
+// node on a read-only canvas.
 function NodeMenu({ items }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -202,9 +202,10 @@ function NodeMenu({ items }) {
 
 // The menu entries every node type shares; specific node types concat their
 // own after these. Copy puts a snapshot of the step on the clipboard (see
-// "clipboard" below) — offered on form and subflow steps, and disabled until
-// the step has been saved, since the save copies from the source by its real
-// id. Delete goes through ReactFlow's deleteElements — the same path as the
+// "clipboard" below) — offered on form and subflow steps, on the read-only
+// canvas too since copying writes nothing, and disabled until the step has
+// been saved, since the save copies from the source by its real id. Delete
+// goes through ReactFlow's deleteElements — the same path as the
 // Backspace key — so connected edges cascade, deletable: false is respected,
 // and the removal reaches the server through the ordinary
 // onNodesChange/onEdgesChange reports.
@@ -215,7 +216,7 @@ function useNodeMenuItems(id, deletable) {
   const items = [];
   const node = getNode(id);
 
-  if (editable && node && copyableKind(node)) {
+  if (node && copyableKind(node)) {
     const saved = isSaved(node);
 
     items.push({
