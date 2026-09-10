@@ -81,20 +81,20 @@ defmodule DemoWeb.DataModelingLive do
           </p>
           <p class="max-w-3xl">
             Imagine a user filling out three related forms
-            for an application. Each form the user fills out would be a <code>Form</code>
-            and what connects the three forms together would
+            for an application. Each form the user fills out would be a
+            <code>Form</code> and what connects the three forms together would
             be a <code>Flow</code>.
           </p>
           <p class="max-w-3xl">
-            Sometimes a single Flow with a single Form is enough. Sometimes a
-            single Flow has many Forms. Or it's a little more complex,
-            like a user filling out many groups of forms before submitting.
-            Or maybe we want a really complex flow, like after the user fills out
-            the initial forms for the application, we want different reviewer users to
-            look over the user's forms.
+            Maybe you want to add a reviewer section, where a different user looks
+            at the forms submitted by the user and gives feedback. In that case there'd
+            be the original Flow that has Forms for the user, a new Flow for the Forms
+            for the reviewer, and a top level Flow to connect the two flows together.
           </p>
-          <p>
-            All of these are modeled with just Flows and Forms.
+          <p class="max-w-3xl">
+            We might use terms like "Root Flow" and "Subflow" and "Form Flow"
+            to make it easier to talk about these, but fundamentally these are
+            modeled with just Flows and Forms.
           </p>
           <h3 class="font-bold">Visualizing complex flows</h3>
           <p class="max-w-3xl">
