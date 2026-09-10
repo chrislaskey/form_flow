@@ -5,9 +5,10 @@ defmodule DemoWeb.PersonaComponents do
 
   There is no sign-in in the demo, so this is not security — it is the
   demonstration of it. A page names the roles it is for, and a visitor
-  holding another one is met by the same control they would have used to
-  get in: the perspective picker, with the users who can see the page
-  called out.
+  holding another one is told whose page it is and sent to the header's
+  switcher. Deliberately sent, rather than offered a switcher of its own:
+  there is one place to change perspective, and a refusal is a bad place to
+  teach a second one.
   """
 
   use DemoWeb, :html
@@ -25,7 +26,7 @@ defmodule DemoWeb.PersonaComponents do
   """
   attr :current_user, :map, required: true
   attr :roles, :list, required: true, doc: "the roles this page is for"
-  attr :page, :string, required: true, doc: "what the page is, named in the refusal"
+  attr :page, :string, required: true, doc: "what is being refused, as the refusal names it"
   slot :inner_block, required: true
 
   def persona_gate(assigns) do
@@ -39,8 +40,7 @@ defmodule DemoWeb.PersonaComponents do
   end
 
   @doc """
-  The refusal: who you are, who this page is for, and the picker to become
-  one of them.
+  The refusal: who you are, who this page is for, and where to change that.
   """
   attr :current_user, :map, required: true
   attr :roles, :list, required: true
@@ -54,24 +54,38 @@ defmodule DemoWeb.PersonaComponents do
       <header class="space-y-2">
         <h1 class="text-2xl font-semibold">Not authorized</h1>
         <p class="max-w-3xl text-base-content/70">
-          You are viewing the demo as <span class="font-semibold text-base-content">{@current_user.name}</span>, and {@page} is not {@current_user.name}'s to see. It belongs to <span class="font-semibold text-base-content">
-            {@allowed |> Enum.map(& &1.name) |> to_sentence()}
-          </span>.
+          You are viewing the demo as <span class="font-semibold text-base-content">{@current_user.name}</span>, who cannot see {@page}.
+          <span class="font-semibold text-base-content">{@allowed
+          |> Enum.map(& &1.name)
+          |> to_sentence()}</span>
+          can.
         </p>
       </header>
 
-      <.pick_perspective
-        id="not-authorized-perspective"
-        current_user={@current_user}
-        blurb="Switch to one of them and the page opens."
-      />
+      <p class="flex max-w-3xl items-center gap-2 text-base-content/70">
+        Switch with the <span class="font-semibold text-base-content">Viewing as</span>
+        control in the top right of every page, and the page opens.
+        <svg
+          viewBox="0 0 16 16"
+          class="size-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5.5 10.5l5-5M6.5 5.5h4v4" />
+        </svg>
+      </p>
     </div>
     """
   end
 
   @doc """
-  The framed "Pick a user perspective" control, for any page that wants to
-  offer the switch in its own content rather than only in the header.
+  The framed "Pick a user perspective" control, for a page that introduces
+  the switch rather than assuming it — the demo index does. Pages that
+  merely need it have the header's.
   """
   attr :id, :string, default: "perspective"
   attr :current_user, :map, required: true

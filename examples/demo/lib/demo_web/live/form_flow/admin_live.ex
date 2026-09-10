@@ -34,7 +34,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <.persona_gate current_user={@current_user} roles={[:admin]} page="the admin experience">
+      <.persona_gate current_user={@current_user} roles={[:admin]} page="the admin pages">
         <div class="space-y-6">
           <header class="space-y-2">
             <h1 class="text-2xl font-semibold">Admin</h1>

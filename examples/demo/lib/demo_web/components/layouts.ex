@@ -145,7 +145,7 @@ defmodule DemoWeb.Layouts do
         "flex cursor-pointer list-none items-center gap-1 rounded-lg px-3 py-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden",
         @current && "bg-gray-100 font-semibold text-indigo-600"
       ]}>
-        Demo Experience
+        Demo App
         <svg
           viewBox="0 0 16 16"
           class="size-3.5"

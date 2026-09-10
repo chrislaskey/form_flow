@@ -3,7 +3,6 @@ defmodule DemoWeb.PersonaTest do
 
   import Phoenix.LiveViewTest
 
-  alias Demo.Users
   alias DemoWeb.Experiences
 
   describe "the Demo Experience menu" do
@@ -89,14 +88,21 @@ defmodule DemoWeb.PersonaTest do
       assert has_element?(view, "#perspective-user-switcher")
     end
 
-    test "is what a refused page offers instead", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin")
+    test "is not repeated on a refusal, which points at the header instead", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/admin")
 
-      assert has_element?(view, "#not-authorized-perspective")
+      assert html =~ "Not authorized"
+      assert html =~ "Viewing as"
 
-      for user <- Users.all() do
-        assert has_element?(view, ~s(a[href="/switch-user/#{user.id}"]))
-      end
+      # The header's switcher is the only one on the page
+      switchers =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("details.dropdown")
+        |> LazyHTML.attribute("id")
+
+      assert switchers == ["experience-menu", "header-user-switcher"]
+      refute has_element?(view, "#perspective")
     end
   end
 end

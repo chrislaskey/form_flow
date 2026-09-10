@@ -38,7 +38,7 @@ defmodule DemoWeb.FormFlowLive.Users do
       <.persona_gate
         current_user={@current_user}
         roles={[:owner, :reviewer]}
-        page="the user experience"
+        page="the user pages"
       >
         <div class="space-y-6">
           <header class="space-y-2">
