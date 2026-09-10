@@ -48,7 +48,10 @@ show page. `Flow.allows?/2` answers the table; the pages ask
 rule about a person — who a pre-release flow's users are — and a host
 route honouring the status does the same for that status.
 **`Instances.Flows.narrow_allowed/2`** narrows a listing query to instances
-of flows whose status allows `:start`, `:continue`, or `:see`. A read-only
+of flows whose status allows `:start`, `:continue`, or `:see`; and
+`Instances.Flows.list_query/1` and `list/1` take **`status:`** — the
+journey's own stamp, `"in_progress"` or `"completed"`, not the flow's —
+so a host that stamps journeys can ask for a user's finished ones. A read-only
 flow's instances are listed as View,
 their pages open, and their form edit pages say "This flow is read-only
 now; your answers are kept as they are." — Continue and Reopen are not
@@ -80,6 +83,42 @@ The router now passes **`user_id`** to every template component — the
 flows pages, where the event has an author wherever it is written, and the
 forms pages, for the events they will write; a host rendering the
 components itself should pass it too.
+
+**Pre-release users can be a rule, not a list**: `pre_release_user_ids`
+takes a function of the page's `FormFlow.Context` and `callback_data`
+returning the list — `[context.user_id]` when the viewer qualifies, `[]`
+when not — as well as a list; each page resolves it once, as soon as it
+has a context (`FormFlow.Web.Instances.Forms.Shared.resolve_pre_release_user_ids/1`,
+`FormFlow.Web.Instances.Shared.pre_release_user_ids/1`). **As a flow
+leaves Pre-release, the status dialog offers to delete the trial run**: it
+says how many instances were started during pre-release (the marker in
+`metadata`, read by the new `FormFlow.Data.Instances.Flow.pre_release?/1`
+and listed by **`Instances.Flows.list_pre_release/1`**) and draws a box,
+Delete them, unticked; Save with the box calls
+**`Instances.Flows.delete_pre_release/2`**, which deletes each through
+`delete_instance/2` and logs one **`pre_release_instances_deleted`** event
+with the count, in one transaction (`FormFlow.Web.Templates.Shared.save_status/3`
+is the dialog's Save, for both pages). The offer is made for that one
+move only; on any other the box is ignored. The Edit page's Status field
+makes no such offer.
+
+**The flows index puts archived flows away**: the listing filters them out
+(`Flows.roots_query/1` takes **`status:`** and **`exclude_status:`**) and
+says how many are hidden with a **Show archived** link, which patches
+`?archived=true` onto the page's URL — sort kept, page dropped — and lists
+them greyed, with Hide archived to go back; a listing of nothing but
+archived flows says "Every flow here is archived." and offers the link.
+
+**Ignoring a health entry is logged**: `Health.ignore/3` and
+**`Health.stop_ignoring/3`** (breaking: it takes the admin's `user_id` now,
+as `ignore/3` always did) each write an event on the flow's log in the
+same transaction as the record — **`health_ignored`** and
+**`health_unignored`**, with the entry's `code`, `path`, and `subject` in
+`snapshot` — and the History page reads them as "Ignored health check:
+unconnected at End". The health page passes its `user_id` to both. The
+status dialog's dropdown is a `select` through
+`FormFlow.Web.Components.Core.input/1`, which grew `options` and
+`prompt` for it, so a host's `components` module draws it.
 
 Owned subflows have no log of their own — a save that creates one writes
 no `created` event — and the log is deleted deliberately on both paths that

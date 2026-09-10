@@ -206,11 +206,14 @@ defmodule FormFlow.Web.Router do
         "the page with `on_mount`. Ignored by the template pages"
   )
 
-  attr(:pre_release_user_ids, :list,
+  attr(:pre_release_user_ids, :any,
     default: [],
     doc:
       "the host's user ids for whom a `pre_release` flow is open — offered, " <>
         "continued, seen — as if it were `open`; to everyone else it is a draft. " <>
+        "A list, or a function of the page's `FormFlow.Context` and `callback_data` " <>
+        "returning one, for a host whose pre-release users are a role or a team " <>
+        "(return `[context.user_id]` when the viewer qualifies); it is called once per page. " <>
         "The pages are the gate: the data layer takes a pre-release start from " <>
         "anyone and marks the journey's `metadata` (`\"form_flow\" => %{\"pre_release\" => true}`). " <>
         "A viewer with no `user_id` is never listed, so a host without users has no " <>

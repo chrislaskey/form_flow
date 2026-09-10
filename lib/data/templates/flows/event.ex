@@ -11,12 +11,21 @@ defmodule FormFlow.Data.Templates.Flow.Event do
   subflows inside a save, delete the log deliberately first.
 
   Root flows only: an owned subflow's status and history are its root's,
-  as its health is, so it never has rows here. Two events today. `created`
+  as its health is, so it never has rows here. Five events today. `created`
   is written by `Flows.create/2` and by `Flows.copy/2` for the root they
   make.
   `status_changed` is written by `Flows.update_status/3` with the old and
   new status in `snapshot` (`"from"`, `"to"`); it is the answer to "when did
   we open this, when did we stop new starts, and who did it".
+  `health_ignored` and `health_unignored` are written by
+  `FormFlow.Data.Templates.Flows.Health.ignore/3` and `stop_ignoring/3`
+  beside the record they keep on the flow, with the entry's `"code"`,
+  `"path"`, and `"subject"` in `snapshot` — the record says what is ignored
+  now; the log says who decided it, and when a decision was reversed.
+  `pre_release_instances_deleted` is written by
+  `FormFlow.Data.Instances.Flows.delete_pre_release/2` with the `"count"`
+  deleted, so the trial run an admin cleared away on opening the flow is
+  not simply missing.
 
   Events are audit, not state. `FormFlow.Data.Templates.Flow.status` is the
   column every page reads; nothing derives it from the log, which is what
@@ -32,7 +41,7 @@ defmodule FormFlow.Data.Templates.Flow.Event do
 
   alias FormFlow.Data.Templates.Flow
 
-  @events ~w(created status_changed)
+  @events ~w(created status_changed health_ignored health_unignored pre_release_instances_deleted)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

@@ -23,7 +23,8 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   the flow itself), and the **Ignore** switch — the same control as the
   Show/Edit switch on the flow pages. Turning it on records the entry as
   ignored on the flow (`Health.ignore/3`) by `user_id`, the host's identity
-  for the admin; off removes the record. An ignored entry stays listed,
+  for the admin; off removes the record (`Health.stop_ignoring/3`). Both
+  are logged on the flow's History page. An ignored entry stays listed,
   greyed, with who ignored it and when, and leaves the badge's count.
 
   The selection rides in the URL as `?entry=<code>@<path ids joined by />`,
@@ -112,7 +113,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     written =
       case find_entry(health, key) do
         %Entry{ignored: nil} = entry -> Health.ignore(health, entry, socket.assigns.user_id)
-        %Entry{} = entry -> Health.stop_ignoring(health, entry)
+        %Entry{} = entry -> Health.stop_ignoring(health, entry, socket.assigns.user_id)
         nil -> {:error, :not_found}
       end
 

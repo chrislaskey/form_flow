@@ -24,10 +24,12 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @doc """
   Journeys, newest first, with `:flow` preloaded. `opts[:user_id]` narrows
-  to one creator, `opts[:tenant_id]` to one tenant, and `opts[:flow]` to
-  instances of one or more flow templates (see `narrow_flow/2`) — query
-  conveniences for "my journeys" listings, not access control: the library
-  never enforces visibility.
+  to one creator, `opts[:tenant_id]` to one tenant, `opts[:flow]` to
+  instances of one or more flow templates (see `narrow_flow/2`), and
+  `opts[:status]` to journeys in one status — `"in_progress"` or
+  `"completed"`, the journey's own stamp (`complete/2`), not the flow's —
+  query conveniences for "my journeys" listings, not access control: the
+  library never enforces visibility.
   """
   def list(opts \\ []) do
     Repo.all(from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:flow]))
@@ -38,18 +40,21 @@ defmodule FormFlow.Data.Instances.Flows do
   callers (like Slab's table in query mode) can layer `order_by`,
   `limit`/`offset`, `Repo.aggregate(:count)`, and their own preloads on top.
 
-  `opts[:user_id]`, `opts[:tenant_id]`, and `opts[:flow]` narrow exactly as
-  in `list/1` — and with the same caveat: listing conveniences, not access
-  control. This is the building block for the `instances` attr of
-  `FormFlow.Web.router/1`: the listing page's own default is
-  `list_query(user_id: user_id)`, narrowed to the flows the page offers
-  when it offers some in particular.
+  `opts[:user_id]`, `opts[:tenant_id]`, `opts[:flow]`, and `opts[:status]`
+  narrow exactly as in `list/1` — and with the same caveat: listing
+  conveniences, not access control. This is the building block for the
+  `instances` attr of `FormFlow.Web.router/1`: the listing page's own
+  default is `list_query(user_id: user_id)`, narrowed to the flows the page
+  offers when it offers some in particular. `status: "completed"` is how a
+  host that stamps journeys asks for a user's finished ones — last year's
+  filing, for a form that prefills from it.
   """
   def list_query(opts \\ []) do
     from(i in Instances.Flow)
     |> narrow(:user_id, Keyword.get(opts, :user_id))
     |> narrow_tenant(Keyword.get(opts, :tenant_id))
     |> narrow_flow(Keyword.get(opts, :flow))
+    |> narrow(:status, Keyword.get(opts, :status))
   end
 
   @doc """
@@ -277,6 +282,61 @@ defmodule FormFlow.Data.Instances.Flows do
       case Repo.delete(instance) do
         {:ok, deleted} -> deleted
         {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  The journeys of a root flow started while it was `pre_release`
+  (`FormFlow.Data.Instances.Flow.pre_release?/1`), oldest first — the trial
+  run the status dialog offers to delete when the flow moves on. The marker
+  sits inside the `metadata` map, so the journeys of the flow are read and
+  filtered here rather than in a JSON query the two databases would spell
+  differently; a flow's pre-release run is small.
+  """
+  def list_pre_release(%Templates.Flow{id: flow_id}) do
+    Repo.all(
+      from(i in Instances.Flow, where: i.flow_id == ^flow_id, order_by: [asc: i.inserted_at])
+    )
+    |> Enum.filter(&Instances.Flow.pre_release?/1)
+  end
+
+  @doc """
+  Deletes every journey of `flow` started while it was `pre_release`
+  (`list_pre_release/1`), each through `delete_instance/2`, and writes one
+  `pre_release_instances_deleted` event on the flow's own log
+  (`FormFlow.Data.Templates.Flow.Event`) with the `"count"` and
+  `opts[:user_id]`, all in one transaction — so the trial run an admin
+  cleared away is a recorded decision, not rows that went missing. Returns
+  `{:ok, count}`; with nothing to delete, `{:ok, 0}` and no event. The
+  flow's status is not consulted: this is the admin's call, made from the
+  status dialog as the flow leaves Pre-release.
+  """
+  def delete_pre_release(%Templates.Flow{} = flow, opts \\ []) do
+    Repo.transaction(fn ->
+      case list_pre_release(flow) do
+        [] ->
+          0
+
+        journeys ->
+          Enum.each(journeys, fn journey ->
+            case delete_instance(journey, opts) do
+              {:ok, _deleted} -> :ok
+              {:error, reason} -> Repo.rollback(reason)
+            end
+          end)
+
+          attrs = %{
+            flow_id: flow.id,
+            event: "pre_release_instances_deleted",
+            snapshot: %{"count" => length(journeys)},
+            user_id: Keyword.get(opts, :user_id)
+          }
+
+          case Repo.insert(Templates.Flow.Event.changeset(%Templates.Flow.Event{}, attrs)) do
+            {:ok, _event} -> length(journeys)
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
       end
     end)
   end

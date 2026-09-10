@@ -120,12 +120,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   `properties["_health_metadata"]["ignored_entries"]`, with who ignored it
   and when; from then on `check/2` still lists it — marked, in `Entry`'s
   `:ignored` — but it no longer counts toward `level` and `counts`, so the
-  badge says what is new. `stop_ignoring/2` removes the record. An entry is
+  badge says what is new. `stop_ignoring/3` removes the record. An entry is
   matched by its `code` and `path`, both stable across saves (the canvas
   keeps node ids), and a record whose entry has gone — the step was wired,
   or deleted — is dropped the next time `refresh/2` or either toggle
   writes. Both toggles write the status too, from the report they hold, so
-  the badge follows without a second check.
+  the badge follows without a second check, and each writes an event to the
+  flow's log (`FormFlow.Data.Templates.Flow.Event`, `health_ignored` and
+  `health_unignored`) in the same transaction: the record is the state, the
+  log is who decided it and when.
 
   The records live in the flow's `properties`, beside its type and
   perspectives, because that is the flow's own open map and it travels with
@@ -485,10 +488,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   @doc """
   Records `entry` as ignored on the root flow `health` was checked, by
   `user_id` (the host's opaque identity, as the instance events carry it)
-  and now, and caches the status as it now stands. Returns the updated root
-  flow, or `{:error, :not_found}` when the flow has been deleted since the
-  check. Records for entries the check no longer finds are dropped on the
-  way.
+  and now, caches the status as it now stands, and logs `health_ignored`
+  on the flow, all in one transaction. Returns the updated root flow, or
+  `{:error, :not_found}` when the flow has been deleted since the check.
+  Records for entries the check no longer finds are dropped on the way.
   """
   @spec ignore(t(), Entry.t(), String.t() | nil) :: {:ok, Flow.t()} | {:error, :not_found}
   def ignore(%__MODULE__{} = health, %Entry{} = entry, user_id) do
@@ -499,32 +502,66 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       "ignored_at" => DateTime.to_iso8601(DateTime.utc_now())
     }
 
-    toggle(health, fn records -> Enum.reject(records, &same_entry?(&1, entry)) ++ [record] end)
+    toggle(
+      health,
+      fn records -> Enum.reject(records, &same_entry?(&1, entry)) ++ [record] end,
+      {"health_ignored", entry, user_id}
+    )
   end
 
   @doc """
   Removes `entry`'s ignored record from the root flow `health` was checked,
-  so it counts again, and caches the status as it now stands. Returns the
+  so it counts again, caches the status as it now stands, and logs
+  `health_unignored` by `user_id`, all in one transaction. Returns the
   updated root flow, or `{:error, :not_found}` when the flow has been
   deleted since the check.
   """
-  @spec stop_ignoring(t(), Entry.t()) :: {:ok, Flow.t()} | {:error, :not_found}
-  def stop_ignoring(%__MODULE__{} = health, %Entry{} = entry) do
-    toggle(health, fn records -> Enum.reject(records, &same_entry?(&1, entry)) end)
+  @spec stop_ignoring(t(), Entry.t(), String.t() | nil) ::
+          {:ok, Flow.t()} | {:error, :not_found}
+  def stop_ignoring(%__MODULE__{} = health, %Entry{} = entry, user_id) do
+    toggle(
+      health,
+      fn records -> Enum.reject(records, &same_entry?(&1, entry)) end,
+      {"health_unignored", entry, user_id}
+    )
   end
 
   # The root's current records — those the report still finds — through
   # `change`; then the report as it stands with them, as the status. The
-  # report already holds what a second check would find.
-  defp toggle(health, change) do
-    write_metadata(health.flow_id, fn metadata ->
-      records = metadata |> current_records(health) |> change.()
-      health = build(health.flow_id, health.entries, health.checks_run, health.summary, records)
+  # report already holds what a second check would find. The event goes in
+  # the same transaction as the record, so the log never says what the flow
+  # does not.
+  defp toggle(health, change, {event, entry, user_id}) do
+    write_metadata(
+      health.flow_id,
+      fn metadata ->
+        records = metadata |> current_records(health) |> change.()
+        health = build(health.flow_id, health.entries, health.checks_run, health.summary, records)
 
-      metadata
-      |> put_records(records)
-      |> Map.put("status", encode_status(health))
-    end)
+        metadata
+        |> put_records(records)
+        |> Map.put("status", encode_status(health))
+      end,
+      fn root -> log(root, event, entry, user_id) end
+    )
+  end
+
+  defp log(root, event, entry, user_id) do
+    attrs = %{
+      flow_id: root.id,
+      event: event,
+      user_id: user_id,
+      snapshot: %{
+        "code" => Atom.to_string(entry.code),
+        "path" => entry.path,
+        "subject" => entry.subject
+      }
+    }
+
+    case Repo.insert(Flow.Event.changeset(%Flow.Event{}, attrs)) do
+      {:ok, _event} -> root
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 
   # Read-modify-write of the one key, the root re-read inside the
@@ -535,17 +572,18 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # the flow does not move the flow's own `updated_at`. A root deleted
   # underneath is an error, not a crash — the page it came from may be open
   # in another tab.
-  defp write_metadata(root_id, change) do
+  defp write_metadata(root_id, change, after_write \\ &Function.identity/1) do
     Repo.transaction(fn ->
       case Repo.get(Flow, root_id) do
         nil ->
           Repo.rollback(:not_found)
 
         root ->
-          write_properties(
-            root,
+          root
+          |> write_properties(
             Map.put(root.properties || %{}, @metadata_key, change.(metadata(root)))
           )
+          |> after_write.()
       end
     end)
   end

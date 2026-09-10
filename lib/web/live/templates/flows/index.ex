@@ -30,6 +30,18 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   `base` is the path prefix the flows pages are mounted under, used to build
   the links — with the default `""`, rows link to `/flows/:id`.
 
+  ## Archived flows
+
+  An archived flow is put away, so the listing leaves it out: the rows are
+  `roots_query(exclude_status: "archived")`, and a line above the table says
+  how many are hidden with a **Show archived** link, which patches
+  `?archived=true` onto the page's own URL (sort and page kept) and lists
+  them greyed among the rest, with **Hide archived** to go back. The
+  parameter lives in the URL like Slab's, so the listing an admin looks at
+  survives a reload and can be sent to someone. When every flow is
+  archived the table is not drawn at all; the page says so and offers the
+  link.
+
   ## Health
 
   Every row carries the flow's health as a
@@ -84,6 +96,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
        changing_status: nil,
        status_pending: nil,
        status_counts: nil,
+       status_pre_release_count: 0,
+       status_delete_pre_release?: false,
        status_error: nil
      )}
   end
@@ -102,12 +116,28 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:user_id, fn -> nil end)
 
-    query = Flows.roots_query(tenant_id: socket.assigns.tenant_id)
+    tenant_id = socket.assigns.tenant_id
+    show_archived? = socket.assigns.params["archived"] == "true"
+    roots = Flows.roots_query(tenant_id: tenant_id)
+
+    query =
+      if show_archived?,
+        do: roots,
+        else: Flows.roots_query(tenant_id: tenant_id, exclude_status: "archived")
+
+    empty? = not Repo.exists?(roots)
 
     {:ok,
      socket
      |> assign(:query, query)
-     |> assign(:empty?, not Repo.exists?(query))
+     |> assign(:empty?, empty?)
+     |> assign(:all_hidden?, not empty? and not show_archived? and not Repo.exists?(query))
+     |> assign(:show_archived?, show_archived?)
+     |> assign(
+       :archived_count,
+       Repo.aggregate(Flows.roots_query(tenant_id: tenant_id, status: "archived"), :count)
+     )
+     |> assign(:archived_toggle_path, archived_toggle_path(socket.assigns, not show_archived?))
      |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))
      |> assign(
        :host_types,
@@ -170,6 +200,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
            changing_status: flow,
            status_pending: flow.status,
            status_counts: Shared.instance_counts(flow),
+           status_pre_release_count: Shared.pre_release_count(flow),
+           status_delete_pre_release?: false,
            status_error: nil
          )}
 
@@ -178,8 +210,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     end
   end
 
+  # The form as it stands: the pick, and whether the delete box is ticked
   @impl true
-  def handle_event("status_picked", %{"status" => status}, socket) do
+  def handle_event("status_picked", %{"status" => status} = params, socket) do
+    socket = assign(socket, :status_delete_pre_release?, params["delete_pre_release"] == "true")
+
     if status in Flow.statuses(),
       do: {:noreply, assign(socket, :status_pending, status)},
       else: {:noreply, socket}
@@ -195,16 +230,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   def handle_event("save_status", _params, %{assigns: %{changing_status: nil}} = socket),
     do: {:noreply, socket}
 
-  def handle_event("save_status", %{"status" => status}, socket) do
-    case Flows.update_status(socket.assigns.changing_status, status,
-           user_id: socket.assigns.user_id
-         ) do
+  def handle_event("save_status", params, socket) do
+    case Shared.save_status(socket.assigns.changing_status, params, socket.assigns.user_id) do
       {:ok, _flow} ->
         {:noreply, push_navigate(socket, to: current_path(socket.assigns))}
 
-      {:error, _reason} ->
-        {:noreply,
-         assign(socket, :status_error, "Could not change the status. Please try again.")}
+      {:error, message} ->
+        {:noreply, assign(socket, :status_error, message)}
     end
   end
 
@@ -215,6 +247,26 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       %URI{path: path, query: query} when is_binary(path) -> path <> "?" <> query
       _none -> "#{base}/flows"
     end
+  end
+
+  # This page with `archived` switched — the sort kept, the page number
+  # dropped, since the rows it counted have changed
+  defp archived_toggle_path(%{uri: uri, base: base}, show?) do
+    {path, params} =
+      case uri && URI.parse(uri) do
+        %URI{path: path, query: query} when is_binary(path) ->
+          {path, URI.decode_query(query || "")}
+
+        _none ->
+          {"#{base}/flows", %{}}
+      end
+
+    params =
+      params
+      |> Map.delete("page")
+      |> then(&if(show?, do: Map.put(&1, "archived", "true"), else: Map.delete(&1, "archived")))
+
+    if params == %{}, do: path, else: path <> "?" <> URI.encode_query(params)
   end
 
   defp listed_flow(id, tenant_id) do
@@ -245,6 +297,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         No flows yet — create the first one.
       </Core.alert>
 
+      <Core.alert :if={@all_hidden?} components={@components}>
+        Every flow here is archived.
+        <.link patch={@archived_toggle_path} class="underline">Show archived</.link>
+      </Core.alert>
+
       <CopyDialog.copy_dialog
         :if={@copying}
         flow={@copying}
@@ -260,13 +317,30 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         flow={@changing_status}
         status={@status_pending}
         counts={@status_counts}
+        pre_release_count={@status_pre_release_count}
+        delete_pre_release?={@status_delete_pre_release?}
         error={@status_error}
         target={@myself}
         components={@components}
       />
 
+      <%!-- Archived flows are put away: out of the listing until asked for --%>
+      <p
+        :if={not @empty? and not @all_hidden? and (@show_archived? or @archived_count > 0)}
+        id="flows-archived-toggle"
+        class="mb-2 text-xs text-zinc-500"
+      >
+        <%= if @show_archived? do %>
+          Archived flows are listed, greyed.
+          <.link patch={@archived_toggle_path} class="underline">Hide archived</.link>
+        <% else %>
+          {Shared.count(@archived_count, "archived flow")} hidden.
+          <.link patch={@archived_toggle_path} class="underline">Show archived</.link>
+        <% end %>
+      </p>
+
       <Slab.table
-        :if={!@empty?}
+        :if={not @empty? and not @all_hidden?}
         id="flows-table"
         query={@query}
         repo={Repo.repo()}
@@ -274,7 +348,10 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         params={@table_params}
       >
         <:column :let={flow} field={:name} sortable>
-          <.link navigate={"#{@base}/flows/#{flow.id}"} class="hover:underline">
+          <.link
+            navigate={"#{@base}/flows/#{flow.id}"}
+            class={["hover:underline", flow.status == "archived" && "text-zinc-400"]}
+          >
             {flow.name || "Untitled"}
           </.link>
           <span class="block font-mono text-[10px] text-zinc-400">{flow.id}</span>

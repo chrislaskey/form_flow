@@ -71,7 +71,8 @@ is the gate.
 * **`instances`** — whose instances the listing shows, as an Ecto query
   over `FormFlow.Data.Instances.Flow`. Omitted, the current user's own.
   `FormFlow.Data.Instances.Flows.list_query/1` builds one: with no options
-  it is every instance of every user; `user_id:`, `tenant_id:`, and `flow:`
+  it is every instance of every user; `user_id:`, `tenant_id:`, `flow:`,
+  and `status:` (the instance's own, `"in_progress"` or `"completed"`)
   narrow it; `narrow_flow/2` and `narrow_tenant/2` do the same to a query
   the host wrote.
 * **`perspectives`** — which kind of user is looking, as one or more of the
@@ -200,8 +201,11 @@ badge in the header opens a dialog), from the flows index (the row's ⋮
 menu), or from the edit page (the Status field under the canvas, saved with
 everything else). **Pre-release** is a draft that some people may use:
 the router's `pre_release_user_ids` names them, by the host's own user
-ids, and to them the flow is open — offered, continued, seen — while to
-everyone else it stays a draft. The pages are the gate; the data layer
+ids — a list, or a function of the page's `FormFlow.Context` and
+`callback_data` that returns one, for a role or a team (`fn context, _data ->
+if staff?(context.user_id), do: [context.user_id], else: [] end`) — and to
+them the flow is open — offered, continued, seen — while to everyone else
+it stays a draft. The pages are the gate; the data layer
 takes a pre-release start from anyone and marks the instance's `metadata`
 with `"form_flow" => %{"pre_release" => true}`, so once the flow opens the
 pre-release run's instances can be told from the real ones. **Open** is the
@@ -234,8 +238,10 @@ So the year rolls over like this:
 A pre-release is the same flow with a smaller audience: move it to
 **Pre-release** and name the people in `pre_release_user_ids` on the page
 that should offer it; when it has proved itself, open it. The pre-release
-instances stay in the flow, marked — duplicate the flow before opening if
-the trial run must not mix with the real one. A rule change from a date —
+instances stay in the flow, marked; as the flow leaves Pre-release, the
+status dialog says how many were started during it and offers to delete
+them with the change — logged on the flow's history — or duplicate the
+flow before opening if the trial run must not mix with the real one. A rule change from a date —
 "filings after 1 July need a certificate" — is a copy opened on the date
 while the original winds down.
 
@@ -253,6 +259,20 @@ callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog
 form, which is the same lineage in both years.
+
+Prefilling this year from last year is a form type's job, and the copy
+leaves it the join: every form a copy owns records the lineage it was
+rolled over from in `copied_from_form_id`, so a type walks from this
+year's `context.form` to last year's lineage, from the lineage's
+`owner_flow_id` to last year's flow, and with
+`FormFlow.Data.Instances.Flows.list/1` (`user_id:`, `tenant_id:`,
+`flow:`) to the user's journeys in it, newest first — then to the form
+they submitted at that lineage, whose answers it offers under the user's
+own from `initial_data/2`. A host that stamps journeys complete
+(`FormFlow.Data.Instances.Flows.complete/2`) narrows that listing with
+`status: "completed"`. The demo's `DemoWeb.FormFlowLive.Renewal` is the
+worked example. A step that reuses a catalog form has nothing to join:
+the same lineage serves both years.
 
 ## Taking the answers away
 

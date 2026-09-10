@@ -16,6 +16,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Config.Property
+  alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
 
@@ -430,8 +431,61 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
-  defp count(1, noun), do: "1 #{noun}"
-  defp count(n, noun), do: "#{n} #{noun}s"
+  @doc ~s(A count with its noun: "1 instance", "3 instances".)
+  def count(1, noun), do: "1 #{noun}"
+  def count(n, noun), do: "#{n} #{noun}s"
+
+  @doc """
+  How many of a root flow's journeys were started during pre-release
+  (`FormFlow.Data.Instances.Flows.list_pre_release/1`) — what the status
+  dialog offers to delete as the flow leaves that status. Zero for a flow
+  in any other status, and for an owned flow.
+  """
+  def pre_release_count(%Templates.Flow{owner_flow_id: nil, status: "pre_release"} = flow),
+    do: length(Instances.Flows.list_pre_release(flow))
+
+  def pre_release_count(_flow), do: 0
+
+  @doc """
+  The status dialog's Save, for the show page and the flows index:
+  `Flows.update_status/3` with `params["status"]`, signed by `user_id`, and
+  then — when `params["delete_pre_release"]` is `"true"` — the journeys
+  started during pre-release deleted
+  (`FormFlow.Data.Instances.Flows.delete_pre_release/2`, which logs how
+  many). The offer holds only as `flow` leaves `pre_release`; on any other
+  move the box is ignored, so a form the dialog never drew deletes nothing.
+  `{:ok, flow}`, or `{:error, message}` in the dialog's words.
+  """
+  def save_status(%Templates.Flow{} = flow, params, user_id) do
+    status = params["status"]
+
+    with {:ok, updated} <- Templates.Flows.update_status(flow, status, user_id: user_id),
+         {:ok, _count} <- delete_pre_release(flow, status, params, user_id) do
+      {:ok, updated}
+    else
+      {:error, :deleting} ->
+        {:error,
+         "The status changed, but the pre-release instances could not be deleted. Please try again."}
+
+      {:error, _reason} ->
+        {:error, "Could not change the status. Please try again."}
+    end
+  end
+
+  defp delete_pre_release(
+         %Templates.Flow{status: "pre_release"} = flow,
+         status,
+         %{"delete_pre_release" => "true"},
+         user_id
+       )
+       when status != "pre_release" do
+    case Instances.Flows.delete_pre_release(flow, user_id: user_id) do
+      {:ok, count} -> {:ok, count}
+      {:error, _reason} -> {:error, :deleting}
+    end
+  end
+
+  defp delete_pre_release(_flow, _status, _params, _user_id), do: {:ok, 0}
 
   @doc """
   A moment as the pages say it — "just now", "3 minutes ago", "2 hours

@@ -699,6 +699,85 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Grace"
       refute html =~ "Demo User"
     end
+
+    test "the renewal type starts the form with last year's answers, under the user's own",
+         %{conn: conn} do
+      # Last year: a flow owning its one form, the form typed for renewal
+      {:ok, last_year} =
+        Flows.create(%{name: "Dog License 2026", slug: "dla2026", status: "open"})
+
+      owner =
+        build_form_node(last_year, "Owner",
+          form_type: "demo_renewal",
+          owner_flow_id: last_year.id
+        )
+
+      edge(last_year, build_node(last_year, ["Start"], "Start"), owner)
+
+      # This year is its copy, opened; the copied form points back at last year's
+      {:ok, copy} = Flows.copy(Flows.get(last_year.id), name: "Dog License 2027", slug: "dla2027")
+      {:ok, this_year} = Flows.update_status(copy, "open")
+      [copied_owner] = Enum.filter(Flows.get(this_year.id).nodes, & &1.form_id)
+      assert Forms.get(copied_owner.form_id).copied_from_form_id == owner.form_id
+
+      # Nobody has filed yet: the form starts empty
+      this_instance = start_flow(this_year)
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      refute html =~ "Rex"
+
+      # Last year the user filed. Someone else filed too, and the user also
+      # started a second journey they never submitted — neither is theirs
+      # to renew from
+      last_instance = start_flow(last_year)
+      complete(last_instance, [owner.id], %{"name" => "Rex"})
+      {:ok, theirs} = Instances.Flows.create(%{flow_id: last_year.id, user_id: "someone-else"})
+      complete(theirs, [owner.id], %{"name" => "Fido"})
+      abandoned = start_flow(last_year)
+      {:ok, _started} = Instances.Forms.update_status(abandoned, [owner.id], :in_progress)
+
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      assert html =~ "Rex"
+      refute html =~ "Fido"
+
+      # An answer given this year wins over last year's
+      complete(this_instance, [copied_owner.id], %{"name" => "Rex II"})
+
+      {:ok, _reopened} =
+        Instances.Forms.update_status(this_instance, [copied_owner.id], :in_progress)
+
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      assert html =~ "Rex II"
+    end
+
+    test "the renewal type reaches back past a skipped year, and has nothing to join on a catalog form",
+         %{conn: conn} do
+      {:ok, first} = Flows.create(%{name: "Dog License 2026", slug: "dla2026", status: "open"})
+      owner = build_form_node(first, "Owner", form_type: "demo_renewal", owner_flow_id: first.id)
+      edge(first, build_node(first, ["Start"], "Start"), owner)
+      complete(start_flow(first), [owner.id], %{"name" => "Rex"})
+
+      # 2027 is copied from 2026 and never filed; 2028 is copied from 2027
+      {:ok, second} = Flows.copy(Flows.get(first.id), name: "Dog License 2027", slug: "dla2027")
+      {:ok, third} = Flows.copy(Flows.get(second.id), name: "Dog License 2028", slug: "dla2028")
+      {:ok, third} = Flows.update_status(third, "open")
+      [third_owner] = Enum.filter(Flows.get(third.id).nodes, & &1.form_id)
+
+      {:ok, _view, html} = live(conn, edit_path(start_flow(third), [third_owner.id]))
+      assert html =~ "Rex"
+
+      # A catalog form is the same lineage in every year: no provenance, no prefill
+      %{flow: catalog_flow, instance: instance, form: shared} =
+        flow_of_one(nil, form_type: "demo_renewal", name: "Cat License")
+
+      complete(instance, [shared.id], %{"name" => "Tom"})
+      {:ok, cat_copy} = Flows.copy(Flows.get(catalog_flow.id), name: "Cat License 2027")
+      {:ok, cat_copy} = Flows.update_status(cat_copy, "open")
+      [copied_shared] = Enum.filter(Flows.get(cat_copy.id).nodes, & &1.form_id)
+      assert copied_shared.form_id == shared.form_id
+
+      {:ok, _view, html} = live(conn, edit_path(start_flow(cat_copy), [copied_shared.id]))
+      refute html =~ "Tom"
+    end
   end
 
   describe "the library's review form type" do
@@ -902,6 +981,32 @@ defmodule Demo.FormFlowInstancesTest do
       # Slugs are per tenant: a slug alone matches it in every tenant
       assert ids.(flow: "dog-license") == Enum.sort([d.id, a.id])
       assert ids.(flow: "dog-license", tenant_id: "acme") == [a.id]
+    end
+
+    test "by the journey's own status, with the other options" do
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, done} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
+      {:ok, _open} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
+      {:ok, theirs} = Instances.Flows.create(%{flow_id: dog.id, user_id: "v"})
+      {:ok, done} = Instances.Flows.complete(done, [])
+      {:ok, _theirs} = Instances.Flows.complete(theirs, [])
+
+      ids = fn opts ->
+        opts
+        |> Instances.Flows.list_query()
+        |> FormFlowRepo.all()
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
+      end
+
+      assert ids.(status: "completed") == Enum.sort([done.id, theirs.id])
+      assert ids.(status: "completed", user_id: "u", flow: dog) == [done.id]
+      assert length(ids.(status: "in_progress")) == 1
+      assert length(ids.(status: nil)) == 3
+
+      # list/1 takes it too, newest first
+      assert [%{id: id}] = Instances.Flows.list(status: "completed", user_id: "u")
+      assert id == done.id
     end
   end
 
@@ -1594,6 +1699,7 @@ defmodule Demo.FormFlowInstancesTest do
   # A published form with one text question, "name"; `form_type:` picks a
   # form type for it and `property_values:` its property values — for the
   # demo's prefill type, "Demo User" as the name to prefill unless given.
+  # `owner_flow_id:` makes it a flow's own form rather than a catalog one.
   # `definition:` replaces the question outright, which is how a stored
   # definition that will not parse is published.
   defp published_form(name, opts) do
@@ -1614,7 +1720,8 @@ defmodule Demo.FormFlowInstancesTest do
     {:ok, form} =
       Forms.create(%{
         name: "#{name} #{System.unique_integer([:positive])}",
-        properties: properties
+        properties: properties,
+        owner_flow_id: opts[:owner_flow_id]
       })
 
     [draft] = form.versions

@@ -62,6 +62,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        changing_status?: false,
        status_pending: nil,
        status_counts: nil,
+       status_pre_release_count: 0,
+       status_delete_pre_release?: false,
        status_error: nil
      )}
   end
@@ -200,12 +202,17 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        changing_status?: true,
        status_pending: socket.assigns.flow.status,
        status_counts: Shared.instance_counts(socket.assigns.flow),
+       status_pre_release_count: Shared.pre_release_count(socket.assigns.flow),
+       status_delete_pre_release?: false,
        status_error: nil
      )}
   end
 
+  # The form as it stands: the pick, and whether the delete box is ticked
   @impl true
-  def handle_event("status_picked", %{"status" => status}, socket) do
+  def handle_event("status_picked", %{"status" => status} = params, socket) do
+    socket = assign(socket, :status_delete_pre_release?, params["delete_pre_release"] == "true")
+
     if status in Flow.statuses(),
       do: {:noreply, assign(socket, :status_pending, status)},
       else: {:noreply, socket}
@@ -217,8 +224,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   @impl true
-  def handle_event("save_status", %{"status" => status}, socket) do
-    case Flows.update_status(socket.assigns.flow, status, user_id: socket.assigns.user_id) do
+  def handle_event("save_status", params, socket) do
+    case Shared.save_status(socket.assigns.flow, params, socket.assigns.user_id) do
       {:ok, _flow} ->
         {:noreply,
          assign(socket,
@@ -227,9 +234,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
            status_error: nil
          )}
 
-      {:error, _reason} ->
-        {:noreply,
-         assign(socket, :status_error, "Could not change the status. Please try again.")}
+      {:error, message} ->
+        {:noreply, assign(socket, :status_error, message)}
     end
   end
 
@@ -406,6 +412,8 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         flow={@flow}
         status={@status_pending}
         counts={@status_counts}
+        pre_release_count={@status_pre_release_count}
+        delete_pre_release?={@status_delete_pre_release?}
         error={@status_error}
         target={@myself}
         components={@components}

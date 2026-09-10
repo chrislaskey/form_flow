@@ -42,6 +42,39 @@ defmodule Demo.FormFlowFlowStatusTest do
     end
   end
 
+  # The same router with `pre_release_user_ids` as a function of the page's
+  # context — a role, decided per viewer — rather than a list
+  defmodule RolePage do
+    use Phoenix.LiveView
+
+    @impl true
+    def mount(_params, %{"path" => path, "staff" => staff?}, socket) do
+      {:ok,
+       Phoenix.Component.assign(socket,
+         path: path,
+         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         params: %{},
+         pre_release_user_ids: fn context, _callback_data ->
+           if staff?, do: [context.user_id], else: []
+         end
+       )}
+    end
+
+    @impl true
+    def render(assigns) do
+      ~H"""
+      <FormFlow.Web.router
+        user_id="demo-user"
+        uri={@uri}
+        params={@params}
+        path={@path}
+        base="/users"
+        pre_release_user_ids={@pre_release_user_ids}
+      />
+      """
+    end
+  end
+
   import Ecto.Query, only: [from: 2]
   import Phoenix.LiveViewTest
 
@@ -128,6 +161,42 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
       {:ok, instance} = Instances.Flows.create(%{flow_id: open.id, user_id: "c"})
       assert instance.metadata == %{}
+    end
+
+    test "list_pre_release/1 and delete_pre_release/2 act on the marked journeys alone" do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "open"})
+      {:ok, real} = Instances.Flows.create(%{flow_id: flow.id, user_id: "a"})
+
+      # Nothing marked: nothing deleted, nothing logged
+      assert Instances.Flows.list_pre_release(flow) == []
+      assert Instances.Flows.delete_pre_release(flow, user_id: "demo-admin") == {:ok, 0}
+      assert [%{event: "created"}] = events(flow)
+
+      {:ok, flow} = Flows.update_status(flow, "pre_release", [])
+      {:ok, trial} = Instances.Flows.create(%{flow_id: flow.id, user_id: "b"})
+      assert Instances.Flow.pre_release?(trial)
+      refute Instances.Flow.pre_release?(real)
+      assert [%{id: id}] = Instances.Flows.list_pre_release(flow)
+      assert id == trial.id
+
+      # The trial run goes, trail and all; the real instance stays; one event says how many
+      assert {:ok, 1} = Instances.Flows.delete_pre_release(flow, user_id: "demo-admin")
+      refute Instances.Flows.get(trial.id)
+      assert Instances.Flows.get(real.id)
+
+      assert FormFlowRepo.all(
+               from(e in Instances.Flow.Event, where: e.instance_flow_id == ^trial.id)
+             ) == []
+
+      assert [
+               _created,
+               _status_changed,
+               %{
+                 event: "pre_release_instances_deleted",
+                 snapshot: %{"count" => 1},
+                 user_id: "demo-admin"
+               }
+             ] = events(flow)
     end
 
     test "an owned subflow has no log of its own" do
@@ -227,6 +296,34 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       {:ok, _view, html} =
         live_isolated(conn, UnlistedPage, session: %{"path" => [instance.id]})
+
+      assert html =~ "This flow is not available right now."
+    end
+
+    test "pre_release_user_ids takes a function of the page's context as well as a list",
+         %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+
+      # The function names the viewer: offered, listed, and open
+      staff = %{"staff" => true}
+      {:ok, view, html} = live_isolated(conn, RolePage, session: Map.put(staff, "path", []))
+      assert has_element?(view, start_button(flow))
+      assert html =~ instance.id
+
+      {:ok, _view, html} =
+        live_isolated(conn, RolePage, session: Map.put(staff, "path", [instance.id]))
+
+      assert html =~ "Dog License 2027"
+
+      # The function does not: a draft to this viewer
+      public = %{"staff" => false}
+      {:ok, view, html} = live_isolated(conn, RolePage, session: Map.put(public, "path", []))
+      refute has_element?(view, start_button(flow))
+      refute html =~ instance.id
+
+      {:ok, _view, html} =
+        live_isolated(conn, RolePage, session: Map.put(public, "path", [instance.id]))
 
       assert html =~ "This flow is not available right now."
     end
@@ -490,6 +587,126 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       {:ok, view, _html} = live(conn, path)
       assert has_element?(view, ".badge", "Winding down")
+    end
+
+    test "the index puts archived flows away until asked", %{conn: conn} do
+      {:ok, open} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, archived} = Flows.create(%{name: "Dog License 2024", status: "archived"})
+
+      {:ok, view, html} = live(conn, "/admin/flows")
+      assert html =~ "Dog License"
+      refute html =~ "Dog License 2024"
+      assert has_element?(view, "#flows-archived-toggle", "1 archived flow hidden.")
+
+      # Show archived patches the URL; the archived row is listed, greyed
+      html = view |> element("#flows-archived-toggle a", "Show archived") |> render_click()
+      assert_patch(view, "/admin/flows?archived=true")
+      assert html =~ "Dog License 2024"
+      assert has_element?(view, "a.text-zinc-400[href='/admin/flows/#{archived.id}']")
+      assert has_element?(view, "#flows-archived-toggle a", "Hide archived")
+
+      # The URL keeps it, with the sort; Hide archived takes it off and keeps the sort
+      {:ok, view, html} = live(conn, "/admin/flows?archived=true&sort=name")
+      assert html =~ "Dog License 2024"
+      view |> element("#flows-archived-toggle a", "Hide archived") |> render_click()
+      assert_patch(view, "/admin/flows?sort=name")
+      refute render(view) =~ "Dog License 2024"
+
+      # Nothing but archived flows: no table, a sentence, and the link
+      {:ok, _flow} = Flows.update_status(open, "archived", [])
+      {:ok, view, html} = live(conn, "/admin/flows")
+      assert html =~ "Every flow here is archived."
+      refute html =~ "<table"
+      refute has_element?(view, "#flows-archived-toggle")
+      html = view |> element("a", "Show archived") |> render_click()
+      assert_patch(view, "/admin/flows?archived=true")
+      assert html =~ "<table"
+      assert html =~ "Dog License 2024"
+    end
+
+    test "leaving pre-release offers to delete the trial run, and deleting is logged",
+         %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "open"})
+      {:ok, real} = Instances.Flows.create(%{flow_id: flow.id, user_id: "a"})
+      {:ok, flow} = Flows.update_status(flow, "pre_release", [])
+      {:ok, trial_1} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+      {:ok, trial_2} = Instances.Flows.create(%{flow_id: flow.id, user_id: "b"})
+
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      html = view |> element("button[phx-click=request_status]") |> render_click()
+
+      # No offer until another status is picked; picking back withdraws it
+      refute html =~ "started during pre-release"
+      form = element(view, "form[phx-submit=save_status]")
+      html = render_change(form, %{"status" => "open"})
+      assert html =~ "2 instances were started during pre-release."
+
+      assert has_element?(
+               view,
+               "#status-dialog-pre-release input[type=checkbox][name=delete_pre_release]"
+             )
+
+      refute has_element?(view, "#status-dialog-delete-pre-release[checked]")
+      refute render_change(form, %{"status" => "pre_release"}) =~ "started during pre-release"
+
+      # Ticking survives the redraw
+      render_change(form, %{"status" => "open", "delete_pre_release" => "true"})
+      assert has_element?(view, "#status-dialog-delete-pre-release[checked]")
+
+      # Save with the box: the trial run is gone, the real instance stays, and
+      # the log has both the change and the deletion
+      render_submit(form, %{"status" => "open", "delete_pre_release" => "true"})
+      assert Flows.get(flow.id).status == "open"
+      assert Instances.Flows.get(real.id)
+      refute Instances.Flows.get(trial_1.id)
+      refute Instances.Flows.get(trial_2.id)
+
+      assert [
+               %{event: "created"},
+               %{event: "status_changed"},
+               %{event: "status_changed", snapshot: %{"from" => "pre_release", "to" => "open"}},
+               %{
+                 event: "pre_release_instances_deleted",
+                 snapshot: %{"count" => 2},
+                 user_id: "demo-admin"
+               }
+             ] = events(flow)
+
+      {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+      assert html =~ "Deleted 2 instances started during pre-release"
+    end
+
+    test "the box left unticked deletes nothing, and no other move offers it", %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, trial} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+      menu = "#flow-#{flow.id}-actions"
+
+      # From the index's dialog, the offer made and declined
+      {:ok, view, _html} = live(conn, "/admin/flows")
+      view |> element("#{menu} button", "Change status") |> render_click()
+      form = element(view, "form[phx-submit=save_status]")
+
+      assert render_change(form, %{"status" => "open"}) =~
+               "1 instance was started during pre-release."
+
+      render_submit(form, %{"status" => "open"})
+      assert_redirect(view)
+      assert Flows.get(flow.id).status == "open"
+      assert Instances.Flows.get(trial.id)
+      assert [%{event: "created"}, %{event: "status_changed"}] = events(flow)
+
+      # An open flow with a marked instance left over: no offer on any move,
+      # and a box sent anyway deletes nothing
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      view |> element("button[phx-click=request_status]") |> render_click()
+      form = element(view, "form[phx-submit=save_status]")
+
+      refute render_change(form, %{"status" => "winding_down", "delete_pre_release" => "true"}) =~
+               "started during pre-release"
+
+      render_submit(form, %{"status" => "winding_down", "delete_pre_release" => "true"})
+      assert Flows.get(flow.id).status == "winding_down"
+      assert Instances.Flows.get(trial.id)
     end
 
     test "the history page lists the log newest first, reached from the show page and the index",

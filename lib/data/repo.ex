@@ -14,6 +14,7 @@ defmodule FormFlow.Data.Repo do
   def delete_all(query), do: repo().delete_all(query)
   def update_all(query, updates), do: repo().update_all(query, updates)
   def exists?(query), do: repo().exists?(query)
+  def aggregate(query, aggregate), do: repo().aggregate(query, aggregate)
   def transaction(fun), do: repo().transaction(fun)
   def rollback(value), do: repo().rollback(value)
 end

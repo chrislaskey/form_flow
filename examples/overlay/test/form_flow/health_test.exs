@@ -120,7 +120,7 @@ defmodule Demo.FormFlowHealthTest do
     {:ok, _flow} = Flows.delete(Flows.get(flow.id))
 
     assert Health.ignore(health, unconnected, "demo-admin") == {:error, :not_found}
-    assert Health.stop_ignoring(health, unconnected) == {:error, :not_found}
+    assert Health.stop_ignoring(health, unconnected, "demo-admin") == {:error, :not_found}
     assert Health.refresh(flow.id) == nil
   end
 
@@ -165,6 +165,24 @@ defmodule Demo.FormFlowHealthTest do
     refute Map.has_key?(Flows.get(subflow.id).properties, "_health_metadata")
   end
 
+  test "ignoring and stopping are logged on the flow, with who decided and what" do
+    flow = starter_flow()
+    health = Health.refresh(flow.id)
+    [unconnected] = Health.at(health, :warning)
+
+    {:ok, _root} = Health.ignore(health, unconnected, "demo-admin")
+    {:ok, _root} = Health.stop_ignoring(Health.check(flow.id), unconnected, "other-admin")
+
+    assert [
+             %{event: "created"},
+             %{event: "health_ignored", user_id: "demo-admin", snapshot: ignored},
+             %{event: "health_unignored", user_id: "other-admin", snapshot: unignored}
+           ] = flow |> Flows.list_events() |> Enum.reverse()
+
+    assert %{"code" => "unconnected", "path" => [_end_id], "subject" => "End"} = ignored
+    assert unignored["code"] == "unconnected"
+  end
+
   test "ignoring writes the status too, and refresh drops a record whose entry is gone" do
     flow = starter_flow()
     health = Health.refresh(flow.id)
@@ -196,7 +214,7 @@ defmodule Demo.FormFlowHealthTest do
     {:ok, root} = Health.ignore(health, no_steps, nil)
     assert %{level: :ok, counts: %{ignored: 1}} = Health.status(root)
 
-    {:ok, root} = Health.stop_ignoring(Health.check(flow.id), no_steps)
+    {:ok, root} = Health.stop_ignoring(Health.check(flow.id), no_steps, "demo-admin")
     assert %{level: :warning, counts: %{warning: 1, ignored: 0}} = Health.status(root)
     refute Map.has_key?(root.properties["_health_metadata"], "ignored_entries")
   end

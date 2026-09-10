@@ -131,8 +131,26 @@ defmodule FormFlow.Web.Instances.Shared do
   knows no viewer, does what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
   """
   def status_allows?(%Templates.Flow{status: "pre_release"}, _action, assigns),
-    do: assigns.user_id in (assigns[:pre_release_user_ids] || [])
+    do: assigns.user_id in pre_release_user_ids(assigns)
 
   def status_allows?(%Templates.Flow{} = flow, action, _assigns),
     do: Templates.Flow.allows?(flow, action)
+
+  @doc """
+  The page's `pre_release_user_ids` attr as the list it stands for: the list
+  it was given, or what its function returns for this page — a function of
+  the page's `FormFlow.Context` and `callback_data`, for a host whose
+  pre-release users are a role or a team rather than ids it can write down;
+  it returns `[context.user_id]` when the viewer qualifies and `[]` when
+  not, or the team's ids. Each page resolves it as soon as its context
+  exists (`FormFlow.Web.Instances.Forms.Shared.resolve_pre_release_user_ids/1`),
+  before anything asks `status_allows?/3`, so the function runs once per
+  page and not once per check. `nil` is nobody.
+  """
+  def pre_release_user_ids(%{pre_release_user_ids: ids}) when is_list(ids), do: ids
+
+  def pre_release_user_ids(%{pre_release_user_ids: fun} = assigns) when is_function(fun, 2),
+    do: fun.(assigns[:context], assigns[:callback_data] || %{}) |> List.wrap()
+
+  def pre_release_user_ids(_assigns), do: []
 end

@@ -168,7 +168,10 @@ defmodule FormFlow.Data.Templates.Flows do
   The counts come from grouped subqueries joined 1:1 rather than a `group_by`
   on the flows themselves, so callers (like Slab's table in query mode) can
   layer `order_by`, `limit`/`offset`, and `Repo.aggregate(:count)` on top
-  without fighting the grouping. `opts[:tenant_id]` narrows as in `list/1`.
+  without fighting the grouping. `opts[:tenant_id]` narrows as in `list/1`;
+  `opts[:status]` filters to the flows in one status and
+  `opts[:exclude_status]` filters out the flows in one — how the flows index
+  keeps archived flows out of the listing until asked, and counts them.
   """
   def roots_query(opts \\ []) do
     node_counts =
@@ -193,10 +196,18 @@ defmodule FormFlow.Data.Templates.Flows do
       }
     )
     |> narrow_tenant(Keyword.get(opts, :tenant_id))
+    |> filter_status(Keyword.get(opts, :status))
+    |> exclude_status(Keyword.get(opts, :exclude_status))
   end
 
   defp narrow_tenant(query, nil), do: query
   defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
+
+  defp filter_status(query, nil), do: query
+  defp filter_status(query, status), do: from(f in query, where: f.status == ^status)
+
+  defp exclude_status(query, nil), do: query
+  defp exclude_status(query, status), do: from(f in query, where: f.status != ^status)
 
   @doc """
   Fetches one flow by id with its nodes and relationships loaded, or `nil`.

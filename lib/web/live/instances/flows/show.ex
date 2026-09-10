@@ -176,12 +176,14 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           flow_instance_progress: forms
         }
 
+        # The context first, and the page's pre-release users with it: the
+        # rows and `continue_allowed?/2` ask the status by this viewer
+        socket = socket |> assign(:context, context) |> Shared.resolve_pre_release_user_ids()
         rows = rows(forms, tree, flow_instance, socket.assigns)
 
         socket =
           assign(socket,
             flow_instance: flow_instance,
-            context: context,
             rows: rows,
             continue_allowed?: continue_allowed?(flow, socket.assigns),
             part_done?: part_done?(rows, flow_instance),

@@ -21,7 +21,8 @@ defmodule FormFlow.Data.Templates.Flow.EventTest do
     refute Event.changeset(%Event{}, %{flow_id: flow_id, event: "published"}).valid?
 
     # The two kinds today; a later kind is a string added here
-    assert Event.events() == ~w(created status_changed)
+    assert Event.events() ==
+             ~w(created status_changed health_ignored health_unignored pre_release_instances_deleted)
   end
 
   test "the actor is optional — a host that passes no user_id logs the change unsigned" do

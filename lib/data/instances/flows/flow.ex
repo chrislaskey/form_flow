@@ -55,6 +55,15 @@ defmodule FormFlow.Data.Instances.Flow do
   def statuses, do: @statuses
 
   @doc """
+  Whether the journey was started while its flow was `pre_release` — the
+  marker `FormFlow.Data.Instances.Flows.create/2` leaves in `metadata`
+  (`"form_flow" => %{"pre_release" => true}`), so a trial run can be told
+  from the real one once the flow opens.
+  """
+  def pre_release?(%__MODULE__{metadata: metadata}),
+    do: match?(%{"form_flow" => %{"pre_release" => true}}, metadata)
+
+  @doc """
   Builds a changeset for a journey.
 
   `status` and `completed_at` are not castable — completion machinery

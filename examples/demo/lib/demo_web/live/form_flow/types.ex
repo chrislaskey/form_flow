@@ -6,7 +6,8 @@ defmodule DemoWeb.FormFlowLive.Types do
   dropdowns) and acted on in the users side (which forms a user may edit;
   what a form starts filled in with) — the same list has to answer in both
   places, so both pages call the same function. What the types *do* is
-  `DemoWeb.FormFlowLive.Checklist` and `DemoWeb.FormFlowLive.Prefill`.
+  `DemoWeb.FormFlowLive.Checklist`, `DemoWeb.FormFlowLive.Prefill`, and
+  `DemoWeb.FormFlowLive.Renewal`.
 
   Each list starts from the library's defaults, so the demo offers its own
   types beside the built-in ones rather than instead of them.
@@ -23,9 +24,9 @@ defmodule DemoWeb.FormFlowLive.Types do
     )
   end
 
-  # The prefill type joins the library's Default and Review.
+  # The prefill and renewal types join the library's Default and Review.
   def form_types do
-    FormFlow.Config.Forms.Type.defaults() ++ [prefill()]
+    FormFlow.Config.Forms.Type.defaults() ++ [prefill(), renewal()]
   end
 
   # The kinds of user a "forms" flow can be for. The admin picks per subflow;
@@ -55,6 +56,16 @@ defmodule DemoWeb.FormFlowLive.Types do
       name: "Demo prefill",
       description: "Starts with the name filled in from the host application.",
       properties: DemoWeb.FormFlowLive.Prefill.properties()
+    }
+  end
+
+  defp renewal do
+    %FormFlow.Config.Forms.Type{
+      id: "demo_renewal",
+      module: DemoWeb.FormFlowLive.Renewal,
+      name: "Demo renewal",
+      description: "Starts with the answers the user gave in last year's copy of this flow.",
+      properties: []
     }
   end
 

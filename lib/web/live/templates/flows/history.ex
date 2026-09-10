@@ -5,9 +5,12 @@ defmodule FormFlow.Web.Templates.Flows.History do
   append-only log (`FormFlow.Data.Templates.Flow.Event`), one line per
   event — what happened, who did it, when.
 
-  Two kinds of event today. `created` reads "Created"; `status_changed`
-  reads as the two statuses with an arrow between them ("Draft → Open"),
-  in the words the status badge uses (`FormFlow.Web.Templates.Shared.status_label/1`).
+  `created` reads "Created"; `status_changed` reads as the two statuses
+  with an arrow between them ("Draft → Open"), in the words the status
+  badge uses (`FormFlow.Web.Templates.Shared.status_label/1`);
+  `health_ignored` and `health_unignored` name the health check and where
+  it was ("Ignored health check: unconnected at Intake"), as the health
+  page lists it; `pre_release_instances_deleted` says how many.
   The author is the host's `user_id` as it was given — an opaque identity
   FormFlow does not resolve to a name, the way the health page's "Ignored
   by" shows it — and an event with none says so. The time is relative
@@ -117,7 +120,23 @@ defmodule FormFlow.Web.Templates.Flows.History do
   defp describe(%{event: "status_changed", snapshot: %{"from" => from, "to" => to}}),
     do: "#{Shared.status_label(from)} → #{Shared.status_label(to)}"
 
+  defp describe(%{event: "health_ignored", snapshot: snapshot}),
+    do: "Ignored health check: #{health_entry(snapshot)}"
+
+  defp describe(%{event: "health_unignored", snapshot: snapshot}),
+    do: "Stopped ignoring health check: #{health_entry(snapshot)}"
+
+  defp describe(%{event: "pre_release_instances_deleted", snapshot: %{"count" => count}}),
+    do: "Deleted #{Shared.count(count, "instance")} started during pre-release"
+
   defp describe(%{event: event}), do: event |> String.replace("_", " ") |> String.capitalize()
+
+  # The check's code and where it was, the way the health page lists an entry
+  defp health_entry(%{"code" => code, "subject" => subject}) when is_binary(subject),
+    do: "#{code} at #{subject}"
+
+  defp health_entry(%{"code" => code}), do: code
+  defp health_entry(_snapshot), do: "unknown"
 
   defp author(%{user_id: nil}), do: "by nobody recorded"
   defp author(%{user_id: user_id}), do: "by #{user_id}"

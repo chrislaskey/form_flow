@@ -68,6 +68,8 @@ defmodule FormFlow.Web.Components.Core do
   attr(:errors, :list, default: [])
   attr(:class, :any, default: nil)
   attr(:error_class, :any, default: nil)
+  attr(:options, :list, doc: "for `type=\"select\"`: `Phoenix.HTML.Form.options_for_select/2`'s")
+  attr(:prompt, :string, default: nil, doc: "for `type=\"select\"`: the blank first option")
 
   attr(:rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
