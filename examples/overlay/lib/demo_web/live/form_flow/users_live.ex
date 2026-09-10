@@ -12,6 +12,7 @@ defmodule DemoWeb.FormFlowLive.Users do
 
   use DemoWeb, :live_view
 
+  import DemoWeb.PageComponents
   import DemoWeb.PersonaComponents
 
   @impl true
@@ -35,23 +36,10 @@ defmodule DemoWeb.FormFlowLive.Users do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <.persona_gate
-        current_user={@current_user}
-        roles={[:owner, :reviewer]}
-        page="the user pages"
-      >
-        <div class="space-y-6">
-          <header class="space-y-2">
-            <h1 class="text-2xl font-semibold">Users</h1>
-            <p class="text-base-content/70">
-              FormFlow's user-facing form instances: flows (diagrams rendered with
-              ReactFlow) and the reusable form catalog. Back to the <.link
-                navigate={~p"/"}
-                class="link"
-              >demo index</.link>.
-            </p>
-          </header>
+      <div class="space-y-6">
+        <.h1>User pages</.h1>
 
+        <.persona_gate current_user={@current_user} roles={[:owner]} page="the user pages">
           <div id="users-pages">
             <FormFlow.Web.router
               user_id="demo-user"
@@ -65,8 +53,8 @@ defmodule DemoWeb.FormFlowLive.Users do
               pre_release_user_ids={["demo-user"]}
             />
           </div>
-        </div>
-      </.persona_gate>
+        </.persona_gate>
+      </div>
     </Layouts.app>
     """
   end

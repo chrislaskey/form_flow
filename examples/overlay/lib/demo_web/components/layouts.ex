@@ -38,7 +38,7 @@ defmodule DemoWeb.Layouts do
     default: nil,
     doc:
       "which primary nav item is active: :home, :install_check, :docs, " <>
-        ":admin, or :users — the last two both light the Demo Experience menu"
+        ":admin, :users, or :reviewers — the last three light the Demo app menu"
 
   attr :current_user, :map,
     default: nil,
@@ -72,7 +72,7 @@ defmodule DemoWeb.Layouts do
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
-              <.experience_menu current={@current_nav in [:admin, :users]} />
+              <.experience_menu current={@current_nav in [:admin, :users, :reviewers]} />
             </nav>
             <div :if={@current_user} class="flex items-center sm:border-l sm:border-gray-200 sm:pl-4">
               <UserSwitcher.user_switcher id="header-user-switcher" current_user={@current_user} />
@@ -145,7 +145,7 @@ defmodule DemoWeb.Layouts do
         "flex cursor-pointer list-none items-center gap-1 rounded-lg px-3 py-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden",
         @current && "bg-gray-100 font-semibold text-indigo-600"
       ]}>
-        Demo App
+        Demo app
         <svg
           viewBox="0 0 16 16"
           class="size-3.5"

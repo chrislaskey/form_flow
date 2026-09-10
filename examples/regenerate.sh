@@ -72,7 +72,7 @@ echo "==> Replacing the default route with the demo LiveViews"
 # a user's own flows. The live_session's on_mount hook assigns the demo's
 # current user (one of Demo.Users, chosen with the header's user switcher) to
 # every LiveView; the POST route is what the switcher's rows hit to change it.
-perl -pi -e 's{get "/", PageController, :home}{post "/switch-user/:user_id", UserSwitchController, :create\n\n    live_session :default, on_mount: DemoWeb.UserHook do\n      live "/install-check", InstallCheckLive\n      live "/branding", BrandingLive\n      live "/docs", DocsLive.Index\n      live "/docs/data-modeling", DocsLive.DataModelingLive\n      live "/admin/*path", FormFlowLive.Admin\n      live "/users/*path", FormFlowLive.Users\n      live "/", HomeLive\n    end}' demo/lib/demo_web/router.ex
+perl -pi -e 's{get "/", PageController, :home}{post "/switch-user/:user_id", UserSwitchController, :create\n\n    live_session :default, on_mount: DemoWeb.UserHook do\n      live "/install-check", InstallCheckLive\n      live "/branding", BrandingLive\n      live "/docs", DocsLive.Index\n      live "/docs/data-modeling", DocsLive.DataModelingLive\n      live "/admin/*path", FormFlowLive.Admin\n      live "/users/*path", FormFlowLive.Users\n      live "/reviewers/*path", FormFlowLive.Reviewers\n      live "/", HomeLive\n    end}' demo/lib/demo_web/router.ex
 
 # The generated home page, its test, and its controller go: the route above
 # replaced that page with the demo index, and the template it left behind

@@ -9,9 +9,14 @@ defmodule DemoWeb.PersonaComponents do
   switcher. Deliberately sent, rather than offered a switcher of its own:
   there is one place to change perspective, and a refusal is a bad place to
   teach a second one.
+
+  A gate wraps a page's content, not its title — the title stays outside it,
+  so someone turned away still sees which page they were turned away from.
   """
 
   use DemoWeb, :html
+
+  import DemoWeb.PageComponents
 
   alias Demo.Users
   alias DemoWeb.UserSwitcher
@@ -23,6 +28,8 @@ defmodule DemoWeb.PersonaComponents do
   A page's content, for the users whose role is in `roles`. Everyone else
   gets `not_authorized/1` in its place — the block is never rendered, so a
   page can put anything inside it.
+
+  Wrap the content, and leave the page's `h1` above it.
   """
   attr :current_user, :map, required: true
   attr :roles, :list, required: true, doc: "the roles this page is for"
@@ -50,9 +57,10 @@ defmodule DemoWeb.PersonaComponents do
     assigns = assign(assigns, :allowed, Users.with_roles(assigns.roles))
 
     ~H"""
-    <div class="space-y-6">
-      <header class="space-y-2">
-        <h1 class="text-2xl font-semibold">Not authorized</h1>
+    <div>
+      <.h2>Not authorized!</.h2>
+
+      <div class="space-y-4">
         <p class="max-w-3xl text-base-content/70">
           You are viewing the demo as <span class="font-semibold text-base-content">{@current_user.name}</span>, who cannot see {@page}.
           <span class="font-semibold text-base-content">{@allowed
@@ -60,24 +68,24 @@ defmodule DemoWeb.PersonaComponents do
           |> to_sentence()}</span>
           can.
         </p>
-      </header>
 
-      <p class="flex max-w-3xl items-center gap-2 text-base-content/70">
-        Switch with the <span class="font-semibold text-base-content">Viewing as</span>
-        control in the top right of every page, and the page opens.
-        <svg
-          viewBox="0 0 16 16"
-          class="size-4 shrink-0"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M5.5 10.5l5-5M6.5 5.5h4v4" />
-        </svg>
-      </p>
+        <p class="flex max-w-3xl items-center gap-2 text-base-content/70 border rounded-lg p-4 border-gray-300">
+          Switch with the <span class="font-semibold text-base-content">Viewing as</span>
+          control in the top right of every page, and the page opens.
+          <svg
+            viewBox="0 0 16 16"
+            class="size-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5.5 10.5l5-5M6.5 5.5h4v4" />
+          </svg>
+        </p>
+      </div>
     </div>
     """
   end

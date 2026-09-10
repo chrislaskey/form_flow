@@ -24,6 +24,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
   use DemoWeb, :live_view
 
   import DemoWeb.DocsComponents
+  import DemoWeb.PageComponents
 
   alias DemoWeb.DocsComponents
   alias DemoWeb.DocsLive.DataModelingLive.Diagram

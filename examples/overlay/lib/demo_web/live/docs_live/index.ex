@@ -11,6 +11,7 @@ defmodule DemoWeb.DocsLive.Index do
   use DemoWeb, :live_view
 
   import DemoWeb.DocsComponents
+  import DemoWeb.PageComponents
 
   alias DemoWeb.DocsComponents
 

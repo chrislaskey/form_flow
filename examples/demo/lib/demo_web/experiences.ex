@@ -11,20 +11,20 @@ defmodule DemoWeb.Experiences do
   @experiences [
     %{
       id: :admin,
-      title: "Admin Pages",
+      title: "Admin pages",
       path: "/admin",
       blurb: "Build and view the flows and forms"
     },
     %{
       id: :user,
-      title: "User Pages",
+      title: "User pages",
       path: "/users",
       blurb: "Fill out and track an application"
     },
     %{
       id: :reviewer,
-      title: "Reviewer Pages",
-      path: "/users",
+      title: "Reviewer pages",
+      path: "/reviewers",
       blurb: "Review and decide applications"
     }
   ]

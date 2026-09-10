@@ -40,6 +40,7 @@ defmodule DemoWeb.Router do
       live "/docs/data-modeling", DocsLive.DataModelingLive
       live "/admin/*path", FormFlowLive.Admin
       live "/users/*path", FormFlowLive.Users
+      live "/reviewers/*path", FormFlowLive.Reviewers
       live "/", HomeLive
     end
   end

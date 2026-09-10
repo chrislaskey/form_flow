@@ -64,19 +64,44 @@ defmodule DemoWeb.PersonaTest do
       assert has_element?(view, "#users-pages")
     end
 
-    @tag user: "reviewer"
-    test "opens for the reviewer, who has no page of their own yet", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users")
-
-      assert has_element?(view, "#users-pages")
-    end
-
     @tag user: "admin"
     test "refuses the admin", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/users")
 
       refute has_element?(view, "#users-pages")
       assert html =~ "Not authorized"
+    end
+  end
+
+  describe "the reviewer experience" do
+    @tag user: "reviewer"
+    test "opens for the reviewer", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/reviewers")
+
+      assert has_element?(view, "#reviewers-pages")
+    end
+
+    @tag user: "dog_owner"
+    test "refuses a pet owner", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/reviewers")
+
+      refute has_element?(view, "#reviewers-pages")
+      assert html =~ "Not authorized"
+    end
+  end
+
+  describe "a refused page" do
+    @tag user: "dog_owner"
+    test "still says which page it was", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/admin")
+
+      headings =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("h1, h2")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      assert headings == ["Admin pages", "Not authorized"]
     end
   end
 
