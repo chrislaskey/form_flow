@@ -137,8 +137,10 @@ defmodule FormFlow.Data.Instances.Flows do
 
   One thing about the status is recorded: a journey started while the flow
   is `pre_release` gets `"form_flow" => %{"pre_release" => true}` in its
-  `metadata`, so a listing or an export can tell the pre-release run's
-  instances from the real ones once the flow opens. `metadata` is otherwise
+  `metadata`, so the pre-release run can be told from the real one once the
+  flow opens — by `FormFlow.Data.Instances.Flow.pre_release?/1` on a row, or
+  `list_pre_release/1` for a flow's; the marker is inside the map, so there
+  is no `where` for it to hand a listing query. `metadata` is otherwise
   the host's map; `"form_flow"` is the one key FormFlow claims in it.
   """
   def create(attrs \\ %{}, opts \\ []) do
@@ -313,32 +315,33 @@ defmodule FormFlow.Data.Instances.Flows do
   status dialog as the flow leaves Pre-release.
   """
   def delete_pre_release(%Templates.Flow{} = flow, opts \\ []) do
-    Repo.transaction(fn ->
-      case list_pre_release(flow) do
-        [] ->
-          0
+    Repo.transaction(fn -> delete_journeys(flow, list_pre_release(flow), opts) end)
+  end
 
-        journeys ->
-          Enum.each(journeys, fn journey ->
-            case delete_instance(journey, opts) do
-              {:ok, _deleted} -> :ok
-              {:error, reason} -> Repo.rollback(reason)
-            end
-          end)
+  # Nothing marked is nothing to record
+  defp delete_journeys(_flow, [], _opts), do: 0
 
-          attrs = %{
-            flow_id: flow.id,
-            event: "pre_release_instances_deleted",
-            snapshot: %{"count" => length(journeys)},
-            user_id: Keyword.get(opts, :user_id)
-          }
+  defp delete_journeys(flow, journeys, opts) do
+    Enum.each(journeys, &delete_journey!(&1, opts))
 
-          case Repo.insert(Templates.Flow.Event.changeset(%Templates.Flow.Event{}, attrs)) do
-            {:ok, _event} -> length(journeys)
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-      end
-    end)
+    attrs = %{
+      flow_id: flow.id,
+      event: "pre_release_instances_deleted",
+      snapshot: %{"count" => length(journeys)},
+      user_id: Keyword.get(opts, :user_id)
+    }
+
+    case Repo.insert(Templates.Flow.Event.changeset(%Templates.Flow.Event{}, attrs)) do
+      {:ok, _event} -> length(journeys)
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp delete_journey!(journey, opts) do
+    case delete_instance(journey, opts) do
+      {:ok, _deleted} -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 
   @doc "All of a journey's form instances, superseded ones included."

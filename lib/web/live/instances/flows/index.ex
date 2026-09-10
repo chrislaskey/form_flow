@@ -208,7 +208,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   # drew, and it may have stopped taking starts since. The data layer does
   # what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
   defp start(socket, flow_id) do
-    flow = Templates.Flows.get(flow_id)
+    flow = Templates.Flows.get_row(flow_id)
 
     if flow && FormFlow.Web.Instances.Shared.status_allows?(flow, :start, socket.assigns) do
       attrs = %{

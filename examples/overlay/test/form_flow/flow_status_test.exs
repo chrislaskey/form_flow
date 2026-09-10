@@ -82,6 +82,7 @@ defmodule Demo.FormFlowFlowStatusTest do
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Health
 
   # ── the data layer ──────────────────────────────────────────────────────
 
@@ -161,6 +162,42 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
       {:ok, instance} = Instances.Flows.create(%{flow_id: open.id, user_id: "c"})
       assert instance.metadata == %{}
+    end
+
+    test "status_allows?/3 answers a host's own route from a bare map" do
+      {:ok, pre} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
+      shared = FormFlow.Web.Instances.Shared
+
+      assert shared.status_allows?(pre, :see, %{user_id: "u", pre_release_user_ids: ["u"]})
+      refute shared.status_allows?(pre, :see, %{user_id: "v", pre_release_user_ids: ["u"]})
+      assert shared.status_allows?(open, :start, %{})
+      refute shared.status_allows?(pre, :start, %{user_id: "u", pre_release_user_ids: []})
+
+      # An attr not yet resolved is refused loudly, not guessed at
+      assert_raise FunctionClauseError, fn ->
+        shared.status_allows?(pre, :see, %{
+          user_id: "u",
+          pre_release_user_ids: fn _context, _data -> ["u"] end
+        })
+      end
+    end
+
+    test "pre_release_count/1 counts the marker, not the flow's status" do
+      {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
+
+      for user <- ~w(a b c),
+          do: {:ok, _} = Instances.Flows.create(%{flow_id: flow.id, user_id: user})
+
+      # Moved back to pre-release with an open run behind it: nothing to offer
+      {:ok, back} = Flows.update_status(flow, "pre_release", [])
+      assert FormFlow.Web.Templates.Shared.pre_release_count(back) == 0
+
+      {:ok, _trial} = Instances.Flows.create(%{flow_id: flow.id, user_id: "d"})
+      assert FormFlow.Web.Templates.Shared.pre_release_count(back) == 1
+
+      # The flow as loaded before the move: not pre-release, so no offer
+      assert FormFlow.Web.Templates.Shared.pre_release_count(flow) == 0
     end
 
     test "list_pre_release/1 and delete_pre_release/2 act on the marked journeys alone" do
@@ -707,6 +744,21 @@ defmodule Demo.FormFlowFlowStatusTest do
       render_submit(form, %{"status" => "winding_down", "delete_pre_release" => "true"})
       assert Flows.get(flow.id).status == "winding_down"
       assert Instances.Flows.get(trial.id)
+    end
+
+    test "the history page names a health check the way the health page does", %{conn: conn} do
+      {:ok, flow} = Flows.create(%{name: "Dog License", nodes: Flows.starter_nodes()})
+      health = Health.refresh(flow.id)
+      [unreachable] = Health.at(health, :error)
+      assert unreachable.code == :end_unreachable
+
+      {:ok, _root} = Health.ignore(health, unreachable, "demo-admin")
+      {:ok, _root} = Health.stop_ignoring(Health.check(flow.id), unreachable, "demo-admin")
+
+      {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+      assert html =~ "Ignored health check: end unreachable"
+      assert html =~ "Stopped ignoring health check: end unreachable"
+      refute html =~ "end_unreachable"
     end
 
     test "the history page lists the log newest first, reached from the show page and the index",

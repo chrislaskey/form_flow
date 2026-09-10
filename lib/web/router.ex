@@ -213,7 +213,9 @@ defmodule FormFlow.Web.Router do
         "continued, seen — as if it were `open`; to everyone else it is a draft. " <>
         "A list, or a function of the page's `FormFlow.Context` and `callback_data` " <>
         "returning one, for a host whose pre-release users are a role or a team " <>
-        "(return `[context.user_id]` when the viewer qualifies); it is called once per page. " <>
+        "(return `[context.user_id]` when the viewer qualifies); it is called once per page, " <>
+        "with the page's context — the user, tenant, and perspectives, no flow — so the " <>
+        "rule is per page, not per flow. " <>
         "The pages are the gate: the data layer takes a pre-release start from " <>
         "anyone and marks the journey's `metadata` (`\"form_flow\" => %{\"pre_release\" => true}`). " <>
         "A viewer with no `user_id` is never listed, so a host without users has no " <>

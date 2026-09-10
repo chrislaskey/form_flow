@@ -225,6 +225,19 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
+  The flow's row alone — no nodes, no relationships — or `nil`. For the
+  callers that want one fact about a flow at a moment, its `status` at a
+  click above all (`FormFlow.Web.Instances.Shared.status_allows?/3`), and
+  not the tree `get/1` loads with it.
+  """
+  def get_row(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, id} -> Repo.get(Flow, id)
+      :error -> nil
+    end
+  end
+
+  @doc """
   Fetches one flow by its slug (`FormFlow.Data.Templates.Slug`), loaded like
   `get/1`, or `nil`. `opts[:tenant_id]` scopes the lookup to one tenant; a
   host with no tenants needs nothing more than the slug. Slugs are unique per
@@ -580,29 +593,33 @@ defmodule FormFlow.Data.Templates.Flows do
 
   def update_status(%Flow{} = flow, status, opts) when is_binary(status) do
     if status in Flow.statuses() do
-      Repo.transaction(fn ->
-        current = Repo.get(Flow, flow.id) || Repo.rollback(:not_found)
-
-        if current.status == status do
-          current
-        else
-          snapshot =
-            Map.merge(Keyword.get(opts, :snapshot, %{}), %{
-              "from" => current.status,
-              "to" => status
-            })
-
-          with {:ok, updated} <- Repo.update(Flow.status_changeset(current, status)),
-               {:ok, _event} <-
-                 insert_event(updated, "status_changed", Keyword.put(opts, :snapshot, snapshot)) do
-            updated
-          else
-            {:error, reason} -> Repo.rollback(reason)
-          end
-        end
-      end)
+      Repo.transaction(fn -> move_status(flow.id, status, opts) end)
     else
       {:error, :unknown_status}
+    end
+  end
+
+  # The row as it now is, read inside the transaction: the status it already
+  # carries is a no-op, and a flow deleted since the caller loaded it is
+  # `{:error, :not_found}`
+  defp move_status(id, status, opts) do
+    case Repo.get(Flow, id) do
+      nil -> Repo.rollback(:not_found)
+      %Flow{status: ^status} = current -> current
+      current -> write_status(current, status, opts)
+    end
+  end
+
+  defp write_status(%Flow{} = current, status, opts) do
+    snapshot =
+      Map.merge(Keyword.get(opts, :snapshot, %{}), %{"from" => current.status, "to" => status})
+
+    with {:ok, updated} <- Repo.update(Flow.status_changeset(current, status)),
+         {:ok, _event} <-
+           insert_event(updated, "status_changed", Keyword.put(opts, :snapshot, snapshot)) do
+      updated
+    else
+      {:error, reason} -> Repo.rollback(reason)
     end
   end
 

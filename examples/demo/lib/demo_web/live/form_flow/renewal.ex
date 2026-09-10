@@ -14,7 +14,9 @@ defmodule DemoWeb.FormFlowLive.Renewal do
   user's own — the shape every prefill takes (`DemoWeb.FormFlowLive.Prefill`).
   A user who skipped a year is found the year before: the walk follows
   `copied_from_form_id` back until a submitted form turns up or the
-  provenance runs out.
+  provenance runs out. The walk needs no guard against cycles: the column
+  is written by `FormFlow.Data.Templates.Forms.copy/2` alone, never cast,
+  so a chain of copies only ever points at older lineages.
 
   It asks for the form the user *submitted* — a completed form instance at
   the position — and not for a completed journey: the demo never stamps a
@@ -57,8 +59,10 @@ defmodule DemoWeb.FormFlowLive.Renewal do
     case Templates.Forms.get(form_id) do
       %Templates.Form{owner_flow_id: flow_id} = form when is_binary(flow_id) ->
         journeys = Instances.Flows.list(user_id: user_id, tenant_id: tenant_id, flow: flow_id)
+        # Every journey here is of the one flow: its tree, resolved once
+        tree = journeys != [] && Templates.Flows.resolve_tree(flow_id)
 
-        Enum.find_value(journeys, &submitted_at(&1, form.id)) ||
+        Enum.find_value(journeys, &submitted_at(&1, tree, form.id)) ||
           answers_at(form.copied_from_form_id, context)
 
       _catalog_or_gone ->
@@ -70,9 +74,7 @@ defmodule DemoWeb.FormFlowLive.Renewal do
   # journey, read the way the pages read progress: the resolved tree and
   # every form instance of the journey, so a superseded instance is passed
   # over and a step the flow no longer has is not a form of it
-  defp submitted_at(%Instances.Flow{} = journey, form_id) do
-    tree = Templates.Flows.resolve_tree(journey.flow_id)
-
+  defp submitted_at(%Instances.Flow{} = journey, tree, form_id) do
     tree
     |> FlowProgress.forms(Instances.Flows.form_instances(journey))
     |> Enum.find_value(fn

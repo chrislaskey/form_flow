@@ -431,6 +431,14 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
+  @doc """
+  A health check's code as the pages say it — `:form_not_published` reads
+  "form not published" — on the health page's list and the History page's
+  line alike.
+  """
+  def check_name(code) when is_atom(code), do: code |> Atom.to_string() |> check_name()
+  def check_name(code) when is_binary(code), do: String.replace(code, "_", " ")
+
   @doc ~s(A count with its noun: "1 instance", "3 instances".)
   def count(1, noun), do: "1 #{noun}"
   def count(n, noun), do: "#{n} #{noun}s"
@@ -454,7 +462,9 @@ defmodule FormFlow.Web.Templates.Shared do
   (`FormFlow.Data.Instances.Flows.delete_pre_release/2`, which logs how
   many). The offer holds only as `flow` leaves `pre_release`; on any other
   move the box is ignored, so a form the dialog never drew deletes nothing.
-  `{:ok, flow}`, or `{:error, message}` in the dialog's words.
+  The two are two transactions, the status first: a deletion that fails
+  leaves the status changed, and the message says so. `{:ok, flow}`, or
+  `{:error, message}` in the dialog's words.
   """
   def save_status(%Templates.Flow{} = flow, params, user_id) do
     status = params["status"]

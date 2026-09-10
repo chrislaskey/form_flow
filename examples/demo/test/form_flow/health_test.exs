@@ -163,6 +163,18 @@ defmodule Demo.FormFlowHealthTest do
     assert Health.status(Flows.get(root.id)) != nil
     assert Health.status(Flows.get(subflow.id)) == nil
     refute Map.has_key?(Flows.get(subflow.id).properties, "_health_metadata")
+
+    # A check by the subflow's id is the root's check too, so what is ignored
+    # from it — the record and the event — lands on the root
+    health = Health.check(subflow.id)
+    assert health.flow_id == root.id
+    [entry | _rest] = health.entries
+
+    {:ok, written} = Health.ignore(health, entry, "demo-admin")
+    assert written.id == root.id
+    refute Map.has_key?(Flows.get(subflow.id).properties, "_health_metadata")
+    assert [%{event: "health_ignored"} | _older] = Flows.list_events(Flows.get(root.id))
+    assert Flows.list_events(Flows.get(subflow.id)) == []
   end
 
   test "ignoring and stopping are logged on the flow, with who decided and what" do

@@ -128,7 +128,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   # and the year may have closed since. The data layer does what it is
   # asked (`FormFlow.Data.Instances.Forms.update_status/4`).
   defp reopen(socket, path) do
-    flow = Templates.Flows.get(socket.assigns.flow_instance.flow_id)
+    flow = Templates.Flows.get_row(socket.assigns.flow_instance.flow_id)
 
     if continue_allowed?(flow, socket.assigns) do
       case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
@@ -178,7 +178,10 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
         # The context first, and the page's pre-release users with it: the
         # rows and `continue_allowed?/2` ask the status by this viewer
-        socket = socket |> assign(:context, context) |> Shared.resolve_pre_release_user_ids()
+        socket =
+          socket
+          |> assign(:context, context)
+          |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
         rows = rows(forms, tree, flow_instance, socket.assigns)
 
         socket =

@@ -203,9 +203,10 @@ everything else). **Pre-release** is a draft that some people may use:
 the router's `pre_release_user_ids` names them, by the host's own user
 ids — a list, or a function of the page's `FormFlow.Context` and
 `callback_data` that returns one, for a role or a team (`fn context, _data ->
-if staff?(context.user_id), do: [context.user_id], else: [] end`) — and to
-them the flow is open — offered, continued, seen — while to everyone else
-it stays a draft. The pages are the gate; the data layer
+if staff?(context.user_id), do: [context.user_id], else: [] end`; the
+context is the page's, with no flow in it, so the rule is per page) — and
+to them the flow is open — offered, continued, seen — while to everyone
+else it stays a draft. The pages are the gate; the data layer
 takes a pre-release start from anyone and marks the instance's `metadata`
 with `"form_flow" => %{"pre_release" => true}`, so once the flow opens the
 pre-release run's instances can be told from the real ones. **Open** is the
@@ -241,9 +242,9 @@ that should offer it; when it has proved itself, open it. The pre-release
 instances stay in the flow, marked; as the flow leaves Pre-release, the
 status dialog says how many were started during it and offers to delete
 them with the change — logged on the flow's history — or duplicate the
-flow before opening if the trial run must not mix with the real one. A rule change from a date —
-"filings after 1 July need a certificate" — is a copy opened on the date
-while the original winds down.
+flow before opening if the trial run must not mix with the real one. A
+rule change from a date — "filings after 1 July need a certificate" — is
+a copy opened on the date while the original winds down.
 
 Two things follow for host code. The status is the pages' rule, not the
 data layer's: `FormFlow.Data.Instances.Flows.create/2` and
@@ -254,7 +255,9 @@ route of your own that should honour the status asks
 `FormFlow.Data.Templates.Flow.allows?/2` first — and, since `allows?/2`
 answers the table and the table says a pre-release flow is open, checks
 its own pre-release users for that one status, as the pages do through
-`FormFlow.Web.Instances.Shared.status_allows?/3`. And a gate or
+`FormFlow.Web.Instances.Shared.status_allows?/3` — which a route can call
+too, with a bare map for the page: `status_allows?(flow, :see,
+%{user_id: id, pre_release_user_ids: ids})`. And a gate or
 callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog

@@ -103,7 +103,9 @@ move only; on any other the box is ignored. The Edit page's Status field
 makes no such offer.
 
 **The flows index puts archived flows away**: the listing filters them out
-(`Flows.roots_query/1` takes **`status:`** and **`exclude_status:`**) and
+(`Flows.roots_query/1` takes **`status:`** and **`exclude_status:`**;
+**`Flows.get_row/1`** fetches a flow's row without its tree, for the
+clicks that want its status alone) and
 says how many are hidden with a **Show archived** link, which patches
 `?archived=true` onto the page's URL — sort kept, page dropped — and lists
 them greyed, with Hide archived to go back; a listing of nothing but
@@ -115,7 +117,11 @@ as `ignore/3` always did) each write an event on the flow's log in the
 same transaction as the record — **`health_ignored`** and
 **`health_unignored`**, with the entry's `code`, `path`, and `subject` in
 `snapshot` — and the History page reads them as "Ignored health check:
-unconnected at End". The health page passes its `user_id` to both. The
+form not published at Intake", the check named as the health page names it
+(`FormFlow.Web.Templates.Shared.check_name/1`). `Health.check/2` given an
+owned subflow's id now checks its root, so a report — and what is ignored
+from it — always lands on the root, as `refresh/2` already did. The health
+page passes its `user_id` to both. The
 status dialog's dropdown is a `select` through
 `FormFlow.Web.Components.Core.input/1`, which grew `options` and
 `prompt` for it, so a host's `components` module draws it.

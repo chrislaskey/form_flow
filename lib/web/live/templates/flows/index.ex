@@ -133,10 +133,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
      |> assign(:empty?, empty?)
      |> assign(:all_hidden?, not empty? and not show_archived? and not Repo.exists?(query))
      |> assign(:show_archived?, show_archived?)
-     |> assign(
-       :archived_count,
-       Repo.aggregate(Flows.roots_query(tenant_id: tenant_id, status: "archived"), :count)
-     )
+     |> assign(:archived_count, archived_count(tenant_id, empty? or show_archived?))
      |> assign(:archived_toggle_path, archived_toggle_path(socket.assigns, not show_archived?))
      |> assign(:table_params, Map.put_new(socket.assigns.params, "sort", "inserted_at"))
      |> assign(
@@ -248,6 +245,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       _none -> "#{base}/flows"
     end
   end
+
+  # How many archived flows the hidden line names; not asked when there is
+  # nothing to list or when they are shown, where the line does not say
+  defp archived_count(_tenant_id, true), do: 0
+
+  defp archived_count(tenant_id, false),
+    do: Repo.aggregate(Flows.roots_query(tenant_id: tenant_id, status: "archived"), :count)
 
   # This page with `archived` switched — the sort kept, the page number
   # dropped, since the rows it counted have changed

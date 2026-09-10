@@ -88,7 +88,10 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
     # The page's pre-release users, resolved now that the context exists —
     # `continue_allowed?/2` below is the first to ask
-    socket = socket |> assign(:context, context) |> resolve_pre_release_user_ids()
+    socket =
+      socket
+      |> assign(:context, context)
+      |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
 
     type = flow_type(context, socket.assigns)
     {visible?, editable?} = access(type, context, socket.assigns)
@@ -279,7 +282,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   fails closed rather than falling through to the page.
   """
   def on_mount(socket, on_ok \\ & &1, opts \\ []) do
-    socket = resolve_pre_release_user_ids(socket)
+    socket = FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids(socket)
     flow = instance_flow(socket.assigns)
 
     cond do
@@ -304,22 +307,6 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       true ->
         host_on_mount(socket, on_ok)
     end
-  end
-
-  @doc """
-  The page's `pre_release_user_ids` attr as the list it stands for
-  (`FormFlow.Web.Instances.Shared.pre_release_user_ids/1`), assigned in
-  place of what the host gave. A function is asked here with the page's
-  context, so every page calls this once its `:context` is assigned and
-  before anything asks `status_allows?/3`; a list passes through, so calling
-  it again costs nothing.
-  """
-  def resolve_pre_release_user_ids(socket) do
-    assign(
-      socket,
-      :pre_release_user_ids,
-      FormFlow.Web.Instances.Shared.pre_release_user_ids(socket.assigns)
-    )
   end
 
   # The flow's status is the second rule before the host's gate: an instance

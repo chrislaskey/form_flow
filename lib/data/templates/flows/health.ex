@@ -217,8 +217,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
       flow.id |> Flows.resolve_tree() |> Health.check()
 
-  `nil` for an id no flow has. Reads only; `refresh/2` is the check that
-  writes.
+  An owned subflow's id is its root's check: a subflow's health is its
+  root's, as its status and history are, so the report — and anything
+  `ignore/3` writes from it — lands on the root. `nil` for an id no flow
+  has. Reads only; `refresh/2` is the check that writes.
   """
   @spec check(Ecto.UUID.t() | map() | nil, keyword()) :: t() | nil
   def check(tree_or_id, opts \\ [])
@@ -228,6 +230,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   def check(id, opts) when is_binary(id) do
     case Flows.resolve_tree(id) do
       nil -> nil
+      %{flow: %Flow{owner_flow_id: root_id}} when is_binary(root_id) -> check(root_id, opts)
       tree -> tree |> preload_versions() |> check(opts)
     end
   end

@@ -77,6 +77,8 @@ defmodule FormFlow.Web.Instances.Shared do
           | :completed
           | :ready
 
+  import Phoenix.Component, only: [assign: 3]
+
   alias FormFlow.Data.Templates
 
   @doc """
@@ -129,28 +131,55 @@ defmodule FormFlow.Web.Instances.Shared do
   never in the list. The listing asks at render and again at the click; the
   instance pages ask at mount and at every write. The data layer, which
   knows no viewer, does what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
-  """
-  def status_allows?(%Templates.Flow{status: "pre_release"}, _action, assigns),
-    do: assigns.user_id in pre_release_user_ids(assigns)
 
-  def status_allows?(%Templates.Flow{} = flow, action, _assigns),
-    do: Templates.Flow.allows?(flow, action)
+  The third argument is a page's assigns, and it is read for two keys only:
+  `:user_id`, and `:pre_release_user_ids` as a **list** (the attr already
+  resolved, `resolve_pre_release_user_ids/1`). So a host's own route asks
+  the same question with a bare map —
+  `status_allows?(flow, :see, %{user_id: id, pre_release_user_ids: ids})`
+  — and for any status but `pre_release` the map is not read at all. A
+  page that asks before resolving its attr does not get a guess: a function
+  still in the assign is a `FunctionClauseError`, which is the honest answer
+  to asking who may see a flow before knowing.
+  """
+  def status_allows?(
+        %Templates.Flow{status: "pre_release"},
+        _action,
+        %{pre_release_user_ids: ids} = assigns
+      )
+      when is_list(ids),
+      do: assigns.user_id in ids
+
+  def status_allows?(%Templates.Flow{status: status} = flow, action, _assigns)
+      when status != "pre_release",
+      do: Templates.Flow.allows?(flow, action)
 
   @doc """
-  The page's `pre_release_user_ids` attr as the list it stands for: the list
-  it was given, or what its function returns for this page — a function of
-  the page's `FormFlow.Context` and `callback_data`, for a host whose
-  pre-release users are a role or a team rather than ids it can write down;
-  it returns `[context.user_id]` when the viewer qualifies and `[]` when
-  not, or the team's ids. Each page resolves it as soon as its context
-  exists (`FormFlow.Web.Instances.Forms.Shared.resolve_pre_release_user_ids/1`),
-  before anything asks `status_allows?/3`, so the function runs once per
-  page and not once per check. `nil` is nobody.
-  """
-  def pre_release_user_ids(%{pre_release_user_ids: ids}) when is_list(ids), do: ids
+  The page's `pre_release_user_ids` attr, assigned as the list it stands
+  for: the list it was given, or what its function returns for this page —
+  a function of the page's `FormFlow.Context` and `callback_data`, for a
+  host whose pre-release users are a role or a team rather than ids it can
+  write down; it returns `[context.user_id]` when the viewer qualifies and
+  `[]` when not, or the team's ids. `nil` is nobody.
 
-  def pre_release_user_ids(%{pre_release_user_ids: fun} = assigns) when is_function(fun, 2),
+  Every page calls this once its `:context` is assigned and before anything
+  asks `status_allows?/3` — `FormFlow.Web.Instances.Forms.Shared.assigns/1`
+  for the form pages, `FormFlow.Web.Instances.Flows.Show`'s load before its
+  rows, `FormFlow.Web.Instances.Forms.Shared.on_mount/3` for the listing —
+  so the function runs once per page, with a context that is there; a list
+  passes through, so a second call costs nothing. The context is the
+  page's: on the listing it has the user, tenant, and perspectives and no
+  flow, so the rule cannot vary by flow — it is who may pre-release on
+  this page, as the attr is per page.
+  """
+  def resolve_pre_release_user_ids(socket) do
+    assign(socket, :pre_release_user_ids, pre_release_user_ids(socket.assigns))
+  end
+
+  defp pre_release_user_ids(%{pre_release_user_ids: ids}) when is_list(ids), do: ids
+
+  defp pre_release_user_ids(%{pre_release_user_ids: fun} = assigns) when is_function(fun, 2),
     do: fun.(assigns[:context], assigns[:callback_data] || %{}) |> List.wrap()
 
-  def pre_release_user_ids(_assigns), do: []
+  defp pre_release_user_ids(_assigns), do: []
 end

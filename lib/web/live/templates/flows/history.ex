@@ -9,8 +9,9 @@ defmodule FormFlow.Web.Templates.Flows.History do
   with an arrow between them ("Draft → Open"), in the words the status
   badge uses (`FormFlow.Web.Templates.Shared.status_label/1`);
   `health_ignored` and `health_unignored` name the health check and where
-  it was ("Ignored health check: unconnected at Intake"), as the health
-  page lists it; `pre_release_instances_deleted` says how many.
+  it was ("Ignored health check: form not published at Intake"), in the
+  words the health page lists it (`FormFlow.Web.Templates.Shared.check_name/1`);
+  `pre_release_instances_deleted` says how many.
   The author is the host's `user_id` as it was given — an opaque identity
   FormFlow does not resolve to a name, the way the health page's "Ignored
   by" shows it — and an event with none says so. The time is relative
@@ -133,9 +134,9 @@ defmodule FormFlow.Web.Templates.Flows.History do
 
   # The check's code and where it was, the way the health page lists an entry
   defp health_entry(%{"code" => code, "subject" => subject}) when is_binary(subject),
-    do: "#{code} at #{subject}"
+    do: "#{Shared.check_name(code)} at #{subject}"
 
-  defp health_entry(%{"code" => code}), do: code
+  defp health_entry(%{"code" => code}), do: Shared.check_name(code)
   defp health_entry(_snapshot), do: "unknown"
 
   defp author(%{user_id: nil}), do: "by nobody recorded"

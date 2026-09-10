@@ -296,13 +296,13 @@ defmodule FormFlow.Web.Templates.Flows.Health do
               ]} />
               <span class="min-w-0 flex-1">
                 <span class="block truncate">{where(entry, @flow)}</span>
-                <span class="block truncate text-xs text-zinc-400">{check_name(entry.code)}</span>
+                <span class="block truncate text-xs text-zinc-400">{Shared.check_name(entry.code)}</span>
               </span>
               <span :if={entry == @selected} class="text-zinc-500" aria-hidden="true">›</span>
             </button>
           </li>
           <li class="px-5 py-3 text-xs text-zinc-400">
-            {plural(Health.passing(@health), "check")} passing
+            {Shared.count(Health.passing(@health), "check")} passing
           </li>
         </ul>
 
@@ -431,17 +431,12 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   defp where(%Entry{subject: subject}, _flow), do: subject
 
   # The code as words, for the list's second line
-  defp check_name(code), do: code |> Atom.to_string() |> String.replace("_", " ")
-
   defp checked_at(flow) do
     case Health.status(flow) do
       %{checked_at: %DateTime{} = at} -> at
       _none -> nil
     end
   end
-
-  defp plural(1, noun), do: "1 #{noun}"
-  defp plural(count, noun), do: "#{count} #{noun}s"
 
   defp dot(:error), do: "bg-error"
   defp dot(:warning), do: "bg-warning"
