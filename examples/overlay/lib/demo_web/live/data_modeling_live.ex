@@ -157,18 +157,21 @@ defmodule DemoWeb.DataModelingLive do
             left to <code>Instances.Form</code>.
           </p>
 
-          <div id="group-legend" class="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span class="font-bold">Legend</span>
-            <span class="flex items-center gap-2">
-              <span class="schema-legend-swatch schema-legend-swatch--templates"></span>
-              <code>FormFlow.Data.Templates</code>
-              <span class="text-base-content/70">— what an admin builds</span>
-            </span>
-            <span class="flex items-center gap-2">
-              <span class="schema-legend-swatch schema-legend-swatch--instances"></span>
-              <code>FormFlow.Data.Instances</code>
-              <span class="text-base-content/70">— what a user fills out</span>
-            </span>
+          <div id="group-legend" class="flex flex-wrap gap-x-6 gap-y-2">
+            <div class="flex gap-2">
+              <div class="schema-legend-swatch schema-legend-swatch--templates"></div>
+              <div>
+                <code>FormFlow.Data.Templates</code>
+                <div class="text-sm text-base-content/70">What an admin builds</div>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <div class="schema-legend-swatch schema-legend-swatch--instances"></div>
+              <div>
+                <code>FormFlow.Data.Instances</code>
+                <div class="text-sm text-base-content/70">What a user fills out</div>
+              </div>
+            </div>
           </div>
 
           <div
