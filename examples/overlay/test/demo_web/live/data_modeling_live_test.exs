@@ -108,18 +108,27 @@ defmodule DemoWeb.DataModelingLiveTest do
     assert Enum.sort(dashed) == ["EMBEDS", "IN", "OWNED_BY"]
   end
 
-  test "prints every SQL example, each naming what issues it", %{conn: conn} do
+  test "prints every query example, in full", %{conn: conn} do
     {:ok, view, html} = live(conn, ~p"/docs/data-modeling")
 
     for example <- SqlExamples.all() do
       block = render(element(view, "#sql-#{example.id}"))
 
       assert block =~ example.title
-      # The tables the statements touch are the ones the diagram draws
-      assert block =~ "form_flow_template_flow"
+      assert block =~ "<pre"
     end
 
+    # The three options, then FormFlow's own, whose tables are the ones the
+    # diagram draws
+    assert html =~ "JOIN edges"
     assert html =~ "WITH RECURSIVE"
+    assert html =~ "MATCH ("
+
+    form_flow = render(element(view, "#sql-form-flow"))
+
+    assert form_flow =~ "form_flow_template_flow_nodes"
+    assert form_flow =~ "form_flow_template_flow_relationships"
+
     refute html =~ "NOTE:"
   end
 

@@ -75,6 +75,73 @@ defmodule DemoWeb.DataModelingLive do
         </header>
 
         <section class="space-y-3">
+          <h3 class="font-bold">The core models, Flows and Forms</h3>
+          <p class="max-w-3xl">
+            There are two core data types in the library, Flows and Forms.
+          </p>
+          <p class="max-w-3xl">
+            Imagine a user filling out three related forms
+            for an application. Each form the user fills out would be a <code>Form</code>
+            and what connects the three forms together would
+            be a <code>Flow</code>.
+          </p>
+          <p class="max-w-3xl">
+            Sometimes a single Flow with a single Form is enough. Sometimes a
+            single Flow has many Forms. Or it's a little more complex,
+            like a user filling out many groups of forms before submitting.
+            Or maybe we want a really complex flow, like after the user fills out
+            the initial forms for the application, we want different reviewer users to
+            look over the user's forms.
+          </p>
+          <p>
+            All of these are modeled with just Flows and Forms.
+          </p>
+          <h3 class="font-bold">Visualizing complex flows</h3>
+          <p class="max-w-3xl">
+            If you visualize the more complex journeys, they begin to
+            resemble a tree shape - Forms are the leaf nodes and Flows are the
+            branches and can be stacked one on top of each other, one flow
+            leading to another flow.
+          </p>
+          <p class="max-w-3xl">
+            Note: to help differentiate the types we call flows that only
+            contain forms are called "Form Flows". And we call flows that only
+            contain flows as children "Subflows". But at the data level, they
+            are both modeled as Flows, just with different type fields.
+          </p>
+          <h3 class="font-bold">Modeling connections</h3>
+          <p class="max-w-3xl">
+            We could use Form and Flow to model both the connections -
+            how one flow connects to another - AND the behaviour - how should a
+            subflow render. And it'd work, but it'd be a bit messy. The simpler
+            way is to keep the behaviour in the Forms and Flows, and model the
+            connections separately.
+          </p>
+          <p class="max-w-3xl">
+            As we've already see, the shape of these flows becomes a kind of
+            tree (or graph). So a good way to model the connections is
+            using Nodes and Relationships (aka vertices and edges).
+          </p>
+          <p class="max-w-3xl">
+            When modeling it this way, every Form and Flow are represented by a
+            Node, and the nodes are connected through Relationships.
+          </p>
+          <h3 class="font-bold">Templates and Instances</h3>
+          <p class="max-w-3xl">
+            One more important piece of modeling terminology is the difference
+            between Templates and Instances.
+          </p>
+          <p class="max-w-3xl">
+            Admin users create Templates, which define the full journey from start
+            to end. These contain Flow templates, Form templates, Nodes, and Relationships.
+          </p>
+          <p class="max-w-3xl">
+            When a user goes to start a journey and fill out the first form, they create
+            an instance of the template.
+          </p>
+        </section>
+
+        <section class="space-y-3">
           <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
             <h2 class="text-lg font-semibold">
               SQL Schema <span class="font-light">PostgreSQL and SQLite supported</span>
@@ -82,7 +149,12 @@ defmodule DemoWeb.DataModelingLive do
           </div>
 
           <p class="mb-6 max-w-3xl">
-            To read the data model, recommend starting in the top right corner with `Templates.Flow`, then move left across `Templates.Flow.Node` and `Templates.Form`. Those are the key models on the admin template side. The user side starts with `Instances.Flow` and moves left to `Instances.Form`.
+            To read the data model, recommend starting in the top right corner
+            with <code>Templates.Flow</code>, then move left across <code>Templates.Flow.Node</code>
+            and <code>Templates.Form</code>. Those are the key models on the admin
+            template side. The user side starts with <code>Instances.Flow</code>
+            and moves
+            left to <code>Instances.Form</code>.
           </p>
 
           <div id="group-legend" class="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -121,11 +193,17 @@ defmodule DemoWeb.DataModelingLive do
           </div>
 
           <p class="mb-6 max-w-3xl">
-            Modeling a flow is best done as a graph. While these can be modeled in a traditional SQL database, it's very inefficient. Even simple flows (from a human perspective) can take a lot of system resources to pull out of a relational database.
+            Modeling a flow is best done as a graph. While these can be modeled
+            in a traditional SQL database, it's very inefficient. Even simple
+            flows (from a human perspective) can take a lot of system resources
+            to pull out of a relational database.
           </p>
 
           <p class="mb-6 max-w-3xl">
-            To help FormFlow scale, it supports dual-writing graph data into a graph database (Neo4J). This makes it much easier to realize a graph at scale. When enabled, Neo4J is queried first, then a targeted SQL query is used to pull just the data from specific IDs.
+            To help FormFlow scale, it supports dual-writing graph data into a
+            graph database (Neo4J). This makes it much easier to realize a
+            graph at scale. When enabled, Neo4J is queried first, then a
+            targeted SQL query is used to pull just the data from specific IDs.
           </p>
 
           <div
@@ -143,14 +221,13 @@ defmodule DemoWeb.DataModelingLive do
 
           <p class="max-w-3xl">
             Three of the ten tables above cross over, and only those three: a
-            node (a <em>step</em>, in the product's words), a relationship
-            between two nodes, and the flow they belong to. Form templates,
-            form versions, and every instance table stay in SQL — a <code>form_id</code>
-            in a Neo4j property map is a key into Postgres, not a pointer into
-            the graph. Flows are drawn here as nodes rather than left out
-            because anything a reference targets has to be a node, or the
-            reference cannot be traversed, and both subflow and ownership
-            references point at flows.
+            node, a relationship between two nodes, and the flow they belong
+            to. Form templates, form versions, and every instance table stay in
+            SQL — a <code>form_id</code> in a Neo4j property map is a key into
+            Postgres, not a pointer into the graph. Flows are drawn here as
+            nodes rather than left out because anything a reference targets has
+            to be a node, or the reference cannot be traversed, and both
+            subflow and ownership references point at flows.
           </p>
 
           <p class="max-w-3xl">
@@ -201,16 +278,23 @@ defmodule DemoWeb.DataModelingLive do
         <section class="space-y-3">
           <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
             <h2 class="text-lg font-semibold">
-              Example SQL queries
-              <span class="font-light">what the graph looks like from the database's side</span>
+              Querying graph data
+              <span class="font-light">three ways to do it, and the one FormFlow uses</span>
             </h2>
           </div>
 
+          <p class="max-w-3xl">
+            Storing a graph in a relational database is not exotic. It is two
+            tables and a foreign key. The interesting question is how you read
+            it back, and there are three well-worn answers: join your way
+            across it, let SQL recurse for you, or hand the job to a database
+            built for graphs.
+          </p>
+
           <p class="mb-6 max-w-3xl">
-            A property graph in a relational database is not exotic — it is two
-            tables and a foreign key. What changes is the reading: once a query
-            has to *follow* the graph rather than filter it, the shape of the
-            statement starts to matter.
+            The examples below walk through all three using a tiny four-node
+            graph, so the shape of each query is easy to see. The last example
+            is FormFlow's own, and explains why it picks the option it does.
           </p>
 
           <div :for={example <- @sql_examples} id={"sql-#{example.id}"} class="mb-8 max-w-3xl">
