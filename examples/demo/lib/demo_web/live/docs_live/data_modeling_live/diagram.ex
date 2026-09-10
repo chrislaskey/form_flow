@@ -1,6 +1,6 @@
-defmodule DemoWeb.DataModelingLive.Diagram do
+defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
   @moduledoc """
-  The schema diagram `DemoWeb.DataModelingLive` draws: one ReactFlow node per
+  The schema diagram `DemoWeb.DocsLive.DataModelingLive` draws: one ReactFlow node per
   table FormFlow's migration creates, one edge per foreign key between them.
 
   Everything but the layout is read off FormFlow's Ecto schemas at runtime —

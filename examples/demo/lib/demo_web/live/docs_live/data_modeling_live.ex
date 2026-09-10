@@ -1,11 +1,11 @@
-defmodule DemoWeb.DataModelingLive do
+defmodule DemoWeb.DocsLive.DataModelingLive do
   @moduledoc """
   `/docs/data-modeling` — the tables `mix form_flow.gen.migration` creates,
   drawn as a schema diagram with a column-level ReactFlow node modelled on
   [ReactFlow's database schema node](https://reactflow.dev/ui/components/database-schema-node).
 
   The tables, columns, and foreign keys come from
-  `DemoWeb.DataModelingLive.Diagram`, which reads them off FormFlow's Ecto
+  `DemoWeb.DocsLive.DataModelingLive.Diagram`, which reads them off FormFlow's Ecto
   schemas, so the page describes the library it is compiled against rather
   than a drawing of it.
 
@@ -23,9 +23,12 @@ defmodule DemoWeb.DataModelingLive do
 
   use DemoWeb, :live_view
 
-  alias DemoWeb.DataModelingLive.Diagram
-  alias DemoWeb.DataModelingLive.GraphSchema
-  alias DemoWeb.DataModelingLive.SqlExamples
+  import DemoWeb.DocsComponents
+
+  alias DemoWeb.DocsComponents
+  alias DemoWeb.DocsLive.DataModelingLive.Diagram
+  alias DemoWeb.DocsLive.DataModelingLive.GraphSchema
+  alias DemoWeb.DocsLive.DataModelingLive.SqlExamples
   alias FormFlow.Web.Helpers.ReactFlow
 
   # Pinned, immutable CDN files. ReactFlow 11 rather than 12
@@ -50,18 +53,30 @@ defmodule DemoWeb.DataModelingLive do
 
   @source_urls Map.new(@sources, fn {key, _package, _version, url} -> {key, url} end)
 
+  # This page's table of contents. The docs nav lists these under the page's
+  # own entry, and `DemoWeb.DocsComponents.docs_section/1` heads each one, so
+  # a heading cannot say one thing while the nav beside it says another.
+  @sections [
+    %{id: "introduction", title: "Introduction"},
+    %{id: "sql-schema", title: "Interactive SQL Schema"},
+    %{id: "graph-schema", title: "Interactive Neo4J Schema"},
+    %{id: "querying-graph-data", title: "Querying graph data"},
+    %{id: "sql-relationships", title: "SQL data relationships"}
+  ]
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Data modeling")
-     |> assign(:current_nav, :data_modeling)
+     |> assign(:current_nav, :docs)
      |> assign(:diagram, Diagram.data())
      |> assign(:graph, GraphSchema.data())
      |> assign(:structural_types, GraphSchema.structural_types())
      |> assign(:sql_examples, SqlExamples.all())
      |> assign(:foreign_keys, Diagram.foreign_keys())
      |> assign(:on_delete_legend, Diagram.on_delete_legend())
+     |> assign(:sections, @sections)
      |> assign(:source_urls, @source_urls)}
   end
 
@@ -69,93 +84,87 @@ defmodule DemoWeb.DataModelingLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <div class="space-y-10">
-        <header class="space-y-2">
-          <h1 class="text-2xl font-semibold">Data modeling</h1>
-        </header>
+      <.docs_layout current={:data_modeling} sections={@sections}>
+        <.h1>Data modeling</.h1>
 
-        <section class="space-y-3">
-          <h3 class="font-bold">The core models, Flows and Forms</h3>
-          <p class="max-w-3xl">
+        <.docs_section {section("introduction")}>
+          <.h3>The core models, Flows and Forms</.h3>
+          <.p>
             There are two core data types in the library, Flows and Forms.
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             Imagine a user filling out three related forms
             for an application. Each form the user fills out would be a <code>Form</code>
             and what connects the three forms together would
             be a <code>Flow</code>.
-          </p>
-          <p class="max-w-3xl">
-            Sometimes a single Flow with a single Form is enough. Sometimes a
-            single Flow has many Forms. Or it's a little more complex,
-            like a user filling out many groups of forms before submitting.
-            Or maybe we want a really complex flow, like after the user fills out
-            the initial forms for the application, we want different reviewer users to
-            look over the user's forms.
-          </p>
-          <p>
-            All of these are modeled with just Flows and Forms.
-          </p>
-          <h3 class="font-bold">Visualizing complex flows</h3>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
+            Maybe you want to add a reviewer section, where a different user looks
+            at the forms submitted by the user and gives feedback. In that case there'd
+            be the original Flow that has Forms for the user, a new Flow for the Forms
+            for the reviewer, and a top level Flow to connect the two flows together.
+          </.p>
+          <.p>
+            We might use terms like "Root Flow" and "Subflow" and "Form Flow"
+            to make it easier to talk about these, but fundamentally these are
+            modeled with just Flows and Forms.
+          </.p>
+          <.h3>Visualizing complex flows</.h3>
+          <.p>
             If you visualize the more complex journeys, they begin to
             resemble a tree shape - Forms are the leaf nodes and Flows are the
             branches and can be stacked one on top of each other, one flow
             leading to another flow.
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             Note: to help differentiate the types we call flows that only
             contain forms are called "Form Flows". And we call flows that only
             contain flows as children "Subflows". But at the data level, they
             are both modeled as Flows, just with different type fields.
-          </p>
-          <h3 class="font-bold">Modeling connections</h3>
-          <p class="max-w-3xl">
+          </.p>
+          <.h3>Modeling connections</.h3>
+          <.p>
             We could use Form and Flow to model both the connections -
             how one flow connects to another - AND the behaviour - how should a
             subflow render. And it'd work, but it'd be a bit messy. The simpler
             way is to keep the behaviour in the Forms and Flows, and model the
             connections separately.
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             As we've already see, the shape of these flows becomes a kind of
             tree (or graph). So a good way to model the connections is
             using Nodes and Relationships (aka vertices and edges).
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             When modeling it this way, every Form and Flow are represented by a
             Node, and the nodes are connected through Relationships.
-          </p>
-          <h3 class="font-bold">Templates and Instances</h3>
-          <p class="max-w-3xl">
+          </.p>
+          <.h3>Templates and Instances</.h3>
+          <.p>
             One more important piece of modeling terminology is the difference
             between Templates and Instances.
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             Admin users create Templates, which define the full journey from start
             to end. These contain Flow templates, Form templates, Nodes, and Relationships.
-          </p>
-          <p class="max-w-3xl">
+          </.p>
+          <.p>
             When a user goes to start a journey and fill out the first form, they create
             an instance of the template.
-          </p>
-        </section>
+          </.p>
+        </.docs_section>
 
-        <section class="space-y-3">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 class="text-lg font-semibold">
-              SQL Schema <span class="font-light">PostgreSQL and SQLite supported</span>
-            </h2>
-          </div>
+        <.docs_section {section("sql-schema")}>
+          <:aside>PostgreSQL and SQLite supported</:aside>
 
-          <p class="mb-6 max-w-3xl">
+          <.p class="mb-6">
             To read the data model, recommend starting in the top right corner
             with <code>Templates.Flow</code>, then move left across <code>Templates.Flow.Node</code>
             and <code>Templates.Form</code>. Those are the key models on the admin
             template side. The user side starts with <code>Instances.Flow</code>
             and moves
             left to <code>Instances.Form</code>.
-          </p>
+          </.p>
 
           <div id="group-legend" class="flex flex-wrap gap-x-6 gap-y-2">
             <div class="flex gap-2">
@@ -186,28 +195,24 @@ defmodule DemoWeb.DataModelingLive do
             data-react-flow-css={@source_urls.react_flow_css}
           >
           </div>
-        </section>
+        </.docs_section>
 
-        <section class="space-y-3">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 class="text-lg font-semibold">
-              Neo4J Graph Schema <span class="font-light">Optional but recommended</span>
-            </h2>
-          </div>
+        <.docs_section {section("graph-schema")}>
+          <:aside>Optional but recommended</:aside>
 
-          <p class="mb-6 max-w-3xl">
+          <.p class="mb-6">
             Modeling a flow is best done as a graph. While these can be modeled
             in a traditional SQL database, it's very inefficient. Even simple
             flows (from a human perspective) can take a lot of system resources
             to pull out of a relational database.
-          </p>
+          </.p>
 
-          <p class="mb-6 max-w-3xl">
+          <.p class="mb-6">
             To help FormFlow scale, it supports dual-writing graph data into a
             graph database (Neo4J). This makes it much easier to realize a
             graph at scale. When enabled, Neo4J is queried first, then a
             targeted SQL query is used to pull just the data from specific IDs.
-          </p>
+          </.p>
 
           <div
             id="graph-diagram"
@@ -222,7 +227,7 @@ defmodule DemoWeb.DataModelingLive do
           >
           </div>
 
-          <p class="max-w-3xl">
+          <.p>
             Three of the ten tables above cross over, and only those three: a
             node, a relationship between two nodes, and the flow they belong
             to. Form templates, form versions, and every instance table stay in
@@ -231,9 +236,9 @@ defmodule DemoWeb.DataModelingLive do
             nodes rather than left out because anything a reference targets has
             to be a node, or the reference cannot be traversed, and both
             subflow and ownership references point at flows.
-          </p>
+          </.p>
 
-          <p class="max-w-3xl">
+          <.p>
             A node carries <code>labels</code>, plural — a set — while a
             relationship carries exactly one <code>type</code>. FormFlow's SQL
             already mirrors that: <code>labels text[]</code>
@@ -242,74 +247,66 @@ defmodule DemoWeb.DataModelingLive do
             column is its Neo4j property map byte for byte, which is why the
             infrastructure columns are dual-written into it — in the graph there
             are no columns to index.
-          </p>
+          </.p>
 
-          <p class="max-w-3xl">
+          <.p>
             The lines are not foreign keys. A solid one is the relationship row
             itself, joining the two nodes it names. A dashed one is <em>structural</em>: a relationship Neo4j would hold that no row
             does, because a property already says it.
-          </p>
+          </.p>
 
-          <div class="overflow-x-auto">
-            <table id="structural-types" class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Reserved type</th>
-                  <th>Derived from</th>
-                  <th>Means</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :for={type <- @structural_types}>
-                  <td class="font-mono text-xs whitespace-nowrap">{type.type}</td>
-                  <td class="font-mono text-xs whitespace-nowrap">{type.derived_from}</td>
-                  <td class="text-sm">{type.meaning}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <.docs_table id="structural-types">
+            <thead>
+              <tr>
+                <th>Reserved type</th>
+                <th>Derived from</th>
+                <th>Means</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={type <- @structural_types}>
+                <td class="font-mono text-xs whitespace-nowrap">{type.type}</td>
+                <td class="font-mono text-xs whitespace-nowrap">{type.derived_from}</td>
+                <td class="text-sm">{type.meaning}</td>
+              </tr>
+            </tbody>
+          </.docs_table>
 
-          <p class="max-w-3xl">
+          <.p>
             Those three types are FormFlow's structural vocabulary, so user data
             must not collide with them: <code>FormFlow.Data.Templates.Flow.Relationship</code>
             rejects them as relationship labels today — a changeset error, not a
             convention — which means no stored data will need cleaning up when
             the dual-write arrives.
-          </p>
-        </section>
+          </.p>
+        </.docs_section>
 
-        <section class="space-y-3">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 class="text-lg font-semibold">
-              Querying graph data
-              <span class="font-light">three ways to do it, and the one FormFlow uses</span>
-            </h2>
-          </div>
+        <.docs_section {section("querying-graph-data")}>
+          <:aside>three ways to do it, and the one FormFlow uses</:aside>
 
-          <p class="max-w-3xl">
+          <.p>
             Storing a graph in a relational database is not exotic. It is two
             tables and a foreign key. The interesting question is how you read
             it back, and there are three well-worn answers: join your way
             across it, let SQL recurse for you, or hand the job to a database
             built for graphs.
-          </p>
+          </.p>
 
-          <p class="mb-6 max-w-3xl">
+          <.p class="mb-6">
             The examples below walk through all three using a tiny four-node
             graph, so the shape of each query is easy to see. The last example
             is FormFlow's own, and explains why it picks the option it does.
-          </p>
+          </.p>
 
           <div :for={example <- @sql_examples} id={"sql-#{example.id}"} class="mb-8 max-w-3xl">
-            <h3 class="font-semibold">{example.title}</h3>
-            <p class="my-2">{example.blurb}</p>
+            <.h3>{example.title}</.h3>
+            <.p class="my-2">{example.blurb}</.p>
             <pre class="schema-sql"><code>{example.sql}</code></pre>
-            <p class="mt-2 whitespace-pre-line text-base-content/70">{example.note}</p>
+            <.note class="mt-2">{example.note}</.note>
           </div>
-        </section>
+        </.docs_section>
 
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">SQL data relationships</h2>
+        <.docs_section {section("sql-relationships")}>
           <div>Delete types</div>
           <ul id="on-delete-legend" class="my-3 ml-3 space-y-1 text-sm">
             <li :for={rule <- @on_delete_legend} class="flex flex-wrap items-baseline gap-x-3">
@@ -320,28 +317,26 @@ defmodule DemoWeb.DataModelingLive do
             </li>
           </ul>
           <div>Foreign keys</div>
-          <div class="overflow-x-auto ml-3 ">
-            <table id="foreign-keys" class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Column</th>
-                  <th>References</th>
-                  <th>On delete</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :for={key <- @foreign_keys}>
-                  <td class="font-mono text-xs whitespace-nowrap">
-                    {key.table}.<span class="font-semibold">{key.column}</span>
-                  </td>
-                  <td class="font-mono text-xs whitespace-nowrap">{key.references}</td>
-                  <td class="font-mono text-xs whitespace-nowrap">{key.on_delete}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+          <.docs_table id="foreign-keys" class="ml-3">
+            <thead>
+              <tr>
+                <th>Column</th>
+                <th>References</th>
+                <th>On delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={key <- @foreign_keys}>
+                <td class="font-mono text-xs whitespace-nowrap">
+                  {key.table}.<span class="font-semibold">{key.column}</span>
+                </td>
+                <td class="font-mono text-xs whitespace-nowrap">{key.references}</td>
+                <td class="font-mono text-xs whitespace-nowrap">{key.on_delete}</td>
+              </tr>
+            </tbody>
+          </.docs_table>
+        </.docs_section>
+      </.docs_layout>
     </Layouts.app>
 
     <style>
@@ -614,4 +609,8 @@ defmodule DemoWeb.DataModelingLive do
     </script>
     """
   end
+
+  # The section the docs components head and the nav links to, spread as
+  # attributes: `<.docs_section {section("introduction")}>`
+  defp section(id), do: DocsComponents.fetch_section(@sections, id)
 end

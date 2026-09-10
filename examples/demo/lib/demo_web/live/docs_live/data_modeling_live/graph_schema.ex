@@ -1,6 +1,6 @@
-defmodule DemoWeb.DataModelingLive.GraphSchema do
+defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
   @moduledoc """
-  The Neo4j side of `DemoWeb.DataModelingLive`: the three entities a dual-write
+  The Neo4j side of `DemoWeb.DocsLive.DataModelingLive`: the three entities a dual-write
   would create, drawn with the same node type as the SQL schema above them so
   the two read as one page.
 

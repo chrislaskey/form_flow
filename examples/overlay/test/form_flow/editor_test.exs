@@ -52,7 +52,7 @@ defmodule Demo.FormFlowEditorTest do
     test "is mounted where the library says it is", %{conn: conn} do
       assert Assets.mount_path() == "/form-flow"
 
-      # The catch-all LiveView route must not swallow the asset path
+      # No LiveView route may swallow the asset path
       assert get(conn, Assets.editor_path()).status == 200
     end
   end
@@ -60,7 +60,7 @@ defmodule Demo.FormFlowEditorTest do
   describe "the editor container" do
     test "renders on the edit page with the bundle's URL", %{conn: conn} do
       {:ok, flow} = create_seeded()
-      {:ok, view, _html} = live(conn, "/flows/#{flow.id}/edit")
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/edit")
 
       assert has_element?(view, ~s(#flows-edit-editor[phx-update="ignore"]))
       assert render(element(view, "#flows-edit-editor")) =~ Assets.editor_path()
@@ -68,7 +68,7 @@ defmodule Demo.FormFlowEditorTest do
 
     test "carries the flow as JSON for the hook to parse, Start and End pinned", %{conn: conn} do
       {:ok, flow} = create_seeded()
-      {:ok, view, _html} = live(conn, "/flows/#{flow.id}/edit")
+      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/edit")
 
       data =
         view
@@ -95,15 +95,15 @@ defmodule Demo.FormFlowEditorTest do
       {:ok, simple} = create_seeded(%{label: "forms"})
       {:ok, complex} = create_seeded(%{label: "subflows"})
 
-      {:ok, view, _html} = live(conn, "/flows/#{simple.id}/edit")
+      {:ok, view, _html} = live(conn, "/admin/flows/#{simple.id}/edit")
       assert view |> element("#flows-edit-editor") |> render() =~ ~s(data-flow-label="forms")
 
-      {:ok, view, _html} = live(conn, "/flows/#{complex.id}/edit")
+      {:ok, view, _html} = live(conn, "/admin/flows/#{complex.id}/edit")
       assert view |> element("#flows-edit-editor") |> render() =~ ~s(data-flow-label="subflows")
     end
 
     test "the flows index is a table and never loads the bundle", %{conn: conn} do
-      {:ok, view, html} = live(conn, "/flows")
+      {:ok, view, html} = live(conn, "/admin/flows")
 
       refute html =~ Assets.editor_path()
       refute has_element?(view, "[data-src]")

@@ -1,11 +1,12 @@
-defmodule DemoWeb.DataModelingLiveTest do
+defmodule DemoWeb.DocsLive.DataModelingLiveTest do
   use DemoWeb.ConnCase
 
   import Phoenix.LiveViewTest
 
-  alias DemoWeb.DataModelingLive.Diagram
-  alias DemoWeb.DataModelingLive.GraphSchema
-  alias DemoWeb.DataModelingLive.SqlExamples
+  alias DemoWeb.DocsComponents
+  alias DemoWeb.DocsLive.DataModelingLive.Diagram
+  alias DemoWeb.DocsLive.DataModelingLive.GraphSchema
+  alias DemoWeb.DocsLive.DataModelingLive.SqlExamples
 
   test "draws one node per table FormFlow's schemas define", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/docs/data-modeling")
@@ -106,6 +107,44 @@ defmodule DemoWeb.DataModelingLiveTest do
     dashed = for edge <- edges, edge["style"]["strokeDasharray"], do: edge["label"]
 
     assert Enum.sort(dashed) == ["EMBEDS", "IN", "OWNED_BY"]
+  end
+
+  test "the docs nav offers every page under /docs", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/docs/data-modeling")
+
+    listed =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#docs-nav a:not([href^='#'])")
+      |> LazyHTML.attribute("href")
+
+    # The nav heads the list with /docs itself
+    assert listed == ["/docs" | Enum.map(DocsComponents.pages(), & &1.path)]
+  end
+
+  test "the nav's section list and the headings are the same list", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/docs/data-modeling")
+
+    page = LazyHTML.from_fragment(html)
+    links = LazyHTML.query(page, "#docs-nav a[href^='#']")
+
+    ids = links |> LazyHTML.attribute("href") |> Enum.map(&String.trim_leading(&1, "#"))
+    titles = Enum.map(links, &(&1 |> LazyHTML.text() |> String.trim()))
+
+    assert "introduction" in ids
+
+    # Every nav entry points at a heading that says the same thing and links
+    # to itself
+    for {id, title} <- Enum.zip(ids, titles) do
+      heading = LazyHTML.query_by_id(page, id)
+
+      assert LazyHTML.tag(heading) == ["h2"]
+      assert LazyHTML.text(heading) =~ title
+      assert heading |> LazyHTML.query("a") |> LazyHTML.attribute("href") == ["#" <> id]
+    end
+
+    # ...and no heading is missing from the nav, in order
+    assert page |> LazyHTML.query("h2") |> LazyHTML.attribute("id") == ids
   end
 
   test "prints every query example, in full", %{conn: conn} do

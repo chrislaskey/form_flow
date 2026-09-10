@@ -36,10 +36,11 @@ defmodule DemoWeb.Router do
     live_session :default, on_mount: DemoWeb.UserHook do
       live "/install-check", InstallCheckLive
       live "/branding", BrandingLive
-      live "/docs/data-modeling", DataModelingLive
+      live "/docs", DocsLive.Index
+      live "/docs/data-modeling", DocsLive.DataModelingLive
       live "/admin/*path", FormFlowLive.Admin
       live "/users/*path", FormFlowLive.Users
-      live "/*path", ReadmeLive
+      live "/", HomeLive
     end
   end
 

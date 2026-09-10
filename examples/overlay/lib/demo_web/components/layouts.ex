@@ -36,7 +36,7 @@ defmodule DemoWeb.Layouts do
   attr :current_nav, :atom,
     default: nil,
     doc:
-      "which primary nav item is active: :home, :install_check, :data_modeling, " <>
+      "which primary nav item is active: :home, :install_check, :docs, " <>
         ":admin, or :users"
 
   attr :current_user, :map,
@@ -64,21 +64,13 @@ defmodule DemoWeb.Layouts do
                 </linearGradient>
               </:defs>
             </.logo_mark>
-            FormFlow
+            FormFlow <span class="font-thin opacity-50">Demo</span>
           </.link>
 
           <div class="flex items-center gap-4">
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
-              <.nav_link navigate="/install-check" current={@current_nav == :install_check}>
-                Install Check
-              </.nav_link>
-              <.nav_link
-                navigate="/docs/data-modeling"
-                current={@current_nav == :data_modeling}
-              >
-                Data Modeling
-              </.nav_link>
+              <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
               <.nav_link navigate="/admin" current={@current_nav == :admin}>Admin</.nav_link>
               <.nav_link navigate="/users" current={@current_nav == :users}>Users</.nav_link>
             </nav>
