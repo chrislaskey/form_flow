@@ -155,6 +155,18 @@ defmodule DemoWeb.ReadmeLive do
         </section>
 
         <section class="space-y-3">
+          <h2 class="text-lg font-semibold">Data modeling</h2>
+          <p class="text-sm text-base-content/70">
+            <.link navigate={~p"/docs/data-modeling"} class="link">/docs/data-modeling</.link>
+            draws the tables the generated migration creates as a schema diagram —
+            columns, Postgres types, and every foreign key's <code>ON DELETE</code>
+            — read off FormFlow's Ecto schemas rather than kept in step by hand.
+            It is also the demo's second ReactFlow canvas, and the one that loads
+            React from a CDN instead of from the library's prebuilt bundle.
+          </p>
+        </section>
+
+        <section class="space-y-3">
           <h2 class="text-lg font-semibold">Library modules</h2>
           <ul id="form-flow-modules" class="space-y-1">
             <li :for={{name, doc} <- @modules} class="text-sm">

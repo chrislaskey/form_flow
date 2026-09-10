@@ -25,6 +25,14 @@ Then open [http://localhost:4001](http://localhost:4001):
   owner) with no sign-in. Choosing one posts to `/switch-user/:user_id`, which
   stores the id in the session and reloads the page; `DemoWeb.UserHook`
   assigns it as `current_user` on every LiveView
+- `/docs/data-modeling` — the tables the generated migration creates, drawn as
+  a schema diagram: `DemoWeb.DataModelingLive`. Columns, Postgres types, and
+  every foreign key's `ON DELETE` are read off FormFlow's Ecto schemas, so the
+  page describes the library the demo is compiled against. It is the demo's
+  second ReactFlow canvas and the only one that loads React from a CDN —
+  `cdn.jsdelivr.net`, at runtime, in the page's own colocated hook — rather
+  than from FormFlow's prebuilt bundle, which is what lets it register a node
+  type of its own
 - `/install-check` — one component from each library FormFlow depends on:
   `PhoenixSelect.select`, `DynamicForm.form`, and `Slab.table`. A missing
   colocated hook, Tailwind `@source`, or absent daisyUI shows up here first
@@ -83,6 +91,9 @@ migration is proven to actually run.
 - `demo/` — the generated app. The interesting files are:
   - `lib/demo_web/live/readme_live.ex` — the index and the router usage
   - `lib/demo_web/live/install_check_live.ex` — one component per dependency
+  - `lib/demo_web/live/data_modeling_live.ex` and
+    `data_modeling_live/diagram.ex` — the schema diagram, and the Ecto
+    reflection behind it
   - `priv/repo/migrations/*_add_form_flow.exs` — the generated migration
   - `test/form_flow/migration_test.exs` — the migration, against real SQLite
   - `assets/js/app.js`, `assets/css/app.css`, `config/config.exs` — the

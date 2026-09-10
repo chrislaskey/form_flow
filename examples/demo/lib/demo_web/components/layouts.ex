@@ -35,7 +35,9 @@ defmodule DemoWeb.Layouts do
 
   attr :current_nav, :atom,
     default: nil,
-    doc: "which primary nav item is active: :home, :install_check, :admin, or :users"
+    doc:
+      "which primary nav item is active: :home, :install_check, :data_modeling, " <>
+        ":admin, or :users"
 
   attr :current_user, :map,
     default: nil,
@@ -70,6 +72,12 @@ defmodule DemoWeb.Layouts do
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/install-check" current={@current_nav == :install_check}>
                 Install Check
+              </.nav_link>
+              <.nav_link
+                navigate="/docs/data-modeling"
+                current={@current_nav == :data_modeling}
+              >
+                Data Modeling
               </.nav_link>
               <.nav_link navigate="/admin" current={@current_nav == :admin}>Admin</.nav_link>
               <.nav_link navigate="/users" current={@current_nav == :users}>Users</.nav_link>
