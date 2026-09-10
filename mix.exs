@@ -58,7 +58,7 @@ defmodule FormFlow.MixProject do
 
   defp package do
     [
-      licenses: ["MIT"],
+      licenses: ["LicenseRef-All-Rights-Reserved"],
       links: %{"GitHub" => @source_url},
       # priv carries the prebuilt editor bundle served by FormFlow.Web.Assets;
       # without it the flow editor cannot load
