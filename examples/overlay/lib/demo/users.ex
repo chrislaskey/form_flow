@@ -9,33 +9,41 @@ defmodule Demo.Users do
 
   # In the order a visitor meets them: reading, applying, then the two staff
   # roles — the reviewer works applications, the admin builds the flows.
+  #
+  # `role` is what the pages gate on (`DemoWeb.PersonaComponents`): the two
+  # pet owners share `:owner`, since nothing in the demo tells them apart.
   @users [
     %{
       id: "docs_reader",
+      role: :reader,
       name: "Docs Reader",
       initials: "DR",
       blurb: "Reads the README-style docs at /"
     },
     %{
       id: "dog_owner",
+      role: :owner,
       name: "Dog Owner",
       initials: "DO",
       blurb: "Applies for and renews a dog license"
     },
     %{
       id: "cat_owner",
+      role: :owner,
       name: "Cat Owner",
       initials: "CO",
       blurb: "Applies for and renews a cat license"
     },
     %{
       id: "reviewer",
+      role: :reviewer,
       name: "Pet License Reviewer",
       initials: "PR",
       blurb: "Reviews and decides license applications"
     },
     %{
       id: "admin",
+      role: :admin,
       name: "Pet License Admin",
       initials: "PA",
       blurb: "Builds the licensing flows and forms"
@@ -49,6 +57,9 @@ defmodule Demo.Users do
 
   @doc "The user a visitor sees the demo as before switching."
   def default, do: hd(@users)
+
+  @doc "Every user holding one of `roles`, in display order."
+  def with_roles(roles), do: Enum.filter(@users, &(&1.role in roles))
 
   @doc "Looks a user up by id."
   def fetch(id), do: Enum.find_value(@users, :error, &if(&1.id == id, do: {:ok, &1}))

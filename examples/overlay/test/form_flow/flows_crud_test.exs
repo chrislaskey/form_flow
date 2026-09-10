@@ -13,6 +13,9 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
   use DemoWeb.ConnCase
 
+  # /admin is the admin experience
+  @moduletag user: "admin"
+
   import Phoenix.LiveViewTest
 
   alias FormFlow.Data.Templates.Flows

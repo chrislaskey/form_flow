@@ -13,6 +13,9 @@ defmodule Demo.FormFlowFlowStatusTest do
 
   use DemoWeb.ConnCase, async: false
 
+  # /admin is the admin experience
+  @moduletag user: "admin"
+
   defmodule UnlistedPage do
     use Phoenix.LiveView
 
@@ -302,6 +305,8 @@ defmodule Demo.FormFlowFlowStatusTest do
   # ── the user-facing pages ───────────────────────────────────────────────
 
   describe "the user-facing pages" do
+    @describetag user: "dog_owner"
+
     test "the listing offers open flows, names winding-down ones, and hides drafts",
          %{conn: conn} do
       {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})

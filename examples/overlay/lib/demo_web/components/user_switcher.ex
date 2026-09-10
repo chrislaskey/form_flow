@@ -42,7 +42,7 @@ defmodule DemoWeb.UserSwitcher do
             <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
               Viewing as
             </span>
-            <span class="text-sm">
+            <span class="text-sm whitespace-nowrap">
               <span class="font-semibold text-gray-900">{@current_user.name}</span>
               <span class="text-gray-400"> · Switch</span>
             </span>

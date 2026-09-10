@@ -15,6 +15,9 @@ defmodule Demo.FormFlowInstancesTest do
 
   use DemoWeb.ConnCase, async: false
 
+  # /users is the user experience
+  @moduletag user: "dog_owner"
+
   import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 

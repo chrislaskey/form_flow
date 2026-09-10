@@ -6,7 +6,7 @@ defmodule DemoWeb.HomeLive do
 
   use DemoWeb, :live_view
 
-  alias DemoWeb.UserSwitcher
+  import DemoWeb.PersonaComponents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -29,19 +29,7 @@ defmodule DemoWeb.HomeLive do
           </p>
         </header>
 
-        <section
-          id="perspective"
-          class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/60 px-6 py-5"
-        >
-          <div class="space-y-1">
-            <h2 class="font-semibold text-gray-900">Pick a perspective</h2>
-            <p class="text-sm text-base-content/70">
-              The demo is viewed as one of four hardcoded users, with no sign-in.
-              Switch here or in the header; the page reloads as that user.
-            </p>
-          </div>
-          <UserSwitcher.user_switcher id="perspective-user-switcher" current_user={@current_user} />
-        </section>
+        <.pick_perspective current_user={@current_user} />
 
         <section>
           <p class="text-sm text-base-content/70">

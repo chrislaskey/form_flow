@@ -12,6 +12,8 @@ defmodule DemoWeb.FormFlowLive.Users do
 
   use DemoWeb, :live_view
 
+  import DemoWeb.PersonaComponents
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -33,29 +35,38 @@ defmodule DemoWeb.FormFlowLive.Users do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <div class="space-y-6">
-        <header class="space-y-2">
-          <h1 class="text-2xl font-semibold">Users</h1>
-          <p class="text-base-content/70">
-            FormFlow's user-facing form instances: flows (diagrams rendered with
-            ReactFlow) and the reusable form catalog. Back to the <.link navigate={~p"/"} class="link">demo index</.link>.
-          </p>
-        </header>
+      <.persona_gate
+        current_user={@current_user}
+        roles={[:owner, :reviewer]}
+        page="the user experience"
+      >
+        <div class="space-y-6">
+          <header class="space-y-2">
+            <h1 class="text-2xl font-semibold">Users</h1>
+            <p class="text-base-content/70">
+              FormFlow's user-facing form instances: flows (diagrams rendered with
+              ReactFlow) and the reusable form catalog. Back to the <.link
+                navigate={~p"/"}
+                class="link"
+              >demo index</.link>.
+            </p>
+          </header>
 
-        <div id="users-pages">
-          <FormFlow.Web.router
-            user_id="demo-user"
-            uri={@uri}
-            params={@params}
-            path={@path}
-            base="/users"
-            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
-            form_types={DemoWeb.FormFlowLive.Types.form_types()}
-            callback_data={%{hello: "world"}}
-            pre_release_user_ids={["demo-user"]}
-          />
+          <div id="users-pages">
+            <FormFlow.Web.router
+              user_id="demo-user"
+              uri={@uri}
+              params={@params}
+              path={@path}
+              base="/users"
+              flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+              form_types={DemoWeb.FormFlowLive.Types.form_types()}
+              callback_data={%{hello: "world"}}
+              pre_release_user_ids={["demo-user"]}
+            />
+          </div>
         </div>
-      </div>
+      </.persona_gate>
     </Layouts.app>
     """
   end

@@ -5,6 +5,7 @@ defmodule DemoWeb.Layouts do
   """
   use DemoWeb, :html
 
+  alias DemoWeb.Experiences
   alias DemoWeb.UserSwitcher
 
   # Embed all files in layouts/* within this module.
@@ -37,7 +38,7 @@ defmodule DemoWeb.Layouts do
     default: nil,
     doc:
       "which primary nav item is active: :home, :install_check, :docs, " <>
-        ":admin, or :users"
+        ":admin, or :users — the last two both light the Demo Experience menu"
 
   attr :current_user, :map,
     default: nil,
@@ -71,8 +72,7 @@ defmodule DemoWeb.Layouts do
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
-              <.nav_link navigate="/admin" current={@current_nav == :admin}>Admin</.nav_link>
-              <.nav_link navigate="/users" current={@current_nav == :users}>Users</.nav_link>
+              <.experience_menu current={@current_nav in [:admin, :users]} />
             </nav>
             <div :if={@current_user} class="flex items-center sm:border-l sm:border-gray-200 sm:pl-4">
               <UserSwitcher.user_switcher id="header-user-switcher" current_user={@current_user} />
@@ -119,6 +119,59 @@ defmodule DemoWeb.Layouts do
       <rect :if={@front == :box1} x="3" y="3" width="13" height="13" rx="1" stroke={@box1} />
       <rect :if={@front == :box2} x="8" y="8" width="13" height="13" rx="1" stroke={@box2} />
     </svg>
+    """
+  end
+
+  @doc """
+  The header's Demo Experience menu: the three sides of the demo, from
+  `DemoWeb.Experiences`.
+
+  A `<details>` rather than a hover menu, for the same reason the user
+  switcher is one — it opens on click, closes on click-away, and needs no
+  JavaScript of its own.
+  """
+  attr :current, :boolean, default: false, doc: "whether one of its pages is being read"
+
+  def experience_menu(assigns) do
+    assigns = assign(assigns, :experiences, Experiences.all())
+
+    ~H"""
+    <details
+      id="experience-menu"
+      class="dropdown dropdown-end"
+      phx-click-away={JS.remove_attribute("open")}
+    >
+      <summary class={[
+        "flex cursor-pointer list-none items-center gap-1 rounded-lg px-3 py-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden",
+        @current && "bg-gray-100 font-semibold text-indigo-600"
+      ]}>
+        Demo Experience
+        <svg
+          viewBox="0 0 16 16"
+          class="size-3.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 6.5l4 4 4-4" />
+        </svg>
+      </summary>
+
+      <ul class="dropdown-content z-30 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+        <li :for={experience <- @experiences}>
+          <.link
+            navigate={experience.path}
+            class="block rounded-lg px-2.5 py-2 transition-colors hover:bg-gray-100"
+          >
+            <span class="block text-sm font-medium text-gray-900">{experience.title}</span>
+            <span class="block truncate text-xs text-gray-500">{experience.blurb}</span>
+          </.link>
+        </li>
+      </ul>
+    </details>
     """
   end
 
