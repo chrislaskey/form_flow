@@ -108,7 +108,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   use Ecto.Migration
 
   def up(context) do
-    create_if_not_exists table(:form_flow_flows, primary_key: false, prefix: context.prefix) do
+    create_if_not_exists table(:form_flow_template_flows,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
       add(:id, :uuid, primary_key: true)
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
@@ -119,20 +122,27 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :owner_flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :delete_all, prefix: context.prefix)
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :delete_all,
+          prefix: context.prefix
+        )
       )
 
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_flows, [:owner_flow_id], prefix: context.prefix))
-    create_if_not_exists(index(:form_flow_flows, [:tenant_id], prefix: context.prefix))
-    create_if_not_exists(index(:form_flow_flows, [:status], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flows, [:owner_flow_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(index(:form_flow_template_flows, [:tenant_id], prefix: context.prefix))
+    create_if_not_exists(index(:form_flow_template_flows, [:status], prefix: context.prefix))
 
     # The flow template's append-only audit (`FormFlow.Data.Templates.Flow.Event`),
     # the same discipline as the two instance logs below: `:restrict`, deleted
     # deliberately by `Flows.delete/1` before the flow.
-    create_if_not_exists table(:form_flow_flow_events,
+    create_if_not_exists table(:form_flow_template_flow_events,
                            primary_key: false,
                            prefix: context.prefix
                          ) do
@@ -140,7 +150,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :restrict, prefix: context.prefix),
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        ),
         null: false
       )
 
@@ -151,12 +165,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_flow_events, [:flow_id], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flow_events, [:flow_id], prefix: context.prefix)
+    )
 
     create_if_not_exists(
-      unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
+      unique_index(:form_flow_template_flows, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
-        name: :form_flow_flows_slug_tenant_index,
+        name: :form_flow_template_flows_slug_tenant_index,
         prefix: context.prefix
       )
     )
@@ -174,7 +190,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :owner_flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :nilify_all, prefix: context.prefix)
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :nilify_all,
+          prefix: context.prefix
+        )
       )
 
       add(
@@ -217,7 +237,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:id, :uuid, primary_key: true)
 
       add(
-        :template_form_id,
+        :form_id,
         references(:form_flow_template_forms,
           type: :uuid,
           on_delete: :restrict,
@@ -246,15 +266,13 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     end
 
     create_if_not_exists(
-      unique_index(:form_flow_template_form_versions, [:template_form_id, :version],
+      unique_index(:form_flow_template_form_versions, [:form_id, :version],
         prefix: context.prefix
       )
     )
 
     create_if_not_exists(
-      index(:form_flow_template_form_versions, [:template_form_id, :status],
-        prefix: context.prefix
-      )
+      index(:form_flow_template_form_versions, [:form_id, :status], prefix: context.prefix)
     )
 
     create_if_not_exists table(:form_flow_instance_flows,
@@ -264,8 +282,12 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:id, :uuid, primary_key: true)
 
       add(
-        :flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :restrict, prefix: context.prefix),
+        :template_flow_id,
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        ),
         null: false
       )
 
@@ -278,7 +300,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_instance_flows, [:flow_id], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_instance_flows, [:template_flow_id], prefix: context.prefix)
+    )
+
     create_if_not_exists(index(:form_flow_instance_flows, [:status], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_instance_flows, [:user_id], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_instance_flows, [:tenant_id], prefix: context.prefix))
@@ -379,7 +404,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
         )
       )
 
-      add(:snapshot_data, :map, null: false, default: %{})
+      add(:snapshot, :map, null: false, default: %{})
       add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)
@@ -416,7 +441,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       index(:form_flow_instance_flow_events, [:instance_flow_id], prefix: context.prefix)
     )
 
-    create_if_not_exists table(:form_flow_nodes,
+    create_if_not_exists table(:form_flow_template_flow_nodes,
                            primary_key: false,
                            prefix: context.prefix
                          ) do
@@ -424,7 +449,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :flow_id,
-        references(:form_flow_flows,
+        references(:form_flow_template_flows,
           type: :uuid,
           on_delete: :delete_all,
           prefix: context.prefix
@@ -437,7 +462,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :subflow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :nothing, prefix: context.prefix)
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :nothing,
+          prefix: context.prefix
+        )
       )
 
       add(
@@ -455,35 +484,45 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_nodes, [:flow_id], prefix: context.prefix))
-
-    create_if_not_exists(index(:form_flow_nodes, [:subflow_id], prefix: context.prefix))
-
-    create_if_not_exists(index(:form_flow_nodes, [:form_id], prefix: context.prefix))
-
-    create_if_not_exists(index(:form_flow_nodes, [:tenant_id], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flow_nodes, [:flow_id], prefix: context.prefix)
+    )
 
     create_if_not_exists(
-      unique_index(:form_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
+      index(:form_flow_template_flow_nodes, [:subflow_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(
+      index(:form_flow_template_flow_nodes, [:form_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(
+      index(:form_flow_template_flow_nodes, [:tenant_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
-        name: :form_flow_nodes_slug_tenant_index,
+        name: :form_flow_template_flow_nodes_slug_tenant_index,
         prefix: context.prefix
       )
     )
 
     # Label and property lookups use GIN: labels via array containment (@>),
     # properties via jsonb_path_ops, which serves @> containment queries only
-    create_if_not_exists(index(:form_flow_nodes, [:labels], using: "GIN", prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flow_nodes, [:labels], using: "GIN", prefix: context.prefix)
+    )
 
     create_if_not_exists(
-      index(:form_flow_nodes, ["properties jsonb_path_ops"],
+      index(:form_flow_template_flow_nodes, ["properties jsonb_path_ops"],
         using: "GIN",
-        name: :form_flow_nodes_properties_index,
+        name: :form_flow_template_flow_nodes_properties_index,
         prefix: context.prefix
       )
     )
 
-    create_if_not_exists table(:form_flow_relationships,
+    create_if_not_exists table(:form_flow_template_flow_relationships,
                            primary_key: false,
                            prefix: context.prefix
                          ) do
@@ -491,7 +530,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :flow_id,
-        references(:form_flow_flows,
+        references(:form_flow_template_flows,
           type: :uuid,
           on_delete: :delete_all,
           prefix: context.prefix
@@ -501,7 +540,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :source_id,
-        references(:form_flow_nodes,
+        references(:form_flow_template_flow_nodes,
           type: :uuid,
           on_delete: :delete_all,
           prefix: context.prefix
@@ -511,7 +550,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
       add(
         :target_id,
-        references(:form_flow_nodes,
+        references(:form_flow_template_flow_nodes,
           type: :uuid,
           on_delete: :delete_all,
           prefix: context.prefix
@@ -528,9 +567,13 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     # Unique, so the same pair can't be linked twice with the same label — a
     # deliberate divergence from Neo4j, where parallel relationships are legal.
-    # Its source_id prefix doubles as the outbound traversal index.
+    # Its source_id prefix doubles as the outbound traversal index. Named here
+    # because the name Ecto derives from the columns runs past Postgres's
+    # 63-byte identifier limit, which would truncate it out of step with the
+    # name `FormFlow.Data.Templates.Flow.Relationship` maps errors from.
     create_if_not_exists(
-      unique_index(:form_flow_relationships, [:source_id, :target_id, :label],
+      unique_index(:form_flow_template_flow_relationships, [:source_id, :target_id, :label],
+        name: :form_flow_template_flow_relationships_source_target_label_index,
         prefix: context.prefix
       )
     )
@@ -538,24 +581,28 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     # Inbound traversal ("what points at N?") — the reverse direction the
     # unique index above can't serve
     create_if_not_exists(
-      index(:form_flow_relationships, [:target_id, :label], prefix: context.prefix)
+      index(:form_flow_template_flow_relationships, [:target_id, :label], prefix: context.prefix)
     )
 
-    create_if_not_exists(index(:form_flow_relationships, [:flow_id], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flow_relationships, [:flow_id], prefix: context.prefix)
+    )
 
-    create_if_not_exists(index(:form_flow_relationships, [:tenant_id], prefix: context.prefix))
+    create_if_not_exists(
+      index(:form_flow_template_flow_relationships, [:tenant_id], prefix: context.prefix)
+    )
   end
 
   def down(context) do
-    drop_if_exists(table(:form_flow_relationships, prefix: context.prefix))
-    drop_if_exists(table(:form_flow_nodes, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_template_flow_relationships, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_template_flow_nodes, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_flow_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_form_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_forms, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_flows, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_form_versions, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_forms, prefix: context.prefix))
-    drop_if_exists(table(:form_flow_flow_events, prefix: context.prefix))
-    drop_if_exists(table(:form_flow_flows, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_template_flow_events, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_template_flows, prefix: context.prefix))
   end
 end

@@ -20,8 +20,8 @@ defmodule FormFlow.Data.Migration do
   ## Versions
 
   FormFlow's schema is versioned independently of the host's migration history.
-  The applied version lives in a `form_flow_migrations` table, so `up/1` knows
-  which steps still need to run and is safe to run more than once.
+  The applied version lives in a `form_flow_database_migrations` table, so
+  `up/1` knows which steps still need to run and is safe to run more than once.
 
   Pin the version in the generated migration. A pinned migration keeps doing
   what it did when it was written, and upgrading FormFlow means generating a

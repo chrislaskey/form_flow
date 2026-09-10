@@ -126,7 +126,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   defp delete_versions_then_lineage(form) do
-    Repo.delete_all(from(v in Version, where: v.template_form_id == ^form.id))
+    Repo.delete_all(from(v in Version, where: v.form_id == ^form.id))
 
     case Repo.delete(form) do
       {:ok, deleted} -> deleted
@@ -247,7 +247,7 @@ defmodule FormFlow.Data.Templates.Forms do
   def list_versions(form_id) do
     Repo.all(
       from(v in Version,
-        where: v.template_form_id == ^form_id,
+        where: v.form_id == ^form_id,
         order_by: [desc: v.inserted_at]
       )
     )
@@ -260,16 +260,14 @@ defmodule FormFlow.Data.Templates.Forms do
   dialog: with no published history, no instance can exist.
   """
   def ever_published?(form_id) do
-    Repo.exists?(
-      from(v in Version, where: v.template_form_id == ^form_id and not is_nil(v.version))
-    )
+    Repo.exists?(from(v in Version, where: v.form_id == ^form_id and not is_nil(v.version)))
   end
 
   @doc "The latest published version of a lineage, or nil. Skips drafts and archived."
   def get_latest_version(form_id) do
     Repo.one(
       from(v in Version,
-        where: v.template_form_id == ^form_id and v.status == "published",
+        where: v.form_id == ^form_id and v.status == "published",
         order_by: [desc: v.version],
         limit: 1
       )
@@ -286,7 +284,7 @@ defmodule FormFlow.Data.Templates.Forms do
         from(i in Instances.Form,
           join: v in Version,
           on: i.template_form_version_id == v.id,
-          where: v.template_form_id == ^form_id,
+          where: v.form_id == ^form_id,
           group_by: i.status,
           select: {i.status, count(i.id)}
         )
@@ -312,8 +310,8 @@ defmodule FormFlow.Data.Templates.Forms do
           left_join: fi in Instances.Flow,
           on: fi.id == i.instance_flow_id,
           left_join: f in Flow,
-          on: f.id == fi.flow_id,
-          where: v.template_form_id == ^form_id,
+          on: f.id == fi.template_flow_id,
+          where: v.form_id == ^form_id,
           group_by: [f.id, f.name, i.status],
           select: {f.id, f.name, i.status, count(i.id)}
         )
@@ -354,7 +352,7 @@ defmodule FormFlow.Data.Templates.Forms do
           nil ->
             {:error, :based_on_not_found}
 
-          %Version{template_form_id: other} when other != form_id ->
+          %Version{form_id: other} when other != form_id ->
             {:error, :based_on_wrong_form}
 
           %Version{status: "draft"} ->
@@ -403,7 +401,7 @@ defmodule FormFlow.Data.Templates.Forms do
   def stale_draft?(%Version{based_on_version_id: nil}), do: false
 
   def stale_draft?(%Version{} = version) do
-    case get_latest_version(version.template_form_id) do
+    case get_latest_version(version.form_id) do
       nil -> false
       latest -> latest.id != version.based_on_version_id
     end
@@ -428,7 +426,7 @@ defmodule FormFlow.Data.Templates.Forms do
     policy = resolve_policy!(opts)
 
     Repo.transaction(fn ->
-      lock_lineage(version.template_form_id)
+      lock_lineage(version.form_id)
 
       # Reloaded inside the lock — the caller's struct may predate a
       # concurrent publish of the same draft
@@ -443,7 +441,7 @@ defmodule FormFlow.Data.Templates.Forms do
   # --- publish internals ---------------------------------------------------
 
   defp publish_draft(draft, policy) do
-    number = next_version_number(draft.template_form_id)
+    number = next_version_number(draft.form_id)
     now = DateTime.utc_now()
 
     case Repo.update(Version.status_changeset(draft, "published", number, now)) do
@@ -485,7 +483,7 @@ defmodule FormFlow.Data.Templates.Forms do
   # Serializes concurrent publishes of one lineage. Postgres only: SQLite has
   # no FOR UPDATE in its grammar (an unconditional lock is a runtime syntax
   # error, not a no-op) and its single-writer model makes the lock
-  # unnecessary. The unique (template_form_id, version) index is the backstop.
+  # unnecessary. The unique (form_id, version) index is the backstop.
   defp lock_lineage(form_id) do
     query = from(f in Form, where: f.id == ^form_id)
     query = if postgres?(), do: lock(query, "FOR UPDATE"), else: query
@@ -502,7 +500,7 @@ defmodule FormFlow.Data.Templates.Forms do
     max =
       Repo.one(
         from(v in Version,
-          where: v.template_form_id == ^form_id and not is_nil(v.version),
+          where: v.form_id == ^form_id and not is_nil(v.version),
           select: max(v.version)
         )
       )
@@ -516,7 +514,7 @@ defmodule FormFlow.Data.Templates.Forms do
         from(i in Instances.Form,
           join: v in Version,
           on: i.template_form_version_id == v.id,
-          where: v.template_form_id == ^published.template_form_id,
+          where: v.form_id == ^published.form_id,
           where: i.template_form_version_id != ^published.id
         )
       )
@@ -570,7 +568,7 @@ defmodule FormFlow.Data.Templates.Forms do
     )
   end
 
-  defp migrate!(instance, published, policy, event, changes, snapshot_data) do
+  defp migrate!(instance, published, policy, event, changes, snapshot) do
     changes = Map.put(changes, :template_form_version_id, published.id)
 
     case Repo.update(Ecto.Changeset.change(instance, changes)) do
@@ -583,7 +581,7 @@ defmodule FormFlow.Data.Templates.Forms do
       event: event,
       from_version_id: instance.template_form_version_id,
       to_version_id: published.id,
-      snapshot_data: snapshot_data,
+      snapshot: snapshot,
       user_id: policy.user_id
     }
 
@@ -596,7 +594,7 @@ defmodule FormFlow.Data.Templates.Forms do
   # Renames re-key first, then prune drops keys absent from the new
   # definition — the only correct order: a renamed field's old key is by
   # definition not in the new definition. Returns {data, dropped} where
-  # dropped is what prune removed (the event's snapshot_data).
+  # dropped is what prune removed (the event's snapshot).
   defp transform_data(data, published, policy) do
     data =
       Enum.reduce(policy.renames, data, fn {old, new}, acc ->
@@ -643,7 +641,7 @@ defmodule FormFlow.Data.Templates.Forms do
         latest_draft =
           Repo.one(
             from(v in Version,
-              where: v.template_form_id == ^source.id and v.status == "draft",
+              where: v.form_id == ^source.id and v.status == "draft",
               order_by: [desc: v.updated_at],
               limit: 1
             )
@@ -658,7 +656,7 @@ defmodule FormFlow.Data.Templates.Forms do
   defp insert_draft(form_id, definition, based_on_id) do
     Repo.insert(
       Version.create_changeset(%Version{}, %{
-        template_form_id: form_id,
+        form_id: form_id,
         definition: definition || %{},
         based_on_version_id: based_on_id
       })
@@ -670,7 +668,7 @@ defmodule FormFlow.Data.Templates.Forms do
       from(i in Instances.Form,
         join: v in Version,
         on: i.template_form_version_id == v.id,
-        where: v.template_form_id == ^form_id
+        where: v.form_id == ^form_id
       )
     )
   end

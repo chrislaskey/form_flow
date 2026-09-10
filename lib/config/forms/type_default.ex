@@ -19,6 +19,6 @@ defmodule FormFlow.Config.Forms.Type.Default do
   defdelegate initial_data(context, callback_data), to: Types.Default
   defdelegate edit_component(assigns), to: Types.Default
   defdelegate show_component(assigns), to: Types.Default
-  defdelegate snapshot_data(context, callback_data), to: Types.Default
+  defdelegate snapshot(context, callback_data), to: Types.Default
   defdelegate handle_complete(context, callback_data), to: Types.Default
 end

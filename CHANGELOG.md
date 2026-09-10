@@ -1,5 +1,119 @@
 # Changelog
 
+## v0.24.0
+
+### Every table says whether it holds a template or an instance
+
+Ten of FormFlow's eleven tables are named `form_flow_<scope>_<subject>`,
+where the scope is `template` or `instance` — the split
+`FormFlow.Data.Templates` and `FormFlow.Data.Instances` draw in the module
+tree. Four tables were not: the flow template's own tables carried no scope
+segment at all, so `form_flow_flows` sat next to `form_flow_instance_flows`
+saying nothing about which side of the line it was on, and `form_flow_nodes`
+and `form_flow_relationships` read as though they belonged to the schema at
+large rather than to a flow template. They now say it:
+
+| Before | After |
+|--------|-------|
+| `form_flow_flows` | `form_flow_template_flows` |
+| `form_flow_flow_events` | `form_flow_template_flow_events` |
+| `form_flow_nodes` | `form_flow_template_flow_nodes` |
+| `form_flow_relationships` | `form_flow_template_flow_relationships` |
+
+No columns changed, and the `"flow_id"` and `"tenant_id"` keys the schemas
+copy into `properties` for the Neo4j dual-write are untouched. The eleventh
+table is neither a template nor an instance — it records which version of the
+migration has run — and says so: **`form_flow_migrations` is now
+`form_flow_database_migrations`**. It is created by
+`FormFlow.Data.Migrations.Version`, which reads the applied version out of it;
+a database migrated by an earlier release has the old table, and reads as
+never migrated.
+
+**One index is named in the migration rather than derived.** The unique index
+on `form_flow_template_flow_relationships` over `source_id`, `target_id`, and
+`label` is now
+`form_flow_template_flow_relationships_source_target_label_index` — the name
+Ecto derives from the columns is 69 characters, past Postgres's 63-byte
+identifier limit, and Postgres would have truncated it silently out of step
+with the name the changeset maps errors from.
+`FormFlow.Data.Templates.Flow.Relationship` declares both that name and the
+one Ecto derives, because SQLite cannot report which index a violation came
+from and its adapter rebuilds Ecto's name from the columns in the error.
+
+### Three columns say which side of the line they point at
+
+The same rule the table names now follow, applied to the columns that broke
+it. Nothing else changed: `flow_id`, `subflow_id`, `form_id`, `tenant_id` and
+`slug` on `form_flow_template_flow_nodes` are dual-written into `properties`
+for Neo4j, so renaming one would orphan stored property data — which is why
+the `form_id`/`template_form_id` split below is settled in the direction it
+is.
+
+| Table | Before | After |
+|-------|--------|-------|
+| `form_flow_instance_flows` | `flow_id` | `template_flow_id` |
+| `form_flow_template_form_versions` | `template_form_id` | `form_id` |
+| `form_flow_instance_form_events` | `snapshot_data` | `snapshot` |
+
+**A journey's flow is a template flow, and now says so.** On an instance row
+a bare `flow_id` sat next to the `instance_flow_id` used everywhere else and
+pointed at neither of the obvious things. Its association renames with it:
+`belongs_to(:template_flow, Templates.Flow)`, so
+`FormFlow.Data.Instances.Flows.list/1` preloads `:template_flow`, a listing
+that preloads its own asks for `preload: [:template_flow]`, and
+`Instances.Flows.create/2` takes `template_flow_id` in its attrs.
+
+**A version belongs to a form.** `template_form_id` becomes `form_id`, and
+its association `:template_form` becomes `:form` — matching
+`form_flow_template_flow_nodes.form_id`, which points at the same table and
+cannot move. The unique index follows to
+`form_flow_template_form_versions_form_id_version_index`.
+
+**One name for one payload.** `snapshot_data` was the same free-form map that
+both event logs already call `snapshot`. The column, the field, and the
+things named after it move together: the `FormFlow.Config.Forms.Type`
+callback **`snapshot_data/2` is now `snapshot/2`** (a form type that
+implements it renames the function), and the `snapshot_data:` option of
+`FormFlow.Data.Instances.Forms.complete/4` is now `snapshot:`.
+
+The rule the three leave behind: on the template side a bare `flow_id` or
+`form_id` means the template; on the instance side every reference is
+qualified — `template_flow_id`, `template_form_version_id`,
+`instance_flow_id`, `instance_form_id`. Role names on self-references
+(`owner_flow_id`, `copied_from_form_id`, `based_on_version_id`,
+`subflow_id`) keep their roles.
+
+### A node and a relationship carry their own id in `properties`
+
+`FormFlow.Data.Templates.Flow.Node` and
+`FormFlow.Data.Templates.Flow.Relationship` already dual-wrote their
+infrastructure columns into `properties`, the map that becomes the Neo4j
+property map — everything except the row's own `id`, which meant a Cypher
+query could match a flow by id (`(:Flow {id: $id})`) but a node only by
+`slug` or `flow_id`. Both now copy `id` as well, so every record in the
+future graph is addressable by the id the rest of the system knows it by.
+
+The copy travels **one way only**: the column is authoritative, a stale
+`"id"` arriving in `properties` is overwritten from it, and nothing reads it
+back into the column — so no round-trip through the editor and no copy or
+paste can re-point a record at another record's identity. A flow copy is the
+case that proves it: the copied node's `properties` are the source's, `id`
+included, and the changeset overwrites it with the copy's own.
+
+**Ids for new records are now minted in the changeset** rather than by the
+adapter at insert, since a copy of a column that does not exist yet is no
+copy at all. A caller-supplied id still wins, and a loaded record keeps the
+id it has.
+
+Stored rows written before this change have no `"id"` in `properties` until
+they are next written — which for nodes and relationships is the next save of
+their flow, since `Flows.update/2` replaces them wholesale.
+
+**The migration is edited in place, not superseded.** `version: 1` creates
+the tables and columns under their new names; there is no rename migration. A
+database migrated by an earlier release has the old ones and is not carried
+over.
+
 ## v0.23.0
 
 ### Renewing from last year, and the rest of the status work

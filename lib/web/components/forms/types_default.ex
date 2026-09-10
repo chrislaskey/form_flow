@@ -52,7 +52,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   end
 
   @impl true
-  def snapshot_data(_context, _callback_data), do: %{}
+  def snapshot(_context, _callback_data), do: %{}
 
   @impl true
   def handle_complete(_context, _callback_data), do: :ok

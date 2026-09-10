@@ -224,7 +224,7 @@ defmodule Demo.FormFlowDownloadsTest do
 
     edge(flow, start, only)
 
-    {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+    {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
 
     %{flow: flow, instance: instance, form: only}
   end

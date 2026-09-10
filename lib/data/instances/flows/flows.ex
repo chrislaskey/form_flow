@@ -23,7 +23,7 @@ defmodule FormFlow.Data.Instances.Flows do
   def get(instance_flow_id), do: Repo.get(Instances.Flow, instance_flow_id)
 
   @doc """
-  Journeys, newest first, with `:flow` preloaded. `opts[:user_id]` narrows
+  Journeys, newest first, with `:template_flow` preloaded. `opts[:user_id]` narrows
   to one creator, `opts[:tenant_id]` to one tenant, `opts[:flow]` to
   instances of one or more flow templates (see `narrow_flow/2`), and
   `opts[:status]` to journeys in one status — `"in_progress"` or
@@ -32,7 +32,9 @@ defmodule FormFlow.Data.Instances.Flows do
   library never enforces visibility.
   """
   def list(opts \\ []) do
-    Repo.all(from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:flow]))
+    Repo.all(
+      from(i in list_query(opts), order_by: [desc: i.inserted_at], preload: [:template_flow])
+    )
   end
 
   @doc """
@@ -77,7 +79,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
     templates = from(f in Templates.Flow, where: f.id in ^ids or f.slug in ^slugs, select: f.id)
 
-    from(i in query, where: i.flow_id in subquery(templates))
+    from(i in query, where: i.template_flow_id in subquery(templates))
   end
 
   # Node and flow ids are UUIDs and slugs never are, so one string can only
@@ -104,7 +106,7 @@ defmodule FormFlow.Data.Instances.Flows do
     statuses = Templates.Flow.statuses_allowing(action)
     templates = from(f in Templates.Flow, where: f.status in ^statuses, select: f.id)
 
-    from(i in query, where: i.flow_id in subquery(templates))
+    from(i in query, where: i.template_flow_id in subquery(templates))
   end
 
   @doc """
@@ -115,7 +117,7 @@ defmodule FormFlow.Data.Instances.Flows do
   def exclude_status(query, status) when is_binary(status) do
     templates = from(f in Templates.Flow, where: f.status == ^status, select: f.id)
 
-    from(i in query, where: i.flow_id not in subquery(templates))
+    from(i in query, where: i.template_flow_id not in subquery(templates))
   end
 
   defp narrow(query, _field, nil), do: query
@@ -144,7 +146,7 @@ defmodule FormFlow.Data.Instances.Flows do
   the host's map; `"form_flow"` is the one key FormFlow claims in it.
   """
   def create(attrs \\ %{}, opts \\ []) do
-    flow_id = attrs[:flow_id] || attrs["flow_id"]
+    flow_id = attrs[:template_flow_id] || attrs["template_flow_id"]
 
     Repo.transaction(fn ->
       attrs = mark_pre_release(attrs, flow_id && Repo.get(Templates.Flow, flow_id))
@@ -163,7 +165,7 @@ defmodule FormFlow.Data.Instances.Flows do
   # Merged inside the "form_flow" namespace, not over it: the next key
   # FormFlow puts there must survive a pre-release start
   defp mark_pre_release(attrs, %Templates.Flow{status: "pre_release"}) do
-    key = if Map.has_key?(attrs, "flow_id"), do: "metadata", else: :metadata
+    key = if Map.has_key?(attrs, "template_flow_id"), do: "metadata", else: :metadata
 
     Map.update(attrs, key, @pre_release_marker, fn metadata ->
       Map.update(metadata || %{}, "form_flow", @pre_release_marker["form_flow"], fn own ->
@@ -207,7 +209,10 @@ defmodule FormFlow.Data.Instances.Flows do
   `FormFlow.Data.Instances.FlowProgress`.
   """
   def progress(%Instances.Flow{} = instance) do
-    FlowProgress.derive(Templates.Flows.resolve_tree(instance.flow_id), form_instances(instance))
+    FlowProgress.derive(
+      Templates.Flows.resolve_tree(instance.template_flow_id),
+      form_instances(instance)
+    )
   end
 
   @doc """
@@ -217,7 +222,7 @@ defmodule FormFlow.Data.Instances.Flows do
   """
   def complete?(%Instances.Flow{} = instance) do
     FlowProgress.complete?(
-      Templates.Flows.resolve_tree(instance.flow_id),
+      Templates.Flows.resolve_tree(instance.template_flow_id),
       form_instances(instance)
     )
   end
@@ -229,7 +234,7 @@ defmodule FormFlow.Data.Instances.Flows do
   """
   def next_path_position(%Instances.Flow{} = instance) do
     FlowProgress.next_path_position(
-      Templates.Flows.resolve_tree(instance.flow_id),
+      Templates.Flows.resolve_tree(instance.template_flow_id),
       form_instances(instance)
     )
   end
@@ -245,7 +250,9 @@ defmodule FormFlow.Data.Instances.Flows do
 
   def list_stranded(%Instances.Flow{} = instance, _opts) do
     instances = form_instances(instance)
-    statuses = FlowProgress.derive(Templates.Flows.resolve_tree(instance.flow_id), instances)
+
+    statuses =
+      FlowProgress.derive(Templates.Flows.resolve_tree(instance.template_flow_id), instances)
 
     stranded_paths =
       for {path, :stranded} <- statuses, into: MapSet.new() do
@@ -258,7 +265,7 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   def list_stranded(%Templates.Flow{} = flow, opts) do
-    Repo.all(from(i in Instances.Flow, where: i.flow_id == ^flow.id))
+    Repo.all(from(i in Instances.Flow, where: i.template_flow_id == ^flow.id))
     |> Enum.flat_map(&list_stranded(&1, opts))
   end
 
@@ -298,7 +305,10 @@ defmodule FormFlow.Data.Instances.Flows do
   """
   def list_pre_release(%Templates.Flow{id: flow_id}) do
     Repo.all(
-      from(i in Instances.Flow, where: i.flow_id == ^flow_id, order_by: [asc: i.inserted_at])
+      from(i in Instances.Flow,
+        where: i.template_flow_id == ^flow_id,
+        order_by: [asc: i.inserted_at]
+      )
     )
     |> Enum.filter(&Instances.Flow.pre_release?/1)
   end

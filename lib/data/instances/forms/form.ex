@@ -9,7 +9,7 @@ defmodule FormFlow.Data.Instances.Form do
   (`FormFlow.Data.Templates.Forms.update_status/3`), each move recorded as an
   append-only `FormFlow.Data.Instances.Form.Event`.
 
-  There is deliberately no lineage (`template_form_id`) column beside the
+  There is deliberately no lineage (`form_id`) column beside the
   pin: the lineage is derived through the pinned version, so it can never
   desync, and the rare admin queries that want it join for free.
 

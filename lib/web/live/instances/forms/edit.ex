@@ -24,7 +24,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   Show, which is also where Reopen is, so there is exactly one place that
   renders answers read-only and exactly one that reopens them.
 
-  Submitting asks the form's type what to record (`snapshot_data/2`),
+  Submitting asks the form's type what to record (`snapshot/2`),
   writes the answers and marks the instance completed with that record on
   its event (`FormFlow.Data.Instances.Forms.update_status/4`), then derives
   the flow instance's progress once more — the form just submitted now
@@ -118,7 +118,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
            Instances.Forms.update_status(flow_instance, form_instance.path, :completed,
              data: payload.data,
              user_id: socket.assigns.user_id,
-             snapshot_data: snapshot
+             snapshot: snapshot
            ) do
       fresh = fresh_context(socket.assigns, completed)
       notify(form_type, fresh, callback_data)
@@ -185,7 +185,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # is never completed without it. Host code: an exception becomes the page's
   # error, never a crashed LiveView that loses what the user typed.
   defp snapshot(form_type, context, callback_data) do
-    case form_type.module.snapshot_data(context, callback_data) do
+    case form_type.module.snapshot(context, callback_data) do
       snapshot when is_map(snapshot) -> {:ok, snapshot}
       other -> {:error, {:not_a_map, other}}
     end
@@ -197,7 +197,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # the progress is fresh, so the form just submitted counts as done, and
   # `:form_instance` is the completed row. The template side is as at mount.
   defp fresh_context(%{flow_instance: flow_instance, context: context} = assigns, completed) do
-    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+    tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
     %Context{

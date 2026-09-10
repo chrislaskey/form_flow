@@ -46,7 +46,7 @@ defmodule FormFlow.Data.Templates.Flow.Event do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "form_flow_flow_events" do
+  schema "form_flow_template_flow_events" do
     belongs_to(:flow, Flow, foreign_key: :flow_id)
 
     field(:event, :string)

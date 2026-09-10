@@ -11,7 +11,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
 
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{
-          flow_id: @flow_id,
+          template_flow_id: @flow_id,
           user_id: "user-42",
           metadata: %{"cycle" => "2026"}
         })
@@ -23,7 +23,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
     test "status and completed_at are not castable — completion machinery stamps them" do
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{
-          flow_id: @flow_id,
+          template_flow_id: @flow_id,
           status: "completed",
           completed_at: DateTime.utc_now()
         })
@@ -33,14 +33,14 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
-    test "flow_id, user_id, and tenant_id are immutable after creation" do
+    test "template_flow_id, user_id, and tenant_id are immutable after creation" do
       persisted =
-        %Instances.Flow{flow_id: @flow_id, user_id: "user-42", tenant_id: "tenant-1"}
+        %Instances.Flow{template_flow_id: @flow_id, user_id: "user-42", tenant_id: "tenant-1"}
         |> Ecto.put_meta(state: :loaded)
 
-      changeset = Instances.Flow.changeset(persisted, %{flow_id: Ecto.UUID.generate()})
+      changeset = Instances.Flow.changeset(persisted, %{template_flow_id: Ecto.UUID.generate()})
       refute changeset.valid?
-      assert {"cannot be changed after creation", _} = changeset.errors[:flow_id]
+      assert {"cannot be changed after creation", _} = changeset.errors[:template_flow_id]
 
       changeset = Instances.Flow.changeset(persisted, %{user_id: "user-43"})
       refute changeset.valid?
@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
     test "casts user_id and tenant_id; a host with no tenants leaves tenant_id nil" do
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{
-          flow_id: @flow_id,
+          template_flow_id: @flow_id,
           user_id: "user-42",
           tenant_id: "tenant-1",
           metadata: %{"cycle" => "2026"}
@@ -67,7 +67,10 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :metadata) == %{"cycle" => "2026"}
 
       changeset =
-        Instances.Flow.changeset(%Instances.Flow{}, %{flow_id: @flow_id, user_id: "user-42"})
+        Instances.Flow.changeset(%Instances.Flow{}, %{
+          template_flow_id: @flow_id,
+          user_id: "user-42"
+        })
 
       assert Ecto.Changeset.get_field(changeset, :tenant_id) == nil
     end

@@ -22,9 +22,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   Slab so pagination stays deterministic instead of leaning on unspecified
   database order.
 
-  The flow's name comes from the `:flow` association, which Slab preloads
-  *after* filtering, sorting, and counting, so it is deliberately not sortable
-  — it is a joined value, not a column Slab could compile into `ORDER BY`.
+  The flow's name comes from the `:template_flow` association, which Slab
+  preloads *after* filtering, sorting, and counting, so it is deliberately not
+  sortable — it is a joined value, not a column Slab could compile into
+  `ORDER BY`.
 
   "The current user" means the router's `user_id` attr: by default the list
   is narrowed to instances that user created, and starting one stamps them as
@@ -212,7 +213,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
     if flow && FormFlow.Web.Instances.Shared.status_allows?(flow, :start, socket.assigns) do
       attrs = %{
-        flow_id: flow_id,
+        template_flow_id: flow_id,
         user_id: socket.assigns.user_id,
         tenant_id: socket.assigns.tenant_id
       }
@@ -287,7 +288,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         id="flow-instances-table"
         query={@query}
         repo={Repo.repo()}
-        preload={[:flow]}
+        preload={[:template_flow]}
         uri={@uri}
         params={@table_params}
       >
@@ -296,7 +297,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             navigate={Paths.flow_path(@base, flow_instance.id)}
             class="hover:underline"
           >
-            {flow_instance.flow.name || "Untitled flow"}
+            {flow_instance.template_flow.name || "Untitled flow"}
           </.link>
         </:column>
         <:column :let={flow_instance} field={:status} sortable>
@@ -315,7 +316,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             variant="primary"
           >
             {if flow_instance.status == "completed" or
-                  not Templates.Flow.allows?(flow_instance.flow, :continue),
+                  not Templates.Flow.allows?(flow_instance.template_flow, :continue),
                 do: "View",
                 else: "Continue"}
           </Core.button>

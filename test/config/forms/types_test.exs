@@ -61,18 +61,18 @@ defmodule FormFlow.Config.Forms.TypesTest do
     end
   end
 
-  describe "Type.Default.snapshot_data/2 and handle_complete/2" do
+  describe "Type.Default.snapshot/2 and handle_complete/2" do
     test "record nothing and do nothing" do
       context = context(%{"name" => "Grace"})
 
-      assert Type.Default.snapshot_data(context, %{}) == %{}
+      assert Type.Default.snapshot(context, %{}) == %{}
       assert Type.Default.handle_complete(context, %{}) == :ok
     end
 
     test "are what a type inherits when it doesn't override them" do
       context = context(%{"name" => "Grace"})
 
-      assert Prefill.snapshot_data(context, %{}) == %{}
+      assert Prefill.snapshot(context, %{}) == %{}
       assert Prefill.handle_complete(context, %{}) == :ok
     end
   end

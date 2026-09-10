@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.Flows do
   `FormFlow.Data.Templates.Flows` context module for
   `FormFlow.Data.Templates.Flow` records.
 
-  A flow is the aggregate: the `form_flow_flows` row plus its
+  A flow is the aggregate: the `form_flow_template_flows` row plus its
   `FormFlow.Data.Templates.Flow.Node` and
   `FormFlow.Data.Templates.Flow.Relationship` children.
   `create/1` and `update/2` accept the whole aggregate — pass `:nodes` and
@@ -633,7 +633,7 @@ defmodule FormFlow.Data.Templates.Flows do
     rows =
       Repo.all(
         from(i in Instances.Flow,
-          where: i.flow_id == ^id,
+          where: i.template_flow_id == ^id,
           group_by: i.status,
           select: {i.status, count(i.id)}
         )
@@ -732,7 +732,8 @@ defmodule FormFlow.Data.Templates.Flows do
   nothing — and while instances of the whole flow have been started against
   it — journeys, `FormFlow.Data.Instances.Flow` records: they reference
   their root live and can never be orphaned by template deletion (the
-  `:restrict` FK on `instance_flows.flow_id` is the database backstop; this
+  `:restrict` FK on `instance_flows.template_flow_id` is the database
+  backstop; this
   guard gives the friendly error first). Note the owned-forms guard alone
   would miss a flow built entirely from catalog forms.
   """
@@ -743,7 +744,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
       tree_ids = [flow.id | owned_ids]
 
-      journeys? = Repo.exists?(from(i in Instances.Flow, where: i.flow_id == ^flow.id))
+      journeys? = Repo.exists?(from(i in Instances.Flow, where: i.template_flow_id == ^flow.id))
 
       cond do
         owned?(flow) ->
@@ -1684,7 +1685,7 @@ defmodule FormFlow.Data.Templates.Flows do
       from(i in FormFlow.Data.Instances.Form,
         join: v in Templates.Form.Version,
         on: i.template_form_version_id == v.id,
-        where: v.template_form_id == ^form_id
+        where: v.form_id == ^form_id
       )
     )
   end

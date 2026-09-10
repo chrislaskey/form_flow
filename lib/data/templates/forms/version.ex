@@ -39,7 +39,7 @@ defmodule FormFlow.Data.Templates.Form.Version do
   @foreign_key_type :binary_id
 
   schema "form_flow_template_form_versions" do
-    belongs_to(:template_form, Form, foreign_key: :template_form_id)
+    belongs_to(:form, Form)
 
     field(:status, :string, default: "draft")
     field(:version, :integer)
@@ -63,9 +63,9 @@ defmodule FormFlow.Data.Templates.Form.Version do
   """
   def create_changeset(version, attrs \\ %{}) do
     version
-    |> cast(attrs, [:template_form_id, :definition, :based_on_version_id])
-    |> validate_required([:template_form_id])
-    |> foreign_key_constraint(:template_form_id)
+    |> cast(attrs, [:form_id, :definition, :based_on_version_id])
+    |> validate_required([:form_id])
+    |> foreign_key_constraint(:form_id)
     |> foreign_key_constraint(:based_on_version_id)
   end
 
@@ -98,8 +98,8 @@ defmodule FormFlow.Data.Templates.Form.Version do
     |> put_change(:version, number)
     |> put_change(:published_at, published_at)
     |> put_change(:status, "published")
-    |> unique_constraint([:template_form_id, :version],
-      name: :form_flow_template_form_versions_template_form_id_version_index
+    |> unique_constraint([:form_id, :version],
+      name: :form_flow_template_form_versions_form_id_version_index
     )
   end
 

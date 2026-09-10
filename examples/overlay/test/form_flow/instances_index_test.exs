@@ -99,7 +99,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
 
   defp start_flow(name, user_id) do
     {:ok, flow} = Flows.create(%{name: name, status: "open"})
-    {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: user_id})
+    {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: user_id})
 
     instance
   end

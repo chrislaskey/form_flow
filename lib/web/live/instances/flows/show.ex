@@ -128,7 +128,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   # and the year may have closed since. The data layer does what it is
   # asked (`FormFlow.Data.Instances.Forms.update_status/4`).
   defp reopen(socket, path) do
-    flow = Templates.Flows.get_row(socket.assigns.flow_instance.flow_id)
+    flow = Templates.Flows.get_row(socket.assigns.flow_instance.template_flow_id)
 
     if continue_allowed?(flow, socket.assigns) do
       case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
@@ -159,7 +159,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         assign(socket, flow_instance: nil, rows: [], stranded: [], flow_name: nil)
 
       flow_instance ->
-        tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+        tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
         forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
         flow = tree && tree.flow
 
@@ -182,6 +182,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           socket
           |> assign(:context, context)
           |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
+
         rows = rows(forms, tree, flow_instance, socket.assigns)
 
         socket =

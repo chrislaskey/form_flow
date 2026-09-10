@@ -24,6 +24,8 @@ defmodule DemoWeb.DataModelingLive do
   use DemoWeb, :live_view
 
   alias DemoWeb.DataModelingLive.Diagram
+  alias DemoWeb.DataModelingLive.GraphSchema
+  alias DemoWeb.DataModelingLive.SqlExamples
   alias FormFlow.Web.Helpers.ReactFlow
 
   # Pinned, immutable CDN files. ReactFlow 11 rather than 12
@@ -55,10 +57,11 @@ defmodule DemoWeb.DataModelingLive do
      |> assign(:page_title, "Data modeling")
      |> assign(:current_nav, :data_modeling)
      |> assign(:diagram, Diagram.data())
+     |> assign(:graph, GraphSchema.data())
+     |> assign(:structural_types, GraphSchema.structural_types())
+     |> assign(:sql_examples, SqlExamples.all())
      |> assign(:foreign_keys, Diagram.foreign_keys())
      |> assign(:on_delete_legend, Diagram.on_delete_legend())
-     |> assign(:table_count, Diagram.table_count())
-     |> assign(:sources, @sources)
      |> assign(:source_urls, @source_urls)}
   end
 
@@ -69,25 +72,31 @@ defmodule DemoWeb.DataModelingLive do
       <div class="space-y-10">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">Data modeling</h1>
-          <p class="text-base-content/70">
-            The {@table_count} tables <code>mix form_flow.gen.migration</code>
-            creates, and the {length(@foreign_keys)} foreign keys between them. Every table,
-            column, and key below is read off FormFlow's Ecto schemas when this
-            page renders — nothing here is a drawing kept in step by hand.
-          </p>
-          <p class="text-sm text-base-content/70">
-            Column types are the Postgres types the migration produces. This demo
-            runs SQLite, whose migration is a near-copy; the two diverge only in
-            the DDL, not in the tables or the keys.
-          </p>
         </header>
 
         <section class="space-y-3">
           <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <h2 class="text-lg font-semibold">Schema</h2>
-            <p class="text-sm text-base-content/70">
-              Drag to pan, scroll to zoom, drag a table to move it.
-            </p>
+            <h2 class="text-lg font-semibold">
+              SQL Schema <span class="font-light">PostgreSQL and SQLite supported</span>
+            </h2>
+          </div>
+
+          <p class="mb-6 max-w-3xl">
+            To read the data model, recommend starting in the top right corner with `Templates.Flow`, then move left across `Templates.Flow.Node` and `Templates.Form`. Those are the key models on the admin template side. The user side starts with `Instances.Flow` and moves left to `Instances.Form`.
+          </p>
+
+          <div id="group-legend" class="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span class="font-bold">Legend</span>
+            <span class="flex items-center gap-2">
+              <span class="schema-legend-swatch schema-legend-swatch--templates"></span>
+              <code>FormFlow.Data.Templates</code>
+              <span class="text-base-content/70">— what an admin builds</span>
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="schema-legend-swatch schema-legend-swatch--instances"></span>
+              <code>FormFlow.Data.Instances</code>
+              <span class="text-base-content/70">— what a user fills out</span>
+            </span>
           </div>
 
           <div
@@ -102,77 +111,129 @@ defmodule DemoWeb.DataModelingLive do
             data-react-flow-css={@source_urls.react_flow_css}
           >
           </div>
+        </section>
 
-          <div id="group-legend" class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <span class="flex items-center gap-2">
-              <span class="schema-legend-swatch schema-legend-swatch--templates"></span>
-              <code>FormFlow.Data.Templates</code>
-              <span class="text-base-content/70">— what an admin builds</span>
-            </span>
-            <span class="flex items-center gap-2">
-              <span class="schema-legend-swatch schema-legend-swatch--instances"></span>
-              <code>FormFlow.Data.Instances</code>
-              <span class="text-base-content/70">— what a user fills out</span>
-            </span>
+        <section class="space-y-3">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <h2 class="text-lg font-semibold">
+              Neo4J Graph Schema <span class="font-light">Optional but recommended</span>
+            </h2>
           </div>
 
-          <ul id="on-delete-legend" class="space-y-1 text-sm">
+          <p class="mb-6 max-w-3xl">
+            Modeling a flow is best done as a graph. While these can be modeled in a traditional SQL database, it's very inefficient. Even simple flows (from a human perspective) can take a lot of system resources to pull out of a relational database.
+          </p>
+
+          <p class="mb-6 max-w-3xl">
+            To help FormFlow scale, it supports dual-writing graph data into a graph database (Neo4J). This makes it much easier to realize a graph at scale. When enabled, Neo4J is queried first, then a targeted SQL query is used to pull just the data from specific IDs.
+          </p>
+
+          <div
+            id="graph-diagram"
+            class="schema-diagram schema-diagram--graph"
+            phx-hook=".SchemaDiagram"
+            phx-update="ignore"
+            data-diagram={ReactFlow.to_json(@graph)}
+            data-react={@source_urls.react}
+            data-react-dom={@source_urls.react_dom}
+            data-react-flow={@source_urls.react_flow}
+            data-react-flow-css={@source_urls.react_flow_css}
+          >
+          </div>
+
+          <p class="max-w-3xl">
+            Three of the ten tables above cross over, and only those three: a
+            node (a <em>step</em>, in the product's words), a relationship
+            between two nodes, and the flow they belong to. Form templates,
+            form versions, and every instance table stay in SQL — a <code>form_id</code>
+            in a Neo4j property map is a key into Postgres, not a pointer into
+            the graph. Flows are drawn here as nodes rather than left out
+            because anything a reference targets has to be a node, or the
+            reference cannot be traversed, and both subflow and ownership
+            references point at flows.
+          </p>
+
+          <p class="max-w-3xl">
+            A node carries <code>labels</code>, plural — a set — while a
+            relationship carries exactly one <code>type</code>. FormFlow's SQL
+            already mirrors that: <code>labels text[]</code>
+            on the nodes table, a single <code>label varchar</code>
+            on the relationships table. Each entity's <code>properties</code>
+            column is its Neo4j property map byte for byte, which is why the
+            infrastructure columns are dual-written into it — in the graph there
+            are no columns to index.
+          </p>
+
+          <p class="max-w-3xl">
+            The lines are not foreign keys. A solid one is the relationship row
+            itself, joining the two nodes it names. A dashed one is <em>structural</em>: a relationship Neo4j would hold that no row
+            does, because a property already says it.
+          </p>
+
+          <div class="overflow-x-auto">
+            <table id="structural-types" class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Reserved type</th>
+                  <th>Derived from</th>
+                  <th>Means</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={type <- @structural_types}>
+                  <td class="font-mono text-xs whitespace-nowrap">{type.type}</td>
+                  <td class="font-mono text-xs whitespace-nowrap">{type.derived_from}</td>
+                  <td class="text-sm">{type.meaning}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="max-w-3xl">
+            Those three types are FormFlow's structural vocabulary, so user data
+            must not collide with them: <code>FormFlow.Data.Templates.Flow.Relationship</code>
+            rejects them as relationship labels today — a changeset error, not a
+            convention — which means no stored data will need cleaning up when
+            the dual-write arrives.
+          </p>
+        </section>
+
+        <section class="space-y-3">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <h2 class="text-lg font-semibold">
+              Example SQL queries
+              <span class="font-light">what the graph looks like from the database's side</span>
+            </h2>
+          </div>
+
+          <p class="mb-6 max-w-3xl">
+            A property graph in a relational database is not exotic — it is two
+            tables and a foreign key. What changes is the reading: once a query
+            has to *follow* the graph rather than filter it, the shape of the
+            statement starts to matter.
+          </p>
+
+          <div :for={example <- @sql_examples} id={"sql-#{example.id}"} class="mb-8 max-w-3xl">
+            <h3 class="font-semibold">{example.title}</h3>
+            <p class="my-2">{example.blurb}</p>
+            <pre class="schema-sql"><code>{example.sql}</code></pre>
+            <p class="mt-2 whitespace-pre-line text-base-content/70">{example.note}</p>
+          </div>
+        </section>
+
+        <section class="space-y-3">
+          <h2 class="text-lg font-semibold">SQL data relationships</h2>
+          <div>Delete types</div>
+          <ul id="on-delete-legend" class="my-3 ml-3 space-y-1 text-sm">
             <li :for={rule <- @on_delete_legend} class="flex flex-wrap items-baseline gap-x-3">
-              <span class="flex items-center gap-2 font-mono text-xs whitespace-nowrap">
-                <span class="schema-legend-line" style={"background: #{rule.color}"}></span>
+              <span class="font-mono text-xs whitespace-nowrap">
                 ON DELETE {rule.label}
               </span>
               <span class="text-base-content/70">{rule.meaning}</span>
             </li>
           </ul>
-        </section>
-
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">Reading the model</h2>
-          <ul class="space-y-2 text-sm text-base-content/70">
-            <li>
-              <strong class="text-gray-900">A flow is a property graph.</strong>
-              <code>form_flow_flows</code>
-              holds one. Its steps are rows in <code>form_flow_nodes</code>.
-              The connections between them are rows in <code>form_flow_relationships</code>. Both carry a
-              <code>properties</code>
-              jsonb column and a real <code>flow_id</code>, so the database
-              enforces membership while the shape stays portable to Neo4j.
-            </li>
-            <li>
-              <strong class="text-gray-900">A form template is a lineage plus its versions.</strong>
-              <code>form_flow_template_forms</code>
-              is the identity; <code>form_flow_template_form_versions</code>
-              holds every definition, draft and published. Published versions never
-              change.
-            </li>
-            <li>
-              <strong class="text-gray-900">An instance pins the version it was filled against.</strong>
-              <code>form_flow_instance_forms.template_form_version_id</code>
-              is the load-bearing column of the whole schema, and the only path from
-              a set of answers to its lineage — there is deliberately no second
-              column beside it to fall out of step.
-            </li>
-            <li>
-              <strong class="text-gray-900">A journey is addressed by path, not by node.</strong>
-              <code>form_flow_instance_forms.instance_flow_id</code>
-              and <code>path</code>
-              — the chain of node ids from the root flow down
-              to the form — identify a visit. Editor saves replace all of a flow's
-              nodes, so a foreign key to a node would fire on every routine save.
-            </li>
-            <li>
-              <strong class="text-gray-900">Nothing is deleted quietly.</strong>
-              The three event tables are append-only audit logs, and every key into
-              them is <code>RESTRICT</code>: removing a flow, a form, or a journey
-              goes through explicit context code that deletes its events on purpose.
-            </li>
-          </ul>
-        </section>
-
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">Foreign keys</h2>
-          <div class="overflow-x-auto">
+          <div>Foreign keys</div>
+          <div class="overflow-x-auto ml-3 ">
             <table id="foreign-keys" class="table table-sm">
               <thead>
                 <tr>
@@ -187,51 +248,11 @@ defmodule DemoWeb.DataModelingLive do
                     {key.table}.<span class="font-semibold">{key.column}</span>
                   </td>
                   <td class="font-mono text-xs whitespace-nowrap">{key.references}</td>
-                  <td class="font-mono text-xs whitespace-nowrap" style={"color: #{key.color}"}>
-                    {key.on_delete}
-                  </td>
+                  <td class="font-mono text-xs whitespace-nowrap">{key.on_delete}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
-
-        <section class="space-y-3">
-          <h2 class="text-lg font-semibold">How this page is built</h2>
-          <p class="text-sm text-base-content/70">
-            React and ReactFlow are fetched from jsDelivr by the page's colocated
-            hook, which then registers one node type of its own — <code>table</code>
-            — and hands it the nodes and edges <code>DemoWeb.DataModelingLive.Diagram</code>
-            derived in Elixir. There is no npm install, no bundler config, and
-            nothing in <code>app.js</code>
-            but the hook, so the page loads nothing until you open it.
-          </p>
-          <div class="overflow-x-auto">
-            <table id="cdn-sources" class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Package</th>
-                  <th>Version</th>
-                  <th>Fetched from</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :for={{_key, package, version, url} <- @sources}>
-                  <td class="font-mono text-xs whitespace-nowrap">{package}</td>
-                  <td class="font-mono text-xs">{version}</td>
-                  <td class="font-mono text-xs break-all">{url}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="text-sm text-base-content/70">
-            FormFlow's flow editor takes the other road: its React and
-            @xyflow/react are prebuilt into <code>priv/static/form_flow_editor.mjs</code>
-            and served by the <code>form_flow_router_asset_routes()</code>
-            route, so an app installing the library needs no CDN and no network at
-            runtime. Compare <.link navigate={~p"/admin/flows"} class="link">/admin/flows</.link>
-            with this page: same idea, two ways of getting React to the browser.
-          </p>
         </section>
       </div>
     </Layouts.app>
@@ -265,19 +286,32 @@ defmodule DemoWeb.DataModelingLive do
       .schema-node--templates .schema-node__header { background: #eef2ff; }
       .schema-node--instances .schema-node__header { background: #ecfdf5; }
 
-      .schema-node__table {
+      /* The five starred tables, drawn a shade heavier than the ones that
+         support them */
+      .schema-node--primary {
+        border-color: #71717a;
+        box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
+      }
+
+      .schema-node__schema {
         display: block;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-weight: 600;
         color: #111827;
       }
 
-      .schema-node__schema {
+      .schema-node__table {
         display: block;
         margin-top: 3px;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 10px;
         color: #6b7280;
+      }
+
+      .schema-node__star {
+        margin-left: 5px;
+        font-family: system-ui, sans-serif;
+        font-size: 11px;
       }
 
       .schema-node__row {
@@ -304,8 +338,7 @@ defmodule DemoWeb.DataModelingLive do
         letter-spacing: 0.04em;
       }
 
-      .schema-node__key--pk { background: #fef3c7; color: #92400e; }
-      .schema-node__key--fk { background: #e0e7ff; color: #3730a3; }
+      .schema-node__key { background: #e0e7ff; color: #3730a3; }
 
       .schema-node__type {
         margin-left: auto;
@@ -331,8 +364,8 @@ defmodule DemoWeb.DataModelingLive do
       .schema-legend-swatch {
         display: block;
         flex: none;
-        width: 14px;
-        height: 14px;
+        width: 24px;
+        height: 24px;
         border: 1px solid #d4d4d8;
         border-radius: 3px;
       }
@@ -340,12 +373,25 @@ defmodule DemoWeb.DataModelingLive do
       .schema-legend-swatch--templates { background: #eef2ff; }
       .schema-legend-swatch--instances { background: #ecfdf5; }
 
-      .schema-legend-line {
-        display: block;
-        flex: none;
-        width: 18px;
-        height: 2px;
-        border-radius: 1px;
+      /* The graph canvas is a four-node illustration, not a ten-table
+         schema, so it needs nothing like the height */
+      .schema-diagram--graph {
+        height: 42vh;
+        min-height: 340px;
+      }
+
+      /* Wide statements scroll inside their own box rather than stretching
+         the page */
+      .schema-sql {
+        overflow-x: auto;
+        padding: 10px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #fafafa;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+        color: #111827;
       }
     </style>
 
@@ -393,7 +439,7 @@ defmodule DemoWeb.DataModelingLive do
         return {React: window.React, ReactDOM: window.ReactDOM, ReactFlow: window.ReactFlow}
       }
 
-      // The table node: a header naming the table and the Ecto schema behind
+      // The table node: a header naming the Ecto schema and the table behind
       // it, then one row per column. A row's handle is what an edge attaches
       // to, which is why the primary key gets a target and each foreign key a
       // source — the same arrangement as ReactFlow's own database schema node,
@@ -408,20 +454,23 @@ defmodule DemoWeb.DataModelingLive do
         }
 
         return function TableNode({data}) {
-          return h("div", {className: `schema-node schema-node--${data.group}`},
+          const classes = ["schema-node", `schema-node--${data.group}`]
+          if (data.primary) classes.push("schema-node--primary")
+
+          return h("div", {className: classes.join(" ")},
             h("div", {className: "schema-node__header"},
-              h("span", {className: "schema-node__table"}, data.table),
-              h("span", {className: "schema-node__schema"}, data.schema)
+              h("span", {className: "schema-node__schema"},
+                data.schema,
+                data.primary && h("span", {className: "schema-node__star"}, "\u2605")
+              ),
+              h("span", {className: "schema-node__table"}, data.table)
             ),
             data.columns.map((column) =>
               h("div", {className: "schema-node__row", key: column.name},
                 column.handle &&
                   h(Handle, {...handles[column.handle], id: column.name, isConnectable: false}),
                 h("span", {className: "schema-node__name"}, column.name),
-                column.key &&
-                  h("span", {
-                    className: `schema-node__key schema-node__key--${column.key.toLowerCase()}`
-                  }, column.key),
+                column.key && h("span", {className: "schema-node__key"}, column.key),
                 h("span", {className: "schema-node__type"}, column.type)
               )
             )

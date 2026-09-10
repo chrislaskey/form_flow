@@ -14,7 +14,7 @@ defmodule FormFlow.Data.Migrations.Version do
 
   use Ecto.Migration
 
-  @table "form_flow_migrations"
+  @table "form_flow_database_migrations"
 
   @doc "The version table's unqualified name."
   def table_name, do: @table

@@ -133,7 +133,7 @@ defmodule FormFlow.Config.Forms.Type do
   @callback show_component(map()) :: Phoenix.LiveView.Rendered.t()
 
   @doc """
-  What to record on the form's completion event, in its `snapshot_data`,
+  What to record on the form's completion event, in its `snapshot`,
   when the user submits — free-form, `%{}` for nothing. A type that needs to
   remember what it saw at submit time records it here; the Review type
   records the form it reviewed. The context is the edit page's: `:form_instance`
@@ -141,7 +141,7 @@ defmodule FormFlow.Config.Forms.Type do
   the user saw it. Runs before the completion is written: an error here
   refuses the submit rather than completing a form without its record.
   """
-  @callback snapshot_data(Context.t(), map()) :: map()
+  @callback snapshot(Context.t(), map()) :: map()
 
   @doc """
   Called after the user submits the form and the instance is completed — the
@@ -173,8 +173,8 @@ defmodule FormFlow.Config.Forms.Type do
         FormFlow.Config.Forms.Type.Default.show_component(assigns)
       end
 
-      def snapshot_data(context, callback_data) do
-        FormFlow.Config.Forms.Type.Default.snapshot_data(context, callback_data)
+      def snapshot(context, callback_data) do
+        FormFlow.Config.Forms.Type.Default.snapshot(context, callback_data)
       end
 
       def handle_complete(context, callback_data) do
@@ -184,7 +184,7 @@ defmodule FormFlow.Config.Forms.Type do
       defoverridable initial_data: 2,
                      edit_component: 1,
                      show_component: 1,
-                     snapshot_data: 2,
+                     snapshot: 2,
                      handle_complete: 2
     end
   end

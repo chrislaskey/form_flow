@@ -22,31 +22,47 @@ defmodule DemoWeb.DataModelingLive.Diagram do
       on `belongs_to`, so `@on_delete_rules` records it per column. It is the
       most load-bearing thing about this schema — see the long comment at the
       top of `FormFlow.Data.Migrations.Postgres.V01` — which is why the page
-      colours every edge by it.
-    * **Position.** ReactFlow has no layout of its own. The tables are placed
-      by hand, right to left in dependency order, so an edge normally leaves a
-      foreign key on a node's right and arrives at the referenced `id` on
-      another node's left.
+      names it against every foreign key it lists.
+    * **Position.** ReactFlow has no layout of its own, so `@tables` places
+      each one by hand, right to left in dependency order.
+    * **Which tables matter most.** `@primary` names the five the page stars;
+      nothing in the schema says one table is more central than another.
   """
 
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Templates
 
-  # Right to left in dependency order: `form_flow_flows`, which nearly
-  # everything references, sits at the far right, and each table sits left of
-  # whatever it points at. Flow and form templates fill the top band, the
-  # instances of them the bottom one.
+  # Three columns, right to left in dependency order: `form_flow_template_flows`,
+  # which nearly everything references, heads the right-hand column, the graph
+  # of a flow's nodes is the middle one, and forms are on the left. Templates
+  # fill the top band and the instances of them the bottom one, so an edge
+  # normally leaves a foreign key on a node's right and arrives at the
+  # referenced `id` on another node's left. Declaration order is the order the
+  # foreign-key table under the diagram reads in, which is not this one.
   @tables [
-    %{schema: Templates.Flow, position: %{x: 1360, y: 180}},
-    %{schema: Templates.Form, position: %{x: 1020, y: 0}},
-    %{schema: Templates.Flow.Node, position: %{x: 680, y: 0}},
-    %{schema: Templates.Flow.Relationship, position: %{x: 340, y: 0}},
-    %{schema: Templates.Flow.Event, position: %{x: 0, y: 30}},
-    %{schema: Templates.Form.Version, position: %{x: 680, y: 340}},
-    %{schema: Instances.Flow, position: %{x: 1020, y: 340}},
-    %{schema: Instances.Form, position: %{x: 340, y: 340}},
-    %{schema: Instances.Form.Event, position: %{x: 0, y: 340}},
-    %{schema: Instances.Flow.Event, position: %{x: 680, y: 680}}
+    %{schema: Templates.Flow, position: %{x: 840, y: 0}},
+    %{schema: Templates.Form, position: %{x: 0, y: 0}},
+    %{schema: Templates.Flow.Node, position: %{x: 420, y: 0}},
+    %{schema: Templates.Flow.Relationship, position: %{x: 420, y: 320}},
+    %{schema: Templates.Flow.Event, position: %{x: 840, y: 320}},
+    %{schema: Templates.Form.Version, position: %{x: 0, y: 320}},
+    %{schema: Instances.Flow, position: %{x: 840, y: 700}},
+    %{schema: Instances.Form, position: %{x: 0, y: 700}},
+    %{schema: Instances.Form.Event, position: %{x: 0, y: 1120}},
+    %{schema: Instances.Flow.Event, position: %{x: 840, y: 1010}}
+  ]
+
+  # The five a reader should find first: a flow template, the nodes in it, a
+  # form template, and the two tables those turn into once a user fills one
+  # out. The other five support them — a form's versions, a flow's audit log
+  # and each instance's, and the relationships between nodes. The page marks
+  # these with a star.
+  @primary [
+    Templates.Flow,
+    Templates.Flow.Node,
+    Templates.Form,
+    Instances.Flow,
+    Instances.Form
   ]
 
   # What Ecto.Adapters.Postgres.Connection's `ecto_to_db` writes for each field
@@ -66,7 +82,7 @@ defmodule DemoWeb.DataModelingLive.Diagram do
   # and `{:array, :string}`. The migration is the DDL that runs, so it wins.
   @migration_types %{
     {"form_flow_template_forms", "description"} => "text",
-    {"form_flow_nodes", "labels"} => "text[]",
+    {"form_flow_template_flow_nodes", "labels"} => "text[]",
     {"form_flow_instance_forms", "path"} => "text[]"
   }
 
@@ -75,19 +91,19 @@ defmodule DemoWeb.DataModelingLive.Diagram do
   # than Ecto's, since that is the DDL the page is describing: :delete_all is
   # CASCADE, :nilify_all is SET NULL, :nothing is NO ACTION.
   @on_delete_rules %{
-    {"form_flow_flows", "owner_flow_id"} => :cascade,
-    {"form_flow_flow_events", "flow_id"} => :restrict,
+    {"form_flow_template_flows", "owner_flow_id"} => :cascade,
+    {"form_flow_template_flow_events", "flow_id"} => :restrict,
     {"form_flow_template_forms", "owner_flow_id"} => :set_null,
     {"form_flow_template_forms", "copied_from_form_id"} => :set_null,
-    {"form_flow_template_form_versions", "template_form_id"} => :restrict,
+    {"form_flow_template_form_versions", "form_id"} => :restrict,
     {"form_flow_template_form_versions", "based_on_version_id"} => :set_null,
-    {"form_flow_nodes", "flow_id"} => :cascade,
-    {"form_flow_nodes", "subflow_id"} => :no_action,
-    {"form_flow_nodes", "form_id"} => :no_action,
-    {"form_flow_relationships", "flow_id"} => :cascade,
-    {"form_flow_relationships", "source_id"} => :cascade,
-    {"form_flow_relationships", "target_id"} => :cascade,
-    {"form_flow_instance_flows", "flow_id"} => :restrict,
+    {"form_flow_template_flow_nodes", "flow_id"} => :cascade,
+    {"form_flow_template_flow_nodes", "subflow_id"} => :no_action,
+    {"form_flow_template_flow_nodes", "form_id"} => :no_action,
+    {"form_flow_template_flow_relationships", "flow_id"} => :cascade,
+    {"form_flow_template_flow_relationships", "source_id"} => :cascade,
+    {"form_flow_template_flow_relationships", "target_id"} => :cascade,
+    {"form_flow_instance_flows", "template_flow_id"} => :restrict,
     {"form_flow_instance_flow_events", "instance_flow_id"} => :restrict,
     {"form_flow_instance_forms", "template_form_version_id"} => :restrict,
     {"form_flow_instance_forms", "instance_flow_id"} => :restrict,
@@ -96,31 +112,32 @@ defmodule DemoWeb.DataModelingLive.Diagram do
     {"form_flow_instance_form_events", "to_version_id"} => :restrict
   }
 
+  # One grey for every edge: a line's job here is to say which column points
+  # at which, and the ON DELETE rule it carries is named in the table below
+  # rather than encoded in a colour the reader has to decode.
+  @edge_color "#a1a1aa"
+
   # In the order the legend lists them: from the rule that destroys the most
   # data to the one the database declines to enforce at all.
   @on_delete [
     %{
       rule: :cascade,
       label: "CASCADE",
-      color: "#dc2626",
       meaning: "deleting the referenced row deletes this one with it"
     },
     %{
       rule: :restrict,
       label: "RESTRICT",
-      color: "#d97706",
       meaning: "the database refuses to delete the referenced row while this one points at it"
     },
     %{
       rule: :set_null,
       label: "SET NULL",
-      color: "#2563eb",
       meaning: "deleting the referenced row leaves this column NULL"
     },
     %{
       rule: :no_action,
       label: "NO ACTION",
-      color: "#6b7280",
       meaning:
         "the database allows it; FormFlow refuses in application code instead, " <>
           "where it can say why and control the ordering"
@@ -152,8 +169,7 @@ defmodule DemoWeb.DataModelingLive.Diagram do
         table: table_name(schema),
         column: to_string(association.owner_key),
         references: "#{table_name(association.related)}.#{association.related_key}",
-        on_delete: rule.label,
-        color: rule.color
+        on_delete: rule.label
       }
     end
   end
@@ -177,6 +193,7 @@ defmodule DemoWeb.DataModelingLive.Diagram do
         table: table_name(schema),
         schema: schema_name(schema),
         group: to_string(group(schema)),
+        primary: schema in @primary,
         columns: columns(schema)
       }
     }
@@ -186,8 +203,6 @@ defmodule DemoWeb.DataModelingLive.Diagram do
     table = table_name(schema)
 
     for association <- references(schema) do
-      rule = on_delete_rule(table, association.owner_key)
-
       %{
         id: "#{table}.#{association.owner_key}",
         source: table,
@@ -195,8 +210,8 @@ defmodule DemoWeb.DataModelingLive.Diagram do
         target: table_name(association.related),
         targetHandle: to_string(association.related_key),
         type: "smoothstep",
-        style: %{stroke: rule.color, strokeWidth: 1.5},
-        markerEnd: %{type: "arrowclosed", color: rule.color, width: 16, height: 16}
+        style: %{stroke: @edge_color, strokeWidth: 1.5},
+        markerEnd: %{type: "arrowclosed", color: @edge_color, width: 16, height: 16}
       }
     end
   end

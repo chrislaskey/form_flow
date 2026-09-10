@@ -65,7 +65,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
       # two differ is the guard doing its job.
       assigns = %{
         page_state: :completed,
-        flow_instance: %Instances.Flow{id: "flow-1", flow_id: Ecto.UUID.generate()},
+        flow_instance: %Instances.Flow{id: "flow-1", template_flow_id: Ecto.UUID.generate()},
         form_instance: %Instances.Form{id: "form-1", path: ["a"]},
         user_id: "user-1",
         tenant_id: nil,

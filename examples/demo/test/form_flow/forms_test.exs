@@ -253,14 +253,14 @@ defmodule Demo.FormFlowFormsTest do
       reset = reload(in_progress)
       assert reset.template_form_version_id == v2.id
       assert reset.data == %{}
-      assert [%{event: "migrated", snapshot_data: %{"name" => "Ada"}}] = events_for(in_progress)
+      assert [%{event: "migrated", snapshot: %{"name" => "Ada"}}] = events_for(in_progress)
 
       reopened = reload(completed)
       assert reopened.template_form_version_id == v2.id
       assert reopened.status == "in_progress"
       assert reopened.completed_at == nil
       assert reopened.data == %{}
-      assert [%{event: "reopened", snapshot_data: %{"name" => "Grace"}}] = events_for(completed)
+      assert [%{event: "reopened", snapshot: %{"name" => "Grace"}}] = events_for(completed)
     end
 
     test "renames re-key carried data before prune drops the rest" do
@@ -287,7 +287,7 @@ defmodule Demo.FormFlowFormsTest do
       assert migrated.data == %{"new_name" => "Ada", "kept" => "yes"}
 
       # The pruned key survives in the event snapshot — nothing is lost silently
-      assert [%{snapshot_data: %{"orphan" => "gone"}}] = events_for(instance)
+      assert [%{snapshot: %{"orphan" => "gone"}}] = events_for(instance)
     end
 
     test "prune without declared fields prunes nothing — never everything" do
@@ -537,7 +537,7 @@ defmodule Demo.FormFlowFormsTest do
 
   # A journey through the flow with its one step's form started
   defp start_at_step(%{nodes: [step]} = flow) do
-    {:ok, journey} = Instances.Flows.create(%{flow_id: flow.id, user_id: "owner"})
+    {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "owner"})
     {:ok, instance} = Instances.Forms.update_status(journey, [step.id], :in_progress)
     instance
   end

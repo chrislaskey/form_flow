@@ -71,7 +71,7 @@ defmodule FormFlow.Data.Templates.Flow do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "form_flow_flows" do
+  schema "form_flow_template_flows" do
     field(:name, :string)
 
     # The declared flavor: "forms" or "subflows", never mixed (see
@@ -186,7 +186,7 @@ defmodule FormFlow.Data.Templates.Flow do
     |> validate_immutable(:label)
     |> validate_immutable(:tenant_id)
     |> validate_immutable(:status)
-    |> Slug.validate_slug(:form_flow_flows_slug_tenant_index)
+    |> Slug.validate_slug(:form_flow_template_flows_slug_tenant_index)
     |> copy_into_properties(:tenant_id, "tenant_id")
     |> copy_into_properties(:slug, "slug")
     |> foreign_key_constraint(:owner_flow_id)

@@ -34,8 +34,8 @@ defmodule Demo.FormFlowInstancesTest do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def snapshot_data(context, _callback_data) do
-      Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:snapshot_data, context})
+    def snapshot(context, _callback_data) do
+      Phoenix.PubSub.broadcast(Demo.PubSub, "form_flow_test", {:snapshot, context})
       %{"seen" => %{"status" => context.form_instance.status}}
     end
 
@@ -49,7 +49,7 @@ defmodule Demo.FormFlowInstancesTest do
     use FormFlow.Config.Forms.Type
 
     @impl true
-    def snapshot_data(_context, _callback_data), do: raise("nothing to record")
+    def snapshot(_context, _callback_data), do: raise("nothing to record")
   end
 
   defmodule FailingReaction do
@@ -226,7 +226,11 @@ defmodule Demo.FormFlowInstancesTest do
       %{flow: flow, forms: [name, _address]} = flow_of_two()
 
       {:ok, tenant_instance} =
-        Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user", tenant_id: "acme"})
+        Instances.Flows.create(%{
+          template_flow_id: flow.id,
+          user_id: "demo-user",
+          tenant_id: "acme"
+        })
 
       {:ok, form_instance} =
         Instances.Forms.update_status(tenant_instance, [name.id], :in_progress,
@@ -730,7 +734,10 @@ defmodule Demo.FormFlowInstancesTest do
       # to renew from
       last_instance = start_flow(last_year)
       complete(last_instance, [owner.id], %{"name" => "Rex"})
-      {:ok, theirs} = Instances.Flows.create(%{flow_id: last_year.id, user_id: "someone-else"})
+
+      {:ok, theirs} =
+        Instances.Flows.create(%{template_flow_id: last_year.id, user_id: "someone-else"})
+
       complete(theirs, [owner.id], %{"name" => "Fido"})
       abandoned = start_flow(last_year)
       {:ok, _started} = Instances.Forms.update_status(abandoned, [owner.id], :in_progress)
@@ -830,7 +837,9 @@ defmodule Demo.FormFlowInstancesTest do
   describe "the instances attr scopes the listing" do
     test "by default the listing is the user's own", %{conn: conn} do
       %{flow: flow, instance: mine} = flow_of_one()
-      {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
+
+      {:ok, theirs} =
+        Instances.Flows.create(%{template_flow_id: flow.id, user_id: "someone-else"})
 
       {:ok, _view, html} = isolated(conn, [])
 
@@ -840,10 +849,16 @@ defmodule Demo.FormFlowInstancesTest do
 
     test "a host's query lists whoever it says; the tenant is applied on top", %{conn: conn} do
       %{flow: flow, instance: mine} = flow_of_one()
-      {:ok, theirs} = Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else"})
+
+      {:ok, theirs} =
+        Instances.Flows.create(%{template_flow_id: flow.id, user_id: "someone-else"})
 
       {:ok, acme} =
-        Instances.Flows.create(%{flow_id: flow.id, user_id: "someone-else", tenant_id: "acme"})
+        Instances.Flows.create(%{
+          template_flow_id: flow.id,
+          user_id: "someone-else",
+          tenant_id: "acme"
+        })
 
       {:ok, _view, html} = isolated(conn, [], %{"listing" => "everyone"})
       assert html =~ mine.id
@@ -933,8 +948,12 @@ defmodule Demo.FormFlowInstancesTest do
     test "the flows a host names are also the flows the listing shows", %{conn: conn} do
       {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
       {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
-      {:ok, dog_instance} = Instances.Flows.create(%{flow_id: dog.id, user_id: "demo-user"})
-      {:ok, cat_instance} = Instances.Flows.create(%{flow_id: cat.id, user_id: "demo-user"})
+
+      {:ok, dog_instance} =
+        Instances.Flows.create(%{template_flow_id: dog.id, user_id: "demo-user"})
+
+      {:ok, cat_instance} =
+        Instances.Flows.create(%{template_flow_id: cat.id, user_id: "demo-user"})
 
       # None named: the user's own instances of every flow
       {:ok, _view, html} = isolated(conn, [])
@@ -960,9 +979,11 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
       {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
       {:ok, acme_dog} = Flows.create(%{name: "Dog License", tenant_id: "acme", status: "open"})
-      {:ok, d} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
-      {:ok, c} = Instances.Flows.create(%{flow_id: cat.id, user_id: "u"})
-      {:ok, a} = Instances.Flows.create(%{flow_id: acme_dog.id, user_id: "u", tenant_id: "acme"})
+      {:ok, d} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "u"})
+      {:ok, c} = Instances.Flows.create(%{template_flow_id: cat.id, user_id: "u"})
+
+      {:ok, a} =
+        Instances.Flows.create(%{template_flow_id: acme_dog.id, user_id: "u", tenant_id: "acme"})
 
       ids = fn opts ->
         opts
@@ -985,9 +1006,9 @@ defmodule Demo.FormFlowInstancesTest do
 
     test "by the journey's own status, with the other options" do
       {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
-      {:ok, done} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
-      {:ok, _open} = Instances.Flows.create(%{flow_id: dog.id, user_id: "u"})
-      {:ok, theirs} = Instances.Flows.create(%{flow_id: dog.id, user_id: "v"})
+      {:ok, done} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "u"})
+      {:ok, _open} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "u"})
+      {:ok, theirs} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "v"})
       {:ok, done} = Instances.Flows.complete(done, [])
       {:ok, _theirs} = Instances.Flows.complete(theirs, [])
 
@@ -1091,7 +1112,7 @@ defmodule Demo.FormFlowInstancesTest do
       :ok = Phoenix.PubSub.subscribe(Demo.PubSub, "form_flow_test")
     end
 
-    test "snapshot_data/2 lands on the event; handle_complete/2 sees the form done",
+    test "snapshot/2 lands on the event; handle_complete/2 sees the form done",
          %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one(nil, form_type: "recording")
       {:ok, only} = Flows.update_node(only, %{slug: "recorded-step"})
@@ -1101,7 +1122,7 @@ defmodule Demo.FormFlowInstancesTest do
       submit(view, form_instance, %{"name" => "Ada"})
 
       # The snapshot saw the form as the page did: still in progress
-      assert_receive {:snapshot_data, %Context{form_instance: %{status: "in_progress"}}}
+      assert_receive {:snapshot, %Context{form_instance: %{status: "in_progress"}}}
 
       # The reaction saw the completed row and the flow instance's fresh progress
       assert_receive {:handle_complete, %Context{} = fresh}
@@ -1119,11 +1140,11 @@ defmodule Demo.FormFlowInstancesTest do
 
       # The template side is as at mount
       assert fresh.form.id ==
-               Forms.get_version(form_instance.template_form_version_id).template_form_id
+               Forms.get_version(form_instance.template_form_version_id).form_id
 
       assert {_path, _flash} = assert_redirect(view)
 
-      assert %{snapshot_data: %{"seen" => %{"status" => "in_progress"}}} =
+      assert %{snapshot: %{"seen" => %{"status" => "in_progress"}}} =
                Instances.Forms.latest_event(form_instance, "status_changed")
     end
 
@@ -1164,7 +1185,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       review_instance = reviewed(conn, fixture)
 
-      assert %{snapshot_data: %{"reviewed" => reviewed}} =
+      assert %{snapshot: %{"reviewed" => reviewed}} =
                Instances.Forms.latest_event(review_instance, "status_changed")
 
       assert reviewed == %{
@@ -1182,7 +1203,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       review_instance = reviewed(conn, fixture)
 
-      assert %{snapshot_data: %{"reviewed" => %{"path" => path, "instance_id" => nil}}} =
+      assert %{snapshot: %{"reviewed" => %{"path" => path, "instance_id" => nil}}} =
                Instances.Forms.latest_event(review_instance, "status_changed")
 
       assert path == intake.id
@@ -1199,7 +1220,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       review_instance = reviewed(conn, %{instance: instance, review: review})
 
-      assert %{snapshot_data: %{"reviewed" => %{"path" => "gone", "instance_id" => nil}}} =
+      assert %{snapshot: %{"reviewed" => %{"path" => "gone", "instance_id" => nil}}} =
                Instances.Forms.latest_event(review_instance, "status_changed")
     end
   end
@@ -1261,7 +1282,7 @@ defmodule Demo.FormFlowInstancesTest do
       reviewed(conn, fixture)
 
       published = Forms.get_version(source.template_form_version_id)
-      {:ok, draft} = Forms.create_draft(published.template_form_id, based_on: published.id)
+      {:ok, draft} = Forms.create_draft(published.form_id, based_on: published.id)
 
       {:ok, draft} =
         Forms.update_draft(draft, %{
@@ -1301,7 +1322,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert {:ok, _deleted} = Instances.Forms.delete_instance(source)
 
-      assert %{snapshot_data: %{"reviewed" => %{"data" => %{}, "redacted_at" => _at}}} =
+      assert %{snapshot: %{"reviewed" => %{"data" => %{}, "redacted_at" => _at}}} =
                Instances.Forms.latest_event(review_instance, "status_changed")
 
       {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
@@ -1378,10 +1399,10 @@ defmodule Demo.FormFlowInstancesTest do
         }
 
         review_a =
-          complete(instance, [review_a.id], %{"name" => "Looks right"}, snapshot_data: snapshot)
+          complete(instance, [review_a.id], %{"name" => "Looks right"}, snapshot: snapshot)
 
         review_b =
-          complete(instance, [review_b.id], %{"name" => "Agreed"}, snapshot_data: snapshot)
+          complete(instance, [review_b.id], %{"name" => "Agreed"}, snapshot: snapshot)
 
         %{source: source, reviews: [review_a, supersede(review_b)]}
       end
@@ -1404,21 +1425,21 @@ defmodule Demo.FormFlowInstancesTest do
       for {review, was} <- Enum.zip(journey.reviews, before) do
         event = Instances.Forms.latest_event(review, "status_changed")
 
-        assert %{"reviewed" => reviewed} = event.snapshot_data
+        assert %{"reviewed" => reviewed} = event.snapshot
         assert reviewed["data"] == %{}
         assert {:ok, _at, 0} = DateTime.from_iso8601(reviewed["redacted_at"])
         # Identity kept: what was reviewed stays on record, only the answers go
         assert reviewed["instance_id"] == journey.source.id
         assert reviewed["version_id"] == journey.source.template_form_version_id
         # The row is otherwise the row it was
-        assert Map.drop(event, [:snapshot_data, :__meta__]) ==
-                 Map.drop(was, [:snapshot_data, :__meta__])
+        assert Map.drop(event, [:snapshot, :__meta__]) ==
+                 Map.drop(was, [:snapshot, :__meta__])
       end
 
       # The other journey's copies are of its own Intake, and stay
       for review <- other.reviews do
         assert %{"reviewed" => %{"data" => %{"name" => "Ada"}} = reviewed} =
-                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+                 Instances.Forms.latest_event(review, "status_changed").snapshot
 
         refute Map.has_key?(reviewed, "redacted_at")
       end
@@ -1436,7 +1457,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       for review <- journey.reviews do
         assert %{"reviewed" => %{"data" => %{}, "redacted_at" => _at}} =
-                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+                 Instances.Forms.latest_event(review, "status_changed").snapshot
       end
     end
 
@@ -1450,7 +1471,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       for review <- other.reviews do
         assert %{"reviewed" => %{"data" => %{"name" => "Ada"}}} =
-                 Instances.Forms.latest_event(review, "status_changed").snapshot_data
+                 Instances.Forms.latest_event(review, "status_changed").snapshot
       end
     end
   end
@@ -1584,13 +1605,13 @@ defmodule Demo.FormFlowInstancesTest do
   defp properties(type), do: %{"form_flow_type" => type}
 
   defp start_flow(flow) do
-    {:ok, instance} = Instances.Flows.create(%{flow_id: flow.id, user_id: "demo-user"})
+    {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
 
     instance
   end
 
   # Starts and submits the form at `path`; `opts` reach the completion
-  # (`snapshot_data:` writes a payload on its `status_changed` event)
+  # (`snapshot:` writes a payload on its `status_changed` event)
   defp complete(instance, path, data \\ %{}, opts \\ []) do
     {:ok, _opened} = Instances.Forms.update_status(instance, path, :in_progress)
 

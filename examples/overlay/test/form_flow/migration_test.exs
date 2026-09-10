@@ -44,7 +44,7 @@ defmodule Demo.FormFlowMigrationTest do
              Repo.query(
                """
                INSERT INTO form_flow_instance_form_events
-                 (id, instance_form_id, event, to_version_id, snapshot_data,
+                 (id, instance_form_id, event, to_version_id, snapshot,
                   inserted_at, updated_at)
                VALUES (?, ?, 'created', ?, '{}', ?, ?)
                """,
@@ -112,7 +112,7 @@ defmodule Demo.FormFlowMigrationTest do
       Repo.query(
         """
         INSERT INTO form_flow_template_form_versions
-          (id, template_form_id, status, lock_version, definition, inserted_at, updated_at)
+          (id, form_id, status, lock_version, definition, inserted_at, updated_at)
         VALUES (?, ?, 'draft', 1, '{}', ?, ?)
         """,
         [id, form_id, @timestamp, @timestamp]
@@ -127,7 +127,7 @@ defmodule Demo.FormFlowMigrationTest do
     result =
       Repo.query(
         """
-        INSERT INTO form_flow_flows (id, label, inserted_at, updated_at)
+        INSERT INTO form_flow_template_flows (id, label, inserted_at, updated_at)
         VALUES (?, 'forms', ?, ?)
         """,
         [id, @timestamp, @timestamp]

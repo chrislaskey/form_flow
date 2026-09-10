@@ -23,7 +23,7 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
           page_state: :ready,
           # A real flow id: reopen reads the flow again at the click, and a
           # missing one is answered without touching the repo
-          flow_instance: %Instances.Flow{id: "flow-1", flow_id: Ecto.UUID.generate()},
+          flow_instance: %Instances.Flow{id: "flow-1", template_flow_id: Ecto.UUID.generate()},
           flow_instance_id: "flow-1",
           user_id: "user-1",
           tenant_id: nil,

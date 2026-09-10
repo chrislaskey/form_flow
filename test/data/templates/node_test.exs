@@ -17,7 +17,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert changeset.changes.flow_id == @flow_id
     assert changeset.changes.labels == ["Step", "Form"]
 
-    assert changeset.changes.properties == %{
+    assert properties(changeset) == %{
              "label" => "Contact details",
              "flow_id" => @flow_id
            }
@@ -46,7 +46,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     node = Ecto.Changeset.apply_changes(changeset)
 
     assert node.labels == []
-    assert node.properties == %{"flow_id" => @flow_id}
+    assert Map.delete(node.properties, "id") == %{"flow_id" => @flow_id}
   end
 
   test "casts subflow_id and copies it into properties" do
@@ -152,7 +152,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
         properties: %{"label" => "Start", "flow_id" => Ecto.UUID.generate()}
       })
 
-    assert changeset.changes.properties == %{"label" => "Start", "flow_id" => @flow_id}
+    assert properties(changeset) == %{"label" => "Start", "flow_id" => @flow_id}
   end
 
   test "rejects labels that are not a list of strings" do
@@ -170,7 +170,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert changeset.changes.tenant_id == "acme"
     assert changeset.changes.slug == "owner-contact"
 
-    assert changeset.changes.properties == %{
+    assert properties(changeset) == %{
              "flow_id" => @flow_id,
              "tenant_id" => "acme",
              "slug" => "owner-contact"
@@ -197,7 +197,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     assert changeset.valid?
     refute Map.has_key?(changeset.changes, :tenant_id)
     refute Map.has_key?(changeset.changes, :slug)
-    assert changeset.changes.properties == %{"flow_id" => @flow_id, "k" => "v"}
+    assert properties(changeset) == %{"flow_id" => @flow_id, "k" => "v"}
   end
 
   test "clearing the slug removes its properties copy" do
@@ -212,7 +212,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     changeset = Node.changeset(persisted, %{slug: ""})
 
     assert changeset.changes.slug == nil
-    assert changeset.changes.properties == %{"flow_id" => @flow_id}
+    assert properties(changeset) == %{"flow_id" => @flow_id}
   end
 
   test "tenant_id is immutable once the node is persisted" do
@@ -229,6 +229,43 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
     refute changeset.valid?
     assert %{slug: [_message]} = errors_on(changeset)
   end
+
+  test "the node's own id is copied into properties, overwriting a stale copy" do
+    id = Ecto.UUID.generate()
+
+    changeset =
+      Node.changeset(%Node{}, %{
+        id: id,
+        flow_id: @flow_id,
+        properties: %{"id" => Ecto.UUID.generate()}
+      })
+
+    assert changeset.changes.properties["id"] == id
+  end
+
+  test "a node given no id is given one, so the properties copy is never missing" do
+    changeset = Node.changeset(%Node{}, %{flow_id: @flow_id})
+
+    assert {:ok, id} = Ecto.UUID.cast(changeset.changes.id)
+    assert changeset.changes.properties["id"] == id
+  end
+
+  test "an update keeps the loaded id rather than minting a new one" do
+    id = Ecto.UUID.generate()
+
+    loaded =
+      %Node{id: id, flow_id: @flow_id, properties: %{"id" => id, "flow_id" => @flow_id}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Node.changeset(loaded, %{properties: %{"k" => "v"}})
+
+    refute Map.has_key?(changeset.changes, :id)
+    assert changeset.changes.properties["id"] == id
+  end
+
+  # The generated id is unpredictable, so exact-map assertions compare what is
+  # left once its properties copy is set aside
+  defp properties(changeset), do: Map.delete(changeset.changes.properties, "id")
 
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->

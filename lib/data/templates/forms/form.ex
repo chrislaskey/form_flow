@@ -70,7 +70,7 @@ defmodule FormFlow.Data.Templates.Form do
     belongs_to(:owner_flow, Flow, foreign_key: :owner_flow_id)
     belongs_to(:copied_from, __MODULE__, foreign_key: :copied_from_form_id)
 
-    has_many(:versions, Version, foreign_key: :template_form_id)
+    has_many(:versions, Version, foreign_key: :form_id)
 
     timestamps(type: :utc_datetime_usec)
   end

@@ -17,7 +17,7 @@ defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
     assert changeset.valid?
     assert changeset.changes.label == "TRANSITIONS_TO"
 
-    assert changeset.changes.properties == %{
+    assert properties(changeset) == %{
              "if" => "approved",
              "flow_id" => @attrs.flow_id
            }
@@ -41,7 +41,7 @@ defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
 
     assert changeset.valid?
 
-    assert Ecto.Changeset.apply_changes(changeset).properties == %{
+    assert Map.delete(Ecto.Changeset.apply_changes(changeset).properties, "id") == %{
              "flow_id" => @attrs.flow_id
            }
   end
@@ -52,7 +52,7 @@ defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
     assert changeset.valid?
     assert changeset.changes.tenant_id == "acme"
 
-    assert changeset.changes.properties == %{
+    assert properties(changeset) == %{
              "flow_id" => @attrs.flow_id,
              "tenant_id" => "acme"
            }
@@ -72,12 +72,38 @@ defmodule FormFlow.Data.Templates.Flow.RelationshipTest do
   test "carries the unique constraint on source, target, and label" do
     changeset = Relationship.changeset(%Relationship{}, @attrs)
 
-    assert Enum.any?(changeset.constraints, fn constraint ->
-             constraint.type == :unique and
-               constraint.constraint ==
-                 "form_flow_relationships_source_id_target_id_label_index"
-           end)
+    unique =
+      for constraint <- changeset.constraints,
+          constraint.type == :unique,
+          do: constraint.constraint
+
+    # Postgres's name for the index, and the one SQLite's adapter rebuilds
+    # from the columns because SQLite cannot report the index itself
+    assert "form_flow_template_flow_relationships_source_target_label_index" in unique
+
+    assert "form_flow_template_flow_relationships_source_id_target_id_label_index" in unique
   end
+
+  test "the relationship's own id is copied into properties, generated if absent" do
+    id = Ecto.UUID.generate()
+
+    changeset =
+      Relationship.changeset(
+        %Relationship{},
+        Map.merge(@attrs, %{id: id, properties: %{"id" => "stale"}})
+      )
+
+    assert changeset.changes.properties["id"] == id
+
+    generated = Relationship.changeset(%Relationship{}, @attrs)
+
+    assert {:ok, _} = Ecto.UUID.cast(generated.changes.id)
+    assert generated.changes.properties["id"] == generated.changes.id
+  end
+
+  # The generated id is unpredictable, so exact-map assertions compare what is
+  # left once its properties copy is set aside
+  defp properties(changeset), do: Map.delete(changeset.changes.properties, "id")
 
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->

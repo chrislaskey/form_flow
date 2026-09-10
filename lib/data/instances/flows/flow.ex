@@ -5,9 +5,9 @@ defmodule FormFlow.Data.Instances.Flow do
   `FormFlow.Data.Templates.Flow`, exactly as `FormFlow.Data.Instances.Form`
   is the counterpart of `FormFlow.Data.Templates.Form`.
 
-  `flow_id` names the root; the traversal covers the whole tree reachable
-  through subflow references, with interior positions addressed by `path`
-  on the attached form instances. The flow is referenced *live* — never
+  `template_flow_id` names the root; the traversal covers the whole tree
+  reachable through subflow references, with interior positions addressed by
+  `path` on the attached form instances. The flow is referenced *live* — never
   versioned, never snapshotted: structure is routing, and edits propagate
   to journeys in flight (form instances already carry their own immutable
   pin at the form-version level, which is where attestation lives).
@@ -41,7 +41,7 @@ defmodule FormFlow.Data.Instances.Flow do
   @foreign_key_type :binary_id
 
   schema "form_flow_instance_flows" do
-    belongs_to(:flow, Templates.Flow)
+    belongs_to(:template_flow, Templates.Flow)
 
     field(:status, :string, default: "in_progress")
     field(:user_id, :string)
@@ -67,19 +67,19 @@ defmodule FormFlow.Data.Instances.Flow do
   Builds a changeset for a journey.
 
   `status` and `completed_at` are not castable — completion machinery
-  stamps them (see moduledoc). `flow_id`, `user_id`, and `tenant_id` are
+  stamps them (see moduledoc). `template_flow_id`, `user_id`, and `tenant_id` are
   castable at creation and immutable afterwards: a journey can never
   re-point at a different tree (its form instances' paths reference that
   tree's nodes), and provenance never changes.
   """
   def changeset(instance, attrs \\ %{}) do
     instance
-    |> cast(attrs, [:flow_id, :user_id, :tenant_id, :metadata])
-    |> validate_required([:flow_id])
-    |> validate_immutable(:flow_id)
+    |> cast(attrs, [:template_flow_id, :user_id, :tenant_id, :metadata])
+    |> validate_required([:template_flow_id])
+    |> validate_immutable(:template_flow_id)
     |> validate_immutable(:user_id)
     |> validate_immutable(:tenant_id)
-    |> foreign_key_constraint(:flow_id)
+    |> foreign_key_constraint(:template_flow_id)
   end
 
   # The same rule Templates.Flow applies to `label`: castable at creation,

@@ -22,13 +22,15 @@ That rule is what makes the Neo4j mapping mechanical:
     as a relationship. Both derive from the same column, so they cannot
     drift: the property is the fidelity contract, the relationship is the
     query accelerator.
-  * Flow rows (`form_flow_flows`) map wholesale to `:Flow` nodes, so their
-    column (`owner_flow_id`) needs no properties copy.
-  * Two more infrastructure keys ride the same rule without becoming
-    relationships, since neither points at a node: `tenant_id` on nodes and
-    relationships (the flow's, stamped at insert), and `slug` on nodes (a
-    step's handle, `FormFlow.Data.Templates.Slug`). A query narrows by them
-    directly.
+  * Flow rows (`form_flow_template_flows`) map wholesale to `:Flow` nodes, so
+    their column (`owner_flow_id`) needs no properties copy.
+  * Three more infrastructure keys ride the same rule without becoming
+    relationships, since none of them points at a node: `id` on nodes and
+    relationships (the row's own, so a query can match the record by the id
+    the rest of the system knows it by), `tenant_id` on both (the flow's,
+    stamped at insert), and `slug` on nodes (a node's handle in the product's
+    words, a *step's*, `FormFlow.Data.Templates.Slug`). A query narrows by
+    them directly.
   * **Keys with a leading underscore are the library's own bookkeeping**,
     not domain data, and are stripped from the projection: a flow's
     `properties["_health_metadata"]` (`FormFlow.Data.Templates.Flows.Health`
@@ -45,9 +47,9 @@ point at flows — so flows are nodes too.
 
 | SQL | Neo4j |
 |-----|-------|
-| `form_flow_nodes` row | node — `labels` column → labels, `properties` column → property map, verbatim |
-| `form_flow_relationships` row | relationship — `label` → type, `properties` → property map |
-| `form_flow_flows` row | `:Flow` node (id, timestamps as properties) |
+| `form_flow_template_flow_nodes` row | node — `labels` column → labels, `properties` column → property map, verbatim |
+| `form_flow_template_flow_relationships` row | relationship — `label` → type, `properties` → property map |
+| `form_flow_template_flows` row | `:Flow` node (id, timestamps as properties) |
 | `nodes.flow_id` column | `(n)-[:IN]->(:Flow)` |
 | `nodes.subflow_id` column | `(n)-[:EMBEDS]->(:Flow)` |
 | `flows.owner_flow_id` column | `(:Flow)-[:OWNED_BY]->(:Flow)` |
@@ -76,8 +78,12 @@ The queries that motivate a graph database become single patterns:
     MATCH (f:Flow)-[:OWNED_BY]->(:Flow {id: $root})
     RETURN f
 
-    // a step by its handle — no id, no join
+    // a node (step) by its handle — no join
     MATCH (n {slug: $slug, tenant_id: $tenant})
+    RETURN n
+
+    // or by the id the SQL row has, now that it rides in properties
+    MATCH (n {id: $id})
     RETURN n
 
 The first and third are indexed one-hop traversals; the second is the query

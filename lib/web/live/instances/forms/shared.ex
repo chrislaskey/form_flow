@@ -140,7 +140,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   """
   def resolve(assigns) do
     %{flow_instance: flow_instance, path: path} = assigns
-    tree = Templates.Flows.resolve_tree(flow_instance.flow_id)
+    tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
     # An instance already at the position is simply used — including a
@@ -149,7 +149,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
     version = form_instance && Templates.Forms.get_version(form_instance.template_form_version_id)
 
-    form = version && Templates.Forms.get(version.template_form_id)
+    form = version && Templates.Forms.get(version.form_id)
 
     context = %Context{
       context(assigns, tree, forms)
@@ -325,7 +325,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   # The page's `flows` attr is its scope: an instance is in it when its flow
   # is one of the flows the attr names. No attr, or no instance in scope
   # (the listing), and every instance is.
-  defp flow_in_scope?(%{flow_instance: %{flow_id: flow_id}, flows: flows} = assigns)
+  defp flow_in_scope?(%{flow_instance: %{template_flow_id: flow_id}, flows: flows} = assigns)
        when is_list(flows) do
     Enum.any?(resolve_flows(flows, Map.get(assigns, :tenant_id)), &(&1.id == flow_id))
   end

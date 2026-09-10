@@ -19,6 +19,12 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   authoritative, and a stale `"flow_id"` arriving in `properties` is
   overwritten.
 
+  The node's own `id` rides along the same way, so a Cypher query can match a
+  node by the id the rest of the system knows it by. It is only ever written
+  outward: a stale `"id"` in incoming `properties` is overwritten from the
+  column and never read back into it, so nothing a client round-trips can
+  re-point a node at another node's identity.
+
   ## Subflows and forms
 
   A node that embeds another flow carries that flow's id in `subflow_id` —
@@ -70,7 +76,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "form_flow_nodes" do
+  schema "form_flow_template_flow_nodes" do
     field(:labels, {:array, :string}, default: [])
     field(:properties, :map, default: %{})
     field(:tenant_id, :string)
@@ -98,7 +104,9 @@ defmodule FormFlow.Data.Templates.Flow.Node do
     |> put_new_from_properties(:subflow_id, "subflow_id")
     |> put_new_from_properties(:form_id, "form_id")
     |> derive_labels_from_kind()
-    |> Slug.validate_slug(:form_flow_nodes_slug_tenant_index)
+    |> Slug.validate_slug(:form_flow_template_flow_nodes_slug_tenant_index)
+    |> put_new_id()
+    |> copy_into_properties(:id, "id")
     |> copy_into_properties(:flow_id, "flow_id")
     |> copy_into_properties(:tenant_id, "tenant_id")
     |> copy_into_properties(:slug, "slug")
@@ -107,6 +115,18 @@ defmodule FormFlow.Data.Templates.Flow.Node do
     |> foreign_key_constraint(:flow_id)
     |> foreign_key_constraint(:subflow_id)
     |> foreign_key_constraint(:form_id)
+  end
+
+  # The id has to exist before it can be copied into `properties`, and for a
+  # new node without one it would otherwise be minted by the adapter at
+  # insert — after the changeset has run, too late for the copy. `get_field`,
+  # not `get_change`: a loaded node already has its id in the data, and
+  # `put_new_change/3` would hand it a fresh one on every update.
+  defp put_new_id(changeset) do
+    case get_field(changeset, :id) do
+      nil -> put_change(changeset, :id, Ecto.UUID.generate())
+      _id -> changeset
+    end
   end
 
   defp validate_immutable(changeset, field) do

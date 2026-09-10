@@ -1028,7 +1028,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   # A user starts the form at a root flow's step
   defp start_at(flow, node) do
-    {:ok, journey} = Instances.Flows.create(%{flow_id: flow.id, user_id: "owner"})
+    {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "owner"})
     {:ok, instance} = Instances.Forms.update_status(journey, [node.id], :in_progress)
     instance
   end

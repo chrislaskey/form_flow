@@ -61,11 +61,18 @@ defmodule Demo.FormFlowFlowsTest do
     assert Enum.find(nodes, &(&1.id == form.id)).properties == %{
              "label" => "Form",
              "fields" => 4,
-             "flow_id" => flow.id
+             "flow_id" => flow.id,
+             "id" => form.id
            }
 
     assert relationship.label == "TRANSITIONS_TO"
-    assert relationship.properties == %{"if" => "always", "flow_id" => flow.id}
+
+    assert relationship.properties == %{
+             "if" => "always",
+             "flow_id" => flow.id,
+             "id" => relationship.id
+           }
+
     assert {relationship.source_id, relationship.target_id} == {start.id, form.id}
   end
 
@@ -141,10 +148,11 @@ defmodule Demo.FormFlowFlowsTest do
 
     assert {:ok, _} = Flows.delete(Flows.get(flow.id))
 
-    assert {:ok, %{rows: [[0]]}} = Repo.query("SELECT count(*) FROM form_flow_nodes")
+    assert {:ok, %{rows: [[0]]}} =
+             Repo.query("SELECT count(*) FROM form_flow_template_flow_nodes")
 
     assert {:ok, %{rows: [[0]]}} =
-             Repo.query("SELECT count(*) FROM form_flow_relationships")
+             Repo.query("SELECT count(*) FROM form_flow_template_flow_relationships")
   end
 
   describe "declared flavor and save-time children" do
@@ -920,6 +928,34 @@ defmodule Demo.FormFlowFlowsTest do
       assert {:error, changeset} = Flows.copy(root, slug: "onboarding-2027")
       assert %{slug: [_taken]} = errors_on(changeset)
       assert length(Flows.list()) == before
+    end
+
+    test "every node and relationship carries its own id in properties, copies included" do
+      {:ok, flow} = Flows.create()
+      start = insert_node(flow)
+      form = insert_node(flow)
+      insert_relationship(flow, start, form)
+
+      for node <- Flows.get(flow.id).nodes do
+        assert node.properties["id"] == node.id
+      end
+
+      # The copy's properties come from the source, which carries the source's
+      # id — the changeset has to overwrite it, or a Cypher lookup by id would
+      # land on the original
+      {:ok, copy} = Flows.copy(flow)
+      copied = Flows.get(copy.id)
+
+      assert length(copied.nodes) == 2
+
+      for node <- copied.nodes do
+        assert node.properties["id"] == node.id
+        refute node.properties["id"] in [start.id, form.id]
+      end
+
+      for relationship <- copied.relationships do
+        assert relationship.properties["id"] == relationship.id
+      end
     end
 
     test "copy deep-copies the subflows" do

@@ -18,15 +18,15 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   ## What was reviewed
 
   Submitting the review records what it reviewed on its own completion event
-  (`snapshot_data/2`): the source's id, its pinned version id, its
+  (`snapshot/2`): the source's id, its pinned version id, its
   `completed_at`, and its answers as they were rendered, under `"reviewed"`
-  in the event's `snapshot_data`. Structure by reference — the version is
+  in the event's `snapshot`. Structure by reference — the version is
   immutable — and answers by copy, because the source can be resubmitted,
   reconciled, or deleted, and a review that carries its own record is
   stronger evidence than one reconstructed from other tables. The library
   blanks the copy when the source is deleted
   (`FormFlow.Data.Instances.Forms.redact_snapshots/1`). A host that cannot
-  hold duplicated personal data overrides `snapshot_data/2` in its own
+  hold duplicated personal data overrides `snapshot/2` in its own
   review type to store identifiers only.
 
   A source that did not resolve, or had no instance, at review time records
@@ -127,7 +127,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   end
 
   @impl true
-  def snapshot_data(context, _callback_data) do
+  def snapshot(context, _callback_data) do
     path = (context.form_type_property_values || %{})["source"]
 
     %{"reviewed" => reviewed(path, Type.related_form(context, "source"))}
@@ -296,7 +296,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
       context.form_instance &&
         Instances.Forms.latest_event(context.form_instance, "status_changed")
 
-    snapshot = completion && get_in(completion.snapshot_data, ["reviewed"])
+    snapshot = completion && get_in(completion.snapshot, ["reviewed"])
 
     source_events =
       case source do

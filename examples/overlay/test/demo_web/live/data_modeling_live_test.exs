@@ -4,6 +4,8 @@ defmodule DemoWeb.DataModelingLiveTest do
   import Phoenix.LiveViewTest
 
   alias DemoWeb.DataModelingLive.Diagram
+  alias DemoWeb.DataModelingLive.GraphSchema
+  alias DemoWeb.DataModelingLive.SqlExamples
 
   test "draws one node per table FormFlow's schemas define", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/docs/data-modeling")
@@ -11,6 +13,23 @@ defmodule DemoWeb.DataModelingLiveTest do
     drawn = view |> diagram() |> Map.fetch!("nodes") |> Enum.map(& &1["id"])
 
     assert Enum.sort(drawn) == Enum.sort(form_flow_tables())
+  end
+
+  test "stars the five tables the rest support", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/docs/data-modeling")
+
+    starred =
+      for node <- view |> diagram() |> Map.fetch!("nodes"),
+          node["data"]["primary"],
+          do: node["id"]
+
+    assert Enum.sort(starred) == [
+             "form_flow_instance_flows",
+             "form_flow_instance_forms",
+             "form_flow_template_flow_nodes",
+             "form_flow_template_flows",
+             "form_flow_template_forms"
+           ]
   end
 
   test "every column carries a Postgres type", %{conn: conn} do
@@ -54,24 +73,75 @@ defmodule DemoWeb.DataModelingLiveTest do
     end
   end
 
-  test "names the CDN packages the canvas is built on", %{conn: conn} do
+  test "draws the graph schema with the same node type as the SQL schema", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/docs/data-modeling")
 
-    html = render(element(view, "#cdn-sources"))
+    %{"nodes" => nodes, "edges" => edges} = diagram(view, "graph-diagram")
 
-    assert html =~ "react"
-    assert html =~ "reactflow"
-    assert html =~ "cdn.jsdelivr.net"
+    # Only the graph half of the templates crosses over — a node, a
+    # relationship between two nodes, and the flow they belong to
+    assert Enum.map(nodes, & &1["data"]["table"]) |> Enum.sort() == [
+             "form_flow_template_flow_nodes",
+             "form_flow_template_flow_relationships",
+             "form_flow_template_flows"
+           ]
+
+    assert Enum.all?(nodes, &(&1["type"] == "table"))
+
+    # Neo4j has no primary or foreign keys, so no row carries a key badge
+    for node <- nodes, column <- node["data"]["columns"] do
+      assert column["key"] == nil
+    end
+
+    columns =
+      Map.new(nodes, &{&1["id"], Map.new(&1["data"]["columns"], fn c -> {c["name"], c} end)})
+
+    for edge <- edges do
+      assert columns[edge["source"]][edge["sourceHandle"]]["handle"] == "source"
+      assert columns[edge["target"]][edge["targetHandle"]]["handle"] == "target"
+    end
+
+    # The reserved types are the dashed ones: a property says it, so no
+    # relationship row holds it
+    dashed = for edge <- edges, edge["style"]["strokeDasharray"], do: edge["label"]
+
+    assert Enum.sort(dashed) == ["EMBEDS", "IN", "OWNED_BY"]
+  end
+
+  test "prints every SQL example, each naming what issues it", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/docs/data-modeling")
+
+    for example <- SqlExamples.all() do
+      block = render(element(view, "#sql-#{example.id}"))
+
+      assert block =~ example.title
+      # The tables the statements touch are the ones the diagram draws
+      assert block =~ "form_flow_template_flow"
+    end
+
+    assert html =~ "WITH RECURSIVE"
+    refute html =~ "NOTE:"
+  end
+
+  test "lists each reserved relationship type with the column behind it", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/docs/data-modeling")
+
+    html = render(element(view, "#structural-types"))
+
+    for type <- GraphSchema.structural_types() do
+      assert html =~ type.type
+      assert html =~ type.derived_from
+    end
   end
 
   # The nodes and edges the hook is handed, out of the container's
   # data-diagram attribute
-  defp diagram(view) do
+  defp diagram(view, id \\ "schema-diagram") do
     view
-    |> element("#schema-diagram")
+    |> element("##{id}")
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query_by_id("schema-diagram")
+    |> LazyHTML.query_by_id(id)
     |> LazyHTML.attribute("data-diagram")
     |> hd()
     |> Jason.decode!()

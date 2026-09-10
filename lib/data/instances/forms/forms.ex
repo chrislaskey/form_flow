@@ -93,7 +93,7 @@ defmodule FormFlow.Data.Instances.Forms do
       call creates the instance, stamped on it as the user who started it
     * `:tenant_id` — the host tenant, stamped on the instance when the call
       creates it
-    * `:snapshot_data` — free-form event payload
+    * `:snapshot` — free-form event payload
 
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
   position with no instance), `{:error, :unknown_position}` (no such node —
@@ -179,7 +179,7 @@ defmodule FormFlow.Data.Instances.Forms do
   @doc """
   Blanks the answers in every review snapshot that references `instance` —
   the copies review submissions made of it, found by
-  `"reviewed"."instance_id"` in the `snapshot_data` of the `status_changed`
+  `"reviewed"."instance_id"` in the `snapshot` of the `status_changed`
   events of the journey's other instances, superseded ones included (a
   superseded review's trail is kept, not deleted, so its copy has to be
   blanked too). Each copy's `"data"` becomes `%{}` and `"redacted_at"` is
@@ -214,21 +214,21 @@ defmodule FormFlow.Data.Instances.Forms do
 
     Repo.transaction(fn ->
       events
-      |> Enum.filter(&(get_in(&1.snapshot_data, ["reviewed", "instance_id"]) == instance.id))
+      |> Enum.filter(&(get_in(&1.snapshot, ["reviewed", "instance_id"]) == instance.id))
       |> Enum.reduce(0, fn event, count ->
         reviewed =
-          Map.merge(event.snapshot_data["reviewed"], %{
+          Map.merge(event.snapshot["reviewed"], %{
             "data" => %{},
             "redacted_at" => redacted_at
           })
 
-        snapshot = Map.put(event.snapshot_data, "reviewed", reviewed)
+        snapshot = Map.put(event.snapshot, "reviewed", reviewed)
 
         # Written as a plain column update so nothing else on the row moves,
         # `updated_at` included
         {1, _} =
           Repo.update_all(from(e in Event, where: e.id == ^event.id),
-            set: [snapshot_data: snapshot]
+            set: [snapshot: snapshot]
           )
 
         count + 1
@@ -314,7 +314,7 @@ defmodule FormFlow.Data.Instances.Forms do
       instance_form_id: instance.id,
       event: event,
       user_id: Keyword.get(opts, :user_id),
-      snapshot_data: Keyword.get(opts, :snapshot_data, %{})
+      snapshot: Keyword.get(opts, :snapshot, %{})
     }
 
     Repo.insert(Event.changeset(%Event{}, attrs))

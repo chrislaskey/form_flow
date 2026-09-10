@@ -129,7 +129,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     # The status is the pages' rule, asked again at the click from the flow
     # as it now is — Reopen was drawn while continuing was allowed, and the
     # year may have closed since
-    flow = Templates.Flows.get_row(flow_instance.flow_id)
+    flow = Templates.Flows.get_row(flow_instance.template_flow_id)
 
     if match?(%Templates.Flow{}, flow) and
          FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, socket.assigns) do

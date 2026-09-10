@@ -13,7 +13,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
   use Ecto.Migration
 
   def up(_context) do
-    create_if_not_exists table(:form_flow_flows, primary_key: false) do
+    create_if_not_exists table(:form_flow_template_flows, primary_key: false) do
       add(:id, :uuid, primary_key: true)
       add(:name, :string)
       add(:label, :string, null: false, default: "forms")
@@ -21,18 +21,26 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:slug, :string)
       add(:status, :string, null: false, default: "draft")
       add(:properties, :map, null: false, default: %{})
-      add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :delete_all))
+
+      add(
+        :owner_flow_id,
+        references(:form_flow_template_flows, type: :uuid, on_delete: :delete_all)
+      )
 
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_flows, [:owner_flow_id]))
-    create_if_not_exists(index(:form_flow_flows, [:tenant_id]))
-    create_if_not_exists(index(:form_flow_flows, [:status]))
+    create_if_not_exists(index(:form_flow_template_flows, [:owner_flow_id]))
+    create_if_not_exists(index(:form_flow_template_flows, [:tenant_id]))
+    create_if_not_exists(index(:form_flow_template_flows, [:status]))
 
-    create_if_not_exists table(:form_flow_flow_events, primary_key: false) do
+    create_if_not_exists table(:form_flow_template_flow_events, primary_key: false) do
       add(:id, :uuid, primary_key: true)
-      add(:flow_id, references(:form_flow_flows, type: :uuid, on_delete: :restrict), null: false)
+
+      add(:flow_id, references(:form_flow_template_flows, type: :uuid, on_delete: :restrict),
+        null: false
+      )
+
       add(:event, :string, null: false)
       add(:snapshot, :map, null: false)
       add(:user_id, :string)
@@ -40,12 +48,12 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_flow_events, [:flow_id]))
+    create_if_not_exists(index(:form_flow_template_flow_events, [:flow_id]))
 
     create_if_not_exists(
-      unique_index(:form_flow_flows, [:slug, "COALESCE(tenant_id, '')"],
+      unique_index(:form_flow_template_flows, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
-        name: :form_flow_flows_slug_tenant_index
+        name: :form_flow_template_flows_slug_tenant_index
       )
     )
 
@@ -56,7 +64,11 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:tenant_id, :string)
       add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
-      add(:owner_flow_id, references(:form_flow_flows, type: :uuid, on_delete: :nilify_all))
+
+      add(
+        :owner_flow_id,
+        references(:form_flow_template_flows, type: :uuid, on_delete: :nilify_all)
+      )
 
       add(
         :copied_from_form_id,
@@ -84,7 +96,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:id, :uuid, primary_key: true)
 
       add(
-        :template_form_id,
+        :form_id,
         references(:form_flow_template_forms, type: :uuid, on_delete: :restrict),
         null: false
       )
@@ -104,18 +116,16 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(
-      unique_index(:form_flow_template_form_versions, [:template_form_id, :version])
-    )
+    create_if_not_exists(unique_index(:form_flow_template_form_versions, [:form_id, :version]))
 
-    create_if_not_exists(index(:form_flow_template_form_versions, [:template_form_id, :status]))
+    create_if_not_exists(index(:form_flow_template_form_versions, [:form_id, :status]))
 
     create_if_not_exists table(:form_flow_instance_flows, primary_key: false) do
       add(:id, :uuid, primary_key: true)
 
       add(
-        :flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :restrict),
+        :template_flow_id,
+        references(:form_flow_template_flows, type: :uuid, on_delete: :restrict),
         null: false
       )
 
@@ -128,7 +138,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_instance_flows, [:flow_id]))
+    create_if_not_exists(index(:form_flow_instance_flows, [:template_flow_id]))
     create_if_not_exists(index(:form_flow_instance_flows, [:status]))
     create_if_not_exists(index(:form_flow_instance_flows, [:user_id]))
     create_if_not_exists(index(:form_flow_instance_flows, [:tenant_id]))
@@ -195,7 +205,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
         references(:form_flow_template_form_versions, type: :uuid, on_delete: :restrict)
       )
 
-      add(:snapshot_data, :map, null: false)
+      add(:snapshot, :map, null: false)
       add(:user_id, :string)
 
       timestamps(type: :utc_datetime_usec)
@@ -221,18 +231,18 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_instance_flow_events, [:instance_flow_id]))
 
-    create_if_not_exists table(:form_flow_nodes, primary_key: false) do
+    create_if_not_exists table(:form_flow_template_flow_nodes, primary_key: false) do
       add(:id, :uuid, primary_key: true)
 
       add(
         :flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :delete_all),
+        references(:form_flow_template_flows, type: :uuid, on_delete: :delete_all),
         null: false
       )
 
       add(:labels, {:array, :string}, null: false)
       add(:properties, :map, null: false)
-      add(:subflow_id, references(:form_flow_flows, type: :uuid, on_delete: :nothing))
+      add(:subflow_id, references(:form_flow_template_flows, type: :uuid, on_delete: :nothing))
       add(:form_id, references(:form_flow_template_forms, type: :uuid, on_delete: :nothing))
       add(:tenant_id, :string)
       add(:slug, :string)
@@ -240,36 +250,36 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create_if_not_exists(index(:form_flow_nodes, [:flow_id]))
-    create_if_not_exists(index(:form_flow_nodes, [:subflow_id]))
-    create_if_not_exists(index(:form_flow_nodes, [:form_id]))
-    create_if_not_exists(index(:form_flow_nodes, [:tenant_id]))
+    create_if_not_exists(index(:form_flow_template_flow_nodes, [:flow_id]))
+    create_if_not_exists(index(:form_flow_template_flow_nodes, [:subflow_id]))
+    create_if_not_exists(index(:form_flow_template_flow_nodes, [:form_id]))
+    create_if_not_exists(index(:form_flow_template_flow_nodes, [:tenant_id]))
 
     create_if_not_exists(
-      unique_index(:form_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
+      unique_index(:form_flow_template_flow_nodes, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
-        name: :form_flow_nodes_slug_tenant_index
+        name: :form_flow_template_flow_nodes_slug_tenant_index
       )
     )
 
-    create_if_not_exists table(:form_flow_relationships, primary_key: false) do
+    create_if_not_exists table(:form_flow_template_flow_relationships, primary_key: false) do
       add(:id, :uuid, primary_key: true)
 
       add(
         :flow_id,
-        references(:form_flow_flows, type: :uuid, on_delete: :delete_all),
+        references(:form_flow_template_flows, type: :uuid, on_delete: :delete_all),
         null: false
       )
 
       add(
         :source_id,
-        references(:form_flow_nodes, type: :uuid, on_delete: :delete_all),
+        references(:form_flow_template_flow_nodes, type: :uuid, on_delete: :delete_all),
         null: false
       )
 
       add(
         :target_id,
-        references(:form_flow_nodes, type: :uuid, on_delete: :delete_all),
+        references(:form_flow_template_flow_nodes, type: :uuid, on_delete: :delete_all),
         null: false
       )
 
@@ -281,26 +291,32 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     end
 
     # Unique, so the same pair can't be linked twice with the same label; its
-    # source_id prefix doubles as the outbound traversal index
-    create_if_not_exists(unique_index(:form_flow_relationships, [:source_id, :target_id, :label]))
+    # source_id prefix doubles as the outbound traversal index. Named to match
+    # the Postgres migration, which spells the name out to stay inside
+    # Postgres's 63-byte identifier limit
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_relationships, [:source_id, :target_id, :label],
+        name: :form_flow_template_flow_relationships_source_target_label_index
+      )
+    )
 
     # Inbound traversal ("what points at N?")
-    create_if_not_exists(index(:form_flow_relationships, [:target_id, :label]))
+    create_if_not_exists(index(:form_flow_template_flow_relationships, [:target_id, :label]))
 
-    create_if_not_exists(index(:form_flow_relationships, [:flow_id]))
-    create_if_not_exists(index(:form_flow_relationships, [:tenant_id]))
+    create_if_not_exists(index(:form_flow_template_flow_relationships, [:flow_id]))
+    create_if_not_exists(index(:form_flow_template_flow_relationships, [:tenant_id]))
   end
 
   def down(_context) do
-    drop_if_exists(table(:form_flow_relationships))
-    drop_if_exists(table(:form_flow_nodes))
+    drop_if_exists(table(:form_flow_template_flow_relationships))
+    drop_if_exists(table(:form_flow_template_flow_nodes))
     drop_if_exists(table(:form_flow_instance_flow_events))
     drop_if_exists(table(:form_flow_instance_form_events))
     drop_if_exists(table(:form_flow_instance_forms))
     drop_if_exists(table(:form_flow_instance_flows))
     drop_if_exists(table(:form_flow_template_form_versions))
     drop_if_exists(table(:form_flow_template_forms))
-    drop_if_exists(table(:form_flow_flow_events))
-    drop_if_exists(table(:form_flow_flows))
+    drop_if_exists(table(:form_flow_template_flow_events))
+    drop_if_exists(table(:form_flow_template_flows))
   end
 end
