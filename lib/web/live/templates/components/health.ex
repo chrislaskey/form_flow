@@ -10,7 +10,9 @@ defmodule FormFlow.Web.Templates.Components.Health do
   changes is the normal state of a form being worked on, and a flow with
   nothing wrong should read as healthy while that work goes on; the tooltip
   says "healthy · 2 to review", and the page lists them. The stethoscope is
-  drawn inline, so a host needs no icon set for it.
+  `FormFlow.Web.Components.Core.icon/1`'s own clause — Heroicons has none,
+  so it is drawn inline rather than asked of the host, and a host needs no
+  icon set for it.
 
   It reads the **cached status** off the flow struct it is given
   (`FormFlow.Data.Templates.Flows.Health.status/1`) and runs nothing: the
@@ -20,7 +22,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
   gets its badge on its first visit. A drill-in page passes its **root**:
   health is the root's, and a subflow's own properties never carry it.
 
-      <Health.health base={@base} flow={@root || @flow} />
+      <Health.health base={@base} flow={@root || @flow} components={@components} />
 
   With `target` — the flow edit page's own `@myself` — the badge pushes the
   `"navigate"` event with `phx-value-to` instead of linking directly, the
@@ -31,9 +33,15 @@ defmodule FormFlow.Web.Templates.Components.Health do
   use Phoenix.Component
 
   alias FormFlow.Data.Templates.Flows.Health
+  alias FormFlow.Web.Components.Core
 
   attr(:base, :string, required: true)
   attr(:flow, :map, required: true, doc: "the root `FormFlow.Data.Templates.Flow`")
+
+  attr(:components, :atom,
+    default: nil,
+    doc: "the host's components module, for whatever this draws through `Core`"
+  )
 
   attr(:target, :any,
     default: nil,
@@ -52,7 +60,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
 
     ~H"""
     <.link :if={!@target} navigate={@to} class={button_class()} aria-label={@words} title={@words}>
-      <.badge status={@status} />
+      <.badge status={@status} components={@components} />
     </.link>
     <button
       :if={@target}
@@ -64,31 +72,17 @@ defmodule FormFlow.Web.Templates.Components.Health do
       aria-label={@words}
       title={@words}
     >
-      <.badge status={@status} />
+      <.badge status={@status} components={@components} />
     </button>
     """
   end
 
   attr(:status, :map, default: nil)
+  attr(:components, :atom, default: nil)
 
   defp badge(assigns) do
     ~H"""
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="size-5"
-      aria-hidden="true"
-    >
-      <path d="M11 2v2" />
-      <path d="M5 2v2" />
-      <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
-      <path d="M8 15a6 6 0 0 0 12 0v-3" />
-      <circle cx="20" cy="10" r="2" />
-    </svg>
+    <Core.icon components={@components} name="stethoscope" class="size-5" />
     <span class={[
       "absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ring-2 ring-white",
       colors(@status)

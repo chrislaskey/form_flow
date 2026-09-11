@@ -24,6 +24,11 @@ defmodule FormFlow.Web.Templates.Forms.Components.Canvas do
     doc: "the definition being previewed, as a JSON string or a map"
   )
 
+  attr(:components, :atom,
+    default: nil,
+    doc: "the host's components module, for whatever this draws through `Core`"
+  )
+
   attr(:class, :any, default: nil)
 
   slot(:empty, doc: "the line under \"Nothing to preview yet\", saying how to fill this version")

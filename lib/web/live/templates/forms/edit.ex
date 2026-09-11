@@ -7,6 +7,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   definition is the point: the optimistic-lock "changed under you" conflict,
   the stale-draft warning, and the picker between coexisting drafts.
 
+  The form's **details** — name, slug, description, type — are edited here
+  too, above the definition, but only until the form is first published.
+  They belong to the lineage and change the moment they are saved, so once
+  a published version would show the change they move to their own page,
+  `FormFlow.Web.Templates.Forms.Details`, and this page says so where the
+  fields were. `FormFlow.Web.Templates.Forms.Shared` is the data both read
+  and write.
+
   The definition is edited one of three ways, picked by the "Edit form
   version using:" radio (`definition_editor`): in the **Form builder**, a
   `DynamicForm` nested form with one entry per element
@@ -72,8 +80,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
+  alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Shared
+  alias FormFlow.Web.Templates.Components.Note
+  alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Builder
   alias FormFlow.Web.Templates.Forms.Preview
@@ -127,11 +137,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def update(%{event: "change", payload: payload}, socket) do
     {payload, moved?} = move_element(payload)
     pending_type = pending_type(payload, socket.assigns.pending_type)
-    properties = Shared.properties(socket.assigns.form_types, pending_type)
+    properties = Templates.Shared.properties(socket.assigns.form_types, pending_type)
     definition = current_definition(payload, socket.assigns.definition_editor)
 
     dirty? =
-      values_from(payload.data, pending_type, properties, definition) !=
+      values_from(
+        payload.data,
+        pending_type,
+        properties,
+        definition,
+        socket.assigns.edit_details?
+      ) !=
         socket.assigns.saved_values
 
     socket =
@@ -157,28 +173,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   def update(%{event: "save", payload: payload}, socket) do
-    type_id = presence(payload.data[:form_type])
-    properties = Shared.properties(socket.assigns.form_types, type_id)
-    name = payload.data[:name]
+    %{form: form, version: version} = socket.assigns
 
-    identity =
-      %{
-        description: payload.data[:description],
-        properties:
-          template_properties(
-            socket.assigns.form,
-            type_id,
-            Shared.payload_property_values(payload.data, properties)
-          )
-      }
-      |> put_form_name(socket.assigns.form, socket.assigns.node, name)
-      |> put_form_slug(socket.assigns.node, payload.data[:slug])
-
-    with :ok <- shareable(socket.assigns.form, identity.properties, socket.assigns.form_types),
-         {:ok, node} <- update_step(socket.assigns.node, name, payload.data[:slug]),
-         {:ok, form} <- Forms.update(socket.assigns.form, identity),
+    with {:ok, form, node} <- save_details(socket.assigns, payload.data),
          {:ok, version} <-
-           Forms.update_draft(socket.assigns.version, %{definition: payload.extra[:definition]}) do
+           Forms.update_draft(version, %{definition: payload.extra[:definition]}) do
       refresh_health(socket)
 
       {:ok,
@@ -188,7 +187,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          node: node,
          version: version,
          versions: Forms.list_versions(form.id),
-         saved_values: values_from(payload.data, type_id, properties, payload.extra[:definition]),
+         saved_values: saved_values(form, node, version, socket.assigns.edit_details?),
          dirty?: false,
          error: nil,
          notice: "Saved."
@@ -204,22 +203,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
            notice: nil
          )}
 
-      {:error, {:related_form_shared, property}} ->
-        {:ok,
-         assign(socket,
-           error:
-             "“#{socket.assigns.form.name}” is shared by every flow that uses it, so it can't " <>
-               "point “#{property.name}” at a step of one flow. Copy the form into this flow " <>
-               "instead — the Copy form choice on the step's page — or clear the choice.",
-           notice: nil
-         )}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:ok,
-         assign(socket,
-           error: Shared.save_error(changeset, "Could not save. Please try again."),
-           notice: nil
-         )}
+      {:error, reason} ->
+        {:ok, assign(socket, error: Shared.save_details_error(form, reason), notice: nil)}
     end
   end
 
@@ -242,11 +227,21 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     {:ok, load(socket)}
   end
 
+  # The details save with the definition only while this page edits them
+  # (`edit_details?`); once the form has been published they are the
+  # details page's, and the fields are not on this page to read
+  defp save_details(%{edit_details?: false, form: form, node: node}, _payload_data),
+    do: {:ok, form, node}
+
+  defp save_details(%{form: form, node: node, form_types: form_types}, payload_data),
+    do: Shared.save_details(form, node, payload_data, form_types)
+
   defp load(socket) do
     assigns = socket.assigns
     {node, form, version, versions} = resolve_form_context(assigns)
 
-    show_chooser? = show_chooser?(form, version)
+    published? = form != nil and Forms.ever_published?(form.id)
+    show_chooser? = show_chooser?(form, version, published?)
     form_types = form_types(assigns, form, version, node)
 
     socket
@@ -257,7 +252,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       versions: versions,
       based_on: based_on_version(versions, version),
       form_types: form_types,
-      pending_type: effective_type(form, assigns.form_types),
+      pending_type: form && Shared.type_id(form, assigns.form_types),
+      edit_details?: form != nil and not published?,
       show_chooser?: show_chooser?,
       awaiting_start?: awaiting_start?(show_chooser?, assigns.params),
       copy_sources: copy_sources(form, assigns.root_id),
@@ -297,7 +293,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp assign_data(socket, form, node, version) do
     socket
-    |> assign(:saved_values, saved_values(form, node, version))
+    |> assign(:saved_values, saved_values(form, node, version, socket.assigns.edit_details?))
     |> assign(:form_data, form_data(form, socket.assigns))
     |> assign(:dirty?, false)
     # What the preview currently shows, and the editor's latest content —
@@ -375,29 +371,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # the form differs from what's persisted (matching the flows editor). The
   # definition is compared as the map that is persisted, the one shape both
   # editors produce — so re-indenting the JSON is not a change, and neither
-  # is opening the builder.
-  defp saved_values(nil, _node, _version), do: nil
+  # is opening the builder. The details count only while this page edits
+  # them.
+  defp saved_values(nil, _node, _version, _edit_details?), do: nil
 
-  defp saved_values(form, node, version) do
-    %{
-      name: to_string(step_name(form, node)),
-      description: to_string(form.description),
-      slug: to_string(step_slug(form, node)),
-      form_type: to_string(form.properties["form_type"]),
-      property_values: FormFlow.Config.Forms.Type.property_values(form),
-      definition: version && version.definition
-    }
+  defp saved_values(form, node, version, edit_details?) do
+    %{definition: version && version.definition}
+    |> Map.merge(if edit_details?, do: Shared.saved_details(form, node), else: %{})
   end
 
-  defp values_from(payload_data, pending_type, properties, definition) do
-    %{
-      name: to_string(payload_data[:name] || ""),
-      description: to_string(payload_data[:description] || ""),
-      slug: to_string(payload_data[:slug] || ""),
-      form_type: to_string(pending_type),
-      property_values: Shared.payload_property_values(payload_data, properties),
-      definition: definition
-    }
+  defp values_from(payload_data, pending_type, properties, definition, edit_details?) do
+    %{definition: definition}
+    |> Map.merge(
+      if edit_details?,
+        do: Shared.details_from(payload_data, pending_type, properties),
+        else: %{}
+    )
   end
 
   # An element's up/down arrow sets its entry's `move` field and fires the
@@ -568,11 +557,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # means there is nothing here a copy would overwrite. Either fact turning
   # false — a save, a publish — is what makes the chooser stop being
   # offered; nothing tracks that a choice was made, because none is needed.
-  defp show_chooser?(nil, _version), do: false
-  defp show_chooser?(_form, nil), do: false
-
-  defp show_chooser?(form, version),
-    do: version.definition == %{} and not Forms.ever_published?(form.id)
+  defp show_chooser?(nil, _version, _published?), do: false
+  defp show_chooser?(_form, nil, _published?), do: false
+  defp show_chooser?(_form, version, published?), do: version.definition == %{} and not published?
 
   # Whether the page is still waiting on a choice: `show_chooser?/2` is the
   # data condition, `?start=custom` (`select_custom_path/1`) is Custom
@@ -600,7 +587,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # (dla2026_proof-of-ad)"), the form's own for a catalog form ("Reusable
   # form - W-2 (w2)"). None from the flow standalone.
   defp flow_sources(root_id) do
-    for {path, source, node} <- Shared.flow_forms(root_id),
+    for {path, source, node} <- Templates.Shared.flow_forms(root_id),
         do: {option_label("Current flow", node, path), source.id}
   end
 
@@ -647,10 +634,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp reuse_form(reuse_forms, id), do: Enum.find(reuse_forms, &(&1.id == id))
 
-  # A step whose form is the catalog's: shared, and said so
-  defp reusing?(%{node: %{}, form: %{owner_flow_id: nil}}), do: true
-  defp reusing?(_assigns), do: false
-
   # The three things the admin agrees to: sharing, publish reach, and what
   # happens to the form the step points at now
   defp reuse_confirm(_assigns, nil), do: nil
@@ -689,95 +672,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp reuse_error(_other, _target, _form_types),
     do: "Could not reuse that form. Please try again."
 
-  # The identity form's data: the saved values, with the saved type's property
-  # values under their field names. Switching the type dropdown re-renders
-  # the property fields, and DynamicForm rebuilds a form whose fields changed
-  # from its data — so at that moment the data becomes the pending values
-  # (reset_form_data_on_switch/3), and what the admin was typing survives.
-  # Otherwise it holds still, which is what keeps in-progress input alive.
-  # The type the form is governed by: the saved one, else the first the page
-  # offers — the same fallback the instance pages make when they render the
-  # form (`FormFlow.Web.Instances.Forms.Shared.form_type/2`). The dropdown
-  # shows it selected from the start, so a form that never picked one saves
-  # what it was already getting, explicitly.
-  defp effective_type(nil, _form_types), do: nil
-
-  defp effective_type(form, form_types) do
-    form.properties["form_type"] || default_type_id(form_types)
-  end
-
-  defp default_type_id([]), do: nil
-  defp default_type_id([first | _rest]), do: first.id
-
-  # What the Name field edits. From a node it is the step: the node's label,
-  # which is what the instance pages show users. An owned form's name is the
-  # same value, written alongside; a catalog form's name is its own, edited
-  # on its catalog page — from a step, the save leaves it alone. Standalone
-  # (no node), the field is the form's own name.
-  defp step_name(form, nil), do: form.name
-  defp step_name(form, node), do: get_in(node.properties, ["data", "label"]) || form.name
-
-  # Through a step the Slug field is the step's; standalone, the form's own
-  defp step_slug(form, nil), do: form.slug
-  defp step_slug(_form, node), do: node.slug
-
-  defp put_form_name(identity, %{owner_flow_id: nil}, %{} = _node, _name), do: identity
-  defp put_form_name(identity, _form, _node, name), do: Map.put(identity, :name, name)
-
-  defp put_form_slug(identity, nil, slug), do: Map.put(identity, :slug, slug)
-  defp put_form_slug(identity, _node, _slug), do: identity
-
-  defp update_step(nil, _name, _slug), do: {:ok, nil}
-  defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
-
-  defp name_label(%{node: nil}), do: "Name"
-  defp name_label(_assigns), do: "Step name"
-
-  defp slug_label(%{node: nil}), do: "Slug"
-  defp slug_label(_assigns), do: "Step slug"
-
-  defp slug_placeholder(%{node: nil}),
-    do:
-      "A stable name for looking this form up in code — lowercase letters, numbers, _ and -. " <>
-        "It does not follow a rename."
-
-  defp slug_placeholder(_assigns),
-    do:
-      "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
-        "It does not follow a rename."
-
-  # A catalog form reused here keeps its own slug, and the field is not it
-  defp slug_description(%{node: %{}, form: %{owner_flow_id: nil, slug: slug}})
-       when is_binary(slug) do
-    "The catalog form's own slug is “#{slug}”; change it on its catalog page."
-  end
-
-  defp slug_description(_assigns), do: nil
-
-  # The step's name is this flow's; a catalog form reused here is not renamed
-  # from a step
-  defp name_description(%{node: %{}, form: %{owner_flow_id: nil} = form}) do
-    "This step reuses the catalog form “#{form.name}”. Renaming the step here does not " <>
-      "rename the catalog form; do that on its catalog page."
-  end
-
-  defp name_description(_assigns), do: nil
-
   defp form_data(nil, _assigns), do: nil
 
+  # The form's data: the definition as its editor holds it, and — while this
+  # page edits them — the details (`FormFlow.Web.Templates.Forms.Shared.details/3`)
   defp form_data(form, assigns) do
-    type_id = effective_type(form, assigns.form_types)
-    values = FormFlow.Config.Forms.Type.property_values(form)
-
-    %{
-      name: step_name(form, assigns.node),
-      description: form.description,
-      slug: step_slug(form, assigns.node),
-      form_type: type_id,
-      definition: assigns.definition_json,
-      definition_editor: assigns.definition_editor
-    }
-    |> Map.merge(Shared.field_data(Shared.properties(assigns.form_types, type_id), values))
+    %{definition: assigns.definition_json, definition_editor: assigns.definition_editor}
+    |> Map.merge(
+      if assigns.edit_details?,
+        do: Shared.details(form, assigns.node, assigns.form_types),
+        else: %{}
+    )
     |> put_elements(assigns)
   end
 
@@ -789,72 +694,35 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp put_elements(form_data, _assigns), do: form_data
 
+  # Switching the type dropdown re-renders the property fields, and
+  # DynamicForm rebuilds a form whose fields changed from its data — so at
+  # that moment the data becomes the pending values, and what the admin was
+  # typing survives. Otherwise it holds still, which is what keeps
+  # in-progress input alive.
   defp reset_form_data_on_switch(socket, pending_type, payload) do
     if pending_type == socket.assigns.form_data[:form_type] do
       socket
     else
-      %{form: form, form_types: types} = socket.assigns
-
-      values =
-        if pending_type == form.properties["form_type"],
-          do: FormFlow.Config.Forms.Type.property_values(form),
-          else: %{}
-
       form_data =
-        payload.data
-        |> Map.take([:name, :description, :slug, :definition, :definition_editor, :elements])
-        |> Map.put(:form_type, pending_type)
-        |> Map.merge(Shared.field_data(Shared.properties(types, pending_type), values))
+        Shared.switch_type(
+          payload.data,
+          socket.assigns.form,
+          pending_type,
+          socket.assigns.form_types,
+          [
+            :definition,
+            :definition_editor,
+            :elements
+          ]
+        )
 
       assign(socket, :form_data, form_data)
     end
   end
 
-  # The form's stored `properties` map with the type applied — an unset type
-  # removes the key and the property values with it, so "no choice" stays
-  # "use the configured default" rather than pinning whatever the default
-  # happened to be at save time. A type's property values are replaced whole,
-  # so switching types leaves nothing of the old one behind — and a type with
-  # nothing entered stores no values key at all.
-  # A catalog form is one lineage for every step reusing it, so a
-  # `:related_form` value — a position in one flow — cannot be its: the rule
-  # `reuse_form/3` applies when a step picks such a form, applied from this
-  # side when such a form picks a step. The type alone is fine; it is the
-  # choice that points somewhere. `FormFlow.Data.Templates.Flows.Health`
-  # reports the state should it arrive another way.
-  defp shareable(%{owner_flow_id: nil} = form, properties, form_types) do
-    form = %{form | properties: properties}
-    values = FormFlow.Config.Forms.Type.property_values(form)
-    property = FormFlow.Config.Forms.Type.related_form_property(form_types, form)
-
-    if property && values[property.id] not in [nil, ""],
-      do: {:error, {:related_form_shared, property}},
-      else: :ok
-  end
-
-  defp shareable(_owned, _properties, _form_types), do: :ok
-
-  defp template_properties(form, nil, _values) do
-    form.properties
-    |> Map.delete("form_type")
-    |> Map.delete("form_type_property_values")
-  end
-
-  defp template_properties(form, type_id, values) when values == %{} do
-    form.properties
-    |> Map.put("form_type", type_id)
-    |> Map.delete("form_type_property_values")
-  end
-
-  defp template_properties(form, type_id, values) do
-    form.properties
-    |> Map.put("form_type", type_id)
-    |> Map.put("form_type_property_values", values)
-  end
-
   # The chooser's Copy: the source's description, form type and its
   # property values become *this* lineage's — never its name, which is the
-  # step's (`step_name/2`); the source's resolved
+  # step's (`FormFlow.Web.Templates.Forms.Shared.step_name/2`); the source's resolved
   # definition (latest published, else newest draft — the same fallback
   # `FormFlow.Web.Templates.Forms.Show` resolves a bare URL to) becomes
   # *this* draft's. Neither this form's id nor its slug moves — a property
@@ -869,7 +737,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          identity = %{
            description: source.description,
            properties:
-             template_properties(
+             Shared.form_properties(
                form,
                source.properties["form_type"],
                FormFlow.Config.Forms.Type.property_values(source)
@@ -880,7 +748,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:ok, Phoenix.json_library().encode!(source_version.definition, pretty: true)}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, Shared.save_error(changeset, "Could not copy that form. Please try again.")}
+        {:error,
+         Templates.Shared.save_error(changeset, "Could not copy that form. Please try again.")}
 
       _other ->
         {:error, "Could not copy that form. Please try again."}
@@ -902,7 +771,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
-         Shared.save_error(changeset, "Could not copy that definition. Please try again.")}
+         Templates.Shared.save_error(
+           changeset,
+           "Could not copy that definition. Please try again."
+         )}
 
       _other ->
         {:error, "Could not copy that definition. Please try again."}
@@ -915,7 +787,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp form_types(assigns, form, _version, _node) do
     assigns.form_types
-    |> Shared.fill_related_forms(
+    |> Templates.Shared.fill_related_forms(
       assigns.root_id,
       assigns.node_id,
       FormFlow.Config.Forms.Type.property_values(form)
@@ -1230,7 +1102,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
         </:crumb>
         <:actions :if={@root}>
-          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
         </:actions>
       </Header.header>
 
@@ -1367,7 +1239,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Reached through a flow: that flow's health, which the save
               below refreshes --%>
         <:actions :if={@root}>
-          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
         </:actions>
         <:actions>
           <Core.button
@@ -1427,19 +1299,30 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       <%!-- A step editing a catalog form is editing it for every flow that
             uses it — said before the first keystroke --%>
       <CatalogBadge.catalog_badge
-        :if={reusing?(assigns)}
+        :if={Shared.reusing?(@node, @form)}
         form={@form}
         usages={@usages}
         components={@components}
         class="mb-3"
       />
 
-      <%!-- One form, one Save: the lineage's identity (name, description)
-        above the version's definition, separated by a read-only strip
-        saying which draft is being edited. The save event writes each
-        value to its owner — identity to the form row, definition to the
-        draft. Picking a different draft belongs on Show, where the
-        version history lists them all.
+      <%!-- Once the form is published its details are edited elsewhere
+            (`edit_details?`), and the page says where before the form,
+            at the page's width --%>
+      <Note.note :if={!@edit_details?} class="mb-6">
+        Form details — the name, slug, description, and type — are shared by every version of
+        this form, published ones included, and change the moment they are saved.
+        <.link navigate={details_path(assigns)} class="link link-primary font-medium">
+          Edit form details
+        </.link>
+      </Note.note>
+
+      <%!-- One form, one Save: the form's details (until the form is
+        first published) above the version's definition, separated by a
+        read-only strip saying which draft is being edited. The save event
+        writes each value to its owner — details to the form row and the
+        step, definition to the draft. Picking a different draft belongs
+        on Show, where the version history lists them all.
 
         Two columns from lg up, stacked below: the whole form on the left,
         the preview on the right. They grow 3 against 2 from a zero basis,
@@ -1481,32 +1364,39 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Three headings mark the page's parts: the form itself, this
               version of it, and the preview. The first two are html fields so
               they travel with the fields they head; the third sits in the
-              preview column. --%>
-        <:field type="html" name="form_details_heading">
-          <.section_heading title="Form details">
+              preview column.
+
+              The details are here only until the form is first published
+              (`edit_details?`). After that a change to them reaches every
+              published version the moment it is saved, so they move to
+              their own page, and the note above the form says where. --%>
+        <:field :if={@edit_details?} type="html" name="form_details_heading">
+          <Shared.section_heading title="Form details">
             What every version of this form shares: its name, slug, description, and type.
-          </.section_heading>
+          </Shared.section_heading>
         </:field>
-        <:group name="name_and_slug" type="horizontal" title={false} />
+        <:group :if={@edit_details?} name="name_and_slug" type="horizontal" title={false} />
         <:field
+          :if={@edit_details?}
           group="name_and_slug"
           type="text"
           name="name"
-          label={name_label(assigns)}
-          description={name_description(assigns)}
+          label={Shared.name_label(@node)}
+          description={Shared.name_description(@form, @node)}
           required
         />
         <:field
+          :if={@edit_details?}
           group="name_and_slug"
           type="text"
           name="slug"
-          label={slug_label(assigns)}
-          placeholder={slug_placeholder(assigns)}
-          description={slug_description(assigns)}
+          label={Shared.slug_label(@node)}
+          placeholder={Shared.slug_placeholder(@node)}
+          description={Shared.slug_description(@form, @node)}
         />
-        <:field type="comment" name="description" label="Description" />
+        <:field :if={@edit_details?} type="comment" name="description" label="Description" />
         <:field
-          :if={@form_types != []}
+          :if={@edit_details? and @form_types != []}
           type="dropdown"
           name="form_type"
           label="Form type"
@@ -1516,28 +1406,32 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- What the picked type does, under its dropdown: the pending
               type's name and description, so the choice explains itself
               before its properties ask for anything --%>
-        <:field :if={@form_types != []} type="html" name="form_type_description">
-          <.type_callout type={Shared.type(@form_types, @pending_type)} />
+        <:field
+          :if={@edit_details? and @form_types != []}
+          type="html"
+          name="form_type_description"
+        >
+          <Shared.type_callout type={Templates.Shared.type(@form_types, @pending_type)} />
         </:field>
         <%!-- The pending type's properties (FormFlow.Config.Property), one
               field each; picking another type swaps them --%>
         <:field
-          :for={property <- Shared.properties(@form_types, @pending_type)}
-          type={Shared.field_type(property)}
-          input_type={Shared.input_type(property)}
-          name={Shared.field_name(property)}
+          :for={property <- details_properties(assigns)}
+          type={Templates.Shared.field_type(property)}
+          input_type={Templates.Shared.input_type(property)}
+          name={Templates.Shared.field_name(property)}
           label={property.name}
           description={property.description}
-          options={Shared.field_options(property)}
+          options={Templates.Shared.field_options(property)}
           required={property.required}
-          read_only={Shared.read_only?(property)}
+          read_only={Templates.Shared.read_only?(property)}
           default={property.default_value}
         />
         <:group name="version" type="vertical" title={false} />
         <:field group="version" type="html" name="form_version_heading">
-          <.section_heading title="Form version">
+          <Shared.section_heading title="Form version">
             This draft's definition: the elements a user fills in. Published versions never change — a fix is a new draft.
-          </.section_heading>
+          </Shared.section_heading>
         </:field>
         <:field group="version" type="html" name="draft_info">
           <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
@@ -1592,9 +1486,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="json_heading"
           visible_if="{definition_editor} = 'json'"
         >
-          <.section_heading title="Form version JSON">
+          <Shared.section_heading title="Form version JSON">
             Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax.
-          </.section_heading>
+          </Shared.section_heading>
         </:field>
         <:field
           group="version"
@@ -1616,10 +1510,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="copy_heading"
           visible_if="{definition_editor} = 'copy'"
         >
-          <.section_heading title="Copy existing form">
+          <Shared.section_heading title="Copy existing form">
             Replace this draft's definition with another form's — one of this flow's steps, or a
             catalog form. The name, slug, description, and form type stay as they are.
-          </.section_heading>
+          </Shared.section_heading>
         </:field>
         <:field
           :if={@copy_sources != []}
@@ -1791,7 +1685,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               }
             }
           </script>
-          <.section_heading title="Preview" class="mb-4">
+          <Shared.section_heading title="Preview" class="mb-4">
             The form as a user will see it, following the definition as you edit.
             <:actions>
               <%!-- Width, not fullscreen: the preview drops the column beside
@@ -1807,16 +1701,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 aria-pressed={to_string(@wide_preview?)}
                 class="mx-2 flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  class="size-4"
-                  aria-hidden="true"
-                >
-                  <path :if={!@wide_preview?} d="m13.28 7.78 3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 0 0 1.06 1.06ZM2 17.25v-4.5a.75.75 0 0 1 1.5 0v2.69l3.22-3.22a.75.75 0 0 1 1.06 1.06L4.56 16.5h2.69a.75.75 0 0 1 0 1.5h-4.5a.747.747 0 0 1-.75-.75ZM12.22 13.28l3.22 3.22h-2.69a.75.75 0 0 0 0 1.5h4.5a.747.747 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.22-3.22a.75.75 0 1 0-1.06 1.06ZM3.5 4.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V4.56Z" />
-                  <path :if={@wide_preview?} d="M3.28 2.22a.75.75 0 0 0-1.06 1.06L5.44 6.5H2.75a.75.75 0 0 0 0 1.5h4.5A.75.75 0 0 0 8 7.25v-4.5a.75.75 0 0 0-1.5 0v2.69L3.28 2.22ZM13.5 2.75a.75.75 0 0 0-1.5 0v4.5c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-2.69l3.22-3.22a.75.75 0 0 0-1.06-1.06L13.5 5.44V2.75ZM3.28 17.78l3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 1 0 1.06 1.06ZM13.5 14.56l3.22 3.22a.75.75 0 1 0 1.06-1.06l-3.22-3.22h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-2.69Z" />
-                </svg>
+                <Core.icon
+                  components={@components}
+                  name={
+                    if @wide_preview?,
+                      do: "hero-arrows-pointing-in",
+                      else: "hero-arrows-pointing-out"
+                  }
+                />
                 {if @wide_preview?, do: "Exit full width", else: "Full width"}
               </button>
               <button
@@ -1853,8 +1745,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 Refresh
               </Core.button>
             </:actions>
-          </.section_heading>
-          <Canvas.canvas definition={@preview_json}>
+          </Shared.section_heading>
+          <Canvas.canvas definition={@preview_json} components={@components}>
             <:empty>Add an element to this version and the form shows up here.</:empty>
             {live_render(@socket, Preview,
               id: preview_id(assigns),
@@ -1883,6 +1775,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp preview_id(assigns), do: "#{assigns.id}-preview-r#{assigns.preview_rev}"
+
+  # The pending type's properties, one field each — none once the details
+  # have left for their own page
+  defp details_properties(%{edit_details?: false}), do: []
+
+  defp details_properties(assigns),
+    do: Templates.Shared.properties(assigns.form_types, assigns.pending_type)
 
   # One entry's fields, in render order, for a scope: the form's elements or
   # the members inside a container. Type and Name come first, then each
@@ -2005,44 +1904,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> JS.set_attribute({"value", ""}, to: "##{field.id}")
   end
 
-  # A part of the page: its title and one line saying what belongs there,
-  # styled like the library's own nested-form heading so the three read as
-  # one family with Elements. Actions ride on the title's line and the
-  # description takes the line under both — sharing a row with the controls
-  # leaves it a narrow column, wrapping a sentence that reads across.
-  attr(:title, :string, required: true)
-  attr(:class, :any, default: nil)
-  slot(:actions)
-  slot(:inner_block, required: true)
-
-  defp section_heading(assigns) do
-    ~H"""
-    <div class={["min-w-0", @class]}>
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="text-lg font-bold">{@title}</h3>
-        <div :if={@actions != []} class="flex shrink-0 items-center gap-2">
-          {render_slot(@actions)}
-        </div>
-      </div>
-      <div class="text-gray-500">{render_slot(@inner_block)}</div>
-    </div>
-    """
-  end
-
-  # The picked form type, named and described (`FormFlow.Config.Forms.Type`),
-  # in a bordered box like the draft strip's, headed "About Review form
-  # type". Nothing for no type.
-  defp type_callout(%{type: nil} = assigns), do: ~H""
-
-  defp type_callout(assigns) do
-    ~H"""
-    <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-      <div class="font-medium text-zinc-800">About {@type.name} form type</div>
-      <p :if={@type.description} class="mt-0.5 text-xs text-zinc-600">{@type.description}</p>
-    </div>
-    """
-  end
-
   defp move_arrows(assigns) do
     ~H"""
     <input type="hidden" id={@field.id} name={@field.name} value="" />
@@ -2103,6 +1964,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp show_path(assigns) do
     preserve_query_params(form_base_path(assigns), assigns.params, ["mode"])
+  end
+
+  defp details_path(assigns) do
+    preserve_query_params("#{form_base_path(assigns)}/edit", assigns.params, ["mode"])
   end
 
   defp version_show_path(assigns, version) do

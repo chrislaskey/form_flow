@@ -37,9 +37,11 @@ defmodule FormFlow.Web.Router do
   | `/forms/:id`                        | `FormFlow.Web.Templates.Forms.Show` (latest published, else newest draft) |
   | `/forms/:id/versions/:version_id`   | `FormFlow.Web.Templates.Forms.Show` (a specific version or draft) |
   | `/forms/:id/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` (drafts only) |
+  | `/forms/:id/edit`                   | `FormFlow.Web.Templates.Forms.Details` (name, slug, description, type — every version's) |
   | `/flows/:root/nodes/:node_id/form`  | `FormFlow.Web.Templates.Forms.Show` (the node's form, with breadcrumb) |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id` | `FormFlow.Web.Templates.Forms.Show` |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` |
+  | `/flows/:root/nodes/:node_id/form/edit` | `FormFlow.Web.Templates.Forms.Details` |
 
   The routes above serve `type="templates"` (the admin editor).
   `type="instances"` (the default) serves the user-facing side:
@@ -449,6 +451,19 @@ defmodule FormFlow.Web.Router do
               components={@components}
               params={@params}
             />
+          <% {:details, form_id} -> %>
+            <.live_component
+              module={Forms.Details}
+              id="forms-details"
+              form_id={form_id}
+              base={@base}
+              user_id={@user_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              components={@components}
+              params={@params}
+            />
           <% {:node_show, root_id, node_id, version_id} -> %>
             <.live_component
               module={Forms.Show}
@@ -471,6 +486,20 @@ defmodule FormFlow.Web.Router do
               root_id={root_id}
               node_id={node_id}
               version_id={version_id}
+              base={@base}
+              user_id={@user_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              components={@components}
+              params={@params}
+            />
+          <% {:node_details, root_id, node_id} -> %>
+            <.live_component
+              module={Forms.Details}
+              id="forms-details"
+              root_id={root_id}
+              node_id={node_id}
               base={@base}
               user_id={@user_id}
               flow_types={@flow_types}
@@ -638,6 +667,7 @@ defmodule FormFlow.Web.Router do
       [] -> :index
       ["new"] -> :new
       [id] -> {:show, id, nil}
+      [id, "edit"] -> {:details, id}
       [id, "versions", version_id] -> {:show, id, version_id}
       [id, "versions", version_id, "edit"] -> {:edit, id, version_id}
       _other -> nil
@@ -647,6 +677,7 @@ defmodule FormFlow.Web.Router do
   defp node_forms_route(root_id, node_id, rest) do
     case rest do
       [] -> {:node_show, root_id, node_id, nil}
+      ["edit"] -> {:node_details, root_id, node_id}
       ["versions", version_id] -> {:node_show, root_id, node_id, version_id}
       ["versions", version_id, "edit"] -> {:node_edit, root_id, node_id, version_id}
       _other -> nil

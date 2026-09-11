@@ -669,7 +669,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         <:actions>
           <%!-- The root's health, cached, from any depth — through the
                 "navigate" event, as below --%>
-          <Health.health base={@base} flow={@root || @flow} target={@myself} />
+          <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
           <%!-- The whole flow at once, read-only — through the "navigate"
                 event like every other way off this page, so unsaved
                 changes prompt first --%>
@@ -741,8 +741,24 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             *saved* values; pending ones live in this component's assigns.
             The type dropdown exists only when the page's flow_types apply
             to this flow — how the forms are presented belongs to the flow
-            of forms itself, so that is "forms" flows only. --%>
-      <div class="mt-3 max-w-md">
+            of forms itself, so that is "forms" flows only.
+
+            Three columns, in two groups: who the flow is (name, slug,
+            status), then what it is (type, perspectives, and the type's
+            properties, wrapping three to a row). The groups are laid out
+            from here, by the attribute DynamicForm stamps on each — a grid
+            in place of the library's content-sized flex row, so every
+            member takes exactly a column — and stack to one column below
+            md. The status summary sits between them at the page's width;
+            it is what splits them, so an owned subflow, which has no
+            status, has one group and its fields fill each row in turn
+            (kind_group/1). --%>
+      <div class={[
+        "mt-3",
+        "[&_[data-dynamic-form-group]>div]:grid [&_[data-dynamic-form-group]>div]:grid-cols-1",
+        "md:[&_[data-dynamic-form-group]>div]:grid-cols-3",
+        "[&_[data-dynamic-form-group]>div]:items-start [&_[data-dynamic-form-group]>div>*]:min-w-0"
+      ]}>
         <DynamicForm.form
           id={"#{@id}-flow-form"}
           data={@form_data}
@@ -750,12 +766,15 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           on_change={&changed(&1, @id)}
           components={@components || CoreComponents}
         >
+          <:group name="identity" type="horizontal" title={false} />
           <:field
+            group="identity"
             type="text"
             name="name"
             label={name_label(assigns)}
           />
           <:field
+            group="identity"
             type="text"
             name="slug"
             label={slug_label(assigns)}
@@ -763,11 +782,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
                 status table), on a root flow only — an owned subflow's is
-                its root's. The summary under it redraws for the pending
-                choice, the way the form edit page explains its type, and
-                says how many instances the choice reaches. --%>
+                its root's. The summary under the row redraws for the
+                pending choice, the way the form edit page explains its type,
+                and says how many instances the choice reaches. --%>
           <:field
             :if={is_nil(@flow.owner_flow_id)}
+            group="identity"
             type="dropdown"
             name="status"
             label="Status"
@@ -777,8 +797,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           <:field :if={is_nil(@flow.owner_flow_id)} type="html" name="status_summary">
             <.status_callout status={@pending_status} counts={@instance_counts} />
           </:field>
+          <:group :if={is_nil(@flow.owner_flow_id)} name="kind" type="horizontal" title={false} />
           <:field
             :if={@flow_types != []}
+            group={kind_group(assigns)}
             type="dropdown"
             name="form_flow_type"
             label="Form flow type"
@@ -789,6 +811,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
                 declares none has no field --%>
           <:field
             :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []}
+            group={kind_group(assigns)}
             type="checkbox"
             name="perspectives"
             label="Perspectives"
@@ -806,6 +829,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
                 field each; picking another type swaps them --%>
           <:field
             :for={property <- Shared.properties(@flow_types, shown_type(assigns))}
+            group={kind_group(assigns)}
             type={Shared.field_type(property)}
             input_type={Shared.input_type(property)}
             name={Shared.field_name(property)}
@@ -919,6 +943,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   defp update_status(flow, _assigns), do: {:ok, flow}
+
+  # The group the type, perspectives, and properties sit in: their own on a
+  # root flow, after the status summary; the identity group on an owned
+  # subflow, which has no status to split the fields around
+  defp kind_group(%{flow: %{owner_flow_id: nil}}), do: "kind"
+  defp kind_group(_assigns), do: "identity"
 
   defp name_label(%{node_id: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"

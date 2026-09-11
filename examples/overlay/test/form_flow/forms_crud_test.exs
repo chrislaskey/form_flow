@@ -1376,19 +1376,14 @@ defmodule Demo.FormFlowFormsCrudTest do
     review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
     edge(root, start_node, intake)
     edge(root, intake, review)
-    {:ok, draft} = Forms.create_draft(review_form.id)
-
-    {:ok, view, _html} =
-      live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/versions/#{draft.id}/edit")
+    # The form is published, so its details — the type among them — are
+    # edited on the details page
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/edit")
 
     view
-    |> element("#forms-edit-form-form")
+    |> element("#forms-details-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Review", "form_type" => "demo_prefill"}})
 
-    # Auto-refresh defaults on, and DynamicForm debounces its change pass
-    # while it's on — the property swap lands through that same debounced
-    # pass, so it isn't there to read yet
-    Process.sleep(520)
     html = render(view)
     assert html =~ "Copy name from"
     assert html =~ ~s(value="#{intake.id}")
@@ -1397,14 +1392,13 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "No earlier forms"
 
     view
-    |> element("#forms-edit-form-form")
+    |> element("#forms-details-form-form")
     |> render_submit(%{
       "dynamic_form" => %{
         "name" => "Review",
         "form_type" => "demo_prefill",
         "property_name" => "Ada",
-        "property_source" => intake.id,
-        "definition" => ~s({"elements": []})
+        "property_source" => intake.id
       }
     })
 
@@ -1438,10 +1432,7 @@ defmodule Demo.FormFlowFormsCrudTest do
         }
       })
 
-    {:ok, draft} = Forms.create_draft(review_form.id)
-
-    {:ok, _view, html} =
-      live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/versions/#{draft.id}/edit")
+    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form/edit")
 
     assert html =~ "The saved choice is no longer in this flow"
 
@@ -1901,6 +1892,170 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
     assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
+  end
+
+  # The details — name, slug, description, type — belong to the lineage and
+  # change the moment they are saved. The draft editor carries them only
+  # until the form is first published; after that they have their own page.
+  describe "form details" do
+    test "a never-published draft edits the details beside its definition", %{conn: conn} do
+      {:ok, form} = Forms.create(%{name: "Fresh", description: "Before"})
+      [draft] = Forms.list_versions(form.id)
+
+      {:ok, view, html} =
+        live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+
+      assert html =~ "Form details"
+      assert has_element?(view, ~s(input[name="dynamic_form[name]"]))
+      refute has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]))
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{
+          "name" => "Renamed",
+          "description" => "After",
+          "definition" => ~s({"elements": []})
+        }
+      })
+
+      assert render(view) =~ "Saved."
+      assert %{name: "Renamed", description: "After"} = Forms.get(form.id)
+    end
+
+    test "once published, the draft editor drops the details and points at their page",
+         %{conn: conn} do
+      {form, v1} = published_form(name: "Settled", description: "Kept")
+      {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+      {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+      refute has_element?(view, ~s(input[name="dynamic_form[name]"]))
+      refute has_element?(view, ~s(select[name="dynamic_form[form_type]"]))
+      assert html =~ "Note:"
+      assert html =~ "shared by every version"
+      assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]), "Edit form details")
+
+      # A save writes the definition and nothing else — a name in the
+      # request is not a field of this page
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Smuggled", "definition" => ~s({"elements": []})}
+      })
+
+      assert render(view) =~ "Saved."
+      assert Forms.get_version(draft.id).definition == %{"elements" => []}
+      assert %{name: "Settled", description: "Kept"} = Forms.get(form.id)
+    end
+
+    test "the details page saves the lineage for every version at once", %{conn: conn} do
+      {form, _v1} = published_form(name: "Settled", description: "Before")
+
+      {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/edit")
+
+      assert html =~ "Form details"
+      assert html =~ "shared by every version"
+      # The banner leads back to the form's page, where drafts are
+      assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}"]), "the form")
+      assert has_element?(view, ~s(input[name="dynamic_form[name]"][value="Settled"]))
+
+      # Picking a type swaps in its properties' fields; the swap lands
+      # through send_update after the change event
+      view
+      |> element("#forms-details-form-form")
+      |> render_change(%{"dynamic_form" => %{"name" => "Settled", "form_type" => "demo_prefill"}})
+
+      assert render(view) =~ "Name to prefill"
+
+      view
+      |> element("#forms-details-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{
+          "name" => "Renamed",
+          "slug" => "renamed",
+          "description" => "After",
+          "form_type" => "demo_prefill",
+          "property_name" => "Ada"
+        }
+      })
+
+      assert render(view) =~ "Saved."
+
+      updated = Forms.get(form.id)
+      assert updated.name == "Renamed"
+      assert updated.slug == "renamed"
+      assert updated.description == "After"
+      assert updated.properties["form_type"] == "demo_prefill"
+      assert updated.properties["form_type_property_values"] == %{"name" => "Ada"}
+
+      # No draft was made: the published version is still the only one
+      assert [%{status: "published"}] = Forms.list_versions(form.id)
+    end
+
+    test "from a node, the details page edits the step's name and slug", %{conn: conn} do
+      {root, node} = flow_with_form_node("Dog License", "Owner contact")
+      form = Forms.get(node.form_id)
+      [draft] = Forms.list_versions(form.id)
+      {:ok, _v1} = Forms.update_status(draft, :published)
+
+      {:ok, view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form/edit")
+
+      assert html =~ "Step name"
+      assert html =~ "Step slug"
+      assert has_element?(view, ~s(input[name="dynamic_form[name]"][value="Owner contact"]))
+
+      view
+      |> element("#forms-details-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{"name" => "Your details", "slug" => "your-details"}
+      })
+
+      assert render(view) =~ "Saved."
+
+      [node] = Flows.get(root.id).nodes
+      assert get_in(node.properties, ["data", "label"]) == "Your details"
+      assert node.slug == "your-details"
+      assert Forms.get(form.id).name == "Your details"
+    end
+
+    test "the show page lists the details and links to their page", %{conn: conn} do
+      {form, _v1} = published_form(name: "Settled", description: "What it is for")
+
+      {:ok, view, html} = live(conn, "/admin/forms/#{form.id}")
+
+      assert html =~ "Form details"
+      assert html =~ "What it is for"
+      assert html =~ form.slug
+      assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]), "Edit form details")
+
+      # Through a step, with the flow's mode carried along
+      {root, node} = flow_with_form_node("Dog License", "Owner contact")
+      {:ok, view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form?mode=edit")
+
+      assert html =~ "Step name"
+
+      assert has_element?(
+               view,
+               ~s(a[href="/admin/flows/#{root.id}/nodes/#{node.id}/form/edit?mode=edit"]),
+               "Edit form details"
+             )
+    end
+
+    test "New draft from this version is primary only while there is no draft", %{conn: conn} do
+      {form, v1} = published_form()
+
+      {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
+      assert has_element?(view, ~s(button.btn-primary[phx-click="create_draft"]))
+      refute has_element?(view, "a", "Continue editing latest draft")
+
+      {:ok, _draft} = Forms.create_draft(form.id, based_on: v1.id)
+
+      {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}")
+      assert has_element?(view, "a.btn-primary", "Continue editing latest draft")
+      assert has_element?(view, ~s(button[phx-click="create_draft"]))
+      refute has_element?(view, ~s(button.btn-primary[phx-click="create_draft"]))
+    end
   end
 
   # --- helpers --------------------------------------------------------------

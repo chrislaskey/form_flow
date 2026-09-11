@@ -380,7 +380,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <:column field={:nodes_count} label="Steps" />
         <:column field={:relationships_count} label="Connections" />
         <:column :let={flow} label="Health">
-          <Health.health base={@base} flow={flow} />
+          <Health.health base={@base} flow={flow} components={@components} />
         </:column>
         <:column :let={flow} field={:inserted_at} label="Created" sortable>
           <span class="text-xs text-zinc-500">

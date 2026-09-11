@@ -586,6 +586,77 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Map.delete(Flows.get(id).properties, "_health_metadata") == %{"slug" => "untitled-fl"}
   end
 
+  test "the edit page's fields sit in two groups; the show page lists the same facts",
+       %{conn: conn} do
+    id = create_flow(conn, "Application", "forms")
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+
+    # Who the flow is, then what it is — each a DynamicForm group the page
+    # lays out three to a row
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="identity"] input[name="dynamic_form[name]"])
+           )
+
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="identity"] input[name="dynamic_form[slug]"])
+           )
+
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="identity"] select[name="dynamic_form[status]"])
+           )
+
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="kind"] select[name="dynamic_form[form_flow_type]"])
+           )
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"form_flow_type" => "wizard_in_order"}})
+
+    view |> element("button", "Save") |> render_click()
+
+    # The show page reads the same fields back under the canvas, labelled
+    # as the edit page labels them
+    {:ok, view, html} = live(conn, "/admin/flows/#{id}")
+
+    assert has_element?(view, "dt", "Name")
+    assert has_element?(view, "dd", "Application")
+    assert has_element?(view, "dt", "Slug")
+    assert has_element?(view, "dd code", Flows.get(id).slug)
+    assert has_element?(view, "dt", "Status")
+    assert has_element?(view, "dt", "Form flow type")
+    assert has_element?(view, "dd", "Wizard (in order)")
+    assert has_element?(view, "dt", "Perspectives")
+    assert html =~ "Draft"
+  end
+
+  test "an owned subflow's fields share one group, having no status to split around",
+       %{conn: conn} do
+    root_id = create_flow(conn, "Onboarding", "subflows")
+    save_subflow_node(conn, root_id)
+    [node] = Flows.get(root_id).nodes
+
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="identity"] input[name="dynamic_form[name]"])
+           )
+
+    assert has_element?(
+             view,
+             ~s([data-dynamic-form-group="identity"] select[name="dynamic_form[form_flow_type]"])
+           )
+
+    refute has_element?(view, ~s([data-dynamic-form-group="kind"]))
+    refute has_element?(view, ~s(select[name="dynamic_form[status]"]))
+  end
+
   test "a complex flow has no type dropdown of its own", %{conn: conn} do
     id = create_flow(conn, "Onboarding", "subflows")
 

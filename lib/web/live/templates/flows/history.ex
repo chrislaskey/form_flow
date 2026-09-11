@@ -78,7 +78,7 @@ defmodule FormFlow.Web.Templates.Flows.History do
         <:metadata>What has happened to this flow, newest first</:metadata>
         <:crumb>History</:crumb>
         <:actions>
-          <Health.health base={@base} flow={@flow} />
+          <Health.health base={@base} flow={@flow} components={@components} />
           <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
             Show
           </Core.button>

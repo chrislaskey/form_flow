@@ -24,7 +24,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   version — and, while a draft exists, lead to the newest one: Continue
   editing latest draft. The default view is the latest published version, so
   without that a draft already under way is easy to miss. Only a published
-  version can be archived.
+  version can be archived. With no draft under way, New draft from this
+  version is the next thing to do, and is primary.
+
+  The form's details — name, slug, description, type — are listed as a fact
+  sheet under the header, and **Edit form details** leads to
+  `FormFlow.Web.Templates.Forms.Details`, where they change for every
+  version at once.
   """
 
   use Phoenix.LiveComponent
@@ -34,8 +40,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Shared
+  alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.Canvas
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
@@ -113,10 +120,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     |> assign_breadcrumb(node)
   end
 
-  # A step whose form is the catalog's: shared, and said so
-  defp reusing?(%{node: %{}, form: %{owner_flow_id: nil}}), do: true
-  defp reusing?(_assigns), do: false
-
   # The page's form types, with each related-form property's choices filled
   # in for this form's place in its flow. Read-only pages still need
   # them, to render a stored value as its name.
@@ -124,7 +127,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   defp form_types(assigns, form, _version, _node) do
     assigns.form_types
-    |> Shared.fill_related_forms(
+    |> Templates.Shared.fill_related_forms(
       assigns.root_id,
       assigns.node_id,
       FormFlow.Config.Forms.Type.property_values(form)
@@ -135,7 +138,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   # default applies)
   defp form_type_label(assigns) do
     with type when is_binary(type) <- assigns.form.properties["form_type"] do
-      case Shared.type(assigns.form_types, type) do
+      case Templates.Shared.type(assigns.form_types, type) do
         %{name: name} -> name
         nil -> type
       end
@@ -147,7 +150,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   defp type_property_values(assigns) do
     values = FormFlow.Config.Forms.Type.property_values(assigns.form)
 
-    for property <- Shared.properties(assigns.form_types, assigns.form.properties["form_type"]),
+    for property <-
+          Templates.Shared.properties(assigns.form_types, assigns.form.properties["form_type"]),
         value = values[property.id],
         do: {property, value}
   end
@@ -257,7 +261,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
          )}
 
       {:error, :in_use} ->
-        places = Shared.list_names(Shared.usage_labels(socket.assigns.usages))
+        places = Templates.Shared.list_names(Templates.Shared.usage_labels(socket.assigns.usages))
 
         {:noreply,
          assign(
@@ -273,7 +277,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   defp use_verb(usages) do
-    if length(Shared.usage_labels(usages)) == 1, do: "uses", else: "use"
+    if length(Templates.Shared.usage_labels(usages)) == 1, do: "uses", else: "use"
   end
 
   @impl true
@@ -303,12 +307,12 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         <:metadata :if={@version}>{version_badge(@version)}</:metadata>
         <:metadata :if={form_type_label(assigns)}>{form_type_label(assigns)}</:metadata>
         <:metadata :for={{property, value} <- type_property_values(assigns)}>
-          {property.name}: {Shared.display_value(property, value)}
+          {property.name}: {Templates.Shared.display_value(property, value)}
         </:metadata>
         <%!-- Reached through a flow: that flow's health, which a publish
               here is the usual way to mend --%>
         <:actions :if={@root}>
-          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} />
+          <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
         </:actions>
         <:actions :if={@version}>
           <Core.button
@@ -346,12 +350,14 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           >
             Continue editing latest draft
           </Core.button>
+          <%!-- The next thing to do, when there is no draft to continue:
+                primary then, and plain beside Continue editing latest draft --%>
           <Core.button
             :if={@version.status in ["published", "archived"]}
             components={@components}
             phx-click="create_draft"
             phx-target={@myself}
-            class="btn"
+            class={["btn", if(latest_draft(@versions), do: "", else: "btn-primary")]}
           >
             New draft from this version
           </Core.button>
@@ -364,6 +370,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             class="btn"
           >
             Archive version
+          </Core.button>
+          <Core.button components={@components} navigate={details_path(assigns)} class="btn">
+            Edit form details
           </Core.button>
           <Core.button
             :if={@form.owner_flow_id == nil and @node == nil}
@@ -386,7 +395,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             own page, where the form is used, so the admin knows what an
             edit reaches before making it --%>
       <CatalogBadge.catalog_badge
-        :if={reusing?(assigns)}
+        :if={Shared.reusing?(@node, @form)}
         form={@form}
         usages={@usages}
         components={@components}
@@ -395,11 +404,38 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       <p :if={@node == nil and @form.owner_flow_id == nil} class="mb-3 text-xs text-zinc-500">
         <span :if={@usages == []}>Not used in any flow yet.</span>
         <span :if={@usages != []}>
-          Used in {Enum.join(Shared.usage_labels(@usages), ", ")} — edits and publishes reach every one of them.
+          Used in {Enum.join(Templates.Shared.usage_labels(@usages), ", ")} — edits and publishes reach every one of them.
         </span>
       </p>
 
-      <p :if={@form.description} class="mb-3 text-sm text-zinc-600">{@form.description}</p>
+      <%!-- The details every version shares, as a fact sheet; the header's
+            Edit form details is where they change. Through a step the name
+            and slug are the step's, the way the fields that edit them are. --%>
+      <div class="mb-6">
+        <h3 class="mb-1 text-xs font-medium text-zinc-500">Form details</h3>
+        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-xs [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
+          <div class="min-w-0">
+            <dt>{Shared.name_label(@node)}</dt>
+            <dd>{Shared.step_name(@form, @node)}</dd>
+          </div>
+          <div class="min-w-0">
+            <dt>{Shared.slug_label(@node)}</dt>
+            <dd><.detail_value value={Shared.step_slug(@form, @node)} code /></dd>
+          </div>
+          <div class="min-w-0">
+            <dt>Description</dt>
+            <dd><.detail_value value={@form.description} /></dd>
+          </div>
+          <div :if={@form_types != []} class="min-w-0">
+            <dt>Form type</dt>
+            <dd><.detail_value value={form_type_label(assigns)} /></dd>
+          </div>
+          <div :for={{property, value} <- type_property_values(assigns)} class="min-w-0">
+            <dt>{property.name}</dt>
+            <dd>{Templates.Shared.display_value(property, value)}</dd>
+          </div>
+        </dl>
+      </div>
 
       <Core.alert
         :if={@version && @version.status == "draft" && Forms.stale_draft?(@version)}
@@ -433,7 +469,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
         <div :if={@version} class="min-w-0 flex-1">
           <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
-          <Canvas.canvas definition={@version.definition}>
+          <Canvas.canvas definition={@version.definition} components={@components}>
             <:empty>This version has no elements.</:empty>
             {live_render(@socket, Preview,
               id: "form-preview-#{@version.id}",
@@ -457,6 +493,28 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         components={@components}
       />
     </div>
+    """
+  end
+
+  # One value of the fact sheet: a dash for none, monospace for a slug
+  attr(:value, :any, default: nil)
+  attr(:code, :boolean, default: false)
+
+  defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
+    ~H"""
+    <span class="text-zinc-400">—</span>
+    """
+  end
+
+  defp detail_value(%{code: true} = assigns) do
+    ~H"""
+    <code class="text-xs">{@value}</code>
+    """
+  end
+
+  defp detail_value(assigns) do
+    ~H"""
+    {@value}
     """
   end
 
@@ -510,6 +568,10 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       assigns.params,
       ["mode"]
     )
+  end
+
+  defp details_path(assigns) do
+    preserve_query_params("#{form_base_path(assigns)}/edit", assigns.params, ["mode"])
   end
 
   defp edit_path(assigns, version) do

@@ -91,6 +91,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     {:ok,
      assign(socket,
        flow: flow,
+       node: subflow_node,
        data: data,
        root: root,
        # The host's lists as given, before the page narrows its own to the
@@ -320,7 +321,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         </:metadata>
         <:actions>
           <%!-- The root's health, cached, from any depth --%>
-          <Health.health base={@base} flow={@root || @flow} />
+          <Health.health base={@base} flow={@root || @flow} components={@components} />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
                 status table), and where it is changed; the root's, so a
                 drill-in page offers nothing --%>
@@ -429,9 +430,91 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         form_type_options={@embedded_form_type_options}
         perspective_options={@embedded_perspective_options}
       />
+
+      <%!-- The flow's own fields, below the canvas, as the edit page lays
+            them out — three to a row, who the flow is and then what it is —
+            read here rather than edited. A step's name and slug through a
+            node, the flow's own at the root. --%>
+      <dl class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <.detail label={name_label(assigns)}>{step_name(@flow, @node)}</.detail>
+        <.detail label={slug_label(assigns)}>
+          <.detail_value value={step_slug(@flow, @node)} code />
+        </.detail>
+        <.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
+          {Shared.status_label(@flow.status)}
+          <span class="block text-xs text-zinc-500">{Shared.status_summary(@flow.status)}</span>
+        </.detail>
+        <.detail :if={@flow_types != []} label="Form flow type">
+          <.detail_value value={type_label(assigns)} />
+        </.detail>
+        <.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
+          <.detail_value value={Enum.join(perspective_names(assigns), ", ")} />
+        </.detail>
+        <.detail :for={property <- Shared.properties(@flow_types, shown_type(assigns))} label={property.name}>
+          <.detail_value value={property_display(assigns, property)} />
+        </.detail>
+      </dl>
     </div>
     """
   end
+
+  # One cell of the fact sheet: the label a field would carry, the value
+  # under it
+  attr(:label, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp detail(assigns) do
+    ~H"""
+    <div class="min-w-0">
+      <dt class="text-xs font-medium text-zinc-500">{@label}</dt>
+      <dd class="mt-0.5 text-sm">{render_slot(@inner_block)}</dd>
+    </div>
+    """
+  end
+
+  # A value of the fact sheet: a dash for none, monospace for a slug
+  attr(:value, :any, default: nil)
+  attr(:code, :boolean, default: false)
+
+  defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
+    ~H"""
+    <span class="text-zinc-400">—</span>
+    """
+  end
+
+  defp detail_value(%{code: true} = assigns) do
+    ~H"""
+    <code class="text-xs">{@value}</code>
+    """
+  end
+
+  defp detail_value(assigns) do
+    ~H"""
+    {@value}
+    """
+  end
+
+  # A property's stored value, shown as its name; nil when unset
+  defp property_display(assigns, property) do
+    values = FormFlow.Config.Flows.Type.property_values(assigns.flow)
+
+    case values[property.id] do
+      empty when empty in [nil, ""] -> nil
+      value -> Shared.display_value(property, value)
+    end
+  end
+
+  defp step_name(flow, nil), do: flow.name
+  defp step_name(flow, node), do: get_in(node.properties, ["data", "label"]) || flow.name
+
+  defp step_slug(flow, nil), do: flow.slug
+  defp step_slug(_flow, node), do: node.slug
+
+  defp name_label(%{node_id: nil}), do: "Name"
+  defp name_label(_assigns), do: "Step name"
+
+  defp slug_label(%{node_id: nil}), do: "Slug"
+  defp slug_label(_assigns), do: "Step slug"
 
   # The flow's type rendered as its human name — the stored one, or the
   # first type an unset one amounts to; nil for a flow with no types

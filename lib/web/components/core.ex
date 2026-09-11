@@ -49,8 +49,45 @@ defmodule FormFlow.Web.Components.Core do
   end
 
   attr(:components, :atom, default: nil)
-  attr(:name, :string, required: true, doc: ~s|a Heroicons name, e.g. "hero-trash"|)
+
+  attr(:name, :string,
+    required: true,
+    doc: ~s|a Heroicons name, e.g. "hero-trash", or "stethoscope", which FormFlow draws itself|
+  )
+
   attr(:class, :any, default: "size-4")
+
+  @doc """
+  An icon, by Heroicons name, drawn by the host's `icon/1` when it has one.
+
+  Asking by name is what lets a host's own delete icon show up on FormFlow's
+  pages: the name travels, the drawing does not.
+
+  `"stethoscope"` is the exception. Heroicons has none, so it never goes to
+  a host — a host's `icon/1` written for `hero-*` names would raise on it —
+  and FormFlow draws it inline. A host that wants its own draws it in the
+  health badge's place, not here.
+  """
+  def icon(%{name: "stethoscope"} = assigns) do
+    ~H"""
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={@class}
+      aria-hidden="true"
+    >
+      <path d="M11 2v2" />
+      <path d="M5 2v2" />
+      <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
+      <path d="M8 15a6 6 0 0 0 12 0v-3" />
+      <circle cx="20" cy="10" r="2" />
+    </svg>
+    """
+  end
 
   def icon(assigns) do
     ComponentResolver.render(assigns.components, :icon, Map.delete(assigns, :components))

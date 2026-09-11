@@ -129,6 +129,12 @@ its delete icon is the one these pages show. The name passed is Heroicons'
 (`hero-trash`); a host with no `icon/1` of its own falls back to
 `FormFlow.Web.CoreComponents.icon/1`, which emits the class name and leaves
 the drawing to the `hero-*` classes the host's Tailwind build generates.
+The full width toggle's arrows go the same way
+(`hero-arrows-pointing-out`/`-in`), and so does anything FormFlow draws
+that Heroicons has a name for. The health badge's **stethoscope is the
+exception, and a clause of `Core.icon` itself**: Heroicons has none, and a
+host's `icon/1` written for `hero-*` names would raise on the name, so it
+never leaves FormFlow.
 
 ### The form edit page is one column beside its preview, and the preview can take the width
 
@@ -164,6 +170,64 @@ Both are `FormFlow.Web.Templates.Forms.Components.Canvas`, and the form's
 **show page previews on the same canvas** — it takes the definition as the
 map a saved version carries where the edit page hands it the JSON string
 its editor holds.
+
+### Form details have their own page once a form has been published
+
+A form's **details** — its name, slug, description, and type with the
+type's property values — belong to the lineage, not to a version: they
+change the moment they are saved, and every version shows the change,
+published ones included. The draft editor had them above the definition
+under one Save, which read as if they were part of the draft. Now the
+editor **carries the details only until the form is first published**.
+After that, where the Form details section was, the page says the details
+are shared by every version and links to **Edit form details** —
+`FormFlow.Web.Templates.Forms.Details`, a new page at `/forms/:id/edit`
+and `/flows/:root/nodes/:node_id/form/edit`. It has the same fields, its
+own Save, a banner saying a save reaches every version at once, and a link
+back to the form's page, where drafts are. A save on the draft editor of a
+published form writes the definition and nothing else; a value for a
+detail in the request is not a field of the page and is ignored.
+
+**The show page lists the details** as a fact sheet under the header, four
+to a row — name, slug, description, type, and the type's property values, with the
+step's name and slug through a node, the way the fields that edit them
+read — and its header has **Edit form details**, which leads to the new
+page at any time, published or not. **New draft from this version is
+primary while there is no draft** to continue; beside Continue editing
+latest draft it stays plain.
+
+`FormFlow.Web.Templates.Forms.Shared` is new: the data the details fields
+read and write — the form data, the saved baseline `dirty?` compares
+against, the save that writes each value to its owner (the step's name and
+slug to the node, the rest to the form row), and the labels — so the two
+pages that edit them agree on what a save does. The version editor's
+`type_callout` and `section_heading` moved there with it.
+
+Both pages say this in a **Note** — `FormFlow.Web.Templates.Components.Note`,
+new: a bordered white card the width of the page opening with **Note:**,
+rather than an alert — above the form on the draft editor, so it does not
+sit inside the form's column, and above the fields on the details page.
+
+### The flow's fields are three to a row, and the show page lists them
+
+**A flow's edit page lays its own fields out in two `DynamicForm` groups**
+under the canvas instead of one narrow stack: who the flow is — name, slug,
+status — then what it is — form flow type, perspectives, and the type's
+properties, wrapping three to a row. The page lays the groups out from
+outside the form, by the `data-dynamic-form-group` attribute the library
+stamps on each: a three-column grid in place of the library's content-sized
+flex row, so every member takes exactly a column, stacking to one column
+below `md`. The status summary sits between the two groups at the page's
+width. It is what splits them: an owned subflow has no status, so its
+fields are one group and fill each row in turn rather than leaving a
+column empty after name and slug.
+
+**A flow's show page lists the same fields under the canvas**, in the same
+three-column layout, read rather than edited — name, slug, status with its
+summary, type, perspectives, and each of the type's properties, a dash for
+one without a value. Through a node the name and slug are the step's, as
+the edit page's fields are. The header's metadata line keeps the type,
+properties, and perspectives it already showed.
 
 ## v0.23.0
 

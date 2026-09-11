@@ -106,7 +106,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         <:metadata>Connected steps only, every level at once</:metadata>
         <:crumb>Overview</:crumb>
         <:actions>
-          <Health.health base={@base} flow={@flow} />
+          <Health.health base={@base} flow={@flow} components={@components} />
           <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
             Show
           </Core.button>
