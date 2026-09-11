@@ -77,6 +77,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Builder
   alias FormFlow.Web.Templates.Forms.Preview
+  alias FormFlow.Web.Templates.Forms.Components.Canvas
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
 
@@ -91,6 +92,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        scopes: ["elements", "children"],
        publishing?: false,
        auto_update?: true,
+       wide_preview?: false,
        preview_rev: 0,
        preview_topic: Ecto.UUID.generate(),
        chooser_selection: "custom",
@@ -950,6 +952,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   @impl true
+  def handle_event("toggle_wide_preview", _params, socket) do
+    {:noreply, assign(socket, :wide_preview?, !socket.assigns.wide_preview?)}
+  end
+
+  @impl true
   def handle_event("update_preview", _params, socket) do
     {:noreply, force_refresh_preview(socket)}
   end
@@ -1434,21 +1441,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         draft. Picking a different draft belongs on Show, where the
         version history lists them all.
 
-        Two parts, one form: the identity fields run the full width, then
-        the version — the draft strip and the definition editors, collected
-        in the "version" group — shares a row with the preview. The
-        component's root and its <form> are display: contents, so the
-        field wrappers and the groups are the flex items themselves: each
-        takes a full line, except the version group, which the preview
-        joins on the last — side by side from lg up, stacked below. Groups
-        are reached by the name the library stamps on them
-        (data-dynamic-form-group, DynamicForm 1.1.0). --%>
+        Two columns from lg up, stacked below: the whole form on the left,
+        the preview on the right. They grow 3 against 2 from a zero basis,
+        so the split is 60/40 of the space the gap leaves — the editor gets
+        the wider half because its element rows hold several fields each.
+        Past max-w-3xl the fields stop widening and hand the slack to the
+        preview, which the flex algorithm redistributes once the capped
+        column freezes. Groups inside the form are reached by the name the
+        library stamps on them (data-dynamic-form-group,
+        DynamicForm 1.1.0).
+
+        Full width preview (the toggle in its heading) drops the column
+        split: the preview takes its own line first, and the form follows
+        underneath at the same max-w-3xl it wears beside it. --%>
       <div class={[
-        "flex flex-wrap gap-x-6",
-        "[&>:first-child]:contents [&>:first-child>form]:contents",
-        "[&_form>*]:basis-full",
-        "[&_[data-dynamic-form-group=version]]:min-w-0",
-        "lg:[&_[data-dynamic-form-group=version]]:grow lg:[&_[data-dynamic-form-group=version]]:basis-0",
+        "flex flex-wrap gap-x-8 gap-y-8",
+        "[&>:first-child]:min-w-0 [&>:first-child]:basis-full [&>:first-child]:max-w-3xl",
+        !@wide_preview? && "lg:[&>:first-child]:grow-[3] lg:[&>:first-child]:basis-0",
         # The Name and Slug row, whose members share the width instead of
         # sizing to their content as a horizontal group's members do. The
         # underscores are escaped — Tailwind reads a bare one as a space —
@@ -1755,13 +1764,43 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Sticky beside a long editor: the preview stays in view while
               the admin scrolls the fields, and scrolls on its own when it is
               the taller of the two. Only once the columns sit side by side —
-              stacked, sticky would pin it over the editor. --%>
-        <div class="min-w-0 basis-full lg:grow lg:basis-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <div class="mb-4 flex items-start justify-between gap-3">
-            <.section_heading title="Preview">
-              The form as a user will see it, following the definition as you edit.
-            </.section_heading>
-            <div class="flex shrink-0 items-center gap-2">
+              stacked or full width, sticky would pin it over the editor, and
+              a preview given the whole width is meant to run as tall as the
+              form it shows. --%>
+        <div class={[
+          "min-w-0 basis-full",
+          @wide_preview? && "order-first",
+          !@wide_preview? &&
+            "lg:grow-[2] lg:basis-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
+        ]}>
+          <.section_heading title="Preview" class="mb-4">
+            The form as a user will see it, following the definition as you edit.
+            <:actions>
+              <%!-- Width, not fullscreen: the preview drops the column beside
+                    it and runs the page's width, with the form underneath.
+                    The label says what pressing it does rather than the state
+                    it is in, the way the header's buttons read. Left of the
+                    auto-refresh switch so it keeps its place when Refresh
+                    appears next to it. --%>
+              <button
+                type="button"
+                phx-click="toggle_wide_preview"
+                phx-target={@myself}
+                aria-pressed={to_string(@wide_preview?)}
+                class="mx-2 flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="size-4"
+                  aria-hidden="true"
+                >
+                  <path :if={!@wide_preview?} d="m13.28 7.78 3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 0 0 1.06 1.06ZM2 17.25v-4.5a.75.75 0 0 1 1.5 0v2.69l3.22-3.22a.75.75 0 0 1 1.06 1.06L4.56 16.5h2.69a.75.75 0 0 1 0 1.5h-4.5a.747.747 0 0 1-.75-.75ZM12.22 13.28l3.22 3.22h-2.69a.75.75 0 0 0 0 1.5h4.5a.747.747 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.22-3.22a.75.75 0 1 0-1.06 1.06ZM3.5 4.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V4.56Z" />
+                  <path :if={@wide_preview?} d="M3.28 2.22a.75.75 0 0 0-1.06 1.06L5.44 6.5H2.75a.75.75 0 0 0 0 1.5h4.5A.75.75 0 0 0 8 7.25v-4.5a.75.75 0 0 0-1.5 0v2.69L3.28 2.22ZM13.5 2.75a.75.75 0 0 0-1.5 0v4.5c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-2.69l3.22-3.22a.75.75 0 0 0-1.06-1.06L13.5 5.44V2.75ZM3.28 17.78l3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 1 0 1.06 1.06ZM13.5 14.56l3.22 3.22a.75.75 0 1 0 1.06-1.06l-3.22-3.22h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-2.69Z" />
+                </svg>
+                {if @wide_preview?, do: "Exit full width", else: "Full width"}
+              </button>
               <button
                 type="button"
                 phx-click="toggle_auto_update"
@@ -1795,14 +1834,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               >
                 Refresh
               </Core.button>
-            </div>
-          </div>
-          <div class="rounded-md border border-zinc-200 p-4">
+            </:actions>
+          </.section_heading>
+          <Canvas.canvas definition={@preview_json}>
+            <:empty>Add an element to this version and the form shows up here.</:empty>
             {live_render(@socket, Preview,
               id: preview_id(assigns),
-              session: %{"id" => preview_id(assigns), "definition" => @preview_json, "pubsub_topic" => @preview_topic}
+              session: %{
+                "id" => preview_id(assigns),
+                "definition" => @preview_json,
+                "pubsub_topic" => @preview_topic
+              }
             )}
-          </div>
+          </Canvas.canvas>
         </div>
       </div>
 
@@ -1945,11 +1989,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # A part of the page: its title and one line saying what belongs there,
   # styled like the library's own nested-form heading so the three read as
-  # one family with Elements
+  # one family with Elements. Actions ride on the title's line and the
+  # description takes the line under both — sharing a row with the controls
+  # leaves it a narrow column, wrapping a sentence that reads across.
+  attr(:title, :string, required: true)
+  attr(:class, :any, default: nil)
+  slot(:actions)
+  slot(:inner_block, required: true)
+
   defp section_heading(assigns) do
     ~H"""
-    <div class="min-w-0">
-      <h3 class="text-lg font-bold">{@title}</h3>
+    <div class={["min-w-0", @class]}>
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="text-lg font-bold">{@title}</h3>
+        <div :if={@actions != []} class="flex shrink-0 items-center gap-2">
+          {render_slot(@actions)}
+        </div>
+      </div>
       <div class="text-gray-500">{render_slot(@inner_block)}</div>
     </div>
     """

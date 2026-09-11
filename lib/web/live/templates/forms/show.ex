@@ -37,6 +37,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
+  alias FormFlow.Web.Templates.Forms.Components.Canvas
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
   alias FormFlow.Web.Templates.Forms.Preview
@@ -430,12 +431,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
         <div :if={@version} class="min-w-0 flex-1">
           <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
-          <div class="rounded-md border border-zinc-200 p-4">
+          <Canvas.canvas definition={@version.definition}>
+            <:empty>This version has no elements.</:empty>
             {live_render(@socket, Preview,
               id: "form-preview-#{@version.id}",
               session: %{"id" => "form-preview-#{@version.id}", "version_id" => @version.id}
             )}
-          </div>
+          </Canvas.canvas>
         </div>
 
         <Core.alert :if={@version == nil} components={@components}>

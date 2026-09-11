@@ -114,6 +114,35 @@ the tables and columns under their new names; there is no rename migration. A
 database migrated by an earlier release has the old ones and is not carried
 over.
 
+### The form edit page is one column beside its preview, and the preview can take the width
+
+**Form details** and **Form version** share a single column again — the
+identity fields no longer run the full width above the version — and the
+**Preview** is the column beside them, 60/40 from `lg` up. The form's column
+stops at `max-w-3xl` — fields stop widening where a form stops being
+readable — and the preview takes the slack a wide screen leaves.
+
+**The preview's heading has a Full width toggle**, beside Auto-refresh. It
+drops the column split: the preview moves to the top of the page at the
+page's width, with the whole form underneath it, and it lets go of the
+sticky positioning and the scroll container it wears beside the form, since
+a preview given the width is meant to run as tall as the form it shows. The
+toggle is view state — it is not saved with the draft, and a reload comes
+back beside the form.
+
+**The preview sits on a canvas**, the dotted surface the flow editor draws
+at the same 16px pitch, with the form on it as a card at `max-w-3xl` — so
+going full width grows the canvas around the form rather than stretching
+the form. **A version with no elements previews as "Nothing to preview
+yet"** and a line saying how to fill it, rather than as a form whose only
+control is Submit. A definition that will not parse still reaches the
+preview, which says what is wrong with it.
+
+Both are `FormFlow.Web.Templates.Forms.Components.Canvas`, and the form's
+**show page previews on the same canvas** — it takes the definition as the
+map a saved version carries where the edit page hands it the JSON string
+its editor holds.
+
 ## v0.23.0
 
 ### Renewing from last year, and the rest of the status work
