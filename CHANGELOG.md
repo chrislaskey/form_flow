@@ -229,6 +229,90 @@ one without a value. Through a node the name and slug are the step's, as
 the edit page's fields are. The header's metadata line keeps the type,
 properties, and perspectives it already showed.
 
+### A choice that decides the page is a card, not a row of radios
+
+`FormFlow.Web.Templates.Components.ChoiceCard` is new: one radio drawn as a
+card carrying its name, a line under it saying what picking it does, and a
+fill when it is the one picked. It is for the choices a page makes a
+decision out of rather than collects an answer to, where the options differ
+in consequence and not just in kind — a row of plain radios cannot say so
+before the click, and one of the draft editor's three replaces the whole
+definition.
+
+**The draft editor's editor picker is the first of them.** It is still the
+same radio group: `definition_editor` keeps its `options`, so the changeset
+validates it exactly as before, and `visible_if` reads it exactly as
+before. Only the control is FormFlow's, through a `DynamicForm` `<:field>`
+with a body — the documented escape hatch, where the library keeps the
+label, the errors, and the validation while the page draws the control. The
+three descriptions and the radio's values come from one list, so the cards
+and the values the changeset accepts cannot drift. The picker carries no
+label of its own (`label={false}`): three cards that each describe
+themselves need no sentence over them.
+
+**The New flow page's kind picker is the second**, and the reason the card
+is a component rather than markup on one page — the two now cannot drift
+apart. Those cards had no picked state at all before.
+
+The fill is daisyUI's **`primary`**, so a card wears the host application's
+brand color rather than one of FormFlow's own, and the description follows
+the card's text color into it as `opacity` rather than as a second palette
+that would have to be picked for every theme a host might set.
+
+### The draft editor says which draft, and what the fields are
+
+**Form version** is now **Draft**, and the strip that sat under it has moved
+into it: what the draft is based on, and when it was last saved, as both
+"2 hours ago" and `2026-09-11 at 4:21pm UTC` — the relative phrase for the
+glance, the absolute one for the record. **Form version elements** is now
+**Form fields**.
+
+**The notes moved to where the fields they talk about were.** The note
+saying the form's details are global and edited on their own page was above
+the form, at the page's width; it is now in the version group, under the
+Draft heading, where the details fields sat until the form was published.
+The link that said how many other drafts exist joins it as a note of its
+own rather than as a sentence trailing the heading.
+
+**An element leads with its name and its label.** The builder's first row
+was Type and Name with the label below; it is now Name and Label, with the
+type dropdown on its own row under them — what an element *is called* before
+what it *is*. The group renames with it, `type_and_name` to `name_and_label`.
+
+### Every label is `text-sm`, including the ones another library draws
+
+The `dt` labels on the flow and form show pages and the health page, the
+fact-sheet and section headings, the fieldset legends, and the checkbox
+input's own label were `text-xs` while the values beside them were `text-sm`.
+They are all `text-sm` now.
+
+**Three of them were not FormFlow's to set.** `DynamicForm` renders inputs
+through the components module it is given, per function, and
+`FormFlow.Web.CoreComponents` defined `input/1` but not the rest — so text,
+select and textarea labels were FormFlow's while radio groups, checkbox
+groups and custom controls fell back to the library's own, which sit inside
+a daisyUI `.fieldset` and inherit its `0.75rem`. One field on a page drawn
+smaller than every other. `FormFlow.Web.CoreComponents` now also defines
+**`input_radio_group/1`**, **`input_checkbox_group/1`** and **`label/1`** —
+the named functions `DynamicForm.ComponentResolver` looks for — so every
+label FormFlow draws is the same size, wherever it is drawn from. A host
+that passes its own components module is unaffected: the resolver asks that
+module first, as it always did.
+
+### The flows index filters, and an id is a column
+
+**A Filters tab over status, name, and slug.** Slab compiles the
+`filter[...]` URL params into WHERE conditions: status is a select of the
+statuses, name and slug are case-insensitive contains. Like the sort and the
+page they live in the URL, so a filtered listing survives a reload and can
+be sent to someone. **Archived is off the status filter's options while
+archived flows are hidden** — the rows already exclude them, so picking it
+could only empty the table; **Show archived** puts it back.
+
+**The id has its own column and the slug sits under the name.** The id was a
+grey line beneath the name and the slug was a column of its own; they have
+swapped. The slug column's sort goes with it — the name's remains.
+
 ## v0.23.0
 
 ### Renewing from last year, and the rest of the status work
