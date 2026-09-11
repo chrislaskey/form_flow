@@ -309,22 +309,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         components={@components}
       >
         <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
-        <%!-- What users may do with it (FormFlow.Data.Templates.Flow's status
-              table); the root's, so a drill-in page says nothing --%>
-        <:metadata :if={is_nil(@flow.owner_flow_id)}>
-          <button
-            type="button"
-            phx-click="request_status"
-            phx-target={@myself}
-            class="cursor-pointer"
-            title={"#{Shared.status_summary(@flow.status)} Click to change."}
-            aria-label={"Status: #{Shared.status_label(@flow.status)}. Change status"}
-          >
-            <Core.badge components={@components} kind={Shared.status_kind(@flow.status)}>
-              {Shared.status_label(@flow.status)} ▾
-            </Core.badge>
-          </button>
-        </:metadata>
         <%!-- Show mode renders the stored type as plain text; the Edit
               page is where it becomes a dropdown --%>
         <:metadata :if={type_label(assigns)}>{type_label(assigns)}</:metadata>
@@ -337,6 +321,20 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         <:actions>
           <%!-- The root's health, cached, from any depth --%>
           <Health.health base={@base} flow={@root || @flow} />
+          <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
+                status table), and where it is changed; the root's, so a
+                drill-in page offers nothing --%>
+          <Core.button
+            :if={is_nil(@flow.owner_flow_id)}
+            components={@components}
+            phx-click="request_status"
+            phx-target={@myself}
+            class="btn btn-ghost"
+            title={"#{Shared.status_summary(@flow.status)} Click to change."}
+            aria-label={"Status: #{Shared.status_label(@flow.status)}. Change status"}
+          >
+            Status: {Shared.status_label(@flow.status)}
+          </Core.button>
           <%!-- The whole flow at once, every level, read-only — the root's,
                 from any depth. Show and Edit stay one level at a time. --%>
           <Core.button components={@components} navigate={overview_path(assigns)} class="btn btn-ghost">

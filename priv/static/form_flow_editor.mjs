@@ -807,6 +807,15 @@ svg.react-flow__connectionline {
   vertical-align: 1px;
 }
 
+/* The panel lays its children out, so buttons beside each other never
+   touch borders */
+.ff-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .ff-panel button {
   padding: 4px 10px;
   border: 1px solid #d4d4d8;
@@ -823,7 +832,7 @@ svg.react-flow__connectionline {
 
 /* Paste stands apart from the add buttons: it is about something already made */
 .ff-panel .ff-panel__paste {
-  margin-left: 6px;
+  margin-left: 4px;
   border-color: #fcd34d;
   background: #fffbeb;
   color: #92400e;

@@ -1376,14 +1376,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <%!-- The remote submit: an HTML form= reference into the
                 DynamicForm below, so Save draft lives in the header like
                 every other page's primary action, and says "draft" because
-                Publish sits right beside it. Styled like the flows editor's
-                Save — quiet until changes exist, primary once they do. --%>
+                Publish sits right beside it.
+
+                The two trade the primary style between them, so whichever
+                is the next thing to do is the one that looks it: unsaved
+                edits make Save draft primary, and once they are saved it
+                hands the emphasis to Publish. Publishing takes the last
+                saved definition, which is why it steps back while the
+                draft and the page disagree. --%>
           <Core.button
             components={@components}
             form={"#{@id}-form-form"}
             class={[
               "btn phx-submit-loading:opacity-75",
-              if(@dirty?, do: "btn-primary", else: "btn-primary")
+              if(@dirty?, do: "btn-primary", else: "")
             ]}
           >
             Save draft
@@ -1392,7 +1398,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             components={@components}
             phx-click="open_publish"
             phx-target={@myself}
-            variant="primary"
+            class={["btn", if(@dirty?, do: "", else: "btn-primary")]}
           >
             Publish
           </Core.button>
@@ -1808,7 +1814,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         target={@myself}
         on_success={&publish(&1, @id)}
         components={@components}
-        saved_note
+        saved_note={@dirty?}
       />
     </div>
     """

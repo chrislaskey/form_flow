@@ -12,6 +12,11 @@ defmodule FormFlow.Web.Templates.Components.Header do
   trail back out. The right side is the page's `actions` — buttons, in the
   order the page lists them.
 
+  Side by side only where there is room for both: a page can carry half a
+  dozen actions, and below `xl` they take the width the title needs. So the
+  two stack there — title, then the actions under it, wrapping — and sit on
+  one line from `xl` up.
+
       <Header.header base={@base} section="flows" root={@root} name={@flow.name}>
         <:metadata>Simple flow</:metadata>
         <:metadata :if={@type}>{@type.name}</:metadata>
@@ -108,7 +113,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   def header(assigns) do
     ~H"""
-    <div class="mb-4 flex items-start justify-between gap-4">
+    <div class="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
       <div class="min-w-0 mb-1">
         <h2 class="flex flex-wrap items-baseline gap-x-2 text-xl font-semibold leading-tight">
           <span>{title(assigns)}</span>
@@ -167,7 +172,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
           <% end %>
         </nav>
       </div>
-      <div :if={@actions != []} class="flex shrink-0 items-center gap-2">
+      <div :if={@actions != []} class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:flex-nowrap">
         {render_slot(@actions)}
       </div>
     </div>

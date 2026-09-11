@@ -477,10 +477,10 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert has_element?(view, ".badge", "Open")
 
       {:ok, view, _html} = live(conn, "/admin/flows/#{draft.id}")
-      assert has_element?(view, ".badge", "Draft")
+      assert has_element?(view, "button[phx-click=request_status]", "Status: Draft")
 
       {:ok, view, _html} = live(conn, "/admin/flows/#{open.id}")
-      assert has_element?(view, ".badge", "Open")
+      assert has_element?(view, "button[phx-click=request_status]", "Status: Open")
     end
 
     test "the edit page's status dropdown explains the choice, and Save writes it with its event",
@@ -600,7 +600,7 @@ defmodule Demo.FormFlowFlowStatusTest do
         |> render_submit(%{"status" => "open"})
 
       refute html =~ "Change the status"
-      assert has_element?(view, ".badge", "Open")
+      assert has_element?(view, "button[phx-click=request_status]", "Status: Open")
       assert Flows.get(flow.id).status == "open"
 
       assert [

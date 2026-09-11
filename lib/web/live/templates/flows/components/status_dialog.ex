@@ -77,7 +77,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
           </div>
 
           <div
-            :if={true || offer_delete?(@flow, @status, @pre_release_count)}
+            :if={offer_delete?(@flow, @status, @pre_release_count)}
             id="status-dialog-pre-release"
             class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
           >

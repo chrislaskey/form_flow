@@ -90,7 +90,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
       <circle cx="20" cy="10" r="2" />
     </svg>
     <span class={[
-      "absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold ring-2 ring-white",
+      "absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ring-2 ring-white",
       colors(@status)
     ]}>
       {mark(@status)}
@@ -99,7 +99,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
   end
 
   defp button_class do
-    "relative inline-flex size-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+    "relative inline-flex size-10 items-center justify-center rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 mx-1"
   end
 
   # The shoulder: a dash for a flow never checked, a check for one with

@@ -1482,22 +1482,26 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute has_element?(view, ~s(#forms-edit-form-form button[type="submit"]))
     assert render(view) =~ ~r/Save draft\s*<\/button>.*Publish/s
 
-    # Quiet (btn-soft) while clean, primary (no btn-soft) once the form
-    # differs from what's persisted — matching the flows editor's Save
-    assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
+    # Save draft and Publish trade the primary style: whichever is the next
+    # thing to do wears it. Clean, that is Publish — publishing takes the
+    # last saved definition, and there is nothing newer to save.
+    refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-primary))
+    assert has_element?(view, ~s(button.btn-primary), "Publish")
 
     view
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
-    refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
+    assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-primary))
+    refute has_element?(view, ~s(button.btn-primary), "Publish")
 
     view
     |> element("#forms-edit-form-form")
     |> render_submit(%{"dynamic_form" => %{"name" => "Remote, edited", "definition" => "{}"}})
 
     assert render(view) =~ "Saved."
-    assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-soft))
+    refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-primary))
+    assert has_element?(view, ~s(button.btn-primary), "Publish")
   end
 
   test "opening a never-published form node from the edit canvas lands straight on its editor",
@@ -1558,12 +1562,24 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}")
     assert %{status: "published", version: 1} = Forms.get_version(draft.id)
 
-    # Later publishes prompt, with the saved-definition caveat Edit needs
+    # Later publishes prompt. The saved-definition caveat is only about
+    # unsaved edits, so a clean draft is not warned about them
     {:ok, second} = Forms.create_draft(form.id, based_on: draft.id)
     {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{second.id}/edit")
 
     view |> element("button", "Publish") |> render_click()
     assert render(view) =~ "Publish this draft?"
+    refute render(view) =~ "unsaved edits are not included"
+
+    view |> element("button", "Cancel") |> render_click()
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{
+      "dynamic_form" => %{"name" => "Publishable, edited", "definition" => "{}"}
+    })
+
+    view |> element("button", "Publish") |> render_click()
     assert render(view) =~ "unsaved edits are not included"
 
     view

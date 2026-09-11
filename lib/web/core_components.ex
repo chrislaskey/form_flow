@@ -240,7 +240,7 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
+        <span :if={@label} class="label text-sm mb-1">
           {@label}<.required_mark required={@required} required_label={@required_label} />
         </span>
         <select
@@ -272,7 +272,7 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
+        <span :if={@label} class="label text-sm mb-1">
           {@label}<.required_mark required={@required} required_label={@required_label} />
         </span>
         <textarea
@@ -296,7 +296,7 @@ defmodule FormFlow.Web.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
+        <span :if={@label} class="label text-sm mb-1">
           {@label}<.required_mark required={@required} required_label={@required_label} />
         </span>
         <input

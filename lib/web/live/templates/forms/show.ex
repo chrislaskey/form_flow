@@ -316,7 +316,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="btn btn-error btn-soft"
+            class="btn btn-error"
           >
             Delete draft
           </Core.button>
@@ -324,7 +324,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             :if={@version.status == "draft"}
             components={@components}
             navigate={edit_path(assigns, @version)}
-            class="btn"
+            class="btn btn-ghost"
           >
             Edit draft
           </Core.button>
@@ -370,7 +370,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="delete"
             phx-target={@myself}
             data-confirm="Delete this form and all of its versions?"
-            class="btn btn-error btn-soft"
+            class="btn btn-error"
           >
             Delete
           </Core.button>
