@@ -56,7 +56,7 @@ defmodule DemoWeb.PageComponents do
 
   def p(assigns) do
     ~H"""
-    <p class={["max-w-3xl", @class]}>{render_slot(@inner_block)}</p>
+    <p class={["max-w-5xl", @class]}>{render_slot(@inner_block)}</p>
     """
   end
 
@@ -69,7 +69,7 @@ defmodule DemoWeb.PageComponents do
 
   def note(assigns) do
     ~H"""
-    <p class={["max-w-3xl whitespace-pre-line text-base-content/70", @class]}>
+    <p class={["max-w-5xl whitespace-pre-line text-base-content/70", @class]}>
       {render_slot(@inner_block)}
     </p>
     """

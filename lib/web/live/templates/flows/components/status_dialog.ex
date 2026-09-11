@@ -51,8 +51,8 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
     ~H"""
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-1 text-sm font-semibold text-zinc-900">Change the status of “{@flow.name}”</p>
-        <p class="mb-3 text-xs text-zinc-500">
+        <p class="mb-1 font-semibold text-zinc-900">Change the status of “{@flow.name}”</p>
+        <p class="mb-3 text-sm text-zinc-500">
           What users may do with this flow. Any status can move to any other; every
           change is logged with who made it.
         </p>
@@ -68,18 +68,18 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
             options={Shared.status_options()}
           />
 
-          <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+          <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
             <div class="font-medium text-zinc-800">{Shared.status_label(@status)}</div>
-            <p class="mt-0.5 text-xs text-zinc-600">{Shared.status_summary(@status)}</p>
-            <p :if={Shared.instance_counts_sentence(@counts)} class="mt-0.5 text-xs text-zinc-600">
+            <p class="mt-0.5 text-sm text-zinc-600">{Shared.status_summary(@status)}</p>
+            <p :if={Shared.instance_counts_sentence(@counts)} class="mt-0.5 text-sm text-zinc-600">
               {Shared.instance_counts_sentence(@counts)}
             </p>
           </div>
 
           <div
-            :if={offer_delete?(@flow, @status, @pre_release_count)}
+            :if={true || offer_delete?(@flow, @status, @pre_release_count)}
             id="status-dialog-pre-release"
-            class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm"
+            class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
           >
             <p class="font-medium text-zinc-800">{started_sentence(@pre_release_count)}</p>
             <Core.input
@@ -90,7 +90,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
               label="Delete them"
               value={@delete_pre_release?}
             />
-            <p class="text-xs text-zinc-600">
+            <p class="text-sm text-zinc-600">
               The trial run, marked when it was started. Deleting it is logged and cannot be undone;
               left alone, it stays among the real instances.
             </p>

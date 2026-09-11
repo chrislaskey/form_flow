@@ -299,7 +299,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
             is FormFlow's own, and explains why it picks the option it does.
           </.p>
 
-          <div :for={example <- @sql_examples} id={"sql-#{example.id}"} class="mb-8 max-w-3xl">
+          <div :for={example <- @sql_examples} id={"sql-#{example.id}"} class="mb-8 max-w-5xl">
             <.h3>{example.title}</.h3>
             <.p class="my-2">{example.blurb}</.p>
             <pre class="schema-sql"><code>{example.sql}</code></pre>

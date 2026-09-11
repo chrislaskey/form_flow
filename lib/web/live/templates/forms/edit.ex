@@ -1369,7 +1369,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="btn btn-error btn-soft"
+            class="btn btn-error"
           >
             Delete draft
           </Core.button>
@@ -1383,7 +1383,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             form={"#{@id}-form-form"}
             class={[
               "btn phx-submit-loading:opacity-75",
-              if(@dirty?, do: "btn-primary", else: "btn-primary btn-soft")
+              if(@dirty?, do: "btn-primary", else: "btn-primary")
             ]}
           >
             Save draft
@@ -1763,7 +1763,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 role="switch"
                 aria-checked={to_string(@auto_update?)}
                 aria-label="Toggle auto-update preview"
-                class="flex items-center gap-1.5 text-xs"
+                class="flex items-center gap-1.5 text-sm mx-2"
               >
                 <span class={
                   if(@auto_update?, do: "font-semibold text-zinc-900", else: "text-zinc-500")

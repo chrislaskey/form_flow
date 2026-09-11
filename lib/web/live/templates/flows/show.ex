@@ -339,7 +339,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <Health.health base={@base} flow={@root || @flow} />
           <%!-- The whole flow at once, every level, read-only — the root's,
                 from any depth. Show and Edit stay one level at a time. --%>
-          <Core.button components={@components} navigate={overview_path(assigns)} class="btn">
+          <Core.button components={@components} navigate={overview_path(assigns)} class="btn btn-ghost">
             Flow Overview
           </Core.button>
           <%!-- A root flow is copied whole from here; an owned subflow is
@@ -349,7 +349,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             components={@components}
             phx-click="request_copy"
             phx-target={@myself}
-            class="btn"
+            class="btn btn-ghost"
           >
             Duplicate Flow
           </Core.button>
@@ -370,7 +370,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             role="switch"
             aria-checked="false"
             aria-label="Switch to Edit"
-            class="flex items-center gap-1.5 text-xs"
+            class="flex items-center gap-1.5 text-sm mx-2"
           >
             <span class="font-semibold text-zinc-900">Show</span>
             <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
@@ -388,7 +388,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
                   "Delete this subflow? It is removed from the parent flow, and its own steps and subflows go with it.",
                 else: "Delete this flow? Its steps, connections, and subflows go with it."
             }
-            class="btn btn-error btn-soft"
+            class="btn btn-error"
           >
             Delete
           </Core.button>

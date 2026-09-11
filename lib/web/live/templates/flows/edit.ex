@@ -678,7 +678,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             phx-click="navigate"
             phx-value-to={overview_path(assigns)}
             phx-target={@myself}
-            class="btn"
+            class="btn btn-ghost"
           >
             Flow Overview
           </Core.button>
@@ -694,7 +694,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             role="switch"
             aria-checked="true"
             aria-label="Switch to Show"
-            class="flex items-center gap-1.5 text-xs"
+            class="flex items-center gap-1.5 text-sm mx-2"
           >
             <span class="text-zinc-500">Show</span>
             <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
@@ -707,7 +707,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             components={@components}
             phx-click="request_discard"
             phx-target={@myself}
-            class="btn btn-error btn-soft"
+            class="btn btn-error"
           >
             Discard changes
           </Core.button>

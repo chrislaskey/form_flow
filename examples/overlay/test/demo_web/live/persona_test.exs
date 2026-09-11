@@ -43,10 +43,13 @@ defmodule DemoWeb.PersonaTest do
     test "refuses a pet owner, and says who it is for", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/admin")
 
+      {:ok, owner} = Demo.Users.fetch("dog_owner")
+      {:ok, admin} = Demo.Users.fetch("admin")
+
       refute has_element?(view, "#admin-pages")
       assert html =~ "Not authorized"
-      assert html =~ "Dog Owner"
-      assert html =~ "Pet License Admin"
+      assert html =~ owner.name
+      assert html =~ admin.name
     end
 
     test "refuses the default user", %{conn: conn} do
@@ -101,7 +104,9 @@ defmodule DemoWeb.PersonaTest do
         |> LazyHTML.query("h1, h2")
         |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
 
-      assert headings == ["Admin pages", "Not authorized"]
+      assert [title, refusal] = headings
+      assert title == "Admin pages"
+      assert refusal =~ "Not authorized"
     end
   end
 

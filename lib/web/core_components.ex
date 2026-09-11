@@ -84,7 +84,7 @@ defmodule FormFlow.Web.CoreComponents do
   slot(:inner_block, required: true)
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{"primary" => "btn-primary", nil => "btn-primary"}
 
     assigns =
       assign_new(assigns, :class, fn ->
@@ -382,17 +382,17 @@ defmodule FormFlow.Web.CoreComponents do
 
   def alert(assigns) do
     kinds = %{
-      neutral: nil,
-      info: "alert-info",
-      success: "alert-success",
-      warning: "alert-warning",
-      error: "alert-error"
+      neutral: "alert-outline",
+      info: "alert-info alert-soft",
+      success: "alert-success alert-soft",
+      warning: "alert-warning alert-soft",
+      error: "alert-error alert-soft"
     }
 
     assigns = assign(assigns, :kind_class, Map.fetch!(kinds, assigns.kind))
 
     ~H"""
-    <div role="alert" class={["alert alert-soft", @kind_class, @class]} {@rest}>
+    <div role="alert" class={["alert", @kind_class, @class]} {@rest}>
       {render_slot(@inner_block)}
     </div>
     """

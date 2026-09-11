@@ -61,7 +61,7 @@ defmodule DemoWeb.PersonaComponents do
       <.h2>Not authorized!</.h2>
 
       <div class="space-y-4">
-        <p class="max-w-3xl text-base-content/70">
+        <p class="max-w-5xl text-base-content/70">
           You are viewing the demo as <span class="font-semibold text-base-content">{@current_user.name}</span>, who cannot see {@page}.
           <span class="font-semibold text-base-content">{@allowed
           |> Enum.map(& &1.name)
@@ -69,7 +69,7 @@ defmodule DemoWeb.PersonaComponents do
           can.
         </p>
 
-        <p class="flex max-w-3xl items-center gap-2 text-base-content/70 border rounded-lg p-4 border-gray-300">
+        <p class="flex max-w-5xl items-center gap-2 text-base-content/70 border rounded-lg p-4 border-gray-300">
           Switch with the <span class="font-semibold text-base-content">Viewing as</span>
           control in the top right of every page, and the page opens.
           <svg

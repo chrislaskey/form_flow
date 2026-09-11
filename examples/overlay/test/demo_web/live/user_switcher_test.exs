@@ -15,7 +15,9 @@ defmodule DemoWeb.UserSwitcherTest do
 
     {:ok, view, _html} = live(conn, ~p"/install-check")
 
-    assert render(element(view, "#header-user-switcher summary")) =~ "Pet License Reviewer"
+    {:ok, reviewer} = Demo.Users.fetch("reviewer")
+
+    assert render(element(view, "#header-user-switcher summary")) =~ reviewer.name
 
     assert has_element?(
              view,

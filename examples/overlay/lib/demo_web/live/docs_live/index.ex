@@ -36,7 +36,7 @@ defmodule DemoWeb.DocsLive.Index do
           it fits their application.
         </.p>
 
-        <ul id="docs-index" class="max-w-3xl space-y-3">
+        <ul id="docs-index" class="max-w-5xl space-y-3">
           <li :for={page <- @pages}>
             <.link
               navigate={page.path}

@@ -227,7 +227,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
           <Core.button
             components={@components}
             navigate={"#{@base}/flows/#{@flow.id}/overview"}
-            class="btn"
+            class="btn btn-ghost"
           >
             Flow Overview
           </Core.button>

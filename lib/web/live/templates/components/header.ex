@@ -109,8 +109,8 @@ defmodule FormFlow.Web.Templates.Components.Header do
   def header(assigns) do
     ~H"""
     <div class="mb-4 flex items-start justify-between gap-4">
-      <div class="min-w-0">
-        <h2 class="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold leading-tight">
+      <div class="min-w-0 mb-1">
+        <h2 class="flex flex-wrap items-baseline gap-x-2 text-xl font-semibold leading-tight">
           <span>{title(assigns)}</span>
           <%= if @root && @name do %>
             <span class="font-normal text-zinc-500">{@name}</span>
@@ -122,7 +122,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
         </h2>
         <nav
           aria-label="Breadcrumb"
-          class={["mt-1 text-xs text-zinc-500", @target && "flex flex-wrap items-center gap-x-1.5"]}
+          class={["mt-1 text-sm text-zinc-500", @target && "flex flex-wrap items-center gap-x-1.5"]}
         >
           <%= if @section do %>
             <.crumb to={templates_path(@base)} target={@target} components={@components}>

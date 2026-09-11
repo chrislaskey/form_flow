@@ -23,29 +23,29 @@ defmodule Demo.Users do
     %{
       id: "dog_owner",
       role: :owner,
-      name: "Dog Owner",
+      name: "User - Dog Owner",
       initials: "DO",
       blurb: "Applies for and renews a dog license"
     },
     %{
       id: "cat_owner",
       role: :owner,
-      name: "Cat Owner",
+      name: "User - Cat Owner",
       initials: "CO",
       blurb: "Applies for and renews a cat license"
     },
     %{
       id: "reviewer",
       role: :reviewer,
-      name: "Pet License Reviewer",
-      initials: "PR",
+      name: "Reviewer - Pet Licenses",
+      initials: "RE",
       blurb: "Reviews and decides license applications"
     },
     %{
       id: "admin",
       role: :admin,
-      name: "Pet License Admin",
-      initials: "PA",
+      name: "Admin - Pet Licenses",
+      initials: "AD",
       blurb: "Builds the licensing flows and forms"
     }
   ]
