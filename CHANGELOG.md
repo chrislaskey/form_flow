@@ -31,6 +31,15 @@ The admin landing's second link reads **Reusable forms**, not "Forms", and
 the line under it says what the catalog is for: a catalogue of reusable
 forms that can be used in multiple flows and kept in sync.
 
+### The data model has a guide
+
+`guides/data-modeling.md` is the demo's `/docs/data-modeling` page as a
+guide: Flows and Forms, templates and instances, the ten tables the
+migration creates, the three that cross over to Neo4j, and the three ways a
+graph can be read back out of SQL — with screenshots of the two diagrams the
+page draws, and a pointer to the demo for the interactive versions. The
+Neo4j guide stays what it was, the mapping itself.
+
 ## v0.24.0
 
 ### Every table says whether it holds a template or an instance

@@ -77,11 +77,15 @@ defmodule FormFlow.MixProject do
         "guides/usage.md",
         "guides/reference.md",
         "guides/development.md",
+        "guides/data-modeling.md",
         "guides/neo4j.md"
       ],
       groups_for_extras: [
         Guides: ~r{guides/}
-      ]
+      ],
+      # The data modeling guide's screenshots, at the same relative path the
+      # markdown uses, so the images resolve both on GitHub and in the docs
+      assets: %{"guides/images" => "images"}
     ]
   end
 end
