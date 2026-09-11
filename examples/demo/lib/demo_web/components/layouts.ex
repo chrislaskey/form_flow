@@ -69,12 +69,12 @@ defmodule DemoWeb.Layouts do
           </.link>
 
           <div class="flex items-center gap-4">
+            <.github_link />
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
               <.experience_menu current={@current_nav in [:admin, :users, :reviewers]} />
             </nav>
-            <.github_link />
             <div :if={@current_user} class="flex items-center sm:border-l sm:border-gray-200 sm:pl-4">
               <UserSwitcher.user_switcher id="header-user-switcher" current_user={@current_user} />
             </div>
@@ -103,7 +103,7 @@ defmodule DemoWeb.Layouts do
       href="https://github.com/chrislaskey/form_flow"
       target="_blank"
       rel="noopener"
-      class="rounded-lg p-2 text-gray-400 transition-colors hover:text-gray-900"
+      class="rounded-lg p-2 -mr-3 text-gray-400 transition-colors hover:text-gray-900"
       aria-label="FormFlow on GitHub"
     >
       <svg viewBox="0 0 16 16" fill="currentColor" class={@class} aria-hidden="true">
