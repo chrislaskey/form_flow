@@ -6,7 +6,7 @@ defmodule DemoWeb.UserSwitcherTest do
   test "the header shows the default user before switching", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    assert render(element(view, "#header-user-switcher summary")) =~ "Docs Reader"
+    assert render(element(view, "#header-user-switcher summary")) =~ Demo.Users.default().name
     assert has_element?(view, "#perspective-user-switcher")
   end
 

@@ -52,10 +52,10 @@ defmodule DemoWeb.PersonaTest do
       assert html =~ admin.name
     end
 
-    test "refuses the default user", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/admin")
+    test "opens for the default user, who is the admin", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin")
 
-      assert html =~ "Not authorized"
+      assert has_element?(view, "#admin-pages")
     end
   end
 
@@ -68,11 +68,28 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "admin"
-    test "refuses the admin", %{conn: conn} do
+    test "opens for the admin, as the user sees it", %{conn: conn} do
+      {:ok, view, admin_html} = live(conn, ~p"/users")
+
+      assert has_element?(view, "#users-pages")
+
+      {:ok, _view, owner_html} = live(build_conn_as("dog_owner"), ~p"/users")
+
+      admin_page = page(admin_html, "#users-pages")
+
+      assert admin_page =~ ~r/\S/
+      assert admin_page == page(owner_html, "#users-pages")
+    end
+
+    @tag user: "docs_reader"
+    test "refuses a reader, and names the admin among those who can", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/users")
+
+      {:ok, admin} = Demo.Users.fetch("admin")
 
       refute has_element?(view, "#users-pages")
       assert html =~ "Not authorized"
+      assert html =~ admin.name
     end
   end
 
@@ -82,6 +99,20 @@ defmodule DemoWeb.PersonaTest do
       {:ok, view, _html} = live(conn, ~p"/reviewers")
 
       assert has_element?(view, "#reviewers-pages")
+    end
+
+    @tag user: "admin"
+    test "opens for the admin, as the reviewer sees it", %{conn: conn} do
+      {:ok, view, admin_html} = live(conn, ~p"/reviewers")
+
+      assert has_element?(view, "#reviewers-pages")
+
+      {:ok, _view, reviewer_html} = live(build_conn_as("reviewer"), ~p"/reviewers")
+
+      admin_page = page(admin_html, "#reviewers-pages")
+
+      assert admin_page =~ ~r/\S/
+      assert admin_page == page(reviewer_html, "#reviewers-pages")
     end
 
     @tag user: "dog_owner"
@@ -118,6 +149,7 @@ defmodule DemoWeb.PersonaTest do
       assert has_element?(view, "#perspective-user-switcher")
     end
 
+    @tag user: "dog_owner"
     test "is not repeated on a refusal, which points at the header instead", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/admin")
 
@@ -134,5 +166,14 @@ defmodule DemoWeb.PersonaTest do
       assert switchers == ["experience-menu", "header-user-switcher"]
       refute has_element?(view, "#perspective")
     end
+  end
+
+  # One region of a render, as text — what an admin sees on another role's
+  # page, to compare against what that role sees.
+  defp page(html, selector) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
   end
 end

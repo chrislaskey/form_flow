@@ -10,6 +10,14 @@ defmodule DemoWeb.PersonaComponents do
   there is one place to change perspective, and a refusal is a bad place to
   teach a second one.
 
+  The admin is admitted to every page, and the demo opens as the admin
+  (`Demo.Users.default/0`), so a visitor meets a refusal only after choosing
+  a narrower perspective — role-level permissions are something to opt into,
+  not the first thing the demo shows. What an admin sees on another role's
+  page is that role's page, unchanged: the `user_id` those pages hand
+  `FormFlow.Web.router` is the page's, not the persona's, so an admin reading
+  `/users` reads it as the user and `/reviewers` as the reviewer.
+
   A gate wraps a page's content, not its title — the title stays outside it,
   so someone turned away still sees which page they were turned away from.
   """
@@ -21,8 +29,14 @@ defmodule DemoWeb.PersonaComponents do
   alias Demo.Users
   alias DemoWeb.UserSwitcher
 
-  @doc "Whether `user` holds one of `roles`."
-  def allows?(user, roles), do: user.role in roles
+  # The roles every page admits, whatever it asks for.
+  @all_access [:admin]
+
+  @doc "Whether `user` holds one of `roles`, or a role that admits every page."
+  def allows?(user, roles), do: user.role in (@all_access ++ roles)
+
+  @doc "Every user a page for `roles` admits, in display order."
+  def allowed_users(roles), do: Users.with_roles(@all_access ++ roles)
 
   @doc """
   A page's content, for the users whose role is in `roles`. Everyone else
@@ -54,7 +68,7 @@ defmodule DemoWeb.PersonaComponents do
   attr :page, :string, required: true
 
   def not_authorized(assigns) do
-    assigns = assign(assigns, :allowed, Users.with_roles(assigns.roles))
+    assigns = assign(assigns, :allowed, allowed_users(assigns.roles))
 
     ~H"""
     <div>
@@ -112,7 +126,8 @@ defmodule DemoWeb.PersonaComponents do
         <p class="text-sm text-base-content/70">
           {@blurb ||
             "The demo is viewed as one of #{@count} hardcoded users, with no sign-in.
-             Switch here or in the header; the page reloads as that user."}
+             It opens as the admin, who can see every page; the others see only
+             their own. Switch here or in the header; the page reloads as that user."}
         </p>
       </div>
       <UserSwitcher.user_switcher id={"#{@id}-user-switcher"} current_user={@current_user} />

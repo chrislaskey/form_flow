@@ -4,11 +4,14 @@ defmodule Demo.Users do
 
   There is no sign-in. The current user's id lives in the session under
   `"demo_user_id"` (set by `DemoWeb.UserSwitchController`, read by
-  `DemoWeb.UserHook`); visitors without one see the demo as the default user.
+  `DemoWeb.UserHook`); visitors without one see the demo as `default/0`, the
+  admin, who is admitted everywhere — narrower perspectives are opt-in.
   """
 
-  # In the order a visitor meets them: reading, applying, then the two staff
-  # roles — the reviewer works applications, the admin builds the flows.
+  # In reading order: reading, applying, then the two staff roles — the
+  # reviewer works applications, the admin builds the flows. The demo opens
+  # as the admin (`default/0`), which is the last of them rather than the
+  # first: the list is a description of the cast, not a running order.
   #
   # `role` is what the pages gate on (`DemoWeb.PersonaComponents`): the two
   # pet owners share `:owner`, since nothing in the demo tells them apart.
@@ -44,19 +47,28 @@ defmodule Demo.Users do
     %{
       id: "admin",
       role: :admin,
-      name: "Admin - Pet Licenses",
+      name: "Admin",
       initials: "AD",
-      blurb: "Builds the licensing flows and forms"
+      blurb: "Builds the flows and forms"
     }
   ]
 
   @session_key "demo_user_id"
 
+  # The perspective the demo opens on. The admin, because
+  # `DemoWeb.PersonaComponents` admits an admin to every page, so a visitor
+  # who has not chosen a perspective yet never lands on a refusal.
+  @default Enum.find(@users, &(&1.role == :admin)) ||
+             raise("no admin user for Demo.Users.default/0 to return")
+
   @doc "All users, in display order."
   def all, do: @users
 
-  @doc "The user a visitor sees the demo as before switching."
-  def default, do: hd(@users)
+  @doc """
+  The user a visitor sees the demo as before switching: the admin, who can
+  see every page.
+  """
+  def default, do: @default
 
   @doc "Every user holding one of `roles`, in display order."
   def with_roles(roles), do: Enum.filter(@users, &(&1.role in roles))
