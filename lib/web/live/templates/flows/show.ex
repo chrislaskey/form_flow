@@ -46,7 +46,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
-  alias FormFlow.Web.Templates.Components.Icons
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Flows.Components.StatusDialog
   alias FormFlow.Web.Templates.Shared
@@ -391,7 +390,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             aria-label="Delete"
             title="Delete"
           >
-            <Icons.trash />
+            <Core.icon components={@components} name="hero-trash" class="size-5" />
           </Core.button>
         </:actions>
       </Header.header>

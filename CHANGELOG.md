@@ -122,8 +122,13 @@ made the most dangerous thing on a page the loudest. They are now
 Where the label was the single word **Delete** — a form's own page and a
 flow's — the button is the waste basket alone, labelled for screen readers
 and for a tooltip; the ones that say what they delete keep their words.
-`FormFlow.Web.Templates.Components.Icons` holds the basket, drawn inline
-like the stethoscope, so a host still needs no icon set.
+The basket is drawn through `Core.icon`, which is new: it dispatches
+`icon/1` the way the rest of `FormFlow.Web.Components.Core` dispatches
+buttons and badges, so **a host's own `icon/1` draws FormFlow's icons** and
+its delete icon is the one these pages show. The name passed is Heroicons'
+(`hero-trash`); a host with no `icon/1` of its own falls back to
+`FormFlow.Web.CoreComponents.icon/1`, which emits the class name and leaves
+the drawing to the `hero-*` classes the host's Tailwind build generates.
 
 ### The form edit page is one column beside its preview, and the preview can take the width
 

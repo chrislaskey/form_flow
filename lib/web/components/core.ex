@@ -49,6 +49,14 @@ defmodule FormFlow.Web.Components.Core do
   end
 
   attr(:components, :atom, default: nil)
+  attr(:name, :string, required: true, doc: ~s|a Heroicons name, e.g. "hero-trash"|)
+  attr(:class, :any, default: "size-4")
+
+  def icon(assigns) do
+    ComponentResolver.render(assigns.components, :icon, Map.delete(assigns, :components))
+  end
+
+  attr(:components, :atom, default: nil)
   attr(:kind, :atom, default: :neutral, values: [:neutral, :info, :success, :warning, :error])
   attr(:variant, :string, default: nil, values: [nil, "solid"])
   attr(:class, :any, default: nil)
