@@ -334,7 +334,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
     ~H"""
     <div class="flex flex-wrap gap-6">
       <section class="min-w-0 flex-1">
-        <h3 class="mb-2 text-xs font-medium text-zinc-500">
+        <h3 class="mb-2 text-sm font-medium text-zinc-500">
           Reviewing{if @source, do: ": #{FlowProgress.qualified_label(@source)}"}
         </h3>
         <Core.error :if={is_nil(@source)} components={@components}>

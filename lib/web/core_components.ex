@@ -218,7 +218,7 @@ defmodule FormFlow.Web.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
+        <span class="label text-sm">
           <input
             type="checkbox"
             id={@id}
@@ -316,6 +316,161 @@ defmodule FormFlow.Web.CoreComponents do
     </div>
     """
   end
+
+  @doc """
+  Renders a field's label, for the controls a page draws itself — a
+  `DynamicForm` `<:field>` with a body, whose label the library still owns.
+
+  Named for the same reason as `input_radio_group/1`: the fallback's label
+  sits in a daisyUI `.fieldset`, which sets `text-xs`, and it would be the one
+  label on the page drawn smaller than the rest.
+  """
+  attr(:for, :string, default: nil)
+  attr(:required, :boolean, default: false)
+  attr(:required_label, :any, default: "*")
+  slot(:inner_block, required: true)
+
+  def label(assigns) do
+    ~H"""
+    <label for={@for} class="label text-sm mb-1">
+      {render_slot(@inner_block)}<.required_mark
+        required={@required}
+        required_label={@required_label}
+      />
+    </label>
+    """
+  end
+
+  @doc """
+  Renders a labeled group of radio buttons — DynamicForm's `radiogroup` and
+  `rating` questions.
+
+  Not part of the Phoenix-generated `CoreComponents` set, so
+  `DynamicForm.ComponentResolver` falls back to its own unless a components
+  module names it. FormFlow names it: its own `input/1` already draws every
+  label at `text-sm`, and a group whose label came from the fallback would
+  be the one field on the page drawn smaller.
+  """
+  attr(:id, :any, default: nil)
+  attr(:name, :any)
+  attr(:label, :any, default: nil)
+  attr(:value, :any)
+  attr(:field, Phoenix.HTML.FormField)
+  attr(:errors, :list, default: [])
+  attr(:required, :boolean, default: false)
+
+  attr(:required_label, :any,
+    default: "*",
+    doc: ~s|mark shown beside the label of a required field; nil or false shows none|
+  )
+
+  attr(:options, :list, required: true, doc: "the `{label, value}` pairs the group offers")
+  attr(:style, :atom, default: :vertical, doc: "`:vertical` or `:horizontal` layout")
+  attr(:rest, :global, include: ~w(disabled))
+
+  def input_radio_group(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns
+    |> assign(field: nil, id: assigns.id || field.id)
+    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign_new(:name, fn -> field.name end)
+    |> assign_new(:value, fn -> field.value end)
+    |> input_radio_group()
+  end
+
+  def input_radio_group(assigns) do
+    ~H"""
+    <div class="fieldset mb-2">
+      <span :if={@label} class="label text-sm mb-1">
+        {@label}<.required_mark required={@required} required_label={@required_label} />
+      </span>
+      <div class={["flex gap-4", group_style(@style)]}>
+        <label :for={{text, value} <- @options} class="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            id={"#{@id}-#{value}"}
+            name={@name}
+            value={value}
+            checked={to_string(@value) == to_string(value)}
+            required={@required}
+            class="radio radio-sm"
+            {@rest}
+          />
+          {text}
+        </label>
+      </div>
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a labeled group of checkboxes bound to an array-valued field —
+  DynamicForm's multi-select questions.
+
+  Named for the same reason as `input_radio_group/1`. The selected values are
+  submitted under `name[]`, with a hidden empty entry so clearing every box
+  still submits the field.
+  """
+  attr(:id, :any, default: nil)
+  attr(:name, :any)
+  attr(:label, :any, default: nil)
+  attr(:value, :any)
+  attr(:field, Phoenix.HTML.FormField)
+  attr(:errors, :list, default: [])
+  attr(:required, :boolean, default: false)
+
+  attr(:required_label, :any,
+    default: "*",
+    doc: ~s|mark shown beside the label of a required field; nil or false shows none|
+  )
+
+  attr(:options, :list, required: true, doc: "the `{label, value}` pairs the group offers")
+  attr(:style, :atom, default: :vertical, doc: "`:vertical` or `:horizontal` layout")
+  attr(:rest, :global, include: ~w(disabled))
+
+  def input_checkbox_group(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns
+    |> assign(field: nil, id: assigns.id || field.id)
+    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign_new(:name, fn -> field.name <> "[]" end)
+    |> assign_new(:value, fn -> field.value end)
+    |> input_checkbox_group()
+  end
+
+  def input_checkbox_group(assigns) do
+    assigns = assign(assigns, :selected, Enum.map(List.wrap(assigns.value), &to_string/1))
+
+    ~H"""
+    <div class="fieldset mb-2">
+      <span :if={@label} class="label text-sm mb-1">
+        {@label}<.required_mark required={@required} required_label={@required_label} />
+      </span>
+      <input type="hidden" name={@name} value="" disabled={@rest[:disabled]} />
+      <div class={["flex gap-4", group_style(@style)]}>
+        <label :for={{text, value} <- @options} class="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            id={"#{@id}-#{value}"}
+            name={@name}
+            value={value}
+            checked={to_string(value) in @selected}
+            class="checkbox checkbox-sm"
+            {@rest}
+          />
+          {text}
+        </label>
+      </div>
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </div>
+    """
+  end
+
+  defp group_style(:horizontal), do: "flex-row items-center"
+  defp group_style(_vertical), do: "flex-col"
 
   # The mark beside a required field's label: nothing unless the field is
   # required and a mark is set, so a definition can blank it while the field

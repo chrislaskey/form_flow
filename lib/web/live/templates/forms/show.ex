@@ -412,8 +412,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             Edit form details is where they change. Through a step the name
             and slug are the step's, the way the fields that edit them are. --%>
       <div class="mb-6">
-        <h3 class="mb-1 text-xs font-medium text-zinc-500">Form details</h3>
-        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-xs [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
+        <h3 class="mb-1 text-sm font-medium text-zinc-500">Form details</h3>
+        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-sm [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
           <div class="min-w-0">
             <dt>{Shared.name_label(@node)}</dt>
             <dd>{Shared.step_name(@form, @node)}</dd>
@@ -448,7 +448,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
       <div class="flex flex-wrap gap-6">
         <div class="w-64 shrink-0">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Versions</h3>
+          <h3 class="mb-1 text-sm font-medium text-zinc-500">Versions</h3>
           <ul class="space-y-1 text-sm">
             <li :for={version <- @versions}>
               <.link
@@ -468,7 +468,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         </div>
 
         <div :if={@version} class="min-w-0 flex-1">
-          <h3 class="mb-1 text-xs font-medium text-zinc-500">Preview</h3>
+          <h3 class="mb-1 text-sm font-medium text-zinc-500">Preview</h3>
           <Canvas.canvas definition={@version.definition} components={@components}>
             <:empty>This version has no elements.</:empty>
             {live_render(@socket, Preview,

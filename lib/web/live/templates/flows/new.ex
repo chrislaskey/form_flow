@@ -18,6 +18,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates
 
@@ -109,27 +110,15 @@ defmodule FormFlow.Web.Templates.Flows.New do
         </div>
 
         <fieldset class="space-y-2">
-          <legend class="text-xs font-medium text-zinc-600">What kind of flow?</legend>
+          <legend class="text-sm font-medium text-zinc-600">What kind of flow?</legend>
 
-          <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-3 text-sm">
-            <input type="radio" name="label" value="forms" checked class="mt-0.5" />
-            <span>
-              <span class="font-medium">Simple flow</span>
-              <span class="block text-xs text-zinc-500">
-                A single flow with one or more forms
-              </span>
-            </span>
-          </label>
+          <ChoiceCard.choice_card name="label" value="forms" checked label="Simple flow">
+            A single flow with one or more forms
+          </ChoiceCard.choice_card>
 
-          <label class="flex items-start gap-2 rounded-md border border-zinc-300 p-3 text-sm">
-            <input type="radio" name="label" value="subflows" class="mt-0.5" />
-            <span>
-              <span class="font-medium">Complex flow</span>
-              <span class="block text-xs text-zinc-500">
-                A complex flow with one or more subflows
-              </span>
-            </span>
-          </label>
+          <ChoiceCard.choice_card name="label" value="subflows" label="Complex flow">
+            A complex flow with one or more subflows
+          </ChoiceCard.choice_card>
         </fieldset>
 
         <Core.button components={@components} variant="primary">

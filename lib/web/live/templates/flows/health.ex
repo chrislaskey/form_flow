@@ -400,7 +400,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   defp fact(assigns) do
     ~H"""
     <div>
-      <dt class="text-xs text-zinc-500">{@label}</dt>
+      <dt class="text-sm text-zinc-500">{@label}</dt>
       <dd class="mt-0.5 font-medium text-zinc-900">{render_slot(@inner_block)}</dd>
     </div>
     """

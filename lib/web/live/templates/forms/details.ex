@@ -107,28 +107,39 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   defp load(socket) do
     assigns = socket.assigns
     node = assigns.node_id && Flows.get_node(assigns.node_id)
-    form_id = assigns.form_id || (node && node.form_id)
-    form = form_id && Forms.get(form_id)
-    form_types = form_types(assigns, form)
+    form = load_form(assigns, node)
 
     socket
-    |> assign(
-      form: form,
-      node: node,
-      form_types: form_types,
-      pending_type: form && Shared.type_id(form, assigns.form_types),
-      usages: (form && Flows.form_usages(form.id)) || [],
-      saved_values: form && Shared.saved_details(form, node),
-      form_data: form && Shared.details(form, node, form_types),
-      dirty?: false
-    )
+    |> assign(form: form, node: node, dirty?: false)
+    |> assign(details(assigns, form, node))
     |> assign_breadcrumb(node)
+  end
+
+  # The form the page edits: the one it was addressed with, or the one the
+  # step holds. A step whose form has gone, like a page addressed with no
+  # form at all, draws nothing.
+  defp load_form(%{form_id: form_id}, _node) when not is_nil(form_id), do: Forms.get(form_id)
+  defp load_form(_assigns, %{form_id: form_id}) when not is_nil(form_id), do: Forms.get(form_id)
+  defp load_form(_assigns, _node), do: nil
+
+  # What the page draws about that form — nothing at all when there is none
+  defp details(_assigns, nil, _node),
+    do: [form_types: [], pending_type: nil, usages: [], saved_values: nil, form_data: nil]
+
+  defp details(assigns, form, node) do
+    form_types = form_types(assigns, form)
+
+    [
+      form_types: form_types,
+      pending_type: Shared.type_id(form, assigns.form_types),
+      usages: Flows.form_usages(form.id),
+      saved_values: Shared.saved_details(form, node),
+      form_data: Shared.details(form, node, form_types)
+    ]
   end
 
   # The page's form types, with each related-form property's choices filled
   # in for this form's place in its flow. Empty means no dropdown.
-  defp form_types(_assigns, nil), do: []
-
   defp form_types(assigns, form) do
     Templates.Shared.fill_related_forms(
       assigns.form_types,

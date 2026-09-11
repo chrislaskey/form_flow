@@ -72,6 +72,43 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/overview"]), "Overview")
     assert has_element?(view, "code", Flows.get(id).slug)
+    assert has_element?(view, "td", id)
+  end
+
+  test "the index filters by status, name, and slug", %{conn: conn} do
+    {:ok, _enrollment} =
+      Flows.create(%{name: "Enrollment", slug: "enrollment", status: "open"})
+
+    {:ok, _renewal} = Flows.create(%{name: "Renewal", slug: "renewal"})
+
+    {:ok, _view, html} = live(conn, "/admin/flows?filter[name]=Renew")
+    assert html =~ "Renewal"
+    refute html =~ "Enrollment"
+
+    {:ok, _view, html} = live(conn, "/admin/flows?filter[slug]=enroll")
+    assert html =~ "Enrollment"
+    refute html =~ "Renewal"
+
+    {:ok, _view, html} = live(conn, "/admin/flows?filter[status]=open")
+    assert html =~ "Enrollment"
+    refute html =~ "Renewal"
+  end
+
+  # Archived is off the status filter's options while archived flows are
+  # hidden: picking it could only empty the table
+  test "the status filter offers archived only when archived flows are shown", %{conn: conn} do
+    {:ok, _flow} = Flows.create(%{name: "Enrollment", slug: "enrollment"})
+
+    filters = "#flows-table-tabs-content-0"
+
+    {:ok, view, _html} = live(conn, "/admin/flows")
+    html = view |> element(filters) |> render()
+    assert html =~ "Status"
+    assert html =~ "Draft"
+    refute html =~ "Archived"
+
+    {:ok, view, _html} = live(conn, "/admin/flows?archived=true")
+    assert view |> element(filters) |> render() =~ "Archived"
   end
 
   test "the index badge reads the cached health; the health page runs the check", %{conn: conn} do

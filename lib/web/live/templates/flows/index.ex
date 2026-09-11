@@ -2,14 +2,15 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
-  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — name
-  and slug, status (`FormFlow.Data.Templates.Flow`'s table, as a badge whose
-  title says what it means), summary counts and timestamps, with Overview,
-  Show, and Edit actions per row and a link to create a new flow. The editor itself lives on those pages, so this one never loads
-  the ReactFlow bundle. Slab runs in query mode against the host app's repo,
-  so sorting and pagination come from the URL: pass the current `uri` and
-  `params` from `handle_params/3` (the `FormFlow.Web.Router` component
-  forwards both).
+  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — the
+  name with its slug beneath it, the id, status
+  (`FormFlow.Data.Templates.Flow`'s table, as a badge whose title says what
+  it means), summary counts and timestamps, with Overview, Show, and Edit
+  actions per row and a link to create a new flow. The editor itself lives
+  on those pages, so this one never loads the ReactFlow bundle. Slab runs in
+  query mode against the host app's repo, so sorting, filtering, and
+  pagination come from the URL: pass the current `uri` and `params` from
+  `handle_params/3` (the `FormFlow.Web.Router` component forwards both).
 
       <.live_component
         module={FormFlow.Web.Templates.Flows.Index}
@@ -30,6 +31,15 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   `base` is the path prefix the flows pages are mounted under, used to build
   the links — with the default `""`, rows link to `/flows/:id`.
 
+  ## Filters
+
+  A Filters tab over status, name, and slug, whitelisted as `<:filter>`
+  fields so Slab compiles `filter[...]` URL params into WHERE conditions:
+  status is a select of `FormFlow.Web.Templates.Shared.status_options/0`,
+  name and slug are case-insensitive contains. Like the sort and the page,
+  they live in the URL, so a filtered listing survives a reload and can be
+  sent to someone.
+
   ## Archived flows
 
   An archived flow is put away, so the listing leaves it out: the rows are
@@ -40,7 +50,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   parameter lives in the URL like Slab's, so the listing an admin looks at
   survives a reload and can be sent to someone. When every flow is
   archived the table is not drawn at all; the page says so and offers the
-  link.
+  link. The status filter follows: archived is off its list of options while
+  archived flows are hidden, since picking it could only empty the table.
 
   ## Health
 
@@ -273,6 +284,14 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     if params == %{}, do: path, else: path <> "?" <> URI.encode_query(params)
   end
 
+  # The status filter offers the statuses the listing can actually show:
+  # archived is off the list while archived flows are hidden, since picking
+  # it could only empty the table.
+  defp status_filter_options(true), do: Shared.status_options()
+
+  defp status_filter_options(false),
+    do: Enum.reject(Shared.status_options(), fn {_label, status} -> status == "archived" end)
+
   defp listed_flow(id, tenant_id) do
     case Flows.get(id) do
       %Flow{owner_flow_id: nil} = flow when is_nil(tenant_id) or flow.tenant_id == tenant_id ->
@@ -351,6 +370,15 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         uri={@uri}
         params={@table_params}
       >
+        <:tab name="filters" />
+        <:filter
+          field={:status}
+          label="Status"
+          type="select"
+          options={status_filter_options(@show_archived?)}
+        />
+        <:filter field={:name} label="Name" placeholder="Search names" />
+        <:filter field={:slug} label="Slug" placeholder="Search slugs" />
         <:column :let={flow} field={:name} sortable>
           <.link
             navigate={"#{@base}/flows/#{flow.id}"}
@@ -358,10 +386,10 @@ defmodule FormFlow.Web.Templates.Flows.Index do
           >
             {flow.name || "Untitled"}
           </.link>
-          <span class="block font-mono text-[10px] text-zinc-400">{flow.id}</span>
+          <code :if={flow.slug} class="block text-xs text-zinc-600">{flow.slug}</code>
         </:column>
-        <:column :let={flow} field={:slug} label="Slug" sortable>
-          <code :if={flow.slug} class="text-xs text-zinc-600">{flow.slug}</code>
+        <:column :let={flow} field={:id} label="ID">
+          <span class="font-mono text-[10px] text-zinc-400">{flow.id}</span>
         </:column>
         <:column :let={flow} field={:status} label="Status">
           <Core.badge

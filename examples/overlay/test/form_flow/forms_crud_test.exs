@@ -1448,8 +1448,10 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
-    assert html =~ "Editing"
-    assert html =~ "1 other draft(s) exist"
+    assert html =~ "Current draft is based on"
+    assert html =~ "Last updated just now on"
+    assert html =~ "Other drafts of this form exist"
+    assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}"]), "See all versions")
 
     # The base version links to its show page in a new tab
     assert has_element?(
@@ -1933,8 +1935,9 @@ defmodule Demo.FormFlowFormsCrudTest do
       refute has_element?(view, ~s(input[name="dynamic_form[name]"]))
       refute has_element?(view, ~s(select[name="dynamic_form[form_type]"]))
       assert html =~ "Note:"
-      assert html =~ "shared by every version"
-      assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]), "Edit form details")
+      assert html =~
+               "Form details like the name, slug, description, and type are global and managed"
+      assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]), "here")
 
       # A save writes the definition and nothing else — a name in the
       # request is not a field of this page

@@ -466,7 +466,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   defp detail(assigns) do
     ~H"""
     <div class="min-w-0">
-      <dt class="text-xs font-medium text-zinc-500">{@label}</dt>
+      <dt class="text-sm font-medium text-zinc-500">{@label}</dt>
       <dd class="mt-0.5 text-sm">{render_slot(@inner_block)}</dd>
     </div>
     """

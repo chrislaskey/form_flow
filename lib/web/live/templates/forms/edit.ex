@@ -15,8 +15,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   fields were. `FormFlow.Web.Templates.Forms.Shared` is the data both read
   and write.
 
-  The definition is edited one of three ways, picked by the "Edit form
-  version using:" radio (`definition_editor`): in the **Form builder**, a
+  The definition is edited one of three ways, picked by the choice cards
+  above it (`definition_editor` — still a radio group, drawn as cards by
+  `editor_cards/1` because the pick decides what the rest of the page is,
+  and a card says what each one does; they carry no label of their own,
+  since three cards that each describe themselves need no sentence over
+  them): in the **Form builder**, a
   `DynamicForm` nested form with one entry per element
   (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
   **JSON** in a comment field, or by **Copy existing form** — a select of
@@ -81,6 +85,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
+  alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Note
   alias FormFlow.Web.Templates.Forms.Shared
@@ -602,10 +607,65 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # The radio's choices: Copy existing form only while there is something to
   # copy from
-  defp editor_options([]), do: [{"Form builder", "form"}, {"JSON", "json"}]
+  # The absolute half of "last updated 3 days ago on ..." — the relative
+  # phrase says how long, this says when
+  defp updated_stamp(version),
+    do: Calendar.strftime(version.updated_at, "%Y-%m-%d at %-I:%M%P UTC")
 
-  defp editor_options(_copy_sources),
-    do: [{"Form builder", "form"}, {"JSON", "json"}, {"Copy existing form", "copy"}]
+  # The three ways to edit one definition: what the radio offers, and what
+  # each card says it does. The descriptions matter more than the labels do —
+  # one of the three replaces the whole definition, which "Copy existing form"
+  # alone does not say.
+  @editors [
+    %{
+      value: "form",
+      label: "Form builder",
+      description: "Add, order, and edit the fields one at a time."
+    },
+    %{
+      value: "json",
+      label: "JSON",
+      description: "Edit the definition directly, as SurveyJS-compatible JSON."
+    },
+    %{
+      value: "copy",
+      label: "Copy existing form",
+      description: "Replace this draft's definition with another form's."
+    }
+  ]
+
+  # Copy needs a catalog to copy from, so with none it is not offered
+  defp editor_choices([]), do: Enum.reject(@editors, &(&1.value == "copy"))
+  defp editor_choices(_copy_sources), do: @editors
+
+  # The editor choice, drawn as cards rather than a row of radios: the choice
+  # decides what the rest of the page is, and a card has the second line the
+  # consequence needs. Still the form's own radio group — the `<:field>` body
+  # takes over the control while DynamicForm keeps the label, the errors, and
+  # the changeset — so `visible_if` reads it exactly as before.
+  attr(:field, :any, required: true)
+  attr(:choices, :list, required: true)
+
+  defp editor_cards(assigns) do
+    ~H"""
+    <div class="flex flex-wrap gap-2">
+      <ChoiceCard.choice_card
+        :for={choice <- @choices}
+        id={"#{@field.id}-#{choice.value}"}
+        name={@field.name}
+        value={choice.value}
+        checked={to_string(@field.value) == choice.value}
+        label={choice.label}
+        class="flex-1 basis-56"
+      >
+        {choice.description}
+      </ChoiceCard.choice_card>
+    </div>
+    """
+  end
+
+  defp editor_options(copy_sources),
+    do: Enum.map(editor_choices(copy_sources), &{&1.label, &1.value})
 
   # What a step can be pointed at: the catalog, minus forms whose type ties
   # them to one flow — a `:related_form` value is a step path there
@@ -1110,7 +1170,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
       <div class="rounded-md border border-zinc-200 p-4">
         <fieldset class="flex flex-wrap items-center gap-4 text-sm">
-          <legend class="mb-2 text-xs font-medium text-zinc-600">Start this form from</legend>
+          <legend class="mb-2 text-sm font-medium text-zinc-600">Start this form from</legend>
           <label class="flex items-center gap-2">
             <input
               type="radio"
@@ -1306,17 +1366,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         class="mb-3"
       />
 
-      <%!-- Once the form is published its details are edited elsewhere
-            (`edit_details?`), and the page says where before the form,
-            at the page's width --%>
-      <Note.note :if={!@edit_details?} class="mb-6">
-        Form details — the name, slug, description, and type — are shared by every version of
-        this form, published ones included, and change the moment they are saved.
-        <.link navigate={details_path(assigns)} class="link link-primary font-medium">
-          Edit form details
-        </.link>
-      </Note.note>
-
       <%!-- One form, one Save: the form's details (until the form is
         first published) above the version's definition, separated by a
         read-only strip saying which draft is being edited. The save event
@@ -1429,14 +1478,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
         <:group name="version" type="vertical" title={false} />
         <:field group="version" type="html" name="form_version_heading">
-          <Shared.section_heading title="Form version">
-            This draft's definition: the elements a user fills in. Published versions never change — a fix is a new draft.
-          </Shared.section_heading>
-        </:field>
-        <:field group="version" type="html" name="draft_info">
-          <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-            Editing <span class="font-medium">draft</span>,
-            last updated {Calendar.strftime(@version.updated_at, "%Y-%m-%d %H:%M")}<span :if={@based_on}>, based on
+          <Shared.section_heading title="Draft">
+            <span :if={@based_on}>
+              Current draft is based on
               <.link
                 href={version_show_path(assigns, @based_on)}
                 target="_blank"
@@ -1457,15 +1501,34 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                     d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
                     clip-rule="evenodd"
                   /></svg>
-              </.link></span>.
-            <.link
-              :if={other_draft_count(@versions, @version) > 0}
-              navigate={show_path(assigns)}
-              class="text-cyan-600 hover:underline"
-            >
-              {other_draft_count(@versions, @version)} other draft(s) exist — see all versions
+              </.link>.
+            </span>
+            Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_stamp(@version)}.
+          </Shared.section_heading>
+        </:field>
+        <%!-- Drafts coexist, and picking between them belongs on Show --%>
+        <:field
+          :if={other_draft_count(@versions, @version) > 0}
+          group="version"
+          type="html"
+          name="other_drafts_note"
+        >
+          <Note.note>
+            Other drafts of this form exist.
+            <.link navigate={show_path(assigns)} class="link link-primary font-medium">
+              See all versions
             </.link>
-          </div>
+          </Note.note>
+        </:field>
+        <%!-- Once the form is published its details are edited elsewhere
+              (`edit_details?`), and the page says where the fields were --%>
+        <:field :if={!@edit_details?} group="version" type="html" name="form_details_note">
+          <Note.note>
+            Form details like the name, slug, description, and type are global and managed
+            <.link navigate={details_path(assigns)} class="link link-primary font-medium">
+              here
+            </.link>
+          </Note.note>
         </:field>
         <%!-- Three ways to edit one definition, under one radio. Each hides
               with visible_if — hidden, it keeps its content and stops being
@@ -1473,20 +1536,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               the radio changes (switch_editor/3). Copy needs a catalog to
               copy from, so with none the radio doesn't offer it. --%>
         <:field
+          :let={field}
           group="version"
           type="radiogroup"
           name="definition_editor"
-          label="Edit form version using:"
+          label={false}
           options={editor_options(@copy_sources)}
-          metadata={%{"style" => "horizontal"}}
-        />
+        >
+          <.editor_cards field={field} choices={editor_choices(@copy_sources)} />
+        </:field>
         <:field
           group="version"
           type="html"
           name="json_heading"
           visible_if="{definition_editor} = 'json'"
         >
-          <Shared.section_heading title="Form version JSON">
+          <Shared.section_heading title="Form version JSON" class="mt-6">
             Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax.
           </Shared.section_heading>
         </:field>
@@ -1510,7 +1575,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="copy_heading"
           visible_if="{definition_editor} = 'copy'"
         >
-          <Shared.section_heading title="Copy existing form">
+          <Shared.section_heading title="Copy existing form" class="mt-6">
             Replace this draft's definition with another form's — one of this flow's steps, or a
             catalog form. The name, slug, description, and form type stay as they are.
           </Shared.section_heading>
@@ -1558,8 +1623,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:nested
           name="elements"
           group="version"
-          title="Form version elements"
-          description="The form's questions and content blocks, in order. An element's name is the key its answer is stored under."
+          title="Form fields"
           entry_title="Element {panelIndex}"
           add_text="Add element"
           remove_text="Remove element"
@@ -1585,7 +1649,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
         <:group
           :for={scope <- @scopes}
-          name={"#{scope}_type_and_name"}
+          name={"#{scope}_name_and_label"}
           nested={scope}
           type="horizontal"
         />
@@ -1604,7 +1668,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field
           :let={field}
           nested="elements"
-          group="elements_type_and_name"
+          group="elements_name_and_label"
           type="text"
           name="move"
           label={false}
@@ -1630,7 +1694,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field
           :let={field}
           nested="children"
-          group="children_type_and_name"
+          group="children_name_and_label"
           type="text"
           name="move"
           label={false}
@@ -1794,23 +1858,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     [
       %{
-        name: "type",
-        type: "dropdown",
-        label: "Type",
-        options: Builder.type_options(scope),
-        required: true,
-        group: "type_and_name"
-      },
-      %{
         name: "name",
         type: "text",
         label: "Name",
         placeholder: "Letters, numbers, _ and -.",
         pattern: "^[A-Za-z0-9_-]+$",
         required: true,
-        group: "type_and_name"
+        group: "name_and_label"
       },
-      %{name: "title", type: "text", label: "Label"},
+      %{name: "title", type: "text", label: "Label", group: "name_and_label"},
+      %{
+        name: "type",
+        type: "dropdown",
+        label: "Type",
+        options: Builder.type_options(scope),
+        required: true
+      },
       %{
         name: "groupType",
         type: "dropdown",
@@ -1882,7 +1945,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The rows of related number fields, shown for the types of their first
-  # member. Type and Name share a row too, declared on its own since it has
+  # member. Name and Label share a row too, declared on its own since it has
   # no visible_if.
   defp element_groups do
     [
