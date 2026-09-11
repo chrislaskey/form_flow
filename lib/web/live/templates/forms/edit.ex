@@ -1551,7 +1551,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="json_heading"
           visible_if="{definition_editor} = 'json'"
         >
-          <Shared.section_heading title="Form version JSON" class="mt-6">
+          <Shared.section_heading title="JSON" class="mt-6">
             Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax.
           </Shared.section_heading>
         </:field>
@@ -1623,7 +1623,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:nested
           name="elements"
           group="version"
-          title="Form fields"
+          title="Form builder"
           entry_title="Element {panelIndex}"
           add_text="Add element"
           remove_text="Remove element"
