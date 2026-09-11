@@ -46,6 +46,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
+  alias FormFlow.Web.Templates.Components.Icons
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Flows.Components.StatusDialog
   alias FormFlow.Web.Templates.Shared
@@ -386,9 +387,11 @@ defmodule FormFlow.Web.Templates.Flows.Show do
                   "Delete this subflow? It is removed from the parent flow, and its own steps and subflows go with it.",
                 else: "Delete this flow? Its steps, connections, and subflows go with it."
             }
-            class="btn btn-error"
+            class="btn btn-error btn-ghost"
+            aria-label="Delete"
+            title="Delete"
           >
-            Delete
+            <Icons.trash />
           </Core.button>
         </:actions>
       </Header.header>

@@ -114,6 +114,17 @@ the tables and columns under their new names; there is no rename migration. A
 database migrated by an earlier release has the old ones and is not carried
 over.
 
+### Destructive actions are ghost buttons, and a bare Delete is its icon
+
+**Delete**, **Delete draft**, and **Discard changes** were solid red, which
+made the most dangerous thing on a page the loudest. They are now
+`btn btn-error btn-ghost`: transparent until hovered, where the red returns.
+Where the label was the single word **Delete** — a form's own page and a
+flow's — the button is the waste basket alone, labelled for screen readers
+and for a tooltip; the ones that say what they delete keep their words.
+`FormFlow.Web.Templates.Components.Icons` holds the basket, drawn inline
+like the stethoscope, so a host still needs no icon set.
+
 ### The form edit page is one column beside its preview, and the preview can take the width
 
 **Form details** and **Form version** share a single column again — the
@@ -128,7 +139,13 @@ page's width, with the whole form underneath it, and it lets go of the
 sticky positioning and the scroll container it wears beside the form, since
 a preview given the width is meant to run as tall as the form it shows. The
 toggle is view state — it is not saved with the draft, and a reload comes
-back beside the form.
+back beside the form. Going full width also scrolls the preview back into
+view, since an admin deep in the elements would otherwise be left below a
+preview that had moved to the top of the page; coming back does not, the
+column it returns to being sticky. The scroll is a colocated hook on a
+marker that exists only in the wide state, so it runs once the new layout
+is in the DOM, and it is smooth unless the browser asks for reduced
+motion.
 
 **The preview sits on a canvas**, the dotted surface the flow editor draws
 at the same 16px pitch, with the form on it as a card at `max-w-3xl` — so

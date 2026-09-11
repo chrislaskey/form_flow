@@ -707,7 +707,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             components={@components}
             phx-click="request_discard"
             phx-target={@myself}
-            class="btn btn-error"
+            class="btn btn-error btn-ghost"
           >
             Discard changes
           </Core.button>
@@ -869,7 +869,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
               components={@components}
               phx-click="confirm_discard"
               phx-target={@myself}
-              class="btn btn-error"
+              class="btn btn-error btn-ghost"
             >
               Discard changes
             </Core.button>

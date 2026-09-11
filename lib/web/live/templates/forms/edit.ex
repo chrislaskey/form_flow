@@ -1376,7 +1376,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="btn btn-error"
+            class="btn btn-error btn-ghost"
           >
             Delete draft
           </Core.button>
@@ -1773,6 +1773,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           !@wide_preview? &&
             "lg:grow-[2] lg:basis-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
         ]}>
+          <%!-- Going full width moves the preview to the top of the page,
+                which is above an admin who was down among the elements with
+                the preview pinned beside them — and nothing about the new
+                layout says to scroll up. This marker exists only in the wide
+                state, so the hook mounts on the way in and never on the way
+                back, and it scrolls the preview into view. Nearest, not
+                start: from the top of the page the preview is already there
+                and nothing should move. --%>
+          <div :if={@wide_preview?} id={"#{@id}-preview-top"} phx-hook=".ScrollIntoView" class="scroll-mt-6" />
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".ScrollIntoView">
+            export default {
+              mounted() {
+                const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+                this.el.scrollIntoView({behavior: reduced ? "auto" : "smooth", block: "nearest"})
+              }
+            }
+          </script>
           <.section_heading title="Preview" class="mb-4">
             The form as a user will see it, following the definition as you edit.
             <:actions>

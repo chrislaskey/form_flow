@@ -864,7 +864,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
 
-    view |> element("button", "Delete") |> render_click()
+    view |> element(~s(button[aria-label="Delete"])) |> render_click()
     assert_redirect(view, "/admin/flows/#{root_id}/edit")
 
     assert Flows.get(root_id).nodes == []
@@ -909,7 +909,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # destination is Middle's editor — addressed by the node embedding Middle
     {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{y.id}")
 
-    view |> element("button", "Delete") |> render_click()
+    view |> element(~s(button[aria-label="Delete"])) |> render_click()
     assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{x.id}/edit")
 
     assert Flows.get(y.subflow_id) == nil
@@ -924,7 +924,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # Visiting the owned child directly and trying to delete it
     {:ok, view, _html} = live(conn, "/admin/flows/#{node.subflow_id}")
 
-    view |> element("button", "Delete") |> render_click()
+    view |> element(~s(button[aria-label="Delete"])) |> render_click()
 
     assert render(view) =~ "it is a subflow of another flow"
     assert Flows.get(node.subflow_id) != nil
@@ -1241,7 +1241,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
 
-    view |> element("button", "Delete") |> render_click()
+    view |> element(~s(button[aria-label="Delete"])) |> render_click()
     assert_redirect(view, "/admin/flows")
 
     assert Flows.get(root_id) == nil

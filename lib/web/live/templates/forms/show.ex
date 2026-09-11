@@ -35,6 +35,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.Icons
   alias FormFlow.Web.Templates.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Components.Canvas
@@ -317,7 +318,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="delete_draft"
             phx-target={@myself}
             data-confirm="Delete this draft? Its unpublished changes are gone for good; published versions are untouched."
-            class="btn btn-error"
+            class="btn btn-error btn-ghost"
           >
             Delete draft
           </Core.button>
@@ -371,9 +372,11 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             phx-click="delete"
             phx-target={@myself}
             data-confirm="Delete this form and all of its versions?"
-            class="btn btn-error"
+            class="btn btn-error btn-ghost"
+            aria-label="Delete"
+            title="Delete"
           >
-            Delete
+            <Icons.trash />
           </Core.button>
         </:actions>
       </Header.header>
