@@ -95,6 +95,9 @@ migration is proven to actually run.
     `data_modeling_live/diagram.ex` — the schema diagram, and the Ecto
     reflection behind it
   - `priv/repo/migrations/*_add_form_flow.exs` — the generated migration
+  - `priv/repo/form_flow_snapshot.sql` and
+    `priv/repo/migrations/*_load_form_flow_snapshot.exs` — the pet licensing
+    flows and forms as SQL, and the migration that replays them (below)
   - `test/form_flow/migration_test.exs` — the migration, against real SQLite
   - `assets/js/app.js`, `assets/css/app.css`, `config/config.exs` — the
     installation requirements above
@@ -103,10 +106,38 @@ migration is proven to actually run.
 - `regenerate.sh` — regenerates `demo/` from scratch with a pinned
   `phx.new` version, reapplies the edits and overlay, sets up the database,
   and builds assets. Run it whenever the skeleton drifts out of date.
+- `snapshot.sh` — rewrites the SQL snapshot from the running demo's
+  database after the flows have been edited in the admin UI.
 
 Stop the demo server before regenerating — the script deletes `demo/` and a
 running server (plus its asset watchers) keeps writing into it. The script
 checks port 4001 and aborts if something is listening.
+
+## The demo's data
+
+The pet licensing flows (`archive/plans/pet-licensing.md`) are built by hand
+in the admin UI, not in code, so the demo has to carry them as data. It does
+so as SQL: `snapshot.sh` dumps every FormFlow table in `demo/demo_dev.db` to
+`overlay/priv/repo/form_flow_snapshot.sql`, one `INSERT` per row, and the
+migration `*_load_form_flow_snapshot.exs` replays that file when `mix setup`
+builds a fresh database. Ids are kept as built, so subflow references,
+`related_form` paths, and review `source` paths survive the round trip.
+
+The cycle after editing a flow at `/admin`:
+
+```
+./examples/snapshot.sh    # rewrites the SQL under overlay/ and demo/
+git diff examples/overlay/priv/repo/form_flow_snapshot.sql
+```
+
+The migration loads nothing into the test database, whose tests count on
+empty tables, or into a database that already has flows — which is the case
+on the very database the snapshot came from, where the migration shows up
+as pending. `mix ecto.reset` in `demo/` is how to reload from the SQL.
+
+Instance rows (applications in progress) are dumped too if any exist, but
+the plan's recommendation is to seed those through the data layer instead
+(`pet-licensing.md` §8), so the snapshot is expected to stay templates only.
 
 ## Distribution note
 

@@ -3,10 +3,11 @@ defmodule Demo.FormFlowFormsCrudTest do
   Drives the forms CRUD pages end-to-end through the dedicated
   `live "/admin/*path", FormFlowLive.Admin` route (mounted with `base="/admin"`):
   `/admin/forms` is the catalog, `/admin/forms/new` creates a lineage with
-  its initial draft, `/admin/forms/:id` shows the resolved version (latest
-  published, else newest draft) with the version history and the publish
-  dialog, `/admin/forms/:id/versions/:vid/edit` edits a draft, and
-  `/admin/flows/:root/nodes/:node_id/form` is the drill-in from a flow.
+  its initial draft and lands on that draft's edit page, `/admin/forms/:id`
+  shows the resolved version (latest published, else newest draft) with the
+  version history and the publish dialog, `/admin/forms/:id/versions/:vid/edit`
+  edits a draft, and `/admin/flows/:root/nodes/:node_id/form` is the drill-in
+  from a flow.
 
   The editor's React side can't run here, so the form node's Open button is
   driven by pushing the hook's event.
@@ -30,7 +31,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Templates"
     assert has_element?(view, "h2", "Form Flow")
     assert has_element?(view, ~s(a[href="/admin/flows"]), "Flows")
-    assert has_element?(view, ~s(a[href="/admin/forms"]), "Forms")
+    assert has_element?(view, ~s(a[href="/admin/forms"]), "Reusable forms")
+
+    assert html =~
+             "A catalogue of reusable forms that can be used in multiple flows and kept in sync"
   end
 
   test "breadcrumbs lead back to the landing from inside both sections", %{conn: conn} do
@@ -52,7 +56,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_submit(%{"dynamic_form" => %{"name" => "W-2 Details", "description" => "Wages"}})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/forms/" <> id = path
+
+    assert %{"id" => id} =
+             Regex.named_captures(~r"^/admin/forms/(?<id>[^/]+)/versions/[^/]+/edit$", path)
 
     form = Forms.get(id)
     assert form.name == "W-2 Details"
@@ -488,7 +494,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_submit(%{"dynamic_form" => %{"name" => "User Information"}})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/forms/" <> id = path
+
+    assert %{"id" => id} =
+             Regex.named_captures(~r"^/admin/forms/(?<id>[^/]+)/versions/[^/]+/edit$", path)
+
     assert Forms.get(id).slug == "user-inform"
 
     {:ok, view, _html} = live(conn, "/admin/forms/new")
@@ -498,7 +507,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_submit(%{"dynamic_form" => %{"name" => "Anything", "slug" => "Chosen"}})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/forms/" <> id = path
+
+    assert %{"id" => id} =
+             Regex.named_captures(~r"^/admin/forms/(?<id>[^/]+)/versions/[^/]+/edit$", path)
+
     assert Forms.get(id).slug == "chosen"
   end
 
@@ -1286,6 +1298,68 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ ~s(value="#{owner_form.id}")
   end
 
+  test "from the catalog, Copy offers every form: the catalog first, then each flow's steps",
+       %{conn: conn} do
+    # Two catalog forms, and two flows wired Start → step → End — the cat
+    # flow's step reusing a catalog form, which is offered once, from the
+    # catalog. Like the step page's own list, only the steps a flow reaches
+    # from its Start are offered.
+    {:ok, form} = Forms.create(%{name: "Owner contact"})
+    {:ok, other} = Forms.create(%{name: "License options", definition: %{"fields" => []}})
+    {_root, node} = wired_flow_with_form_node("Dog License", "About your dog")
+    dog_form = Forms.get(node.form_id)
+    {:ok, _} = Flows.update_node(node, %{slug: "about-your-dog"})
+    {:ok, cat_root} = Flows.create(%{name: "Cat License"})
+    cat_start = build_node(cat_root, ["Start"], "Start")
+
+    cat_step =
+      build_node(cat_root, ["Form"], "License options", %{form_id: other.id, slug: "cat-fees"})
+
+    edge(cat_root, cat_start, cat_step)
+    {:ok, archived} = Flows.create(%{name: "Old License", status: "archived"})
+    {:ok, _} = Forms.create(%{name: "Old form", owner_flow_id: archived.id})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    view
+    |> element("input[type=radio][value=copy]")
+    |> render_click(%{"selection" => "copy"})
+
+    html = render(view)
+    catalog_at = :binary.match(html, "Reusable form - License options (#{other.slug})") |> elem(0)
+    dog_at = :binary.match(html, "Dog License - About your dog (about-your-dog)") |> elem(0)
+    assert catalog_at < dog_at
+    assert html =~ ~s(value="#{dog_form.id}")
+    refute html =~ ~s(value="#{form.id}")
+    # The reused catalog form is offered once, from the catalog, not again
+    # from the Cat License step that reuses it
+    assert length(String.split(html, ~s(value="#{other.id}"))) == 2
+    refute html =~ "Cat License - "
+    refute html =~ "(cat-fees)"
+    # Archived flows are left out
+    refute html =~ "Old License - "
+
+    # Copying a form with a definition is what dismisses the chooser; the
+    # editor's own Copy existing form then lists the same sources
+    view
+    |> element("#forms-edit-chooser-copy")
+    |> render_change(%{"source_form_id" => other.id})
+
+    view
+    |> element(~s(button[phx-click="copy_form"]))
+    |> render_click()
+
+    view
+    |> element("#forms-edit-form-form")
+    |> render_change(%{"dynamic_form" => %{"definition_editor" => "copy"}})
+
+    html = render(view)
+    assert html =~ "Copy definition from existing form"
+    assert html =~ ~s(value="#{dog_form.id}")
+    assert html =~ ~s(value="#{other.id}")
+  end
+
   test "Form type follows Description, and the picked type's name and description show under it",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Typed"})
@@ -1935,8 +2009,10 @@ defmodule Demo.FormFlowFormsCrudTest do
       refute has_element?(view, ~s(input[name="dynamic_form[name]"]))
       refute has_element?(view, ~s(select[name="dynamic_form[form_type]"]))
       assert html =~ "Note:"
+
       assert html =~
                "Form details like the name, slug, description, and type are global and managed"
+
       assert has_element?(view, ~s(a[href="/admin/forms/#{form.id}/edit"]), "here")
 
       # A save writes the definition and nothing else — a name in the

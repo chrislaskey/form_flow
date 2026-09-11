@@ -24,20 +24,22 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   `DynamicForm` nested form with one entry per element
   (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
   **JSON** in a comment field, or by **Copy existing form** — a select of
-  the forms to copy from (`copy_sources/2`: this root flow's own forms, then
-  the catalog) and a button that writes the picked form's resolved
-  definition onto this draft, and nothing else of it. All three sit in the
-  one form under `visible_if`, so whatever is hidden keeps its content and
-  stops being required. Content moves between the editors only when the
-  radio changes — the `%{event: "change"}` clause decodes the JSON into
-  entries, or writes the entries back into the JSON — never per keystroke;
+  the forms to copy from (`copy_sources/2`: through a step, this root flow's
+  own forms and then the catalog; from the catalog, every form there is —
+  the catalog first, then every flow's) and a button that writes the picked
+  form's resolved definition onto this draft, and nothing else of it. All
+  three sit in the one form under `visible_if`, so whatever is hidden keeps
+  its content and stops being required. Content moves between the editors
+  only when the radio changes — the `%{event: "change"}` clause decodes the
+  JSON into entries, or writes the entries back into the JSON — never per
+  keystroke;
   Copy holds the JSON in the hidden field meanwhile, so Save from there
   saves what was typed. A definition the builder cannot show (a property it
   has no control for, JSON that does not parse) refuses the switch and says
   why, rather than dropping what it cannot show; Copy refuses JSON that
   does not parse for the same reason. The builder opens by default whenever
   it can show the saved definition, and Copy is offered only while there is
-  a catalog form to copy from.
+  another form to copy from.
 
   Reached through a step whose form reuses the catalog's, the page wears
   the badge saying where else that form is used
@@ -572,18 +574,26 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "custom"
 
   # What both copies — the chooser's Copy form and the editor's Copy
-  # existing form — offer to copy from, as `{label, form id}` options: this
-  # root flow's own forms first, in the order a user works them, then the
-  # catalog. Never this form itself, and a catalog form reused in this flow
-  # only once, at its step. Two lists from two places, merged here; the
-  # catalog alone is what reusing a form offers, and stays its own list.
+  # existing form — offer to copy from, as `{label, form id}` options.
+  # Through a step: this root flow's own forms first, in the order a user
+  # works them, then the catalog. Standalone, from the catalog: every form
+  # there is — the catalog first, then every flow's owned forms, flow by
+  # flow. Never this form itself, and a form seen twice — a catalog form
+  # reused at a step — only once, where it was seen first. Lists from two
+  # or three places, merged here; the catalog alone is what reusing a form
+  # offers, and stays its own list.
   defp copy_sources(nil, _root_id), do: []
 
   defp copy_sources(form, root_id) do
-    (flow_sources(root_id) ++ catalog_sources(form))
+    root_id
+    |> copy_source_lists(form)
+    |> Enum.concat()
     |> Enum.reject(fn {_label, id} -> id == form.id end)
     |> Enum.uniq_by(fn {_label, id} -> id end)
   end
+
+  defp copy_source_lists(nil, form), do: [catalog_sources(form), owned_sources(form)]
+  defp copy_source_lists(root_id, form), do: [flow_sources(root_id), catalog_sources(form)]
 
   # Every option says where its form comes from, then how that place shows
   # it — this root flow's forms by their step, the catalog's by name — with
@@ -601,12 +611,20 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         do: {option_label("Reusable form", source, source.name), source.id}
   end
 
+  # Every flow's forms, by the flow's name and then the step, the way
+  # `flow_sources/1` names the current flow's ("Dog License - Application /
+  # About your dog (about-your-dog)"). Archived flows are left out: their
+  # forms are done being copied from, and the flows index hides them too.
+  defp owned_sources(form) do
+    for root <- Flows.list(tenant_id: form.tenant_id, exclude_status: "archived"),
+        {path, source, node} <- Templates.Shared.flow_forms(root.id),
+        do: {option_label(root.name, node, path), source.id}
+  end
+
   defp option_label("", %{slug: nil}, shown), do: shown
   defp option_label("", source, shown), do: "#{shown} (#{source.slug})"
   defp option_label(origin, source, shown), do: "#{origin} - #{option_label("", source, shown)}"
 
-  # The radio's choices: Copy existing form only while there is something to
-  # copy from
   # The absolute half of "last updated 3 days ago on ..." — the relative
   # phrase says how long, this says when
   defp updated_stamp(version),
@@ -634,7 +652,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     }
   ]
 
-  # Copy needs a catalog to copy from, so with none it is not offered
+  # Copy needs another form to copy from, so with none it is not offered
   defp editor_choices([]), do: Enum.reject(@editors, &(&1.value == "copy"))
   defp editor_choices(_copy_sources), do: @editors
 
@@ -939,10 +957,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  # The one-time copy: writes the source's identity (name, description, form
-  # type and its property values) and its resolved definition onto *this*
-  # lineage and draft — this form's own slug is never touched, since it
-  # already carries this node's place in the flow (or its own, standalone).
+  # The one-time copy: writes the source's identity (description, form type
+  # and its property values — never the name or slug) and its resolved
+  # definition onto *this* lineage and draft. This form's own slug is never
+  # touched, since it already carries this node's place in the flow (or its
+  # own, standalone).
   # Reloading afterwards is what makes the chooser stop offering itself: its
   # condition is the definition no longer being blank, nothing more to track.
   @impl true
@@ -1533,7 +1552,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Three ways to edit one definition, under one radio. Each hides
               with visible_if — hidden, it keeps its content and stops being
               required — and content crosses between the editors only when
-              the radio changes (switch_editor/3). Copy needs a catalog to
+              the radio changes (switch_editor/3). Copy needs another form to
               copy from, so with none the radio doesn't offer it. --%>
         <:field
           :let={field}
@@ -1576,8 +1595,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           visible_if="{definition_editor} = 'copy'"
         >
           <Shared.section_heading title="Copy existing form" class="mt-6">
-            Replace this draft's definition with another form's — one of this flow's steps, or a
-            catalog form. The name, slug, description, and form type stay as they are.
+            Replace this draft's definition with another form's — a reusable form from the
+            catalog, or a step's form from a flow. The name, slug, description, and form type
+            stay as they are.
           </Shared.section_heading>
         </:field>
         <:field

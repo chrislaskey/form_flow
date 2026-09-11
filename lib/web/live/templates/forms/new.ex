@@ -4,7 +4,11 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
   A name and an optional description, rendered and validated by
   `DynamicForm.form` with declarative `<:field>` slots. Creating makes the
-  lineage plus its initial blank draft and lands on the form's page. Owned
+  lineage plus its initial blank draft and lands on that draft's edit page
+  (`FormFlow.Web.Templates.Forms.Edit`), which starts with the same choice a
+  step's new form gets — Custom form, or Copy form — and then edits the
+  details and the definition on one page, so the name typed here is not the
+  end of creating the form but the start of it. Owned
   forms are never created here — they are auto-created when a flow with form
   steps is saved.
 
@@ -39,10 +43,13 @@ defmodule FormFlow.Web.Templates.Forms.New do
     }
 
     case Forms.create(attrs) do
-      {:ok, form} ->
+      {:ok, %{versions: [draft]} = form} ->
         # Redirects are forbidden inside update/2; handle_async is the
-        # component-owned callback where they are allowed
-        to = "#{socket.assigns.base}/forms/#{form.id}"
+        # component-owned callback where they are allowed. The landing is the
+        # blank draft's edit page, which opens on the chooser — Custom form or
+        # Copy form — and then edits the details and the definition together,
+        # the way a step's new form does.
+        to = "#{socket.assigns.base}/forms/#{form.id}/versions/#{draft.id}/edit"
         {:ok, start_async(socket, :navigate, fn -> to end)}
 
       {:error, %Ecto.Changeset{errors: errors} = changeset} ->

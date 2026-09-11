@@ -285,9 +285,9 @@ defmodule FormFlow.Web.Router do
             </li>
             <li class="py-3">
               <.link navigate={"#{@base}/forms"} class="link link-primary font-medium">
-                Forms
+                Reusable forms
               </.link>
-              <p class="text-base-content/60">The reusable form catalog.</p>
+              <p class="text-base-content/60">A catalogue of reusable forms that can be used in multiple flows and kept in sync</p>
             </li>
           </ul>
         </div>

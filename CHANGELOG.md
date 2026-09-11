@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.25.0
+
+### A new catalog form starts the way a step's form does
+
+Creating a form from the catalog used to end on the form's page, with a
+blank draft waiting to be found and edited separately: the details first,
+then, on another page, the definition. `FormFlow.Web.Templates.Forms.New`
+now lands on that blank draft's edit page instead, which opens on the same
+choice a step's new form gets — Custom form, or Copy form — and then edits
+the details and the definition together, the way a step's form does until
+it is first published. The name typed on the New page is the start of the
+form, not the end of creating it.
+
+### From the catalog, Copy offers every form
+
+The chooser's Copy form and the editor's Copy existing form listed only the
+catalog when opened from the catalog, so a catalog form could be started
+from another catalog form but never from the form a step already had. Both
+now offer **every form**: the catalog first, by name, then each flow's
+steps, flow by flow — "Dog License - Application / About your dog
+(about-your-dog)" — the way a step's own page names the current flow's
+forms. A catalog form a step reuses is offered once, from the catalog.
+Archived flows are left out, as the flows index leaves them out. Through a
+step the list is as it was: the current flow's forms, then the catalog.
+
+### The templates landing says what the catalog is for
+
+The admin landing's second link reads **Reusable forms**, not "Forms", and
+the line under it says what the catalog is for: a catalogue of reusable
+forms that can be used in multiple flows and kept in sync.
+
 ## v0.24.0
 
 ### Every table says whether it holds a template or an instance
