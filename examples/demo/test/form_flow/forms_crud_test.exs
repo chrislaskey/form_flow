@@ -2206,6 +2206,395 @@ defmodule Demo.FormFlowFormsCrudTest do
     {Flows.get(flow.id), node}
   end
 
+  describe "prefills on the draft edit page" do
+    setup %{conn: conn} do
+      {:ok, form} =
+        Forms.create(%{
+          name: "Prefilled",
+          definition: %{"elements" => [%{"type" => "text", "name" => "pet_name"}]}
+        })
+
+      [draft] = Forms.list_versions(form.id)
+
+      %{conn: conn, form: form, draft: draft, path: edit_path(form, draft)}
+    end
+
+    test "the picker is there, saying what it is, with nothing saved yet", %{conn: conn, path: path} do
+      {:ok, view, html} = live(conn, path)
+
+      # The placeholder is the label — one control, one word — and the select
+      # stays usable so a form with no prefills says so itself
+      assert html =~ ~s(placeholder="Prefill")
+      refute has_element?(view, ~s(#forms-edit-prefill-select input[disabled]))
+      assert has_element?(view, "#forms-edit-prefill-actions button", "New prefill")
+
+      # Nothing to update or delete until one is selected, so neither is drawn
+      refute has_element?(view, "#forms-edit-prefill-actions button", "Edit prefill")
+      refute has_element?(view, "#forms-edit-prefill-actions button", "Delete prefill")
+    end
+
+    test "creating one saves it to the form and selects it", %{conn: conn, form: form, path: path} do
+      {:ok, view, _html} = live(conn, path)
+
+      view |> element("#forms-edit-prefill-actions button", "New prefill") |> render_click()
+      assert render(view) =~ "New prefill"
+
+      # Creating selects it, which is a navigation: the URL names it, and the
+      # preview is mounted with its answers
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-submit="save_prefill"]))
+               |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rex"})})
+
+      assert to == path <> "?prefill=Happy+path"
+
+      assert [prefill] = Forms.list_prefills(Forms.get(form.id))
+      assert prefill.name == "Happy path"
+      assert prefill.data == %{"pet_name" => "Rex"}
+      assert prefill.user_id == "demo-admin"
+    end
+
+    test "a prefill named in the URL fills the preview in", %{conn: conn, form: form, path: path} do
+      {:ok, _form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      assert has_element?(view, ~s(#forms-edit-prefill-select input[value="Happy path"]))
+      assert render(view) =~ "Rex"
+    end
+
+    test "a URL naming a prefill that is gone selects nothing", %{conn: conn, path: path} do
+      {:ok, view, _html} = live(conn, path <> "?prefill=Never+saved")
+
+      refute has_element?(view, ~s(#forms-edit-prefill-select input[value="Never saved"]))
+      refute has_element?(view, "#forms-edit-prefill-actions button", "Edit prefill")
+      assert render(view) =~ "This form has no prefill named"
+    end
+
+    test "choosing one from a clean draft goes straight there", %{conn: conn, form: form, path: path} do
+      {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      {:ok, view, _html} = live(conn, path)
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-change="pick_prefill"]))
+               |> render_change(%{"prefill" => "Happy path"})
+
+      assert to == path <> "?prefill=Happy+path"
+    end
+
+    test "choosing one from an edited draft asks to save first", %{conn: conn, form: form, path: path} do
+      {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      {:ok, view, _html} = live(conn, path)
+
+      # Unsaved editor content — the state a reload would discard
+      view
+      |> element("#forms-edit-form-form")
+      |> render_change(%{
+        "dynamic_form" => %{
+          "name" => "Prefilled",
+          "definition_editor" => "json",
+          "definition" => ~s({"elements": []})
+        }
+      })
+
+      view
+      |> element(~s(form[phx-change="pick_prefill"]))
+      |> render_change(%{"prefill" => "Happy path"})
+
+      assert render(view) =~ "This draft has unsaved changes"
+
+      # Keep editing leaves the page where it is, with the draft untouched
+      view |> element(~s(button[phx-click="cancel_prefill_navigation"])) |> render_click()
+      refute render(view) =~ "This draft has unsaved changes"
+
+      # Save & Continue is the editor's own submit button: the draft is
+      # written, and only then does the page go where it was going
+      view
+      |> element("#forms-edit-form-form")
+      |> render_submit(%{
+        "dynamic_form" => %{
+          "name" => "Prefilled",
+          "definition_editor" => "json",
+          "definition" => ~s({"elements": []})
+        }
+      })
+
+      assert Forms.get_version(hd(Forms.list_versions(form.id)).id).definition == %{
+               "elements" => []
+             }
+    end
+
+    test "updating the selected one rewrites its answers in place", %{conn: conn, form: form, path: path} do
+      {:ok, _form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      view |> element("#forms-edit-prefill-actions button", "Edit prefill") |> render_click()
+      assert render(view) =~ "Edit this prefill"
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rexington"})})
+
+      assert Forms.get_prefill(Forms.get(form.id), "Happy path").data == %{
+               "pet_name" => "Rexington"
+             }
+
+      # Same name, same URL — no navigation, and the preview shows the new answers
+      assert render(view) =~ "Rexington"
+    end
+
+    test "renaming the selected one follows it to its new name", %{conn: conn, form: form, path: path} do
+      {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      view |> element("#forms-edit-prefill-actions button", "Edit prefill") |> render_click()
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-submit="save_prefill"]))
+               |> render_submit(%{"name" => "Every field", "data" => "{}"})
+
+      assert to == path <> "?prefill=Every+field"
+    end
+
+    test "a refused write keeps the dialog open over what was typed", %{conn: conn, form: form, path: path} do
+      {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      {:ok, view, _html} = live(conn, path)
+
+      view |> element("#forms-edit-prefill-actions button", "New prefill") |> render_click()
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Second", "data" => "{nope"})
+
+      assert render(view) =~ "aren&#39;t valid JSON"
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Second", "data" => ~s(["a list"])})
+
+      assert render(view) =~ "The answers are a JSON object"
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Happy path", "data" => "{}"})
+
+      assert render(view) =~ "Name has already been taken"
+      assert [_one] = Forms.list_prefills(Forms.get(form.id))
+    end
+
+    test "deleting the selected one leaves the URL naming nothing", %{conn: conn, form: form, path: path} do
+      {:ok, _form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      view |> element("#forms-edit-prefill-actions button", "Delete prefill") |> render_click()
+
+      assert Forms.list_prefills(Forms.get(form.id)) == []
+      refute has_element?(view, "#forms-edit-prefill-actions button", "Edit prefill")
+      refute render(view) =~ "Rex"
+    end
+
+    test "Capture reads the preview's form, not the editor's own", %{conn: conn, path: path} do
+      {:ok, view, _html} = live(conn, path)
+
+      # The id the hook serialises is the form the preview rendered — the page
+      # draws two, and the editor's is the definition rather than answers
+      assert has_element?(view, "form#forms-edit-preview-r0-form-form")
+
+      assert has_element?(
+               view,
+               ~s(#forms-edit-prefill-actions-capture[data-form-id="forms-edit-preview-r0-form-form"])
+             )
+    end
+
+    test "capturing with nothing selected opens a new prefill over the answers", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
+      {:ok, view, _html} = live(conn, path)
+
+      # What the hook pushes: the rendered form, serialised the way a submit
+      # would send it
+      view
+      |> element("#forms-edit-prefill-actions-capture")
+      |> render_hook("capture_prefill", %{"params" => "dynamic_form%5Bpet_name%5D=Rex"})
+
+      html = render(view)
+      assert html =~ "New prefill"
+      assert html =~ "pet_name"
+      assert html =~ "Rex"
+
+      # And the sentence about what the browser leaves out, which is why
+      # Capture opens the dialog rather than writing straight away
+      assert html =~ "These answers are the preview as it stands"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-submit="save_prefill"]))
+               |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rex"})})
+
+      assert to == path <> "?prefill=Happy+path"
+
+      assert [%{name: "Happy path", data: %{"pet_name" => "Rex"}}] =
+               Forms.list_prefills(Forms.get(form.id))
+    end
+
+    test "capturing with one selected writes over it", %{conn: conn, form: form, path: path} do
+      {:ok, _form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      view
+      |> element("#forms-edit-prefill-actions-capture")
+      |> render_hook("capture_prefill", %{"params" => "dynamic_form%5Bpet_name%5D=Rexington"})
+
+      # The selected prefill's name, so the dialog updates rather than creates
+      html = render(view)
+      assert html =~ "Edit this prefill"
+      assert html =~ "Rexington"
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rexington"})})
+
+      assert Forms.get_prefill(Forms.get(form.id), "Happy path").data == %{
+               "pet_name" => "Rexington"
+             }
+    end
+
+    test "captured answers are taken as they stand", %{conn: conn, path: path} do
+      {:ok, view, _html} = live(conn, path)
+
+      # Nothing casts them: an answer this version has no question for, and
+      # one the form would refuse, are both kept — a form is tested with bad
+      # answers as often as good ones
+      view
+      |> element("#forms-edit-prefill-actions-capture")
+      |> render_hook("capture_prefill", %{
+        "params" => "dynamic_form%5Bpet_name%5D=&dynamic_form%5Bage%5D=not+a+number"
+      })
+
+      html = render(view)
+      assert html =~ "not a number"
+      assert html =~ "age"
+    end
+  end
+
+  describe "prefills on the show page" do
+    setup %{conn: conn} do
+      {:ok, form} =
+        Forms.create(%{
+          name: "Shown",
+          definition: %{"elements" => [%{"type" => "text", "name" => "pet_name"}]}
+        })
+
+      [draft] = Forms.list_versions(form.id)
+      {:ok, published} = Forms.update_status(draft, :published)
+
+      %{
+        conn: conn,
+        form: form,
+        version: published,
+        path: "/admin/forms/#{form.id}/versions/#{published.id}"
+      }
+    end
+
+    test "a published form keeps its prefills here, where it still has a page", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
+      {:ok, view, _html} = live(conn, path)
+
+      view |> element("#forms-show-prefill-actions button", "New prefill") |> render_click()
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-submit="save_prefill"]))
+               |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rex"})})
+
+      assert to == path <> "?prefill=Happy+path"
+      assert [%{name: "Happy path"}] = Forms.list_prefills(Forms.get(form.id))
+    end
+
+    test "the named prefill fills the version's preview in", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
+      {:ok, _form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
+
+      assert has_element?(view, ~s(#forms-show-prefill-select input[value="Happy path"]))
+      assert render(view) =~ "Rex"
+    end
+
+    test "choosing one goes straight there — nothing here is unsaved", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
+      {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      {:ok, view, _html} = live(conn, path)
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-change="pick_prefill"]))
+               |> render_change(%{"prefill" => "Happy path"})
+
+      assert to == path <> "?prefill=Happy+path"
+    end
+
+    test "Capture writes one from the version on screen", %{
+      conn: conn,
+      form: form,
+      version: version,
+      path: path
+    } do
+      {:ok, view, _html} = live(conn, path)
+
+      form_id = "form-preview-#{version.id}-r0-form-form"
+
+      assert has_element?(view, "form##{form_id}")
+
+      assert has_element?(
+               view,
+               ~s(#forms-show-prefill-actions-capture[data-form-id="#{form_id}"])
+             )
+
+      view
+      |> element("#forms-show-prefill-actions-capture")
+      |> render_hook("capture_prefill", %{"params" => "dynamic_form%5Bpet_name%5D=Rex"})
+
+      assert render(view) =~ "New prefill"
+
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Happy path", "data" => ~s({"pet_name": "Rex"})})
+
+      assert [%{name: "Happy path", data: %{"pet_name" => "Rex"}}] =
+               Forms.list_prefills(Forms.get(form.id))
+    end
+  end
+
+  defp edit_path(form, draft),
+    do: "/admin/forms/#{form.id}/versions/#{draft.id}/edit"
+
   # Root flow → subflow ("Wages") → form node ("W-2 Details"), reached by
   # drill-in — the nested case a breadcrumb has to walk back through
   defp nested_flow_with_form_node do

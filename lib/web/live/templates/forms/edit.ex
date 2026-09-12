@@ -41,6 +41,38 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   it can show the saved definition, and Copy is offered only while there is
   another form to copy from.
 
+  ## Prefills
+
+  Beside the preview is the form's prefills
+  (`FormFlow.Data.Templates.Form.Prefill`): a select of the named sets of
+  test answers saved against this form, and a menu that creates, updates,
+  captures, and deletes them through
+  `FormFlow.Web.Components.Forms.PrefillDialog`. Choosing one
+  fills the preview in, which is how the form is looked at with answers in
+  it rather than empty.
+
+  **Capture prefill** goes the other way: fill the preview in by hand and it
+  becomes the dialog's answers, so a prefill is written by working the form
+  rather than by typing JSON. The form it reads is always the preview's — the
+  editor's own fields are the definition, not answers — and it is captured as
+  it stands, invalid values and all, since a form is tested with bad answers
+  as often as good ones.
+
+  **The selection lives in the URL** (`?prefill=Happy+path`), so it survives
+  a refresh and can be handed to someone else as a link — and so choosing
+  one is a navigation, which reloads the page. A draft with unsaved editor
+  content therefore asks first, the way the canvas asks before a breadcrumb
+  discards an edit: the dialog's Save is the editor form's own submit
+  button, reached by id, and the navigation waits for the save to land
+  (`pending_prefill_path`).
+
+  Prefills belong to the form, not to this version, so writing one never
+  touches the draft and needs no save. Only what is *selected* moves through
+  the URL: creating one selects it, renaming one follows the new name, and
+  deleting one leaves the URL naming a prefill that is not there — which
+  selects nothing, the same state a link to a prefill someone else deleted
+  arrives in.
+
   Reached through a step whose form reuses the catalog's, the page wears
   the badge saying where else that form is used
   (`FormFlow.Web.Templates.Forms.Components.CatalogBadge`): an edit here is
@@ -85,6 +117,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Forms.PrefillDialog
+  alias FormFlow.Web.Components.Forms.PrefillMenu
+  alias FormFlow.Web.Components.Forms.PrefillPicker
+  alias FormFlow.Web.Components.Forms.Prefills
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.ChoiceCard
@@ -114,7 +150,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        preview_topic: Ecto.UUID.generate(),
        chooser_selection: "custom",
        chooser_source_form_id: nil,
-       chooser_reuse_form_id: nil
+       chooser_reuse_form_id: nil,
+       prefill_dialog: nil,
+       prefill_error: nil,
+       pending_prefill_path: nil
      )}
   end
 
@@ -199,7 +238,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          error: nil,
          notice: "Saved."
        )
-       |> assign_breadcrumb(node)}
+       |> assign_breadcrumb(node)
+       |> follow_pending_prefill()}
     else
       {:error, :stale} ->
         {:ok,
@@ -266,6 +306,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       copy_sources: copy_sources(form, assigns.root_id),
       reuse_forms: reuse_forms(form, node, form_types)
     )
+    |> Shared.assign_prefills(form, assigns.params["prefill"])
     |> assign(form_usage_stats(form))
     |> assign_breadcrumb(node)
     |> assign_new(:definition_json, fn -> saved_definition_json(version) end)
@@ -1029,6 +1070,135 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:error, _other} ->
         {:noreply, assign(socket, :error, "Only drafts can be deleted.")}
     end
+  end
+
+  # Which prefill the preview is filled with is in the URL, so choosing one
+  # is a navigation — and a navigation with unsaved editor content is what
+  # the save-first dialog is for (`pending_prefill_path`).
+  @impl true
+  def handle_event("pick_prefill", %{"prefill" => name}, socket) do
+    {:noreply, go_to_prefill(socket, presence(name))}
+  end
+
+  @impl true
+  def handle_event("cancel_prefill_navigation", _params, socket) do
+    {:noreply, assign(socket, :pending_prefill_path, nil)}
+  end
+
+  @impl true
+  def handle_event("open_prefill", %{"action" => "create"}, socket) do
+    {:noreply, open_prefill_dialog(socket, Prefills.dialog(:create))}
+  end
+
+  # The menu item is disabled with nothing selected; this is the guard behind it
+  def handle_event("open_prefill", %{"action" => "update"}, socket) do
+    case socket.assigns.prefill do
+      nil -> {:noreply, socket}
+      prefill -> {:noreply, open_prefill_dialog(socket, Prefills.dialog(:update, prefill))}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_prefill", _params, socket) do
+    {:noreply, assign(socket, prefill_dialog: nil, prefill_error: nil)}
+  end
+
+  # Capture: the answers came off the rendered preview and ride in with the
+  # click (`FormFlow.Web.Components.Forms.PrefillMenu`), so the
+  # dialog is the same one the other two open, over what is on screen
+  @impl true
+  def handle_event("capture_prefill", %{"params" => params}, socket) do
+    dialog = Prefills.captured_dialog(socket.assigns.prefill, params)
+
+    {:noreply, open_prefill_dialog(socket, dialog)}
+  end
+
+  # A write of either kind lands on the form, never on the draft, so there is
+  # nothing here to save first — only what it does to the *selection* can
+  # send the page somewhere (`selects_another?/3`)
+  @impl true
+  def handle_event("save_prefill", %{"name" => name, "data" => json}, socket) do
+    %{form: form, prefill_dialog: %{action: action}, prefill: prefill} = socket.assigns
+    attrs = %{name: name, answers: json, user_id: socket.assigns.user_id}
+
+    case Prefills.save(form, action, prefill, attrs) do
+      {:ok, form} ->
+        # The URL still says which prefill is selected, so the list is what
+        # changed here; selecting what was written is the navigation below
+        socket =
+          socket
+          |> assign(form: form, prefill_dialog: nil, prefill_error: nil)
+          |> Shared.assign_prefills(form, socket.assigns.params["prefill"])
+
+        if Prefills.selects_another?(action, prefill, name) do
+          {:noreply, go_to_prefill(socket, name)}
+        else
+          {:noreply, remount_preview(socket)}
+        end
+
+      # Refused — the dialog stays open over what was typed, which is the
+      # only copy of it: the fields are the assign, not the browser's DOM
+      {:error, message} ->
+        {:noreply,
+         assign(socket,
+           prefill_dialog: %{socket.assigns.prefill_dialog | name: name, data: json},
+           prefill_error: message
+         )}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_prefill", _params, socket) do
+    %{form: form, prefill: prefill} = socket.assigns
+
+    case prefill && Forms.delete_prefill(form, prefill.name) do
+      {:ok, form} ->
+        # The URL still names it, and now names nothing that is there — the
+        # same state a link to a prefill someone else deleted arrives in
+        {:noreply,
+         socket
+         |> assign(form: form)
+         |> Shared.assign_prefills(form, socket.assigns.params["prefill"])
+         |> remount_preview()}
+
+      _none ->
+        {:noreply, socket}
+    end
+  end
+
+  defp open_prefill_dialog(socket, dialog),
+    do: assign(socket, prefill_dialog: dialog, prefill_error: nil)
+
+  defp go_to_prefill(socket, name) do
+    to = prefill_path(socket.assigns, name)
+
+    if socket.assigns.dirty? do
+      assign(socket, :pending_prefill_path, to)
+    else
+      push_navigate(socket, to: to)
+    end
+  end
+
+  # Set while the save-first dialog was up: the save has landed, so the
+  # navigation it interrupted can happen. Redirects are forbidden inside
+  # update/2, which is where saves land (see the publish path).
+  defp follow_pending_prefill(%{assigns: %{pending_prefill_path: nil}} = socket), do: socket
+
+  defp follow_pending_prefill(socket) do
+    to = socket.assigns.pending_prefill_path
+
+    socket
+    |> assign(:pending_prefill_path, nil)
+    |> start_async(:navigate, fn -> to end)
+  end
+
+  # A prefill's answers ride in the preview's session, and a child LiveView
+  # never re-reads one — so answers that changed mean a fresh child, however
+  # the definition is being kept up to date (`force_refresh_preview/1`).
+  defp remount_preview(socket) do
+    socket
+    |> assign(:preview_json, socket.assigns.latest_json)
+    |> assign(:preview_rev, socket.assigns.preview_rev + 1)
   end
 
   defp publish_directly(socket) do
@@ -1830,6 +2000,30 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               </Core.button>
             </:actions>
           </Shared.section_heading>
+          <%!-- Prefills sit between the heading and the preview, because
+                they are about what the preview shows rather than about how
+                it is shown — the heading's own actions are the layout ones.
+                Choosing one reloads the page with it named in the URL, so
+                the choice survives a refresh and can be handed to someone
+                else as a link. --%>
+          <PrefillPicker.prefill_picker
+            id={"#{@id}-prefill-select"}
+            prefills={@prefills}
+            selected={@prefill && @prefill.name}
+            missing={@missing_prefill_name}
+            target={@myself}
+            components={@components}
+            class="mb-4"
+          >
+            <:actions>
+              <PrefillMenu.prefill_menu
+                id={"#{@id}-prefill-actions"}
+                selected={@prefill}
+                form_id={Preview.form_id(preview_id(assigns))}
+                target={@myself}
+              />
+            </:actions>
+          </PrefillPicker.prefill_picker>
           <Canvas.canvas definition={@preview_json} components={@components}>
             <:empty>Add an element to this version and the form shows up here.</:empty>
             {live_render(@socket, Preview,
@@ -1837,7 +2031,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               session: %{
                 "id" => preview_id(assigns),
                 "definition" => @preview_json,
-                "pubsub_topic" => @preview_topic
+                "pubsub_topic" => @preview_topic,
+                "data" => (@prefill && @prefill.data) || %{}
               }
             )}
           </Canvas.canvas>
@@ -1854,6 +2049,47 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         components={@components}
         saved_note={@dirty?}
       />
+
+      <PrefillDialog.prefill_dialog
+        :if={@prefill_dialog}
+        action={@prefill_dialog.action}
+        name={@prefill_dialog.name}
+        data={@prefill_dialog.data}
+        captured={@prefill_dialog.captured}
+        target={@myself}
+        error={@prefill_error}
+        components={@components}
+      />
+
+      <%!-- Choosing a prefill reloads the page, which is where an unsaved
+            draft would go — so it asks first, the way the canvas asks before
+            a crumb discards an edit. Save is the editor form's own submit
+            button, reached by id from out here, so saving from this dialog
+            is the same save as the header's. --%>
+      <div
+        :if={@pending_prefill_path}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+          <p class="mb-4 text-sm text-zinc-700">
+            This draft has unsaved changes. Save before filling the preview in?
+          </p>
+          <div class="flex justify-end gap-2">
+            <Core.button
+              components={@components}
+              type="button"
+              phx-click="cancel_prefill_navigation"
+              phx-target={@myself}
+              class="btn"
+            >
+              Keep editing
+            </Core.button>
+            <Core.button components={@components} form={"#{@id}-form-form"} variant="primary">
+              Save &amp; Continue
+            </Core.button>
+          </div>
+        </div>
+      </div>
     </div>
     """
   end
@@ -2058,6 +2294,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       "#{form_base_path(assigns)}/versions/#{version.id}",
       assigns.params,
       ["mode"]
+    )
+  end
+
+  # This same edit page, with the prefill named — or without it, which is
+  # what selecting nothing means
+  defp prefill_path(assigns, name) do
+    Shared.prefill_path(
+      "#{form_base_path(assigns)}/versions/#{assigns.version.id}/edit",
+      assigns.params,
+      name
     )
   end
 

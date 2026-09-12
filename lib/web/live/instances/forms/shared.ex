@@ -96,6 +96,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     type = flow_type(context, socket.assigns)
     {visible?, editable?} = access(type, context, socket.assigns)
     form_type = form_type(context, socket.assigns)
+    prefills = prefills(context)
+    prefill = prefill(context, socket.assigns.params["prefill"])
 
     socket
     |> assign(
@@ -105,7 +107,11 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       type: type,
       form_type: form_type,
       initial_data:
-        form_instance && form_type.module.initial_data(context, socket.assigns.callback_data),
+        form_instance &&
+          fill_from_prefill(
+            form_type.module.initial_data(context, socket.assigns.callback_data),
+            prefill
+          ),
       context: context,
       visible?: visible?,
       editable?: editable?,
@@ -115,11 +121,49 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       navigate_to: nil,
       clickable: clickable(type, context, socket.assigns),
       flow_name: (tree && tree.flow.name) || "Untitled flow",
+      prefills: prefills,
+      prefill: prefill,
+      missing_prefill_name: prefill == nil && presence(socket.assigns.params["prefill"]),
+      prefills_offered?: prefills_offered?(context),
       form_label:
         (context.form_progress && FlowProgress.qualified_label(context.form_progress)) || "Form"
     )
     |> parse(version)
   end
+
+  # The prefill's answers under whatever the form type supplies, which is the
+  # user's stored answers by default: filling a form in from a saved set can
+  # never replace something the user typed
+  # (`FormFlow.Data.Templates.Form.Prefill`).
+  defp fill_from_prefill(initial_data, nil), do: initial_data
+  defp fill_from_prefill(initial_data, prefill), do: Map.merge(prefill.data, initial_data)
+
+  defp prefills(%Context{form: %Templates.Form{} = form}), do: Templates.Forms.list_prefills(form)
+  defp prefills(_context), do: []
+
+  defp prefill(%Context{form: %Templates.Form{} = form}, name)
+       when is_binary(name) and name != "",
+       do: Templates.Forms.get_prefill(form, name)
+
+  defp prefill(_context, _name), do: nil
+
+  @doc """
+  Whether this page offers to fill the form in from one of the form's
+  prefills: while the flow is a `draft` or in `pre_release`, the statuses
+  that mean it is being tried out rather than used. Nothing is stored by
+  applying one — the answers are what the form renders with until the user
+  saves or submits them.
+
+  Not a permission: the pages draw the picker where this says so, and
+  nothing behind it asks (`archive/plans/prefills-for-testing.md` §15).
+  """
+  def prefills_offered?(%Context{flow: %Templates.Flow{status: status}}),
+    do: status in ~w(draft pre_release)
+
+  def prefills_offered?(_context), do: false
+
+  defp presence(empty) when empty in [nil, ""], do: nil
+  defp presence(value), do: value
 
   @doc """
   Everything a page or a request addressing one position needs loaded, from

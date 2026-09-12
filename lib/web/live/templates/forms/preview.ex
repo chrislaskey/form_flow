@@ -32,6 +32,14 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   embedder re-renders the preview by changing the `live_render` id, which
   remounts it with a fresh session.
 
+  `"data"` is what the form starts filled in with — the answers of the
+  prefill the page has selected (`FormFlow.Data.Templates.Form.Prefill`), or
+  nothing. The embedder holds the form, so it reads the prefill and passes
+  the answers down; this page never looks one up. Answers for questions the
+  definition no longer has are ignored and questions it has gained come up
+  blank, which is what makes an old prefill worth applying to a new
+  definition.
+
   Submissions are swallowed on purpose: a valid submit shows a confirmation
   notice and persists nothing.
   """
@@ -42,6 +50,19 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
 
+  @doc """
+  The DOM id of the `<form>` this preview renders, given the `live_render`
+  id it was mounted with.
+
+  Two suffixes, because the id travels through two components: this page
+  hands `DynamicForm.form/1` its own id with `-form` on the end, and the
+  renderer puts `-form` on that again for the element itself. The embedding
+  page needs the id to read the rendered answers back
+  (`FormFlow.Web.Components.Forms.PrefillMenu`, Capture prefill),
+  and it is spelled here so only one place knows the shape.
+  """
+  def form_id(id), do: "#{id}-form-form"
+
   @impl true
   def mount(:not_mounted_at_router, session, socket) do
     if connected?(socket) && FormFlow.app_config(:pubsub_server) && session["pubsub_topic"] do
@@ -50,7 +71,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
     {:ok,
      socket
-     |> assign(id: session["id"], submitted?: false)
+     |> assign(id: session["id"], submitted?: false, data: session["data"] || %{})
      |> assign_instance(session)}
   end
 
@@ -115,7 +136,12 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
       <Core.alert :if={@submitted?} kind={:success} class="mb-3">
         Valid submission — this is a preview, nothing was saved.
       </Core.alert>
-      <DynamicForm.form id={"#{@id}-form"} instance={@instance} components={CoreComponents} />
+      <DynamicForm.form
+        id={"#{@id}-form"}
+        instance={@instance}
+        data={@data}
+        components={CoreComponents}
+      />
     </div>
     """
   end

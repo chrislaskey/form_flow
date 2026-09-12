@@ -46,6 +46,28 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   payload back into this component via `send_update`, and the redirect happens
   in `handle_async` (redirects are forbidden inside `update/2`).
 
+  ## Prefills
+
+  While the flow is a `draft` or in `pre_release` — being tried out rather
+  than used — the page draws the form's prefills over the form
+  (`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`): the picker
+  fills it in from a saved set of answers, and the **⋮** menu writes them,
+  the same New / Edit / Capture / Delete the template pages carry
+  (`FormFlow.Web.Components.Forms.Prefills`). Capture is what this page adds
+  to the feature: a journey walked by hand is the cheapest way to reach an
+  interesting set of answers, and it is saved where it was reached rather
+  than rebuilt on an admin page.
+
+  Two rules hold here that do not on the template side. The answers a prefill
+  supplies go **under** the user's own (`Shared.assigns/1`), so filling a
+  form in can never replace something they typed, and nothing is stored until
+  they submit. And every write is guarded on the status again, behind the
+  menu that is only drawn under it: applying a prefill puts values in the
+  user's own form, which they could have typed anyway, but *writing* one
+  publishes those values to everyone who can reach the form — which is what
+  the dialog says on screen. Who may write one in an `open` flow is a
+  question this page does not answer yet.
+
   ## The states it draws
 
   Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
@@ -90,9 +112,21 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Forms.PrefillDialog
+  alias FormFlow.Web.Components.Forms.PrefillMenu
+  alias FormFlow.Web.Components.Forms.PrefillPicker
+  alias FormFlow.Web.Components.Forms.Prefills
   alias FormFlow.Web.Instances.Components
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
+
+  # Who may write a prefill here: the status the menu is drawn under
+  # (`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`), and a
+  # resolved form lineage to write it to. Not a permission — where the menu
+  # is drawn is the whole restriction, and this is that same rule asked on
+  # the way in (`archive/plans/prefills-for-testing.md` §15).
+  defguardp prefills_writable?(socket)
+            when socket.assigns.prefills_offered? and socket.assigns.context.form != nil
 
   # The submit arrives here rather than through `handle_event/3`, so this is
   # where it is guarded — on `:ready` alone, so a page the gate would refuse
@@ -153,6 +187,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
+      |> assign_new(:prefill_dialog, fn -> nil end)
+      |> assign_new(:prefill_error, fn -> nil end)
 
     {:ok, socket |> load() |> assign_page_state()}
   end
@@ -167,6 +203,119 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
+  end
+
+  # Which prefill the form is filled from is in the URL, as it is on the
+  # template pages, so it survives a refresh and is a link someone can be
+  # sent. Nothing here is unsaved that a reload would lose: what the user
+  # has answered is on their form instance already.
+  @impl true
+  def handle_event("pick_prefill", %{"prefill" => name}, socket) do
+    {:noreply, push_navigate(socket, to: prefill_path(socket.assigns, name))}
+  end
+
+  # Writing one, from here as from the template pages: the same menu, the
+  # same dialog, the same five events (`FormFlow.Web.Components.Forms.Prefills`).
+  #
+  # Every write is guarded, unlike `pick_prefill` above. Applying a prefill
+  # puts answers in the user's own form — values they could have typed — so a
+  # forged event costs nothing; writing one puts them where every other user
+  # of this form can read them, so the status the menu is drawn under is
+  # asked again here rather than trusted from the DOM.
+  @impl true
+  def handle_event("open_prefill", %{"action" => "create"}, socket)
+      when prefills_writable?(socket) do
+    {:noreply, open_prefill_dialog(socket, Prefills.dialog(:create))}
+  end
+
+  # The menu item is not drawn with nothing selected; this is the guard behind it
+  def handle_event("open_prefill", %{"action" => "update"}, socket)
+      when prefills_writable?(socket) do
+    case socket.assigns.prefill do
+      nil -> {:noreply, socket}
+      prefill -> {:noreply, open_prefill_dialog(socket, Prefills.dialog(:update, prefill))}
+    end
+  end
+
+  # Capture: the answers came off the rendered form and ride in with the
+  # click (`FormFlow.Web.Components.Forms.PrefillMenu`). Here the form is the
+  # user's own, in this very process — the hook reads the DOM all the same,
+  # which is what lets one mechanism serve a page whose form is in a child
+  # LiveView and a page whose form is right here.
+  def handle_event("capture_prefill", %{"params" => params}, socket)
+      when prefills_writable?(socket) do
+    dialog = Prefills.captured_dialog(socket.assigns.prefill, params)
+
+    {:noreply, open_prefill_dialog(socket, dialog)}
+  end
+
+  def handle_event("save_prefill", %{"name" => name, "data" => json}, socket)
+      when prefills_writable?(socket) do
+    %{context: context, prefill_dialog: %{action: action}, prefill: prefill} = socket.assigns
+    attrs = %{name: name, answers: json, user_id: socket.assigns.user_id}
+
+    case Prefills.save(context.form, action, prefill, attrs) do
+      {:ok, _form} ->
+        socket = assign(socket, prefill_dialog: nil, prefill_error: nil)
+
+        if Prefills.selects_another?(action, prefill, name) do
+          {:noreply, push_navigate(socket, to: prefill_path(socket.assigns, name))}
+        else
+          {:noreply, reload(socket)}
+        end
+
+      # Refused — the dialog stays open over what was typed, which is the
+      # only copy of it: the fields are the assign, not the browser's DOM
+      {:error, message} ->
+        {:noreply,
+         assign(socket,
+           prefill_dialog: %{socket.assigns.prefill_dialog | name: name, data: json},
+           prefill_error: message
+         )}
+    end
+  end
+
+  def handle_event("delete_prefill", _params, socket) when prefills_writable?(socket) do
+    %{context: context, prefill: prefill} = socket.assigns
+
+    case prefill && Templates.Forms.delete_prefill(context.form, prefill.name) do
+      # The URL still names it and now names nothing that is there — the same
+      # state a link to a prefill someone else deleted arrives in, and the
+      # form loses the answers it was filled with
+      {:ok, _form} -> {:noreply, reload(socket)}
+      _none -> {:noreply, socket}
+    end
+  end
+
+  # A refused write is silent, for the reason a refused submit is: the client
+  # was not driving a rendered menu, and a message would describe the rule to
+  # whoever was probing it.
+  def handle_event(event, _params, socket)
+      when event in ~w(open_prefill capture_prefill save_prefill delete_prefill) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cancel_prefill", _params, socket) do
+    {:noreply, assign(socket, prefill_dialog: nil, prefill_error: nil)}
+  end
+
+  defp open_prefill_dialog(socket, dialog),
+    do: assign(socket, prefill_dialog: dialog, prefill_error: nil)
+
+  # Everything this page draws, read again: the prefills it lists, the one it
+  # is filled from, and the answers that fills the form with. The same path
+  # `update/2` takes, so a write leaves the page in the state a fresh visit
+  # would find it in.
+  defp reload(socket), do: socket |> load() |> assign_page_state()
+
+  defp prefill_path(assigns, name) do
+    path = Paths.form_edit_path(assigns.base, assigns.flow_instance.id, assigns.path)
+
+    case name do
+      empty when empty in [nil, ""] -> path
+      name -> "#{path}?#{URI.encode_query(%{"prefill" => name})}"
+    end
   end
 
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
@@ -400,11 +549,41 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
+      <%!-- Prefills, while the flow is being tried out rather than used
+            (`prefills_offered?/1`). Above the form and not in it: this
+            fills the form in, and must never read as part of it. The menu
+            beside the picker is the same one the template pages carry, so a
+            scenario found while walking the journey by hand can be captured
+            where it was found rather than rebuilt on an admin page. --%>
+      <div :if={@prefills_offered?} class="mb-4 rounded-md border border-zinc-200 bg-white p-3">
+        <PrefillPicker.prefill_picker
+          id={"#{@id}-prefill-select"}
+          prefills={@prefills}
+          selected={@prefill && @prefill.name}
+          missing={@missing_prefill_name}
+          target={@myself}
+          components={@components}
+        >
+          <:actions>
+            <PrefillMenu.prefill_menu
+              id={"#{@id}-prefill-actions"}
+              selected={@prefill}
+              form_id={"#{form_component_id(assigns)}-form"}
+              target={@myself}
+            />
+          </:actions>
+        </PrefillPicker.prefill_picker>
+        <p class="mt-2 text-xs text-zinc-500">
+          This flow isn't open yet. Filling the form in from a saved set of answers leaves
+          anything already answered alone, and saves nothing until you submit.
+        </p>
+      </div>
+
       <%!-- The form itself is the form type's to draw (edit_component/1) —
             the default is the DynamicForm form alone; a review draws an
             earlier form's answers beside it --%>
       {@form_type.module.edit_component(%{
-        id: "#{@id}-#{@form_instance.id}",
+        id: form_component_id(assigns),
         instance: @parsed,
         data: @initial_data,
         on_success: &submitted(&1, @id),
@@ -412,9 +591,27 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         callback_data: @callback_data,
         components: @components
       })}
+
+      <PrefillDialog.prefill_dialog
+        :if={@prefill_dialog}
+        action={@prefill_dialog.action}
+        name={@prefill_dialog.name}
+        data={@prefill_dialog.data}
+        captured={@prefill_dialog.captured}
+        target={@myself}
+        error={@prefill_error}
+        components={@components}
+      />
     </div>
     """
   end
+
+  # The id the form type is handed, and — with `-form` on the end — the DOM id
+  # of the `<form>` it draws, which is what Capture reads
+  # (`FormFlow.Config.Forms.Type`'s `edit_component/1` renders `DynamicForm.form`
+  # under this id, and DynamicForm's renderer adds the suffix). Spelled once,
+  # so the menu and the form it names cannot drift apart.
+  defp form_component_id(assigns), do: "#{assigns.id}-#{assigns.form_instance.id}"
 
   defp blocked_message(%{start_error: message}) when is_binary(message), do: message
   defp blocked_message(%{form: nil}), do: "This form is not part of this flow."

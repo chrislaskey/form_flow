@@ -1481,6 +1481,184 @@ defmodule Demo.FormFlowInstancesTest do
 
   # ── URLs ────────────────────────────────────────────────────────────────
 
+  describe "prefills" do
+    test "a flow being tried out offers the form's prefills, and one fills the form in",
+         %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Rex"}
+        })
+
+      {:ok, view, html} = live(conn, edit_path(instance, [node.id]))
+
+      assert html =~ ~s(placeholder="Prefill")
+      assert html =~ "This flow isn&#39;t open yet"
+
+      # Choosing one names it in the URL, the way the template pages do
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-change="pick_prefill"]))
+               |> render_change(%{"prefill" => "Happy path"})
+
+      assert to == edit_path(instance, [node.id]) <> "?prefill=Happy+path"
+
+      {:ok, _view, html} = live(conn, to)
+      assert html =~ ~s(value="Rex")
+    end
+
+    test "what the user has answered wins over the prefill", %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Rex"}
+        })
+
+      complete(instance, [node.id], %{"name" => "Typed by hand"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [node.id], :in_progress)
+
+      {:ok, _view, html} =
+        live(conn, edit_path(instance, [node.id]) <> "?prefill=Happy+path")
+
+      assert html =~ ~s(value="Typed by hand")
+      refute html =~ ~s(value="Rex")
+    end
+
+    test "an open flow offers none — this is for a flow not open yet", %{conn: conn} do
+      %{instance: instance, form: node} = flow_of_one()
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Rex"}
+        })
+
+      {:ok, view, html} = live(conn, edit_path(instance, [node.id]))
+
+      refute html =~ ~s(placeholder="Prefill")
+      refute html =~ "Happy path"
+
+      # Nor the menu that writes them: every write event is guarded on the
+      # same status this is
+      refute has_element?(view, "#instance-forms-edit-prefill-actions button", "New prefill")
+      refute has_element?(view, "#instance-forms-edit-prefill-actions-capture")
+    end
+
+    test "a flow being tried out writes them too", %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+
+      # New and Capture write a prefill that need not exist yet, so both are
+      # there with nothing selected; the other two act on a selection
+      assert has_element?(view, "#instance-forms-edit-prefill-actions button", "New prefill")
+      assert has_element?(view, "#instance-forms-edit-prefill-actions-capture")
+      refute has_element?(view, "#instance-forms-edit-prefill-actions button", "Edit prefill")
+      refute has_element?(view, "#instance-forms-edit-prefill-actions button", "Delete prefill")
+
+      # Capture reads the form the user is filling in — the one the form type
+      # drew under the id this page handed it
+      form_id = "instance-forms-edit-#{instance_at(instance, [node.id]).id}-form"
+
+      assert has_element?(view, "form##{form_id}")
+
+      assert has_element?(
+               view,
+               ~s(#instance-forms-edit-prefill-actions-capture[data-form-id="#{form_id}"])
+             )
+    end
+
+    test "capturing a journey walked by hand saves it as a prefill", %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+
+      view
+      |> element("#instance-forms-edit-prefill-actions-capture")
+      |> render_hook("capture_prefill", %{"params" => "dynamic_form%5Bname%5D=Rex"})
+
+      html = render(view)
+      assert html =~ "New prefill"
+      assert html =~ "Rex"
+
+      # The note that makes this safe to offer here: a prefill is everyone's
+      assert html =~ "Prefills are shared"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element(~s(form[phx-submit="save_prefill"]))
+               |> render_submit(%{"name" => "Happy path", "data" => ~s({"name": "Rex"})})
+
+      assert to == edit_path(instance, [node.id]) <> "?prefill=Happy+path"
+
+      assert [prefill] = Forms.list_prefills(Forms.get(node.form_id))
+      assert prefill.name == "Happy path"
+      assert prefill.data == %{"name" => "Rex"}
+      assert prefill.user_id == "demo-user"
+    end
+
+    test "updating the selected one re-fills the form with it", %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Rex"}
+        })
+
+      {:ok, view, html} =
+        live(conn, edit_path(instance, [node.id]) <> "?prefill=Happy+path")
+
+      assert html =~ ~s(value="Rex")
+
+      view
+      |> element("#instance-forms-edit-prefill-actions button", "Edit prefill")
+      |> render_click()
+
+      # Same name, so the selection does not move and the page stays put —
+      # and the form is filled from what was just written
+      view
+      |> element(~s(form[phx-submit="save_prefill"]))
+      |> render_submit(%{"name" => "Happy path", "data" => ~s({"name": "Rexington"})})
+
+      assert Forms.get_prefill(Forms.get(node.form_id), "Happy path").data == %{
+               "name" => "Rexington"
+             }
+
+      assert render(view) =~ ~s(value="Rexington")
+    end
+
+    test "deleting the selected one takes its answers off the form", %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Rex"}
+        })
+
+      {:ok, view, _html} =
+        live(conn, edit_path(instance, [node.id]) <> "?prefill=Happy+path")
+
+      view
+      |> element("#instance-forms-edit-prefill-actions button", "Delete prefill")
+      |> render_click()
+
+      assert Forms.list_prefills(Forms.get(node.form_id)) == []
+      refute render(view) =~ ~s(value="Rex")
+    end
+  end
+
   defp flow_path(instance), do: "/users/#{instance.id}"
 
   defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"

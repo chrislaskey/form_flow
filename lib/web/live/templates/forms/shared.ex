@@ -1,7 +1,8 @@
 defmodule FormFlow.Web.Templates.Forms.Shared do
   @moduledoc """
-  `FormFlow.Web.Templates.Forms.Shared` is what the two pages that edit a
-  form's details have in common.
+  `FormFlow.Web.Templates.Forms.Shared` is what the form pages have in
+  common: the details they edit, and the prefills they fill their preview
+  with.
 
   A form's **details** — its name, slug, description, and type with the
   type's property values — belong to the lineage, not to a version. They
@@ -20,6 +21,25 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   form's name and slug are its own, edited on its catalog page, and from a
   step the save leaves them alone. Standalone (no node), both fields are
   the form's own.
+
+  ## Prefills
+
+  `FormFlow.Web.Templates.Forms.Show` and `FormFlow.Web.Templates.Forms.Edit`
+  both draw the form's prefills beside their preview
+  (`FormFlow.Web.Components.Forms.PrefillPicker`) and both write them
+  (`FormFlow.Web.Components.Forms.PrefillMenu` and its dialog), so what
+  these two pages agree on is here: the assigns the picker reads, and the URL
+  the selection lives in. What the *three* pages that write a prefill agree
+  on — the instance's Edit page is the third — is
+  `FormFlow.Web.Components.Forms.Prefills`.
+
+  What is nowhere shared is what a page does about a navigation: Show goes
+  straight there, while Edit has a draft whose unsaved content a reload
+  would discard, so it asks first.
+
+  Writing a prefill never touches a version, which is why a published form —
+  with no draft to edit, and so no edit page — still has somewhere to keep
+  them: its Show page.
   """
 
   use Phoenix.Component
@@ -232,6 +252,37 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
       <p :if={@type.description} class="mt-0.5 text-xs text-zinc-600">{@type.description}</p>
     </div>
     """
+  end
+
+  @doc """
+  The form's prefills, the one the URL names, and the name it named when
+  the form has not got it — assigned together, since a page draws all three
+  (`FormFlow.Web.Components.Forms.PrefillPicker`).
+  """
+  def assign_prefills(socket, form, name) do
+    name = presence(name)
+    prefill = form && name && Forms.get_prefill(form, name)
+
+    Phoenix.Component.assign(socket,
+      prefills: (form && Forms.list_prefills(form)) || [],
+      prefill: prefill,
+      missing_prefill_name: prefill == nil && name
+    )
+  end
+
+  @doc """
+  `path` with the prefill named, and with the params a form page carries
+  across its own links. A `nil` name drops the key, which is what selecting
+  nothing means.
+  """
+  def prefill_path(path, params, name) do
+    query = Map.take(params, ["mode", "start"])
+    query = if name, do: Map.put(query, "prefill", name), else: query
+
+    case query do
+      empty when empty == %{} -> path
+      query -> "#{path}?#{URI.encode_query(query)}"
+    end
   end
 
   # A part of the page: its title and one line saying what belongs there,

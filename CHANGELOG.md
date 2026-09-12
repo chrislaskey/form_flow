@@ -2,6 +2,72 @@
 
 ## v0.25.0
 
+### Every page that draws a form can fill it in
+
+The form pages draw the form's prefills over the form they render
+(`FormFlow.Web.Components.Forms.PrefillPicker`): a searchable select of the
+sets saved against this form — placeholder **Prefill** — and a **⋮** menu of
+New prefill, Edit prefill, Capture prefill, and Delete prefill, each writing
+through `FormFlow.Web.Components.Forms.PrefillDialog` (a name, and the
+answers as the JSON object of question names to values they are stored as).
+Choosing one fills the form in, so a definition can be looked at with answers
+in it instead of empty, and `FormFlow.Web.Templates.Forms.Preview` takes
+those answers as the `"data"` key of its session. What the three pages agree
+on about writing one is `FormFlow.Web.Components.Forms.Prefills`.
+
+**Capture prefill** goes the other way: fill the preview in by hand and press
+it, and the answers on screen open the same dialog, ready to save — with the
+selected prefill's name, so it writes over that one, or empty, so it writes a
+new one. Capture is not a third way to save a prefill; it is New or Edit with
+the answers already there, which is why it opens the dialog rather than
+writing straight away. Which form it reads is an explicit attr, because a
+template page draws two and the editor's own fields are the definition rather
+than answers: it is always the preview's
+(`FormFlow.Web.Templates.Forms.Preview.form_id/1`), and on a form instance it
+is the form the user is filling in.
+
+It reads the rendered `<form>` in the browser and pushes it as the body a
+submit would send, decoded with `Plug.Conn.Query`. That is one mechanism for
+a page whose form is in a child LiveView and a page whose form is in its own
+process, and it captures what is on screen exactly — invalid answers
+included, since a form is tested with bad answers as often as good ones. What
+the browser hands over is what it would submit, so an unchecked box or a
+disabled question is missing rather than empty and a question hidden by a
+condition is present; the dialog says so.
+
+Three pages have it. `FormFlow.Web.Templates.Forms.Edit` is where a draft is
+written; `FormFlow.Web.Templates.Forms.Show` has it too, because a prefill
+belongs to the form rather than to a version — a form with everything
+published has no draft to edit, and so no edit page, and this is where it
+keeps them. `FormFlow.Web.Instances.Forms.Edit` has the whole of it while its
+flow is a `draft` or in `pre_release`
+(`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`): the answers a
+prefill supplies are merged *under* the user's own, so filling a form in can
+never replace something they typed, and nothing is stored until they submit.
+Capture earns its place here — a journey walked by hand is the cheapest way
+to reach an interesting set of answers, and it is saved where it was reached
+rather than rebuilt on an admin page.
+
+Applying a prefill is ungated, as it was: the answers land in the user's own
+form and are values they could have typed. **Writing** one is guarded on that
+same status behind the menu, because a prefill is readable by everyone who
+can reach the form — there is no per-user set, and nothing hides one. The
+dialog says so where the answers are typed, which is the whole of the
+protection. Who may write one in an `open` flow is not answered yet.
+
+The selection lives in the URL (`?prefill=Happy+path`), so it survives a
+refresh and can be handed to someone else as a link. That makes choosing one
+a navigation, which a draft holding unsaved editor content would lose — so
+the page asks first, the way the flow canvas asks before a breadcrumb
+discards an edit, and the dialog's **Save & Continue** is the editor's own
+submit button, with the navigation waiting for the save to land.
+
+Writing a prefill never touches the draft: prefills belong to the form.
+Creating one selects it and renaming one follows the new name, both
+navigations; deleting one leaves the URL naming a prefill that is not there,
+which selects nothing — the same state a link to a prefill someone else
+deleted arrives in.
+
 ### A form carries prefills for testing
 
 A form template now has a `prefills` column: the named sets of test answers
