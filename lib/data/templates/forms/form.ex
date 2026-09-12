@@ -20,7 +20,8 @@ defmodule FormFlow.Data.Templates.Form do
   copies of "W-2 Details").
 
   `copied_from_form_id` records provenance across copies — which lineage this
-  one was rolled over from — for cross-cycle identity and future prefill.
+  one was rolled over from — for cross-cycle identity and for carrying last
+  cycle's answers forward.
   It is not castable: only `FormFlow.Data.Templates.Forms.copy/2` sets it.
 
   ## Tenancy
@@ -42,6 +43,23 @@ defmodule FormFlow.Data.Templates.Form do
   same way. `FormFlow.Data.Templates.Forms.create/1` fills one in from the
   name when none is given. An owned form has none: the step that collects
   it (`FormFlow.Data.Templates.Flow.Node`) carries the slug.
+
+  ## Prefills
+
+  `prefills` is the form's named sets of test answers
+  (`FormFlow.Data.Templates.Form.Prefill`), a map of the name an admin typed
+  to the entry holding that set — what an admin fills the form with while
+  trying it out, on the preview and in a journey. It is a column of its own
+  rather than a key in `properties`, which is the host's open domain data
+  and the library's to leave alone, and it is on the lineage rather than on
+  a version because prefills are not version specific: one set travels with
+  the form through every publish.
+
+  The whole set is one value, so a write rewrites it and the last write
+  wins — the accepted cost of keeping prefills where the form already is.
+  It moves only through `prefills_changeset/2`, never `changeset/2`, so an
+  ordinary form update cannot drop it, and there is no database constraint
+  behind the shape: `prefills_changeset/2` is what keeps it storable.
   """
 
   use Ecto.Schema
@@ -49,6 +67,7 @@ defmodule FormFlow.Data.Templates.Form do
   import Ecto.Changeset
 
   alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Form.Prefill
   alias FormFlow.Data.Templates.Form.Version
   alias FormFlow.Data.Templates.Slug
 
@@ -67,6 +86,10 @@ defmodule FormFlow.Data.Templates.Form do
     # applies.
     field(:properties, :map, default: %{})
 
+    # Named sets of test answers, by name — see the moduledoc and
+    # `FormFlow.Data.Templates.Form.Prefill`
+    field(:prefills, :map, default: %{})
+
     belongs_to(:owner_flow, Flow, foreign_key: :owner_flow_id)
     belongs_to(:copied_from, __MODULE__, foreign_key: :copied_from_form_id)
 
@@ -78,9 +101,10 @@ defmodule FormFlow.Data.Templates.Form do
   @doc """
   Builds a changeset for a form lineage — identity fields and properties only.
 
-  The definition lives on versions, never here. `copied_from_form_id` is not
-  castable; provenance is stamped only by the copy operation. `tenant_id`
-  is castable at creation and immutable afterwards.
+  The definition lives on versions, never here, and the prefills move only
+  through `prefills_changeset/2`. `copied_from_form_id` is not castable;
+  provenance is stamped only by the copy operation. `tenant_id` is castable
+  at creation and immutable afterwards.
   """
   def changeset(form, attrs \\ %{}) do
     form
@@ -93,6 +117,39 @@ defmodule FormFlow.Data.Templates.Form do
     |> foreign_key_constraint(:owner_flow_id)
     |> unique_constraint(:name, name: :form_flow_template_forms_name_index)
   end
+
+  @doc """
+  The one changeset that moves `prefills` — the whole set at once, since it
+  is one value. Callers go through `FormFlow.Data.Templates.Forms`, which
+  builds the new set from the old one.
+
+  Nothing in the database checks the shape, so this does: names that are
+  words, and every value an entry with its answers under `"data"`
+  (`FormFlow.Data.Templates.Form.Prefill.entry?/1`). A column that failed
+  this test would be a form page that cannot render.
+  """
+  def prefills_changeset(form, prefills) do
+    form
+    |> cast(%{prefills: prefills}, [:prefills])
+    |> validate_prefills()
+  end
+
+  defp validate_prefills(changeset) do
+    validate_change(changeset, :prefills, fn :prefills, prefills ->
+      cond do
+        Enum.any?(Map.keys(prefills), &(not named?(&1))) ->
+          [prefills: "every prefill is stored under the name an admin gave it"]
+
+        Enum.any?(Map.values(prefills), &(not Prefill.entry?(&1))) ->
+          [prefills: ~s(every prefill is a map with its answers under "data")]
+
+        true ->
+          []
+      end
+    end)
+  end
+
+  defp named?(name), do: is_binary(name) and String.trim(name) != ""
 
   defp validate_immutable(changeset, field) do
     if changeset.data.__meta__.state == :loaded and get_change(changeset, field) do

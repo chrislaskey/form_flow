@@ -64,6 +64,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:tenant_id, :string)
       add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
+      add(:prefills, :map, null: false, default: %{})
 
       add(
         :owner_flow_id,

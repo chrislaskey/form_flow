@@ -199,12 +199,15 @@ defmodule DemoWeb.DocsLive.DataModelingLiveTest do
   # by hand, since ReactFlow has no layout of its own and each table needs a
   # position. Reading the same list back would prove nothing, so the test asks
   # the form_flow application which of its modules are Ecto schemas.
+  # Schemas with a source — an embedded one (`Form.Prefill`, stored inside a
+  # column) names no table, and the diagram draws tables
   defp form_flow_tables do
     {:ok, modules} = :application.get_key(:form_flow, :modules)
 
     for module <- modules,
         Code.ensure_loaded?(module),
         function_exported?(module, :__schema__, 1),
-        do: module.__schema__(:source)
+        table = module.__schema__(:source),
+        do: table
   end
 end

@@ -45,6 +45,16 @@ defmodule FormFlow.Data.Templates.Forms do
   The default preset is `:small_fix` (keep / untouched) — the least
   surprising for existing users. Every pin move writes an append-only
   `FormFlow.Data.Instances.Form.Event`.
+
+  ## Prefills
+
+  `list_prefills/1`, `get_prefill/2`, `create_prefill/2`, `update_prefill/3`,
+  and `delete_prefill/2` are the lineage's named sets of test answers
+  (`FormFlow.Data.Templates.Form.Prefill`). They read and write one column of
+  one row — the whole set is a single value — so each takes the form and
+  returns the form it wrote, with the set as it now stands. A prefill is
+  addressed by its name, and `update_prefill/3` given another name moves it
+  there, which is how one is renamed.
   """
 
   import Ecto.Query
@@ -54,6 +64,7 @@ defmodule FormFlow.Data.Templates.Forms do
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Form
+  alias FormFlow.Data.Templates.Form.Prefill
   alias FormFlow.Data.Templates.Form.Version
   alias FormFlow.Data.Templates.Slug
 
@@ -144,8 +155,10 @@ defmodule FormFlow.Data.Templates.Forms do
   been published copies its most recently updated draft as a draft: the copy
   of an unpublished thing is an unpublished thing.
 
-  The copy carries the source's `properties` — its form type and that
-  type's property values — so a rolled-over form behaves as the source did;
+  The copy carries the source's prefills, so a form rolled over for next
+  year opens with last year's test answers, and its `properties` — its form
+  type and that type's property values — so a rolled-over form behaves as
+  the source did;
   `properties:` replaces them, which is how a flow copy hands over the
   values with their step paths re-pointed at the copied tree
   (`FormFlow.Data.Templates.Flows.copy/2`). Copied on its own, a
@@ -176,6 +189,7 @@ defmodule FormFlow.Data.Templates.Forms do
           owner_flow_id: owner_flow_id
         })
         |> Ecto.Changeset.put_change(:copied_from_form_id, form.id)
+        |> Ecto.Changeset.put_change(:prefills, form.prefills)
 
       with {:ok, copy} <- Repo.insert(changeset),
            {:ok, _version} <- copy_version(form, copy) do
@@ -242,6 +256,99 @@ defmodule FormFlow.Data.Templates.Forms do
 
   defp narrow_tenant(query, nil), do: query
   defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
+
+  @doc """
+  A form's prefills in name order, ignoring case — the sets of test answers
+  an admin saved to fill it with (`FormFlow.Data.Templates.Form.Prefill`).
+  """
+  def list_prefills(%Form{prefills: prefills}) do
+    prefills
+    |> Enum.map(fn {name, entry} -> Prefill.from_entry(name, entry) end)
+    |> Enum.sort_by(&String.downcase(&1.name))
+  end
+
+  @doc "One prefill of a form, by the name it was saved under, or nil."
+  def get_prefill(%Form{prefills: prefills}, name) when is_binary(name) do
+    case Map.fetch(prefills, name) do
+      {:ok, entry} -> Prefill.from_entry(name, entry)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Saves a new prefill on a form: `:name`, and the `:data` it fills the form
+  with, plus an optional `:description` and the `:user_id` of the admin
+  saving it. Refused with a changeset error on `:name` when the form already
+  has a prefill by that name — the name is the handle, so one form's
+  prefills each have their own.
+  """
+  def create_prefill(%Form{} = form, attrs) do
+    with {:ok, %Prefill{} = prefill} <-
+           apply_changeset(Prefill.changeset(%Prefill{}, attrs), form, nil) do
+      now = DateTime.utc_now()
+      prefill = %{prefill | inserted_at: now, updated_at: now}
+
+      store_prefills(form, Map.put(form.prefills, prefill.name, Prefill.to_entry(prefill)))
+    end
+  end
+
+  @doc """
+  Edits the prefill a form saved under `name` — the same attributes
+  `create_prefill/2` takes. A `:name` that differs renames it, moving the
+  entry to the new name, which must be free; `{:error, :not_found}` when the
+  form has no prefill by the name given.
+  """
+  def update_prefill(%Form{} = form, name, attrs) when is_binary(name) do
+    case get_prefill(form, name) do
+      nil ->
+        {:error, :not_found}
+
+      prefill ->
+        with {:ok, %Prefill{} = edited} <-
+               apply_changeset(Prefill.changeset(prefill, attrs), form, name) do
+          edited = %{edited | updated_at: DateTime.utc_now()}
+
+          store_prefills(
+            form,
+            form.prefills
+            |> Map.delete(name)
+            |> Map.put(edited.name, Prefill.to_entry(edited))
+          )
+        end
+    end
+  end
+
+  @doc """
+  Removes the prefill a form saved under `name`, or `{:error, :not_found}`
+  when it has none by that name.
+  """
+  def delete_prefill(%Form{} = form, name) when is_binary(name) do
+    if Map.has_key?(form.prefills, name) do
+      store_prefills(form, Map.delete(form.prefills, name))
+    else
+      {:error, :not_found}
+    end
+  end
+
+  defp apply_changeset(changeset, form, current_name) do
+    changeset
+    |> reject_taken_name(form, current_name)
+    |> Ecto.Changeset.apply_action(:insert)
+  end
+
+  defp reject_taken_name(changeset, form, current_name) do
+    name = Ecto.Changeset.get_field(changeset, :name)
+
+    if name != current_name and Map.has_key?(form.prefills, name) do
+      Ecto.Changeset.add_error(changeset, :name, "has already been taken")
+    else
+      changeset
+    end
+  end
+
+  defp store_prefills(form, prefills) do
+    Repo.update(Form.prefills_changeset(form, prefills))
+  end
 
   @doc "Lists a lineage's versions, drafts and published alike, newest first."
   def list_versions(form_id) do

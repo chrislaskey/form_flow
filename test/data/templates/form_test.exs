@@ -92,4 +92,43 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.valid?
     refute Map.has_key?(changeset.changes, :copied_from_form_id)
   end
+
+  test "prefills are not castable — they move only through prefills_changeset/2" do
+    changeset =
+      Form.changeset(%Form{}, %{
+        name: "W-2 Details",
+        prefills: %{"Happy path" => %{"data" => %{"wages" => "1000"}}}
+      })
+
+    assert changeset.valid?
+    refute Map.has_key?(changeset.changes, :prefills)
+  end
+
+  test "prefills_changeset/2 takes the whole set at once" do
+    prefills = %{
+      "Happy path" => %{"data" => %{"wages" => "1000"}, "user_id" => "admin"},
+      "No wages" => %{"data" => %{}}
+    }
+
+    changeset = Form.prefills_changeset(%Form{name: "W-2 Details"}, prefills)
+
+    assert changeset.valid?
+    assert changeset.changes.prefills == prefills
+  end
+
+  test "prefills_changeset/2 refuses a set no page could render" do
+    changeset = Form.prefills_changeset(%Form{}, %{"   " => %{"data" => %{}}})
+
+    refute changeset.valid?
+
+    assert {"every prefill is stored under the name an admin gave it", _opts} =
+             changeset.errors[:prefills]
+
+    changeset = Form.prefills_changeset(%Form{}, %{"Happy path" => %{"wages" => "1000"}})
+
+    refute changeset.valid?
+
+    assert {~s(every prefill is a map with its answers under "data"), _opts} =
+             changeset.errors[:prefills]
+  end
 end

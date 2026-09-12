@@ -50,7 +50,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     silently become a catalog entry).
   #   * `template_forms.copied_from_form_id` — provenance: which lineage this
   #     one was copied from (yearly rollover), for cross-cycle identity and
-  #     future prefill.
+  #     for carrying last cycle's answers forward.
+  #   * `template_forms.prefills` — the lineage's named sets of test answers
+  #     (`FormFlow.Data.Templates.Form.Prefill`), a map of name to envelope.
+  #     On the lineage and not on a version: prefills are not version
+  #     specific, and one set travels with the form through every publish.
   #   * The `(name)` unique index is scoped to the catalog
   #     (`owner_flow_id IS NULL`) — one namespace: owned forms may repeat
   #     names across yearly copies; catalog forms stay unambiguous in every
@@ -187,6 +191,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:tenant_id, :string)
       add(:slug, :string)
       add(:properties, :map, null: false, default: %{})
+      add(:prefills, :map, null: false, default: %{})
 
       add(
         :owner_flow_id,

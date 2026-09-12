@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     }
   end
 
-  defp catalog_form(name, properties \\ %{}) do
+  defp catalog_form(name, properties) do
     %{published_form(name, properties) | owner_flow_id: nil}
   end
 

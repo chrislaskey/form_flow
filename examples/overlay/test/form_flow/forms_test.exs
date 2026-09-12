@@ -363,6 +363,144 @@ defmodule Demo.FormFlowFormsTest do
     end
   end
 
+  describe "prefills" do
+    test "create saves a named set of answers, stamped with who and when" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+
+      assert {:ok, form} =
+               Forms.create_prefill(form, %{
+                 name: "Happy path",
+                 description: "Everything filled in.",
+                 data: %{"pet_name" => "Rex", "breed" => "Beagle"},
+                 user_id: "admin"
+               })
+
+      assert [prefill] = Forms.list_prefills(form)
+      assert prefill.name == "Happy path"
+      assert prefill.description == "Everything filled in."
+      assert prefill.data == %{"pet_name" => "Rex", "breed" => "Beagle"}
+      assert prefill.user_id == "admin"
+      assert %DateTime{} = prefill.inserted_at
+      assert prefill.updated_at == prefill.inserted_at
+
+      # Through the database, not just the struct the write returned
+      assert Forms.get_prefill(Forms.get(form.id), "Happy path") == prefill
+    end
+
+    test "a form's prefills are listed by name, and fetched by it" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "No vet record", data: %{}})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      assert ["Happy path", "No vet record"] = Enum.map(Forms.list_prefills(form), & &1.name)
+      assert Forms.get_prefill(form, "Happy path").data == %{"pet_name" => "Rex"}
+      assert Forms.get_prefill(form, "Never saved") == nil
+    end
+
+    test "a name is a form's own handle — twice is refused, another form is free" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, other} = Forms.create(%{name: "Cat Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+
+      assert {:error, changeset} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+      assert %{name: ["has already been taken"]} = errors_on(changeset)
+
+      assert {:ok, _other} = Forms.create_prefill(other, %{name: "Happy path", data: %{}})
+    end
+
+    test "create refuses a prefill with no name" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+
+      assert {:error, changeset} = Forms.create_prefill(form, %{data: %{"pet_name" => "Rex"}})
+      assert %{name: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "update edits the answers and moves updated_at, keeping when it was saved" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+      saved_at = Forms.get_prefill(form, "Happy path").inserted_at
+
+      assert {:ok, form} =
+               Forms.update_prefill(form, "Happy path", %{data: %{"pet_name" => "Rexington"}})
+
+      prefill = Forms.get_prefill(form, "Happy path")
+      assert prefill.data == %{"pet_name" => "Rexington"}
+      assert prefill.inserted_at == saved_at
+      assert DateTime.compare(prefill.updated_at, saved_at) in [:gt, :eq]
+    end
+
+    test "update under another name renames it, and refuses a name already taken" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+      {:ok, form} = Forms.create_prefill(form, %{name: "No vet record", data: %{}})
+
+      assert {:ok, form} = Forms.update_prefill(form, "Happy path", %{name: "Every field"})
+
+      assert Forms.get_prefill(form, "Happy path") == nil
+      assert Forms.get_prefill(form, "Every field").data == %{"pet_name" => "Rex"}
+
+      assert {:error, changeset} =
+               Forms.update_prefill(form, "Every field", %{name: "No vet record"})
+
+      assert %{name: ["has already been taken"]} = errors_on(changeset)
+    end
+
+    test "update and delete answer for a prefill that is not there" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+
+      assert {:error, :not_found} = Forms.update_prefill(form, "Never saved", %{data: %{}})
+      assert {:error, :not_found} = Forms.delete_prefill(form, "Never saved")
+    end
+
+    test "delete removes one and leaves the rest" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
+      {:ok, form} = Forms.create_prefill(form, %{name: "No vet record", data: %{}})
+
+      assert {:ok, form} = Forms.delete_prefill(form, "Happy path")
+
+      assert ["No vet record"] = Enum.map(Forms.list_prefills(Forms.get(form.id)), & &1.name)
+    end
+
+    test "prefills survive a publish — they are the form's, not a version's" do
+      {:ok, form} = Forms.create(%{name: "Dog Information", definition: %{"fields" => []}})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      [draft] = Forms.list_versions(form.id)
+      {:ok, _published} = Forms.update_status(draft, :published)
+
+      assert ["Happy path"] = Enum.map(Forms.list_prefills(Forms.get(form.id)), & &1.name)
+    end
+
+    test "an ordinary update cannot drop the set" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, renamed} = Forms.update(Forms.get(form.id), %{name: "Dog Details", prefills: %{}})
+
+      assert ["Happy path"] = Enum.map(Forms.list_prefills(renamed), & &1.name)
+    end
+
+    test "a copy opens with the source's prefills" do
+      {:ok, form} = Forms.create(%{name: "Dog Information"})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{
+          name: "Happy path",
+          data: %{"pet_name" => "Rex"},
+          user_id: "admin"
+        })
+
+      owner = insert_flow()
+      assert {:ok, copy} = Forms.copy(form, owner_flow_id: owner.id)
+
+      assert [prefill] = Forms.list_prefills(copy)
+      assert prefill.name == "Happy path"
+      assert prefill.data == %{"pet_name" => "Rex"}
+      assert prefill.user_id == "admin"
+    end
+  end
+
   describe "flow integration" do
     test "saving a forms flow auto-creates an owned form per unbacked form node" do
       {:ok, flow} = Flows.create(%{name: "Taxes 2026"})

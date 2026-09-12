@@ -2,6 +2,31 @@
 
 ## v0.25.0
 
+### A form carries prefills for testing
+
+A form template now has a `prefills` column: the named sets of test answers
+an admin saves to fill the form with while trying it out — a map of the name
+they typed to an entry holding that set's `data`, keyed by the definition's
+question names the way a form instance's answers are.
+`FormFlow.Data.Templates.Form.Prefill` is one entry, and
+`FormFlow.Data.Templates.Forms` reads and writes them:
+`list_prefills/1`, `get_prefill/2`, `create_prefill/2`, `update_prefill/3`,
+`delete_prefill/2`. A name is a form's own handle, so saving a second
+prefill under one it already has is refused, and updating under another name
+is how one is renamed.
+
+They live on the **lineage**, not on a version, because prefills are not
+version specific: one set travels with the form through every publish, and
+an older set applied to a newer definition leaves its new questions blank —
+which is the point, since those blanks are what a user sees when a
+definition moves under them. `Forms.copy/2` carries the set, so a form
+rolled over for next year opens with last year's answers.
+
+The column is its own, not a key in `properties` — that map is the host's
+open domain data — and it moves only through `Form.prefills_changeset/2`,
+so an ordinary form update cannot drop it. The whole set is one value: a
+write rewrites it, and the last write wins.
+
 ### A new catalog form starts the way a step's form does
 
 Creating a form from the catalog used to end on the form's page, with a
