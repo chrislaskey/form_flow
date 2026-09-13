@@ -1667,7 +1667,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
         <:group name="version" type="vertical" title={false} />
         <:field group="version" type="html" name="form_version_heading">
-          <Shared.section_heading title="Draft">
+          <Shared.section_heading title="Form draft">
             <span :if={@based_on}>
               Current draft is based on
               <.link
@@ -1692,8 +1692,23 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                   /></svg>
               </.link>.
             </span>
-            Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_stamp(@version)}.
+            Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_stamp(@version)}. Edit using:
           </Shared.section_heading>
+        </:field>
+        <%!-- Three ways to edit one definition, under one radio. Each hides
+              with visible_if — hidden, it keeps its content and stops being
+              required — and content crosses between the editors only when
+              the radio changes (switch_editor/3). Copy needs another form to
+              copy from, so with none the radio doesn't offer it. --%>
+        <:field
+          :let={field}
+          group="version"
+          type="radiogroup"
+          name="definition_editor"
+          label={false}
+          options={editor_options(@copy_sources)}
+        >
+          <.editor_cards field={field} choices={editor_choices(@copy_sources)} />
         </:field>
         <%!-- Drafts coexist, and picking between them belongs on Show --%>
         <:field
@@ -1718,21 +1733,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               here
             </.link>
           </Note.note>
-        </:field>
-        <%!-- Three ways to edit one definition, under one radio. Each hides
-              with visible_if — hidden, it keeps its content and stops being
-              required — and content crosses between the editors only when
-              the radio changes (switch_editor/3). Copy needs another form to
-              copy from, so with none the radio doesn't offer it. --%>
-        <:field
-          :let={field}
-          group="version"
-          type="radiogroup"
-          name="definition_editor"
-          label={false}
-          options={editor_options(@copy_sources)}
-        >
-          <.editor_cards field={field} choices={editor_choices(@copy_sources)} />
         </:field>
         <:field
           group="version"
