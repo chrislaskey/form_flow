@@ -20,7 +20,7 @@ config :demo, DemoWeb.Endpoint,
     layout: false
   ],
   pubsub_server: Demo.PubSub,
-  live_view: [signing_salt: "L9gqQP39"]
+  live_view: [signing_salt: "gR9F/tBP"]
 
 # Configure esbuild (the version is required)
 config :esbuild,

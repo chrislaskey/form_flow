@@ -35,6 +35,9 @@ defmodule Demo.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
+  # Specifies your project dependencies.
+  #
+  # Type `mix help deps` for examples and options.
   # When deployed via deploy.sh, form_flow source is vendored into
   # vendor/form_flow so it lives inside the Docker build context.
   # In local development, the vendored copy does not exist and we
@@ -43,9 +46,6 @@ defmodule Demo.MixProject do
     if File.dir?("vendor/form_flow"), do: "vendor/form_flow", else: "../.."
   end
 
-  # Specifies your project dependencies.
-  #
-  # Type `mix help deps` for examples and options.
   defp deps do
     [
       {:form_flow, path: form_flow_path()},

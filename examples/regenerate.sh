@@ -57,7 +57,8 @@ mix phx.new demo --module Demo --database sqlite3 --no-mailer --no-dashboard --n
 # dependencies, so apps only declare form_flow itself.
 
 echo "==> Adding form_flow as a path dependency"
-perl -0777 -pi -e 's/(defp deps do\s*\n\s*\[\n)/$1      {:form_flow, path: "..\/.."},\n/' demo/mix.exs
+perl -0777 -pi -e 's/(  defp deps do)/  # When deployed via deploy.sh, form_flow source is vendored into\n  # vendor\/form_flow so it lives inside the Docker build context.\n  # In local development, the vendored copy does not exist and we\n  # fall back to the normal parent-repo path.\n  defp form_flow_path do\n    if File.dir?("vendor\/form_flow"), do: "vendor\/form_flow", else: "..\/.."\n  end\n\n$1/' demo/mix.exs
+perl -0777 -pi -e 's/(defp deps do\s*\n\s*\[\n)/$1      {:form_flow, path: form_flow_path()},\n/' demo/mix.exs
 
 echo "==> Bumping phoenix_live_view for the unsaved-changes guard's phx:before-navigate"
 # form_flow's edit page cancels client-side navigation (browser back/forward,
@@ -193,6 +194,9 @@ config :demo, DemoWeb.Endpoint, reloadable_apps: [:demo, :form_flow]
 
 config :phoenix_live_reload, dirs: [Path.expand("../../../lib", __DIR__)]
 DEV_EXS
+
+echo "==> Adding /vendor/ to .gitignore (used by deploy.sh at build time)"
+echo -e '\n# Vendored form_flow source, created by deploy.sh for Docker builds\n/vendor/' >> demo/.gitignore
 
 # 4. Copy the demo code over the skeleton
 #

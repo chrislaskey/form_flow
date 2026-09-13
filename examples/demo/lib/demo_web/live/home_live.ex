@@ -25,7 +25,7 @@ defmodule DemoWeb.HomeLive do
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">FormFlow demo</h1>
           <p class="text-base-content/70">
-            Batteries included library for creating dynamic form-based user flows in Phoenix.
+            Batteries included library for creating dynamic form-based user flows in Phoenix!
           </p>
         </header>
 
