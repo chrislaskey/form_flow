@@ -267,6 +267,69 @@ DynamicForm translates validation errors through Gettext, defaulting to its
 own backend. Apps with their own translations pass their backend to the form.
 See [DynamicForm: internationalization](https://github.com/chrislaskey/dynamic_form/blob/main/guides/usage.md#internationalization).
 
+### Optional: Build with AI
+
+The form editor's fourth card, **Build with AI**, sends an administrator's
+description of a form to a language model and puts the definition that comes
+back in the editor, unsaved. It is off until a host passes a
+`FormFlow.Config.AI` struct as the `build_with_ai` attr — without one the card
+stays on the page and says the feature is not set up here.
+
+```elixir
+# config/runtime.exs — your own settings, read by you
+config :my_app, :build_with_ai, api_key: System.get_env("OPENROUTER_API_KEY")
+
+# the function you pass to the router
+def build_with_ai do
+  case Application.get_env(:my_app, :build_with_ai)[:api_key] do
+    nil -> nil
+    key -> %FormFlow.Config.AI{api_key: key}
+  end
+end
+```
+
+```heex
+<FormFlow.Web.router type="templates" path={@path} build_with_ai={MyApp.AI.build_with_ai()} />
+```
+
+The struct defaults everything but the key. `:available_models` is the list an
+administrator picks from with the prompt in front of them — more than one draws
+a select, one draws none — and the ids are whatever the provider spells them:
+
+```elixir
+%FormFlow.Config.AI{
+  api_key: key,
+  available_models: [
+    {"Qwen3.8 Flash — the default", "qwen/qwen3.8-flash"},
+    {"Claude Sonnet 5 — the expensive one", "anthropic/claude-sonnet-5"}
+  ]
+}
+```
+
+The default is `qwen/qwen3.8-flash`, and it is a default rather than a
+recommendation with a shelf life: writing a form definition is following a
+list of rules and emitting a couple of thousand tokens of JSON, which a cheap
+current model does well. At list prices that is around a seventh of a cent per
+build, against three and a half cents for `anthropic/claude-opus-5`. Model
+prices move; check the one you name.
+
+What ships is one POST to [OpenRouter](https://openrouter.ai) — one account and
+one key in front of every provider's models. A host that wants its own gateway,
+a provider's own API, a retry, or a spend cap points `:module` at a module of
+its own that `use FormFlow.Config.AI` and implements `submit/2`; the library
+hands it a `FormFlow.Config.AI.Request` and takes `{:ok, text}` or
+`{:error, sentence}` back.
+
+Three things to know before you turn it on:
+
+* **The key is yours.** It is a value you pass, FormFlow stores it nowhere, and
+  the requests are billed to your account. The shipped client falls back to
+  `OPENROUTER_API_KEY` when the struct carries no key.
+* **What an administrator types leaves your servers**, along with the form
+  definition being edited — which can name real people and real policies.
+* **Nothing is saved by building.** The definition lands in the editor and the
+  draft goes dirty; Save draft is still the only write.
+
 ### Per-library installation details
 
 | Library | What it needs | Details |

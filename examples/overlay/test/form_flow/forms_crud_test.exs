@@ -446,8 +446,243 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Add element"
   end
 
+  describe "Build with AI" do
+    @elements ~s({"elements": [{"type": "text", "name": "dog_name", "title": "Dog's name"}]})
+
+    # What the host passes as `build_with_ai`, in front of
+    # `DemoWeb.FormFlowLive.AI.config/0`'s own reading of the environment —
+    # so a test never reaches OpenRouter, and CI, which has no key, sees the
+    # unconfigured state the page is built to explain.
+    defp configure_ai(answer, models \\ ["anthropic/claude-opus-5"]) do
+      Application.put_env(:demo, :ai_stub, %{pid: self(), answer: answer})
+
+      Application.put_env(:demo, :build_with_ai, %FormFlow.Config.AI{
+        module: Demo.StubAI,
+        available_models: models
+      })
+
+      on_exit(fn ->
+        Application.delete_env(:demo, :build_with_ai)
+        Application.delete_env(:demo, :ai_stub)
+      end)
+    end
+
+    defp blank_draft_page(conn), do: draft_page(conn, %{name: "Dogs"})
+
+    defp draft_page(conn, attrs) do
+      {:ok, form} = Forms.create(attrs)
+      [draft] = Forms.list_versions(form.id)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
+
+      {view, draft}
+    end
+
+    # The page reacts to a change through a send_update it handles after the
+    # change event replies, so the prompt and the editor are put in place with
+    # a change and read back afterwards
+    defp describe_form(view, prompt, params \\ %{}) do
+      params =
+        Map.merge(%{"definition_editor" => "ai", "build_with_ai_prompt" => prompt}, params)
+
+      view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
+      render(view)
+    end
+
+    defp build(view) do
+      view |> element(~s(button[phx-click="build_with_ai"])) |> render_click()
+      render_async(view)
+    end
+
+    test "with nothing configured the card stays and the panel says who to ask",
+         %{conn: conn} do
+      {view, _draft} = blank_draft_page(conn)
+
+      html =
+        view
+        |> element("#forms-edit-form-form")
+        |> render_change(%{"dynamic_form" => %{"definition_editor" => "ai"}})
+
+      html = html <> render(view)
+
+      # The card is unconditional — an admin who read about the feature and
+      # cannot find it is looking at their own developers' decision
+      assert html =~ "Build with AI"
+      assert html =~ "Build with AI isn&#39;t set up for this application yet."
+
+      # Nothing to type into that could be sent, and nothing to press
+      refute has_element?(view, ~s(textarea[name="dynamic_form[build_with_ai_prompt]"]))
+      refute has_element?(view, ~s(button[phx-click="build_with_ai"]))
+    end
+
+    test "a built form lands in the form builder, unsaved", %{conn: conn} do
+      configure_ai({:ok, @elements})
+      {view, draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+      html = build(view)
+
+      # The model was asked for this form, with the definition as it stands
+      assert_received {:ai_asked, request}
+      assert request.model == "anthropic/claude-opus-5"
+      assert request.prompt =~ "A form for a dog licence"
+      assert request.system =~ "You write SurveyJS-compatible form definitions"
+
+      # The builder can show it, so that is where it opens
+      assert has_element?(
+               view,
+               ~s(input[name="dynamic_form[elements][0][name]"][value="dog_name"])
+             )
+
+      refute html =~ "Definition (JSON)"
+
+      # Nothing was written: Save draft is still the only write, and it is now
+      # the next thing to do
+      assert Forms.get_version(draft.id).definition == %{}
+      assert has_element?(view, ~s(button[form="forms-edit-form-form"].btn-primary))
+    end
+
+    test "the prompt and unsaved details survive the answer", %{conn: conn} do
+      configure_ai({:ok, @elements})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence", %{"name" => "Dogs, renamed"})
+      build(view)
+
+      # The form is rebuilt from the last change rather than from the data the
+      # page loaded, so an edit typed and not saved is still typed
+      assert has_element?(view, ~s(input[name="dynamic_form[name]"][value="Dogs, renamed"]))
+
+      # The answer opens the form builder, which hides the Build with AI
+      # panel — the prompt is kept, not shown, and asking again from the words
+      # that produced this form costs nothing
+      refute has_element?(view, ~s(textarea[name="dynamic_form[build_with_ai_prompt]"]))
+
+      html = describe_form(view, "A form for a dog licence")
+
+      assert has_element?(
+               view,
+               ~s(textarea[name="dynamic_form[build_with_ai_prompt]"]),
+               "A form for a dog licence"
+             )
+
+      assert html =~ "A form for a dog licence"
+    end
+
+    test "a definition the builder can't show opens as JSON, saying what it was",
+         %{conn: conn} do
+      configure_ai({:ok, ~s({"elements": [{"type": "text", "name": "ssn", "readOnly": true}]})})
+
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "Something with a read-only field")
+      html = build(view)
+
+      assert html =~ "The form builder can&#39;t show what came back, so it stays as JSON."
+      assert html =~ ~s(Element &quot;ssn&quot; uses &quot;readOnly&quot;)
+      assert html =~ "Definition (JSON)"
+      assert html =~ ~s(&quot;readOnly&quot;: true)
+    end
+
+    test "an answer that is not a form is an error, and the definition is untouched",
+         %{conn: conn} do
+      configure_ai({:ok, "I can't do that."})
+
+      {view, _draft} =
+        draft_page(conn, %{
+          name: "Dogs",
+          definition: %{"elements" => [%{"type" => "text", "name" => "dog_name"}]}
+        })
+
+      describe_form(view, "A form for a dog licence", %{
+        "elements" => %{"0" => %{"type" => "text", "name" => "dog_name"}}
+      })
+
+      html = build(view)
+
+      assert html =~ "Build with AI returned an answer that is not valid JSON."
+
+      # The editor did not move, and the definition it holds is the one that
+      # was there — read by switching to the editor that shows it, since a
+      # hidden field is not rendered
+      assert has_element?(
+               view,
+               ~s(input[name="dynamic_form[definition_editor]"][value="ai"][checked])
+             )
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_change(%{"dynamic_form" => %{"definition_editor" => "json"}})
+
+      assert render(view) =~ ~s(&quot;dog_name&quot;)
+    end
+
+    test "an answer with no elements is refused rather than replacing the form",
+         %{conn: conn} do
+      configure_ai({:ok, ~s({"error": "I can't do that"})})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+      html = build(view)
+
+      assert html =~ "Build with AI returned an answer with no form elements."
+      refute html =~ "I can&#39;t do that"
+    end
+
+    test "what the module says went wrong is what the page says", %{conn: conn} do
+      configure_ai({:error, "No credits left."})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      assert build(view) =~ "No credits left."
+    end
+
+    test "several models draw a select, and the picked one is the one asked",
+         %{conn: conn} do
+      configure_ai({:ok, @elements}, [
+        {"The careful one", "anthropic/claude-opus-5"},
+        "openai/gpt-5"
+      ])
+
+      {view, _draft} = blank_draft_page(conn)
+
+      html = describe_form(view, "A form for a dog licence")
+
+      assert html =~ "The careful one"
+
+      assert has_element?(
+               view,
+               ~s(select[name="dynamic_form[build_with_ai_model]"] option[value="anthropic/claude-opus-5"][selected])
+             )
+
+      describe_form(view, "A form for a dog licence", %{"build_with_ai_model" => "openai/gpt-5"})
+      build(view)
+
+      assert_received {:ai_asked, %{model: "openai/gpt-5"}}
+    end
+
+    test "one model draws no select, and is still the one asked", %{conn: conn} do
+      configure_ai({:ok, @elements})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      refute has_element?(view, ~s(select[name="dynamic_form[build_with_ai_model]"]))
+
+      build(view)
+
+      assert_received {:ai_asked, %{model: "anthropic/claude-opus-5"}}
+    end
+  end
+
   test "Build with AI asks for the form when the draft is blank, and for a change when it isn't",
        %{conn: conn} do
+    # The placeholder is the prompt's, and there is no prompt to place it in
+    # until a host has configured the feature
+    configure_ai({:ok, @elements})
+
     {:ok, blank} = Forms.create(%{name: "Blank"})
     [blank_draft] = Forms.list_versions(blank.id)
 
@@ -2417,7 +2652,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert to == path <> "?prefill=Every+field"
     end
 
-    test "a refused write keeps the dialog open over what was typed", %{conn: conn, form: form, path: path} do
+    test "a refused write keeps the dialog open over what was typed", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
 
       {:ok, view, _html} = live(conn, path)
@@ -2444,7 +2683,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert [_one] = Forms.list_prefills(Forms.get(form.id))
     end
 
-    test "deleting the selected one leaves the URL naming nothing", %{conn: conn, form: form, path: path} do
+    test "deleting the selected one leaves the URL naming nothing", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} =
         Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
 

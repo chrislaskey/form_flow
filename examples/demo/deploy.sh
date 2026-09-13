@@ -10,6 +10,11 @@
 # Usage:
 #   ./deploy.sh           # standard deploy
 #   ./deploy.sh --remote-only   # pass flags through to fly deploy
+#
+# Build with AI is off on the deployed demo until the key is set, and the
+# panel says so rather than hiding the card:
+#
+#   fly secrets set OPENROUTER_API_KEY=...
 
 set -euo pipefail
 

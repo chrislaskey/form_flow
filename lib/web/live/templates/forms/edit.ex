@@ -47,11 +47,28 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   it can show the saved definition, and Copy is offered only while there is
   another form to copy from.
 
-  **Build with AI** is a prompt and nothing else so far: what the admin
-  writes is not sent anywhere, and no definition comes back. The prompt
-  asks for the whole form when the draft is blank and for a change when it
-  is not (`ai_placeholder/1`), which is the one thing the page already
-  knows about the request it will eventually make.
+  **Build with AI** sends the prompt, and the definition as it stands, to
+  the model the `build_with_ai` attr configured — a `FormFlow.Config.AI`,
+  whose `:module` makes the call — and puts what comes back in the editor:
+  the form builder when it can show it, JSON when it cannot, and an error
+  over the editor when the answer is not a definition at all. Nothing is
+  saved; the draft goes dirty and Save draft is still the only write, which
+  is the one way this differs from Copy. The prompt asks for the whole form
+  when the draft is blank and for a change when it is not
+  (`ai_placeholder/1`). With no attr passed the card stays and the panel
+  says the feature is not set up here, which is a decision a host's
+  developers made and an admin should be told about rather than shown an
+  absence. What to ask for and how to read the answer are
+  `FormFlow.Web.Templates.Forms.BuildWithAI`'s; the page owns the panel, the
+  button, the clock, and where the answer lands.
+
+  While a build runs the page holds a `@building?` and a clock that ticks
+  through `send_update_after/3`, and both are read only inside a field's
+  slot body — `DynamicForm` rebuilds a form whose declaration changed, so a
+  clock in a field attribute would clear the prompt once a second. For the
+  same reason the answer rebuilds the form from `@latest_data`, the values
+  that arrived with the last change, rather than from `form_data`, which is
+  the values as they were loaded.
 
   ## Prefills
 
@@ -126,6 +143,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   alias Phoenix.LiveView.JS
 
+  alias FormFlow.Config.AI
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
@@ -141,6 +159,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Templates.Forms.Builder
+  alias FormFlow.Web.Templates.Forms.BuildWithAI
   alias FormFlow.Web.Templates.Forms.Preview
   alias FormFlow.Web.Templates.Forms.Components.Canvas
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
@@ -156,6 +175,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        preview_refresh_token: nil,
        scopes: ["elements", "children"],
        publishing?: false,
+       building?: false,
+       building_seconds: 0,
+       building_token: nil,
        auto_update?: true,
        wide_preview?: false,
        preview_rev: 0,
@@ -212,6 +234,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       socket
       |> assign(dirty?: dirty?, notice: nil, editor_error: nil, pending_type: pending_type)
       |> assign(:latest_json, definition_json(preview_definition(payload, socket, definition)))
+      |> assign(:latest_data, payload.data)
       |> reset_form_data_on_move(moved?, payload)
       |> switch_editor(payload, definition)
       |> reset_form_data_on_switch(pending_type, payload)
@@ -225,6 +248,21 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def update(%{event: "refresh_preview", token: token}, socket) do
     if token == socket.assigns.preview_refresh_token do
       {:ok, socket |> assign(:preview_refresh_token, nil) |> force_refresh_preview()}
+    else
+      {:ok, socket}
+    end
+  end
+
+  # The clock on the running step, one second at a time. A LiveComponent has
+  # no handle_info/2, so the timer is a send_update_after to itself — the
+  # same mechanism the preview refresh uses, and guarded the same way: a
+  # token from a superseded build is already in the mailbox and is dropped.
+  def update(%{event: "tick", token: token}, socket) do
+    if socket.assigns.building? and token == socket.assigns.building_token do
+      {:ok,
+       socket
+       |> assign(:building_seconds, socket.assigns.building_seconds + 1)
+       |> schedule_tick()}
     else
       {:ok, socket}
     end
@@ -280,6 +318,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:callback_data, fn -> %{} end)
+      |> assign_new(:build_with_ai, fn -> nil end)
       |> assign_new(:components, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
 
@@ -362,6 +401,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     # and a refresh copies it over and bumps the rev
     |> assign_new(:preview_json, fn %{definition_json: json} -> json end)
     |> assign_new(:latest_json, fn %{definition_json: json} -> json end)
+    # The values that arrived with the last change, which is what Build with
+    # AI reads its prompt from and rebuilds the form from — `form_data` is
+    # the values as they were loaded and has never held a keystroke
+    |> assign_new(:latest_data, fn %{form_data: data} -> data end)
   end
 
   defp maybe_refresh_preview(%{assigns: %{auto_update?: true}} = socket),
@@ -387,6 +430,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp schedule_preview_refresh(socket), do: socket
+
+  defp schedule_tick(socket) do
+    token = make_ref()
+
+    Phoenix.LiveView.send_update_after(
+      __MODULE__,
+      %{id: socket.assigns.id, event: "tick", token: token},
+      1000
+    )
+
+    assign(socket, :building_token, token)
+  end
 
   defp force_refresh_preview(socket) do
     if FormFlow.app_config(:pubsub_server) do
@@ -735,6 +790,97 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # Two to a row rather than as many as fit: wrapping left the fourth card
   # alone on a line of its own at most widths, and a grid keeps every card
   # the same size whatever the column is doing.
+  # The waiting state: the steps, their clocks, and Cancel. Three of the four
+  # steps are instantaneous and are ticked the moment Build is pressed —
+  # because they have genuinely happened — so the only row that moves is the
+  # one the request is in, and its clock is the whole elapsed time. None of
+  # this is reported by the model: it is the page's own bookkeeping, which is
+  # why there is no percentage and no token count.
+  #
+  # The prompt above is dimmed by a rule rather than by a class on the field,
+  # because a field attribute that changed when a build started would rebuild
+  # the form and clear the prompt. The selector is the field's own name,
+  # declared in this file.
+  attr(:seconds, :integer, required: true)
+  attr(:myself, :any, required: true)
+  attr(:components, :atom, default: nil)
+
+  defp building_panel(assigns) do
+    ~H"""
+    <div>
+      <style>
+        textarea[name$="[build_with_ai_prompt]"],
+        select[name$="[build_with_ai_model]"] { opacity: 0.6; }
+
+        @keyframes ff-build-with-ai-border-move {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+
+        .ff-build-with-ai-border {
+          background-image: linear-gradient(90deg, #4f46e5, #7c3aed, #c026d3, #7c3aed, #4f46e5);
+          background-size: 200% 100%;
+          animation: ff-build-with-ai-border-move 3s linear infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ff-build-with-ai-border { animation: none; }
+        }
+      </style>
+      <div class="ff-build-with-ai-border rounded-xl p-[2px]">
+        <div class="rounded-[10px] bg-white p-3">
+          <ol class="space-y-2 text-sm">
+            <li
+              :for={{label, state, clock} <- building_steps(@seconds)}
+              class={[
+                "flex items-center gap-2",
+                state == :done && "text-gray-500",
+                state == :running && "text-gray-900",
+                state == :pending && "text-gray-400"
+              ]}
+            >
+              <Core.icon
+                :if={state == :done}
+                components={@components}
+                name="hero-check"
+                class="size-4 text-primary"
+              />
+              <span
+                :if={state == :running}
+                class="loading loading-spinner loading-xs text-primary"
+              />
+              <span :if={state == :pending} class="size-4 rounded-full border border-zinc-300" />
+              <span class={state == :running && "font-medium text-gray-900"}>{label}</span>
+              <span class="ml-auto font-mono text-xs tabular-nums text-gray-400">{clock}</span>
+            </li>
+          </ol>
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <Core.button components={@components} phx-click="cancel_build_with_ai" phx-target={@myself}>
+          Cancel
+        </Core.button>
+      </div>
+    </div>
+    """
+  end
+
+  # What each step honestly means: the form was read and the description was
+  # sent the moment Build was pressed, the elements are being written for the
+  # whole wait, and the builder is asked about them only once they land.
+  defp building_steps(seconds) do
+    [
+      {"Read the form as it stands", :done, "0:00"},
+      {"Sent your description", :done, "0:00"},
+      {"Writing the elements", :running, building_clock(seconds)},
+      {"Checking the builder can show them", :pending, "—"}
+    ]
+  end
+
+  defp building_clock(seconds) do
+    "#{div(seconds, 60)}:#{String.pad_leading(to_string(rem(seconds, 60)), 2, "0")}"
+  end
+
   attr(:field, :any, required: true)
   attr(:choices, :list, required: true)
 
@@ -932,6 +1078,59 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # Copy existing form: only the source's resolved definition moves — name,
   # slug, description, and form type are untouched. Available any time, not
   # gated by `show_chooser?/2`.
+  # Where a built definition lands: the form builder when it can show it,
+  # JSON when it cannot — the same test `initial_editor/1` makes, and the
+  # same refusal-beats-dropping rule `switch_editor/3` follows. The form is
+  # rebuilt from the last change payload, not from `form_data`, so the prompt
+  # that produced this form and any unsaved detail edits are still there.
+  # Nothing is written to the draft: the page goes dirty and Save draft is
+  # still the only write.
+  defp apply_ai_definition(socket, definition) do
+    json = definition_json(definition)
+    showable? = Builder.unsupported(definition) == []
+    editor = if showable?, do: "form", else: "json"
+
+    form_data =
+      socket.assigns.latest_data
+      |> Map.put(:definition, json)
+      |> Map.put(:definition_editor, editor)
+      |> put_or_delete_elements(showable?, definition)
+
+    socket
+    |> assign(
+      building?: false,
+      definition_editor: editor,
+      form_data: form_data,
+      latest_data: form_data,
+      latest_json: json,
+      # Dirtiness is otherwise computed from a change event, and there is
+      # none here — but Save draft must go primary the moment a form appears
+      dirty?: true,
+      notice: nil,
+      editor_error: unsupported_note(showable?, definition)
+    )
+    |> force_refresh_preview()
+  end
+
+  # The builder edits entries, the JSON editor edits text: whichever is about
+  # to show gets its own, and the other's are dropped rather than left behind.
+  # The delete is what keeps a half-filled entry from blocking Save with an
+  # error nobody can see, the same reason `switch_editor/3` deletes them.
+  defp put_or_delete_elements(form_data, true, definition),
+    do: Map.put(form_data, :elements, Builder.entries(definition))
+
+  defp put_or_delete_elements(form_data, false, _definition),
+    do: Map.delete(form_data, :elements)
+
+  # One place on the page says why the editor is not the one you expected,
+  # and it is the alert a refused switch already writes to
+  defp unsupported_note(true, _definition), do: nil
+
+  defp unsupported_note(false, definition) do
+    "The form builder can't show what came back, so it stays as JSON. " <>
+      Enum.join(Builder.unsupported(definition), " ")
+  end
+
   defp copy_definition_content(version, source_id) do
     with %{} = source <- Forms.get(source_id),
          %{} = source_version <- resolved_version(source.id),
@@ -966,6 +1165,26 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
+  end
+
+  # What came back from the model: a definition the page puts in the editor,
+  # or a sentence in the warning alert the editors already share. Nothing is
+  # saved either way.
+  def handle_async(:build_with_ai, {:ok, {:ok, text}}, socket) do
+    case BuildWithAI.definition(text) do
+      {:ok, definition} -> {:noreply, apply_ai_definition(socket, definition)}
+      {:error, message} -> {:noreply, assign(socket, building?: false, editor_error: message)}
+    end
+  end
+
+  def handle_async(:build_with_ai, {:ok, {:error, message}}, socket),
+    do: {:noreply, assign(socket, building?: false, editor_error: message)}
+
+  # A module that raises rather than returning {:error, _} still has to reach
+  # the admin as a sentence
+  def handle_async(:build_with_ai, {:exit, _reason}, socket) do
+    {:noreply,
+     assign(socket, building?: false, editor_error: "Build with AI failed. Please try again.")}
   end
 
   @impl true
@@ -1103,6 +1322,45 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       nil ->
         {:noreply, socket}
     end
+  end
+
+  # Build with AI. The prompt and the model are read off the last change
+  # payload rather than off the click, and the definition sent with them is
+  # the one on the page — an admin who pasted JSON and asked for a change
+  # gets the change applied to what they pasted. Switching into Build with
+  # AI already refused JSON that does not parse, so what goes in parsed.
+  @impl true
+  def handle_event("build_with_ai", _params, socket) do
+    %{build_with_ai: config, latest_data: data, latest_json: json} = socket.assigns
+
+    case {config, presence(data[:build_with_ai_prompt])} do
+      {nil, _prompt} ->
+        {:noreply, socket}
+
+      {_config, nil} ->
+        {:noreply, socket}
+
+      {config, prompt} ->
+        model = presence(data[:build_with_ai_model]) || AI.default_model(config)
+        request = BuildWithAI.request(prompt, json, model)
+
+        {:noreply,
+         socket
+         |> assign(building?: true, building_seconds: 0, editor_error: nil, error: nil)
+         |> schedule_tick()
+         |> start_async(:build_with_ai, fn -> config.module.submit(request, config) end)}
+    end
+  end
+
+  # Cancel stops waiting; the request may still be running at the provider,
+  # and the library is not paying for it to stop. The prompt is left exactly
+  # as it is, to press again or to change.
+  @impl true
+  def handle_event("cancel_build_with_ai", _params, socket) do
+    {:noreply,
+     socket
+     |> cancel_async(:build_with_ai)
+     |> assign(building?: false, building_token: nil)}
   end
 
   @impl true
@@ -1861,7 +2119,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             Use AI to build new form elements or edit existing ones.
           </Shared.section_heading>
         </:field>
+        <%!-- Nothing configured: the card stays — the product has the
+              feature — and the panel says whose decision the absence is.
+              There is no textarea, because there is nothing to type into
+              that could be sent. --%>
         <:field
+          :if={!@build_with_ai}
+          group="version"
+          type="html"
+          name="build_with_ai_note"
+          visible_if="{definition_editor} = 'ai'"
+        >
+          <Note.note>
+            Build with AI isn't set up for this application yet. It needs a model and an API
+            key, which an administrator configures where FormFlow is mounted.
+          </Note.note>
+        </:field>
+        <:field
+          :if={@build_with_ai}
           group="version"
           type="comment"
           name="build_with_ai_prompt"
@@ -1869,6 +2144,57 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           placeholder={@ai_placeholder}
           visible_if="{definition_editor} = 'ai'"
         />
+        <%!-- Which model is the admin's choice, made with the prompt in
+              front of them, out of what the host offered — so it is a field
+              of the form, and one model is no choice at all. Its options and
+              default come from the config, which holds still while the page
+              is live. --%>
+        <:field
+          :if={@build_with_ai && length(AI.model_options(@build_with_ai)) > 1}
+          group="version"
+          type="dropdown"
+          name="build_with_ai_model"
+          label="Model"
+          options={AI.model_options(@build_with_ai)}
+          default={AI.default_model(@build_with_ai)}
+          visible_if="{definition_editor} = 'ai'"
+        />
+        <%!-- Build, and what stands in its place while the model is
+              answering. The button carries no phx-value: the prompt and the
+              model are read from the last change payload (`latest_data`),
+              which is the same values an attribute would carry without
+              echoing the whole prompt into the DOM.
+
+              Everything that moves while a build runs — `@building?`, the
+              clock — is inside this slot body, which DynamicForm strips
+              before the comparison that decides whether to rebuild the form.
+              In a field attribute the clock would rebuild the form once a
+              second and clear the prompt with it. --%>
+        <:field
+          :let={form}
+          :if={@build_with_ai}
+          group="version"
+          type="custom"
+          name="build_with_ai_build"
+          visible_if="{definition_editor} = 'ai'"
+        >
+          <Core.button
+            :if={!@building?}
+            components={@components}
+            phx-click="build_with_ai"
+            phx-target={@myself}
+            disabled={is_nil(presence(form[:build_with_ai_prompt].value))}
+            variant="primary"
+          >
+            Build
+          </Core.button>
+          <.building_panel
+            :if={@building?}
+            seconds={@building_seconds}
+            myself={@myself}
+            components={@components}
+          />
+        </:field>
         <%!-- The form builder: one entry per element, its fields named after
               the SurveyJS properties they set. Which fields show for a type,
               and which the entry writes back, come from one table in

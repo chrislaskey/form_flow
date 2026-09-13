@@ -139,26 +139,95 @@ or edit existing ones"* — and picking it puts a prompt where the JSON field
 would be, under a heading that says the same thing. The prompt asks for what
 the draft does not have yet: **"Let's create a form with fields for..."**
 while the definition is empty, **"Update the existing form by adding..."**
-once it holds something.
+once it holds something. Press **Build**, and the definition comes back in
+the editor.
 
-It is a prompt and nothing else so far. What the admin writes is not sent
-anywhere and no definition comes back; the next piece of work is the
-application config that says which model answers it. What the page does
-already do is hold the definition in the hidden JSON field while the prompt
-is open, the way Copy does — so a Save from here saves what was typed — and
-refuse the switch when that JSON does not parse, for the same reason Copy
-refuses it: the field is hidden, and a syntax error would surface on Save
-where nobody could see it.
+**Nothing is saved by building.** The definition lands in the editor, the
+draft goes dirty, and Save draft is still the only write — unlike Copy
+existing form, which writes. A definition the form builder can show opens in
+the form builder; one it cannot opens as JSON, with the warning naming what
+it was (`FormFlow.Web.Templates.Forms.Builder.unsupported/1`), the same
+refuse-rather-than-drop rule switching editors already follows. An answer
+that is not a JSON object, or is one with no elements in it — a model's
+refusal, dressed as JSON — is an error message over the editor, and the
+definition on the page is untouched.
+
+**A host says whether the feature exists, and what answers it**, with the new
+`build_with_ai` attr of `FormFlow.Web.router/1` and the form editor: a
+`FormFlow.Config.AI` struct naming the module that makes the call, the models
+to offer, the key, and the timeout. Pass nothing — the default — and the card
+stays where it is with the panel saying the feature is not set up for this
+application, because an admin who has read about it and cannot find it is
+looking at a decision their own developers made. This is the first attr that
+carries a credential: the key is the host's, passed as a value, stored by
+nothing in FormFlow, and what an admin types in the prompt leaves the host's
+servers along with the definition being edited. The README says so under
+*Optional: Build with AI*.
+
+`:available_models` is a list because the choice between a careful model and
+a quick one is the admin's, made per build with the prompt in front of them:
+more than one draws a **Model** select beside the prompt, one draws none. It
+defaults to `qwen/qwen3.8-flash`: writing a definition is following a list of
+rules and emitting a couple of thousand tokens of JSON, which a cheap current
+model does well — about a seventh of a cent a build, against three and a half
+cents for `anthropic/claude-opus-5`, which is no better at it. Model prices
+move, and a default is not a recommendation with a shelf life; name your own.
+
+**What ships is `FormFlow.Config.AI.OpenRouter`**, the struct's default: one
+POST to OpenRouter's chat-completions endpoint, so one account and one key
+reach every provider's models and adding one to the select is not a code
+change. A host that wants its own gateway, a provider's own API, a retry, or
+a spend cap points `:module` at a module of its own that `use
+FormFlow.Config.AI`. The callback is deliberately narrow — a
+`FormFlow.Config.AI.Request` in, `{:ok, text}` or `{:error, sentence}` out —
+so the library keeps what it knows about forms (what to ask for, how to read
+the answer) and the host's module keeps what it knows about the provider.
+The same struct is what a later AI-backed feature on the instance side would
+take; nothing in it is about editing a definition.
+
+**The instruction is generated from the form builder's own tables**
+(`FormFlow.Web.Templates.Forms.BuildWithAI`), not written out beside them, so
+an answer that follows it is an answer the builder can open — including the
+container keys a definition actually uses, `elements` and `templateElements`,
+rather than `children`, which is the builder's own word for the same thing.
+The answer is not schema-constrained: `response_format` cannot express a
+recursive definition, requires enumerating every property — which would
+silently drop anything the builder has no control for — and is supported per
+model *and* per provider behind it.
+
+**While it builds**, the panel is a box of steps under the prompt, each
+carrying its own clock, with Cancel the only control: the form was read and
+the description sent the moment Build was pressed, the elements are being
+written for the whole wait, and the builder is asked about them once they
+land. Nothing there is reported by the model — no percentage, no token count
+— and Cancel stops waiting rather than stopping the request, which is still
+running at the provider.
 
 The placeholder is read when the editor is switched into rather than
-followed per keystroke, because `DynamicForm` rebuilds a form whose
-declaration changed from its data: a placeholder that moved with what was
-typed would drop the prompt every time the draft crossed between blank and
-not.
+followed per keystroke, and the clock and the Build button live inside a
+field's slot body, both for the same reason: `DynamicForm` rebuilds a form
+whose declaration changed from its data, so a placeholder that moved with
+what was typed — or a clock in a field attribute — would drop the prompt.
+For the same reason the page now keeps the values that arrived with the last
+change, and rebuilds the form from those rather than from the data it loaded,
+so a built form arrives with the prompt that produced it and any unsaved name
+or description edit still in place.
 
 The four cards are a two-column grid rather than a row that wraps. Four
 cards wrapping left the fourth alone on a line of its own at most widths;
 a grid keeps every card the same size whatever the column is doing.
+
+### A new dependency: Req
+
+`{:req, ">= 0.4.0"}`, for the one POST `FormFlow.Config.AI.OpenRouter`
+makes. The floor is the version where the surface used here settled: the
+non-bang `Req.post/2` returning `{:ok, response} | {:error, exception}`, with
+`:json`, `:headers` as a list of tuples, and `:receive_timeout`.
+
+Hosts will see five new entries in their lock file, not one: Req brings
+`finch`, `mint`, `hpax`, `nimble_options`, and `nimble_pool`. Making it
+optional was considered and rejected — the guard is cheap, but a default that
+only works if you also add a dependency is not a default.
 
 ### Custom form is now Fresh start
 

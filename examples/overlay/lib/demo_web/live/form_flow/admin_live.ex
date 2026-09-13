@@ -50,6 +50,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}
+              build_with_ai={DemoWeb.FormFlowLive.AI.config()}
             />
           </div>
         </.persona_gate>

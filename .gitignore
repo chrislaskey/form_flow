@@ -27,3 +27,5 @@ form_flow-*.tar
 /assets/node_modules/
 
 archive
+
+.env

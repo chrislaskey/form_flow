@@ -375,7 +375,19 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
       children_reasons(element, type)
   end
 
-  defp allowed_properties(type) do
+  @doc """
+  The properties an element type may carry, **as the definition spells
+  them**: `properties/0`'s keys with `children` — the builder entry's own
+  name for a container's members — replaced by the JSON key that type writes
+  them under, `elements` for a group and `templateElements` for a nested
+  form.
+
+  This is the list `unsupported/1` checks an element's keys against, and the
+  list `FormFlow.Web.Templates.Forms.BuildWithAI` tells a model to use.
+  `properties/0` is the wrong one for both: it names the builder's key, and
+  an element written with `children` in it is one the builder cannot show.
+  """
+  def allowed_properties(type) do
     for {property, types} <- @properties, type in types do
       if property == "children", do: @children_key[type], else: property
     end

@@ -77,6 +77,12 @@ defmodule FormFlow.Web.Router do
   the events they will write — and the flows New page takes the two type
   lists, to cache the new flow's health with the host's types.
 
+  `build_with_ai` goes to the form editor alone
+  (`FormFlow.Web.Templates.Forms.Edit`), because it configures one card on
+  that page rather than a behaviour the pages share — which is the difference
+  between it and the two type lists, and the reason it is not passed
+  everywhere.
+
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
   thing that must be the *same* value on the admin pages and on every
@@ -173,6 +179,17 @@ defmodule FormFlow.Web.Router do
         "callback FormFlow calls — the types' and `on_mount` — beside the " <>
         "`FormFlow.Context`. Whatever the page knows that a type may need: a " <>
         "reviewer's region, a prefill source"
+  )
+
+  attr(:build_with_ai, :any,
+    default: nil,
+    doc:
+      "a `FormFlow.Config.AI` struct — which module answers a Build with AI " <>
+        "prompt on the form editor, and the models, key, and timeout it " <>
+        "answers with. `nil`, the default, leaves the card on the page and " <>
+        "the panel saying the feature is not set up here. The one attr that " <>
+        "carries a credential: it is the host's key, passed as a value and " <>
+        "stored by nothing in FormFlow"
   )
 
   attr(:components, :atom,
@@ -448,6 +465,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              build_with_ai={@build_with_ai}
               components={@components}
               params={@params}
             />
@@ -491,6 +509,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               callback_data={@callback_data}
+              build_with_ai={@build_with_ai}
               components={@components}
               params={@params}
             />
