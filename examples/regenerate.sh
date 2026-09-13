@@ -111,11 +111,23 @@ echo "==> Matching the daisyUI brand color to the header's indigo"
 # phx.new's generated light theme ships Phoenix's stock orange as
 # --color-primary, which clashes with the indigo/violet/fuchsia gradient the
 # demo's own header and logo use (layouts.ex, copied in from overlay/ below).
-# The dark theme already carries that same indigo as its primary — Elixir's
-# color, not Phoenix's — so light borrows its exact swatch rather than
-# picking a second one.
+# Swap it for the indigo the rest of the demo already uses.
 perl -pi -e 's{--color-primary: oklch\(70% 0\.213 47\.604\);}{--color-primary: oklch(58% 0.233 277.117);}' demo/assets/css/app.css
 perl -pi -e 's{--color-primary-content: oklch\(98% 0\.016 73\.684\);}{--color-primary-content: oklch(96% 0.018 272.314);}' demo/assets/css/app.css
+
+echo "==> Removing the dark theme so the demo always renders in light mode"
+# phx.new generates both a light and a dark daisyUI theme. The dark theme
+# uses `prefersdark: true`, which activates via @media (prefers-color-scheme:
+# dark) on machines running in dark mode — making the demo's light-on-light
+# text unreadable. The demo has no theme toggle, so the dark theme is dead
+# weight that only causes problems; remove it entirely. The @custom-variant
+# dark line also references data-theme=dark selectors we no longer need.
+perl -0777 -pi -e 's{/\* daisyUI theme plugin.*?name: "dark";.*?\n\}\n\n}{}s' demo/assets/css/app.css
+perl -pi -e 's{^/\* daisyUI theme plugin.*\n}{}' demo/assets/css/app.css
+perl -pi -e 's{^.*@custom-variant dark.*data-theme=dark.*\n}{}' demo/assets/css/app.css
+# Replace the remaining comment above the light theme with one that explains
+# why only a light theme is declared.
+perl -pi -e 's{^(\@plugin "\.\./vendor/daisyui-theme" \{)$}{/* daisyUI theme: light only, no dark-mode switching. The demo always renders\n   in light mode regardless of the OS preference. */\n$1}' demo/assets/css/app.css
 
 echo "==> Registering colocated JavaScript hooks"
 # form_flow, slab, and phoenix_select ship their JS as colocated hooks, which
