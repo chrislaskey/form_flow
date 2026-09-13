@@ -100,7 +100,7 @@ echo "==> Pointing Tailwind at FormFlow's classes"
 # All four libraries render server-side markup styled with Tailwind (plus the
 # daisyUI component classes DynamicForm uses), so each needs a @source line or
 # its classes never make it into the generated stylesheet.
-perl -pi -e 's{\@source "\.\./\.\./lib/demo_web";}{$&\n/* FormFlow is a path dependency here, so point Tailwind at its source\n   directly. Apps installing form_flow from Hex use\n   "../../deps/form_flow/lib" instead. FormFlow renders components from\n   these libraries too, so their classes need to be scanned as well. */\n\@source "../../../../lib";\n\@source "../../deps/slab/lib";\n\@source "../../deps/dynamic_form/lib";\n\@source "../../deps/phoenix_select/lib";}' demo/assets/css/app.css
+perl -pi -e 's{\@source "\.\./\.\./lib/demo_web";}{$&\n/* FormFlow is a path dependency here, so point Tailwind at its source\n   directly. Apps installing form_flow from Hex use\n   "../../deps/form_flow/lib" instead. FormFlow renders components from\n   these libraries too, so their classes need to be scanned as well. */\n\@source "../../../../lib";\n\@source "../../vendor/form_flow/lib";\n\@source "../../deps/slab/lib";\n\@source "../../deps/dynamic_form/lib";\n\@source "../../deps/phoenix_select/lib";}' demo/assets/css/app.css
 
 echo "==> Setting the demo's default font to Plus Jakarta Sans"
 # The Google Fonts <link> tags live in root.html.heex, copied in from overlay/

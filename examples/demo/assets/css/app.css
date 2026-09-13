@@ -10,6 +10,7 @@
    "../../deps/form_flow/lib" instead. FormFlow renders components from
    these libraries too, so their classes need to be scanned as well. */
 @source "../../../../lib";
+@source "../../vendor/form_flow/lib";
 @source "../../deps/slab/lib";
 @source "../../deps/dynamic_form/lib";
 @source "../../deps/phoenix_select/lib";
