@@ -37,9 +37,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert html =~ "A single flow with one or more forms"
     assert html =~ "A complex flow with one or more subflows"
 
+    # Name and Slug share a row, and Create flow is the header's, reaching
+    # the form below by an HTML form= reference
+    assert has_element?(view, ~s([data-dynamic-form-group="name_and_slug"]))
+    assert has_element?(view, ~s(button[form="flows-new-form-form"]), "Create flow")
+
+    # Leaving loses what was typed, so Cancel asks first
+    assert has_element?(view, "a[data-confirm]", "Cancel")
+
     view
     |> element("form")
-    |> render_submit(%{"name" => "Enrollment", "label" => "forms"})
+    |> render_submit(%{"dynamic_form" => %{"name" => "Enrollment", "label" => "forms"}})
 
     {path, _flash} = assert_redirect(view)
     assert "/admin/flows/" <> rest = path
@@ -372,7 +380,9 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view
     |> element("form")
-    |> render_submit(%{"name" => "Dog License Application 2026", "label" => "forms"})
+    |> render_submit(%{
+      "dynamic_form" => %{"name" => "Dog License Application 2026", "label" => "forms"}
+    })
 
     {path, _flash} = assert_redirect(view)
     assert "/admin/flows/" <> rest = path
@@ -383,7 +393,9 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view
     |> element("form")
-    |> render_submit(%{"name" => "Anything", "label" => "forms", "slug" => "Chosen"})
+    |> render_submit(%{
+      "dynamic_form" => %{"name" => "Anything", "label" => "forms", "slug" => "Chosen"}
+    })
 
     {path, _flash} = assert_redirect(view)
     assert "/admin/flows/" <> rest = path
@@ -1712,7 +1724,9 @@ defmodule Demo.FormFlowFlowsCrudTest do
   defp create_flow(conn, name \\ "Untitled flow", label \\ "forms") do
     {:ok, view, _html} = live(conn, "/admin/flows/new")
 
-    view |> element("form") |> render_submit(%{"name" => name, "label" => label})
+    view
+    |> element("form")
+    |> render_submit(%{"dynamic_form" => %{"name" => name, "label" => label}})
 
     {path, _flash} = assert_redirect(view)
     ["", "admin", "flows", id, "edit"] = String.split(path, "/")

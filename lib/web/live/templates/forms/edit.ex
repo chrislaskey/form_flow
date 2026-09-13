@@ -15,31 +15,43 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   fields were. `FormFlow.Web.Templates.Forms.Shared` is the data both read
   and write.
 
-  The definition is edited one of three ways, picked by the choice cards
+  The definition is edited one of four ways, picked by the choice cards
   above it (`definition_editor` — still a radio group, drawn as cards by
   `editor_cards/1` because the pick decides what the rest of the page is,
   and a card says what each one does; they carry no label of their own,
-  since three cards that each describe themselves need no sentence over
+  since cards that each describe themselves need no sentence over
   them): in the **Form builder**, a
   `DynamicForm` nested form with one entry per element
   (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
-  **JSON** in a comment field, or by **Copy existing form** — a select of
+  **JSON** in a comment field, by **Copy existing form** — a select of
   the forms to copy from (`copy_sources/2`: through a step, this root flow's
   own forms and then the catalog; from the catalog, every form there is —
   the catalog first, then every flow's) and a button that writes the picked
-  form's resolved definition onto this draft, and nothing else of it. All
-  three sit in the one form under `visible_if`, so whatever is hidden keeps
+  form's resolved definition onto this draft, and nothing else of it — or by
+  **Build with AI**, a prompt describing the form to build or the change to
+  make to the one that is here. All
+  four sit in the one form under `visible_if`, so whatever is hidden keeps
   its content and stops being required. Content moves between the editors
   only when the radio changes — the `%{event: "change"}` clause decodes the
   JSON into entries, or writes the entries back into the JSON — never per
   keystroke;
-  Copy holds the JSON in the hidden field meanwhile, so Save from there
-  saves what was typed. A definition the builder cannot show (a property it
+  Copy and Build with AI hold the JSON in the hidden field meanwhile, so
+  Save from either saves what was typed. A definition the builder cannot
+  show (a property it
   has no control for, JSON that does not parse) refuses the switch and says
-  why, rather than dropping what it cannot show; Copy refuses JSON that
-  does not parse for the same reason. The builder opens by default whenever
+  why, rather than dropping what it cannot show; Copy and Build with AI
+  refuse JSON that
+  does not parse for the same reason — the field they would hold it in is
+  hidden, and a syntax error would surface on Save where nobody could see
+  it. The builder opens by default whenever
   it can show the saved definition, and Copy is offered only while there is
   another form to copy from.
+
+  **Build with AI** is a prompt and nothing else so far: what the admin
+  writes is not sent anywhere, and no definition comes back. The prompt
+  asks for the whole form when the draft is blank and for a change when it
+  is not (`ai_placeholder/1`), which is the one thing the page already
+  knows about the request it will eventually make.
 
   ## Prefills
 
@@ -90,7 +102,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   (`/flows/:root/nodes/:node_id/form/versions/:version_id/edit`).
 
   A draft that is blank and has never been published shows nothing but a
-  choice, in place of the identity form: Custom form (an explicit no-op —
+  choice, in place of the identity form: Fresh start (an explicit no-op —
   the fields are already ready once chosen), Copy form (pick another form
   — the same `copy_sources/2` —
   and write its description, form type, and definition onto this one —
@@ -102,8 +114,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   either of the first two is what reveals the rest of the page
   (`awaiting_start?`), and the chooser stops being offered on any later
   visit the moment either triggering fact changes — a save, a publish — so
-  nothing tracks that a choice was made, beyond Custom form's own
-  `?start=custom` (see `select_custom_path/1`; Copy needs no such marker,
+  nothing tracks that a choice was made, beyond Fresh start's own
+  `?start=fresh` (see `select_fresh_path/1`; Copy needs no such marker,
   since writing the definition already makes the draft not blank; Reuse
   leaves for the step's form page, which now resolves the catalog form).
   """
@@ -148,7 +160,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
        wide_preview?: false,
        preview_rev: 0,
        preview_topic: Ecto.UUID.generate(),
-       chooser_selection: "custom",
+       chooser_selection: "fresh",
        chooser_source_form_id: nil,
        chooser_reuse_form_id: nil,
        prefill_dialog: nil,
@@ -313,6 +325,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     # Kept across reloads once set, so a parent re-render leaves the admin's
     # choice alone; Copy clears it so it is derived again
     |> assign(:definition_editor, socket.assigns[:definition_editor] || initial_editor(version))
+    |> assign_new(:ai_placeholder, fn %{definition_json: json} -> ai_placeholder(json) end)
     |> assign_data(form, node, version)
   end
 
@@ -511,28 +524,31 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # does), or refuse and snap the radio back. Refusing beats dropping: a
   # property the builder has no control for would be gone the moment the
   # admin switched back to JSON. `definition` is what the payload held, read
-  # by the editor the admin is leaving. JSON and Copy hold the definition
-  # the same way — as text in the JSON field — so moving to either writes
-  # it there; Copy additionally needs it to parse, since the field is hidden
-  # there and a syntax error would surface on Save where nobody could see
-  # it.
+  # by the editor the admin is leaving. JSON, Copy, and Build with AI hold
+  # the definition the same way — as text in the JSON field — so moving to
+  # any of them writes it there; Copy and Build with AI additionally need it
+  # to parse, since the field is hidden there and a syntax error would
+  # surface on Save where nobody could see it.
   defp switch_editor(socket, payload, definition) do
     from = socket.assigns.definition_editor
     to = payload.data[:definition_editor]
 
     cond do
-      to not in ["form", "json", "copy"] or to == from ->
+      to not in ["form", "json", "copy", "ai"] or to == from ->
         socket
 
-      to == "copy" and not is_map(definition) ->
-        refuse_switch(
-          socket,
-          payload,
-          from,
-          "Fix the JSON syntax before switching to Copy existing form."
-        )
+      refusal = switch_refusal(to, definition) ->
+        refuse_switch(socket, payload, from, refusal)
 
-      to in ["json", "copy"] ->
+      to == "form" ->
+        form_data =
+          payload.data
+          |> Map.put(:definition_editor, "form")
+          |> Map.put(:elements, Builder.entries(definition))
+
+        assign(socket, definition_editor: "form", form_data: form_data)
+
+      true ->
         form_data =
           payload.data
           |> Map.put(:definition_editor, to)
@@ -541,38 +557,46 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           # behind would block Save with an error nobody could see
           |> Map.delete(:elements)
 
-        assign(socket, definition_editor: to, form_data: form_data)
-
-      not is_map(definition) ->
-        refuse_switch(
-          socket,
-          payload,
-          from,
-          "Fix the JSON syntax before switching to the form builder."
-        )
-
-      Builder.unsupported(definition) != [] ->
-        refuse_switch(
-          socket,
-          payload,
-          from,
-          "The form builder can't show this definition, so it stays as JSON. " <>
-            Enum.join(Builder.unsupported(definition), " ") <>
-            " Remove those properties to edit it in the form builder."
-        )
-
-      true ->
-        form_data =
-          payload.data
-          |> Map.put(:definition_editor, "form")
-          |> Map.put(:elements, Builder.entries(definition))
-
-        assign(socket, definition_editor: "form", form_data: form_data)
+        socket
+        |> assign(definition_editor: to, form_data: form_data)
+        |> assign_ai_placeholder(to, definition)
     end
   end
 
-  # A refused switch only ever leaves JSON or Copy (the builder's content is
-  # always a map), so the radio snaps back to the one the admin was on
+  # Why a switch is refused, or nil. Copy and Build with AI need the
+  # definition to parse because they hold it in the hidden JSON field; the
+  # builder needs that and a control for everything the definition uses.
+  defp switch_refusal("copy", definition) when not is_map(definition),
+    do: "Fix the JSON syntax before switching to Copy existing form."
+
+  defp switch_refusal("ai", definition) when not is_map(definition),
+    do: "Fix the JSON syntax before switching to Build with AI."
+
+  defp switch_refusal("form", definition) when not is_map(definition),
+    do: "Fix the JSON syntax before switching to the form builder."
+
+  defp switch_refusal("form", definition) do
+    case Builder.unsupported(definition) do
+      [] ->
+        nil
+
+      unsupported ->
+        "The form builder can't show this definition, so it stays as JSON. " <>
+          Enum.join(unsupported, " ") <>
+          " Remove those properties to edit it in the form builder."
+    end
+  end
+
+  defp switch_refusal(_to, _definition), do: nil
+
+  defp assign_ai_placeholder(socket, "ai", definition),
+    do: assign(socket, :ai_placeholder, ai_placeholder(definition))
+
+  defp assign_ai_placeholder(socket, _to, _definition), do: socket
+
+  # A refused switch only ever leaves JSON, Copy, or Build with AI (the
+  # builder's content is always a map), so the radio snaps back to the one
+  # the admin was on
   defp refuse_switch(socket, payload, from, message) do
     form_data =
       payload.data
@@ -610,9 +634,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp show_chooser?(_form, version, published?), do: version.definition == %{} and not published?
 
   # Whether the page is still waiting on a choice: `show_chooser?/2` is the
-  # data condition, `?start=custom` (`select_custom_path/1`) is Custom
-  # form's own way of saying the choice was already made
-  defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "custom"
+  # data condition, `?start=fresh` (`select_fresh_path/1`) is Fresh
+  # start's own way of saying the choice was already made
+  defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "fresh"
 
   # What both copies — the chooser's Copy form and the editor's Copy
   # existing form — offer to copy from, as `{label, form id}` options.
@@ -671,9 +695,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp updated_stamp(version),
     do: Calendar.strftime(version.updated_at, "%Y-%m-%d at %-I:%M%P UTC")
 
-  # The three ways to edit one definition: what the radio offers, and what
+  # The four ways to edit one definition: what the radio offers, and what
   # each card says it does. The descriptions matter more than the labels do —
-  # one of the three replaces the whole definition, which "Copy existing form"
+  # one of them replaces the whole definition, which "Copy existing form"
   # alone does not say.
   @editors [
     %{
@@ -690,6 +714,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       value: "copy",
       label: "Copy existing form",
       description: "Replace this draft's definition with another form's."
+    },
+    %{
+      value: "ai",
+      label: "Build with AI",
+      description: "Use AI to build new form elements or edit existing ones."
     }
   ]
 
@@ -702,12 +731,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # consequence needs. Still the form's own radio group — the `<:field>` body
   # takes over the control while DynamicForm keeps the label, the errors, and
   # the changeset — so `visible_if` reads it exactly as before.
+  #
+  # Two to a row rather than as many as fit: wrapping left the fourth card
+  # alone on a line of its own at most widths, and a grid keeps every card
+  # the same size whatever the column is doing.
   attr(:field, :any, required: true)
   attr(:choices, :list, required: true)
 
   defp editor_cards(assigns) do
     ~H"""
-    <div class="flex flex-wrap gap-2">
+    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <ChoiceCard.choice_card
         :for={choice <- @choices}
         id={"#{@field.id}-#{choice.value}"}
@@ -715,7 +748,6 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         value={choice.value}
         checked={to_string(@field.value) == choice.value}
         label={choice.label}
-        class="flex-1 basis-56"
       >
         {choice.description}
       </ChoiceCard.choice_card>
@@ -725,6 +757,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp editor_options(copy_sources),
     do: Enum.map(editor_choices(copy_sources), &{&1.label, &1.value})
+
+  # What the prompt asks for: a form, or a change to the one that is here —
+  # a definition with nothing in it has nothing to edit, and the two
+  # requests read nothing alike. Read when the admin switches into Build
+  # with AI (`switch_editor/3`) and held until they switch in again, rather
+  # than followed per keystroke: DynamicForm rebuilds a form whose
+  # declaration changed from its data, so a placeholder that moved with what
+  # was typed would drop the prompt each time the draft crossed between
+  # blank and not.
+  # Empty is either shape a draft with nothing in it takes: no definition at
+  # all, or the empty document the form builder writes for one.
+  defp ai_placeholder(definition) when is_map(definition) do
+    if definition in [%{}, %{"elements" => []}],
+      do: "Let's create a form with fields for...",
+      else: "Update the existing form by adding..."
+  end
+
+  defp ai_placeholder(json), do: ai_placeholder(decoded_definition(json))
 
   # What a step can be pointed at: the catalog, minus forms whose type ties
   # them to one flow — a `:related_form` value is a step path there
@@ -957,13 +1007,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     {:noreply, assign(socket, :chooser_selection, selection)}
   end
 
-  # Custom form changes nothing about the form or draft — there is no data
+  # Fresh start changes nothing about the form or draft — there is no data
   # event that would make `show_chooser?/2` false on its own, unlike Copy.
-  # `?start=custom` is what a reload of this exact page reads back to know the
+  # `?start=fresh` is what a reload of this exact page reads back to know the
   # choice was already made.
   @impl true
-  def handle_event("select_custom", _params, socket) do
-    {:noreply, push_navigate(socket, to: select_custom_path(socket.assigns))}
+  def handle_event("select_fresh", _params, socket) do
+    {:noreply, push_navigate(socket, to: select_fresh_path(socket.assigns))}
   end
 
   @impl true
@@ -1330,10 +1380,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # Nothing else on the page until a choice is made: the identity form, the
   # definition, the header's Save/Publish — none of them mean anything yet.
-  # Custom form's Select has to leave a mark server-side or reloading this
+  # Fresh start's Select has to leave a mark server-side or reloading this
   # exact page would show the chooser again forever (the data itself never
   # changes for it, unlike Copy) — a query param is the only channel that
-  # survives `push_navigate`'s full remount (see `select_custom_path/1`).
+  # survives `push_navigate`'s full remount (see `select_fresh_path/1`).
   def render(%{awaiting_start?: true} = assigns) do
     ~H"""
     <div>
@@ -1364,12 +1414,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             <input
               type="radio"
               name="chooser_selection"
-              value="custom"
-              checked={@chooser_selection == "custom"}
+              value="fresh"
+              checked={@chooser_selection == "fresh"}
               phx-click="chooser_select"
-              phx-value-selection="custom"
+              phx-value-selection="fresh"
               phx-target={@myself}
-            /> Custom form
+            /> Fresh start
           </label>
           <label class="flex items-center gap-2">
             <input
@@ -1382,7 +1432,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               phx-target={@myself}
             /> Copy form
           </label>
-          <%!-- The first place the three stop being parallel: Custom and
+          <%!-- The first place the three stop being parallel: Fresh start and
                 Copy fill the form this step already has; Reuse throws that
                 form away and points the step at the catalog's. Only through
                 a step — a catalog form has nothing to repoint. --%>
@@ -1399,10 +1449,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </label>
         </fieldset>
 
-        <div :if={@chooser_selection == "custom"} class="mt-3">
+        <div :if={@chooser_selection == "fresh"} class="mt-3">
           <Core.button
             components={@components}
-            phx-click="select_custom"
+            phx-click="select_fresh"
             phx-target={@myself}
             variant="primary"
           >
@@ -1797,6 +1847,28 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             Copy definition
           </Core.button>
         </:field>
+        <%!-- Build with AI: the prompt, and the definition it would work
+              from held in the hidden JSON field the way Copy holds it. The
+              placeholder is the only thing that changes with the draft —
+              a blank one has no form to edit yet (ai_placeholder/1). --%>
+        <:field
+          group="version"
+          type="html"
+          name="build_with_ai_heading"
+          visible_if="{definition_editor} = 'ai'"
+        >
+          <Shared.section_heading title="Build with AI" class="mt-6">
+            Use AI to build new form elements or edit existing ones.
+          </Shared.section_heading>
+        </:field>
+        <:field
+          group="version"
+          type="comment"
+          name="build_with_ai_prompt"
+          label={false}
+          placeholder={@ai_placeholder}
+          visible_if="{definition_editor} = 'ai'"
+        />
         <%!-- The form builder: one entry per element, its fields named after
               the SurveyJS properties they set. Which fields show for a type,
               and which the entry writes back, come from one table in
@@ -2307,12 +2379,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     )
   end
 
-  # This same edit page, with `start=custom` added — `mode` carries forward
-  # if it was already there. Reloading is what makes Custom form's choice
+  # This same edit page, with `start=fresh` added — `mode` carries forward
+  # if it was already there. Reloading is what makes Fresh start's choice
   # stick, since nothing about the form or draft changed to make
   # `show_chooser?/2` false on its own.
-  defp select_custom_path(assigns) do
-    query = assigns.params |> Map.take(["mode"]) |> Map.put("start", "custom")
+  defp select_fresh_path(assigns) do
+    query = assigns.params |> Map.take(["mode"]) |> Map.put("start", "fresh")
     "#{form_base_path(assigns)}/versions/#{assigns.version.id}/edit?#{URI.encode_query(query)}"
   end
 end

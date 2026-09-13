@@ -94,7 +94,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     # Past the never-published-and-blank chooser, straight to the form
     {:ok, view, html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     # A blank draft opens in the form builder; the JSON field is the radio's
     # other choice, and a submit that names it is a submit as JSON. With no
@@ -135,7 +135,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, _html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     # Add element must not also submit the form — a button with no type is a
     # submit button, and a click would silently save the draft
@@ -271,7 +271,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, _html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     submit = fn elements ->
       view
@@ -446,6 +446,59 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Add element"
   end
 
+  test "Build with AI asks for the form when the draft is blank, and for a change when it isn't",
+       %{conn: conn} do
+    {:ok, blank} = Forms.create(%{name: "Blank"})
+    [blank_draft] = Forms.list_versions(blank.id)
+
+    {:ok, view, html} =
+      live(conn, "/admin/forms/#{blank.id}/versions/#{blank_draft.id}/edit?start=fresh")
+
+    # The fourth editor, beside the other three
+    assert html =~ "Build with AI"
+    assert html =~ "Use AI to build new form elements or edit existing ones."
+
+    switch = fn params ->
+      view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
+      render(view)
+    end
+
+    html = switch.(%{"definition_editor" => "ai", "definition" => "{}"})
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="ai"][checked])
+           )
+
+    assert html =~ "Let&#39;s create a form with fields for..."
+    refute html =~ "Update the existing form by adding..."
+
+    # A draft with a form in it has something to edit, and asks for that
+    # instead — read on the way in, so the prompt already typed is never
+    # thrown away by a definition that crossed between blank and not
+    _html = switch.(%{"definition_editor" => "json", "definition" => "{}"})
+
+    html =
+      switch.(%{
+        "definition_editor" => "ai",
+        "definition" => ~s({"elements": [{"type": "text", "name": "ssn"}]})
+      })
+
+    assert html =~ "Update the existing form by adding..."
+    refute html =~ "Let&#39;s create a form with fields for..."
+
+    # The definition rides along in the hidden JSON field, so it has to parse
+    # — the same refusal Copy gives, for the same reason
+    _html = switch.(%{"definition_editor" => "json", "definition" => "{}"})
+    html = switch.(%{"definition_editor" => "ai", "definition" => "{nope"})
+    assert html =~ "Fix the JSON syntax before switching to Build with AI."
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[definition_editor]"][value="json"][checked])
+           )
+  end
+
   test "a catalog form cannot be pointed at a step; the copy is the way", %{conn: conn} do
     {:ok, shared} = Forms.create(%{name: "Check owner", properties: %{"form_type" => "review"}})
     {:ok, flow} = Flows.create(%{name: "Intake"})
@@ -465,7 +518,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} =
       live(
         conn,
-        "/admin/flows/#{flow.id}/nodes/#{check_node.id}/form/versions/#{draft.id}/edit?start=custom"
+        "/admin/flows/#{flow.id}/nodes/#{check_node.id}/form/versions/#{draft.id}/edit?start=fresh"
       )
 
     view
@@ -520,7 +573,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     assert html =~ "mine"
 
@@ -549,7 +602,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, _html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     view
     |> element("#forms-edit-form-form")
@@ -575,7 +628,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     # The dropdown carries what the demo's Config enables — proof the
     # router's config attr reaches the form pages. Nothing saved yet, so it
@@ -667,14 +720,14 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get(form.id).properties == %{"form_type" => "default", "slug" => "typed"}
   end
 
-  test "a blank, never-published draft offers the copy-or-custom chooser; anything else doesn't",
+  test "a blank, never-published draft offers the copy-or-fresh-start chooser; anything else doesn't",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Fresh"})
     [draft] = Forms.list_versions(form.id)
 
     {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit")
     assert html =~ "Start this form from"
-    assert html =~ "Custom form"
+    assert html =~ "Fresh start"
     assert html =~ "Copy form"
 
     # A definition already typed in — even once nothing has been published —
@@ -702,21 +755,21 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute has_element?(view, "button", "Publish")
     refute html =~ "Definition (JSON)"
 
-    # Custom form is the default selection; Select is what commits it
+    # Fresh start is the default selection; Select is what commits it
     view
-    |> element(~s(button[phx-click="select_custom"]))
+    |> element(~s(button[phx-click="select_fresh"]))
     |> render_click()
 
-    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+    assert_redirect(view, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     {:ok, view, html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     refute html =~ "Start this form from"
     assert has_element?(view, "#forms-edit-form-form")
     assert has_element?(view, "button", "Publish")
 
-    # Nothing about the form or draft changed — Custom form is a no-op
+    # Nothing about the form or draft changed — Fresh start is a no-op
     assert Forms.get_version(draft.id).definition == %{}
   end
 
@@ -1061,7 +1114,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, view, html} =
         live(
           conn,
-          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=fresh"
         )
 
       assert html =~ "Step name"
@@ -1088,7 +1141,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, view, html} =
         live(
           conn,
-          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=fresh"
         )
 
       # The field shows the step's label, and says whose name is not being edited
@@ -1114,7 +1167,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       [draft] = Forms.list_versions(catalog.id)
 
       {:ok, view, html} =
-        live(conn, "/admin/forms/#{catalog.id}/versions/#{draft.id}/edit?start=custom")
+        live(conn, "/admin/forms/#{catalog.id}/versions/#{draft.id}/edit?start=fresh")
 
       refute html =~ "Step name"
 
@@ -1142,7 +1195,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, view, html} =
         live(
           conn,
-          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=fresh"
         )
 
       assert html =~ "Step slug"
@@ -1199,7 +1252,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, view, html} =
         live(
           conn,
-          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=custom"
+          "/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?start=fresh"
         )
 
       assert html =~ "Step slug"
@@ -1366,7 +1419,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     {description_at, _} = :binary.match(html, ~s(name="dynamic_form[description]"))
     {type_at, _} = :binary.match(html, ~s(name="dynamic_form[form_type]"))
@@ -1540,7 +1593,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, _html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     # The header button submits the DynamicForm below through its form= id;
     # the form itself renders no built-in submit. Publish sits to its right,
@@ -1622,7 +1675,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     [draft] = Forms.list_versions(form.id)
 
     {:ok, view, _html} =
-      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     view |> element("button", "Publish") |> render_click()
 
@@ -1979,7 +2032,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       [draft] = Forms.list_versions(form.id)
 
       {:ok, view, html} =
-        live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=custom")
+        live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
       assert html =~ "Form details"
       assert has_element?(view, ~s(input[name="dynamic_form[name]"]))

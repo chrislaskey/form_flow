@@ -543,7 +543,9 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "a flow made on the New page has its creator; a duplicate has its copier", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/admin/flows/new")
-      view |> element("form") |> render_submit(%{"name" => "Dog License", "label" => "forms"})
+      view
+      |> element("form")
+      |> render_submit(%{"dynamic_form" => %{"name" => "Dog License", "label" => "forms"}})
       {path, _flash} = assert_redirect(view)
       ["", "admin", "flows", id, "edit"] = String.split(path, "/")
 

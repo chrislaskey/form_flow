@@ -2,15 +2,18 @@ defmodule DemoWeb.BrandingLive do
   @moduledoc """
   Scratch page for trying `Layouts.logo_mark` as an actual logo — solid vs.
   gradient strokes, on light and dark — and, below that, directions for the
-  demo's user switcher (see `DemoWeb.BrandingLive.UserSwitchers`) and for
+  demo's user switcher (see `DemoWeb.BrandingLive.UserSwitchers`), for
   the flow health check's trigger and modal
-  (see `DemoWeb.BrandingLive.HealthChecks`).
+  (see `DemoWeb.BrandingLive.HealthChecks`), and for the form editor's Build
+  with AI panel while it waits on a model
+  (see `DemoWeb.BrandingLive.BuildWithAI`).
 
   Mounted on `live "/branding", BrandingLive`.
   """
 
   use DemoWeb, :live_view
 
+  alias DemoWeb.BrandingLive.BuildWithAI
   alias DemoWeb.BrandingLive.HealthChecks
   alias DemoWeb.BrandingLive.UserSwitchers
 
@@ -144,6 +147,8 @@ defmodule DemoWeb.BrandingLive do
      |> assign(:health_modals, HealthChecks.modals())
      |> assign(:health_states, HealthChecks.states())
      |> assign(:health_icons, HealthChecks.icon_variants())
+     |> assign(:ai_directions, BuildWithAI.directions())
+     |> assign(:ai_steps_variations, BuildWithAI.steps_variations())
      |> assign(:selected, %{})
      |> assign(:menus_open, false)}
   end
@@ -343,6 +348,89 @@ defmodule DemoWeb.BrandingLive do
               </div>
               <div class="flex justify-center rounded-xl bg-gray-200/70 px-6 py-10">
                 <HealthChecks.modal direction={m.id} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="build-with-ai" class="space-y-10 border-t border-gray-200 pt-10">
+          <header class="space-y-2">
+            <h2 class="text-2xl font-semibold">Build with AI — waiting states</h2>
+            <p class="text-base-content/70">
+              The form editor's fourth panel in the twenty to sixty seconds between
+              pressing Build and a form appearing. Every direction shows the same
+              hardcoded prompt, so they differ only in how the wait is drawn.
+              Nothing here is wired up, and nothing here knows how far along the
+              request is — there is no percentage to report.
+            </p>
+          </header>
+
+          <BuildWithAI.styles />
+
+          <div class="space-y-3">
+            <h3 class="text-lg font-semibold text-gray-900">The two settled states</h3>
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div class="space-y-2">
+                <p class="text-sm text-gray-500">
+                  Ready, with the model select a host offering several models gets
+                </p>
+                <BuildWithAI.reference variant={:idle} />
+              </div>
+              <div class="space-y-2">
+                <p class="text-sm text-gray-500">Not configured — no prompt, no button</p>
+                <BuildWithAI.reference variant={:not_configured} />
+              </div>
+            </div>
+          </div>
+
+          <%!-- Two columns that pack rather than a grid that leaves a row
+                as tall as its tallest cell: these panels differ in height by
+                a factor of three. The two full-width directions follow
+                underneath, where a column cannot hold them. --%>
+          <div class="columns-1 gap-8 lg:columns-2">
+            <div
+              :for={d <- Enum.reject(@ai_directions, &Map.get(&1, :wide))}
+              class="mb-8 space-y-3 break-inside-avoid"
+            >
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 class="font-semibold text-gray-900">{d.title}</h3>
+                <p class="text-sm text-gray-500">{d.note}</p>
+              </div>
+              <BuildWithAI.panel direction={d.id} />
+            </div>
+          </div>
+
+          <div class="space-y-8">
+            <div :for={d <- Enum.filter(@ai_directions, &Map.get(&1, :wide))} class="space-y-3">
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 class="font-semibold text-gray-900">{d.title}</h3>
+                <p class="text-sm text-gray-500">{d.note}</p>
+              </div>
+              <BuildWithAI.panel direction={d.id} />
+            </div>
+          </div>
+
+          <div class="space-y-6 border-t border-gray-200 pt-8">
+            <header class="space-y-2">
+              <h3 class="text-xl font-semibold">Second pass: the steps, varied</h3>
+              <p class="text-base-content/70">
+                Direction 6 on an ordinary white panel, with direction 12's moving
+                border around the steps rather than around the whole thing — the
+                panel is not what is working, the steps are. 6f is the pick: each
+                step carries its own clock, which is why there is no total in the
+                corner, and Cancel is the only thing under the box. Then the same
+                shape varied, including the two states the wait ends in, which the
+                directions above never showed.
+              </p>
+            </header>
+
+            <div class="columns-1 gap-8 lg:columns-2">
+              <div :for={v <- @ai_steps_variations} class="mb-8 space-y-3 break-inside-avoid">
+                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h4 class="font-semibold text-gray-900">{v.title}</h4>
+                  <p class="text-sm text-gray-500">{v.note}</p>
+                </div>
+                <BuildWithAI.steps_panel variant={v.id} />
               </div>
             </div>
           </div>

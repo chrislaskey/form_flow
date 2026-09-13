@@ -99,7 +99,7 @@ Creating a form from the catalog used to end on the form's page, with a
 blank draft waiting to be found and edited separately: the details first,
 then, on another page, the definition. `FormFlow.Web.Templates.Forms.New`
 now lands on that blank draft's edit page instead, which opens on the same
-choice a step's new form gets — Custom form, or Copy form — and then edits
+choice a step's new form gets — Fresh start, or Copy form — and then edits
 the details and the definition together, the way a step's form does until
 it is first published. The name typed on the New page is the start of the
 form, not the end of creating it.
@@ -130,6 +130,56 @@ migration creates, the three that cross over to Neo4j, and the three ways a
 graph can be read back out of SQL — with screenshots of the two diagrams the
 page draws, and a pointer to the demo for the interactive versions. The
 Neo4j guide stays what it was, the mapping itself.
+
+### A fourth way to edit a definition: Build with AI
+
+`FormFlow.Web.Templates.Forms.Edit` offers **Build with AI** beside Form
+builder, JSON, and Copy existing form — *"Use AI to build new form elements
+or edit existing ones"* — and picking it puts a prompt where the JSON field
+would be, under a heading that says the same thing. The prompt asks for what
+the draft does not have yet: **"Let's create a form with fields for..."**
+while the definition is empty, **"Update the existing form by adding..."**
+once it holds something.
+
+It is a prompt and nothing else so far. What the admin writes is not sent
+anywhere and no definition comes back; the next piece of work is the
+application config that says which model answers it. What the page does
+already do is hold the definition in the hidden JSON field while the prompt
+is open, the way Copy does — so a Save from here saves what was typed — and
+refuse the switch when that JSON does not parse, for the same reason Copy
+refuses it: the field is hidden, and a syntax error would surface on Save
+where nobody could see it.
+
+The placeholder is read when the editor is switched into rather than
+followed per keystroke, because `DynamicForm` rebuilds a form whose
+declaration changed from its data: a placeholder that moved with what was
+typed would drop the prompt every time the draft crossed between blank and
+not.
+
+The four cards are a two-column grid rather than a row that wraps. Four
+cards wrapping left the fourth alone on a line of its own at most widths;
+a grid keeps every card the same size whatever the column is doing.
+
+### Custom form is now Fresh start
+
+The chooser a blank, never-published draft opens on reads **Fresh start**,
+Copy form, and Reuse form. Only the first has a new name: "Custom form" said
+what the form was rather than what picking it does, which is to leave the
+draft empty and start typing. The query parameter it leaves behind moved
+with it — a draft that was opened with `?start=custom` is now
+`?start=fresh`, and a bookmarked link with the old one shows the chooser
+again rather than the editor.
+
+### The New flow page is laid out across, not down
+
+`FormFlow.Web.Templates.Flows.New` puts Name and Slug on one row (a
+`DynamicForm` horizontal group) and the kind beside it as the same choice
+cards the form editor picks its editor with — **Simple flow** and **Complex
+flow**, side by side, each saying what the flow can hold — inside a
+`max-w-5xl` column. **Create flow** moved to the header beside Cancel, where
+every other page keeps its primary action, reaching the form below by an
+HTML `form=` reference. Cancel asks before it leaves: nothing here is saved
+yet, so leaving loses whatever was typed.
 
 ## v0.24.0
 
