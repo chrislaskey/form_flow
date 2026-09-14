@@ -23,6 +23,22 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAITest do
       end
     end
 
+    # The model that invented `"groupType": "row"` reasoned aloud that the
+    # allowed values were "not specified" — because they were not
+    test "spells out the values of the two properties that take a fixed set" do
+      instructions = BuildWithAI.instructions()
+
+      assert instructions =~ "* groupType: horizontal, vertical"
+
+      for {_label, group_type} <- Builder.group_type_options() do
+        assert instructions =~ group_type
+      end
+
+      for {_label, input_type} <- Builder.input_type_options() do
+        assert instructions =~ input_type
+      end
+    end
+
     test "names the container keys, and never the builder's own" do
       instructions = BuildWithAI.instructions()
 
@@ -100,6 +116,109 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAITest do
     test "refuses an elements key that is not a list" do
       assert BuildWithAI.definition(~s({"elements": "a dog form"})) ==
                {:error, "Build with AI returned an answer with no form elements."}
+    end
+  end
+
+  describe "changes/2" do
+    @before ~s({"elements":[
+      {"type":"panel","name":"who","title":"Who","elements":[
+        {"type":"text","name":"given_name","title":"Given"},
+        {"type":"text","name":"middle_name"},
+        {"type":"text","name":"family_name"}]},
+      {"type":"paneldynamic","name":"addresses","templateElements":[
+        {"type":"text","name":"city"}]},
+      {"type":"html","name":"intro","html":"<p>Hi</p>"}]})
+
+    defp definition(elements), do: %{"elements" => elements}
+
+    defp who(members), do: %{"type" => "panel", "name" => "who", "elements" => members}
+
+    defp addresses(members),
+      do: %{"type" => "paneldynamic", "name" => "addresses", "templateElements" => members}
+
+    defp given_name, do: %{"type" => "text", "name" => "given_name", "title" => "Given"}
+    defp middle_name, do: %{"type" => "text", "name" => "middle_name"}
+    defp family_name, do: %{"type" => "text", "name" => "family_name"}
+    defp city, do: %{"type" => "text", "name" => "city"}
+
+    test "names the questions an answer merged away, in the order they were asked" do
+      merged =
+        definition([who([%{"type" => "text", "name" => "full_name"}]), addresses([city()])])
+
+      assert %{removed: ["given_name", "middle_name", "family_name"], added: ["full_name"]} =
+               BuildWithAI.changes(@before, merged)
+    end
+
+    test "a renamed question is a removed one and an added one" do
+      previous = ~s({"elements":[{"type":"text","name":"read_ordinances"}]})
+      renamed = definition([%{"type" => "text", "name" => "agreements"}])
+
+      assert BuildWithAI.changes(previous, renamed) == %{
+               added: ["agreements"],
+               removed: ["read_ordinances"],
+               changed: []
+             }
+    end
+
+    test "a question kept but altered is changed" do
+      retitled =
+        definition([
+          who([%{given_name() | "title" => "Given name"}, middle_name(), family_name()]),
+          addresses([city()])
+        ])
+
+      assert BuildWithAI.changes(@before, retitled) == %{
+               added: [],
+               removed: [],
+               changed: ["given_name"]
+             }
+    end
+
+    # The shape of most correct answers: groups moved about, questions kept.
+    # A warning that fired here would fire on nearly everything.
+    test "rearranging groups, and dropping one, changes nothing" do
+      regrouped =
+        definition([
+          %{
+            "type" => "panel",
+            "name" => "names_row",
+            "groupType" => "horizontal",
+            "elements" => [given_name(), middle_name(), family_name()]
+          },
+          addresses([city()])
+        ])
+
+      assert BuildWithAI.changes(@before, regrouped) == %{added: [], removed: [], changed: []}
+    end
+
+    test "a nested form losing a question of its template counts" do
+      emptied =
+        definition([who([given_name(), middle_name(), family_name()]), addresses([])])
+
+      assert %{removed: ["city"], added: [], changed: []} = BuildWithAI.changes(@before, emptied)
+    end
+
+    test "a form built from a blank draft has nothing to compare against" do
+      built = definition([%{"type" => "text", "name" => "dog_name"}])
+
+      assert BuildWithAI.changes("{}", built) == %{added: [], removed: [], changed: []}
+
+      assert BuildWithAI.changes(~s({"elements":[]}), built) == %{
+               added: [],
+               removed: [],
+               changed: []
+             }
+
+      assert BuildWithAI.changes("{nope", built) == %{added: [], removed: [], changed: []}
+    end
+  end
+
+  describe "changes?/1" do
+    test "is false only when nothing moved" do
+      refute BuildWithAI.changes?(%{added: [], removed: [], changed: []})
+      assert BuildWithAI.changes?(%{added: ["a"], removed: [], changed: []})
+      assert BuildWithAI.changes?(%{added: [], removed: ["a"], changed: []})
+      assert BuildWithAI.changes?(%{added: [], removed: [], changed: ["a"]})
     end
   end
 

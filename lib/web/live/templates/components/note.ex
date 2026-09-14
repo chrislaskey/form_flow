@@ -22,7 +22,7 @@ defmodule FormFlow.Web.Templates.Components.Note do
 
   def note(assigns) do
     ~H"""
-    <div class={["rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700", @class]}>
+    <div class={["text-sm text-zinc-700", @class]}>
       <span class="font-bold">Note:</span> {render_slot(@inner_block)}
     </div>
     """

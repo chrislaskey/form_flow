@@ -49,6 +49,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
+  alias FormFlow.Web.Templates.Forms.Builder
 
   @doc """
   The DOM id of the `<form>` this preview renders, given the `live_render`
@@ -95,6 +96,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   defp parse(socket, definition) do
     instance = DynamicForm.Parser.FromData.parse!(definition)
     _changeset = DynamicForm.Changeset.create_changeset(instance)
+    check_group_types!(instance)
 
     socket
     |> assign(missing?: false)
@@ -102,6 +104,42 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   rescue
     error -> assign(socket, instance: nil, parse_error: Exception.message(error))
   end
+
+  # A group type this preview's components module has no clause for is the
+  # one value in a definition that makes DynamicForm raise rather than draw,
+  # and it raises at diff time — inside the component, after `mount/3` has
+  # returned, where the rescue above cannot reach it and the client answers
+  # by remounting into the loop this eager check exists to prevent. So it is
+  # asked here, before anything is drawn, against the layouts the form
+  # builder offers (`FormFlow.Web.Templates.Forms.Builder.group_type_options/0`)
+  # — which are `DynamicForm.CoreComponents`', the module this page renders
+  # with.
+  defp check_group_types!(%DynamicForm.Instance{elements: elements}) do
+    allowed = Enum.map(Builder.group_type_options(), &elem(&1, 1))
+
+    Enum.each(List.wrap(elements), &check_group_type!(&1, allowed))
+  end
+
+  defp check_group_type!(element, allowed) do
+    type = group_type(element)
+
+    if is_binary(type) and type not in allowed do
+      raise ArgumentError,
+            "#{inspect(element.name)} has a groupType of #{inspect(type)}. " <>
+              "The preview draws #{Enum.map_join(allowed, " and ", &inspect/1)}."
+    end
+
+    element
+    |> members()
+    |> Enum.each(&check_group_type!(&1, allowed))
+  end
+
+  defp group_type(%{groupType: type}), do: type
+  defp group_type(_element), do: nil
+
+  defp members(%{elements: elements}) when is_list(elements), do: elements
+  defp members(%{templateElements: elements}) when is_list(elements), do: elements
+  defp members(_element), do: []
 
   @impl true
   def handle_info({:dynamic_form, :success, _payload}, socket) do

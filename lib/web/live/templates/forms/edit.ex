@@ -857,7 +857,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         </div>
       </div>
       <div class="mt-3 flex justify-end">
-        <Core.button components={@components} phx-click="cancel_build_with_ai" phx-target={@myself}>
+        <Core.button
+          components={@components}
+          type="button"
+          phx-click="cancel_build_with_ai"
+          phx-target={@myself}
+        >
           Cancel
         </Core.button>
       </div>
@@ -1107,7 +1112,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       # none here — but Save draft must go primary the moment a form appears
       dirty?: true,
       notice: nil,
-      editor_error: unsupported_note(showable?, definition)
+      editor_error: answer_note(socket, definition, showable?)
     )
     |> force_refresh_preview()
   end
@@ -1122,14 +1127,69 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp put_or_delete_elements(form_data, false, _definition),
     do: Map.delete(form_data, :elements)
 
-  # One place on the page says why the editor is not the one you expected,
-  # and it is the alert a refused switch already writes to
+  # What to say about the answer, in the alert a refused switch already writes
+  # to: why the editor is not the one you expected, and what the answer no
+  # longer has. Either can happen without the other, and both at once reads as
+  # one paragraph rather than two alerts.
+  defp answer_note(socket, definition, showable?) do
+    [unsupported_note(showable?, definition), changes_note(socket, definition)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+    |> presence()
+  end
+
   defp unsupported_note(true, _definition), do: nil
 
   defp unsupported_note(false, definition) do
     "The form builder can't show what came back, so it stays as JSON. " <>
       Enum.join(Builder.unsupported(definition), " ")
   end
+
+  # What the answer did to the questions, which nothing else on the page would
+  # say: a definition missing three of them looks exactly like a definition
+  # that never had them. Nothing is saved yet, which is what makes this worth
+  # saying here rather than at Save — the draft on screen is still undoable.
+  defp changes_note(socket, definition) do
+    changes = BuildWithAI.changes(socket.assigns.latest_json, definition)
+
+    if BuildWithAI.changes?(changes) do
+      "Build with AI #{clauses(changes)}." <> removal_warning(changes)
+    end
+  end
+
+  # "added 1 question (nickname), removed 2 (given_name, family_name), and
+  # changed 1 (date_of_birth)" — the count first, so the sentence reads the
+  # same whether a form gained one question or twenty, and the names after it,
+  # because a removed one is the admin's to recognise.
+  defp clauses(%{added: added, removed: removed, changed: changed}) do
+    [{"added", added}, {"removed", removed}, {"changed", changed}]
+    |> Enum.reject(fn {_verb, names} -> names == [] end)
+    |> Enum.with_index()
+    |> Enum.map(fn {{verb, names}, index} -> clause(verb, names, index) end)
+    |> sentence()
+  end
+
+  # Only the first clause says what is being counted; the rest read as its
+  # continuation
+  defp clause(verb, names, 0), do: "#{verb} #{count(names)} (#{Enum.join(names, ", ")})"
+  defp clause(verb, names, _later), do: "#{verb} #{length(names)} (#{Enum.join(names, ", ")})"
+
+  defp count([_one]), do: "1 question"
+  defp count(names), do: "#{length(names)} questions"
+
+  defp sentence([one]), do: one
+  defp sentence([one, two]), do: "#{one} and #{two}"
+
+  defp sentence(clauses),
+    do: Enum.join(Enum.drop(clauses, -1), ", ") <> ", and " <> List.last(clauses)
+
+  defp removal_warning(%{removed: []}), do: ""
+
+  defp removal_warning(%{removed: [_one]}),
+    do: " Any answers already given to it would not carry over."
+
+  defp removal_warning(%{removed: _many}),
+    do: " Any answers already given to those would not carry over."
 
   defp copy_definition_content(version, source_id) do
     with %{} = source <- Forms.get(source_id),
@@ -2178,9 +2238,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="build_with_ai_build"
           visible_if="{definition_editor} = 'ai'"
         >
+          <Note.note :if={@dirty? and !@building?} class="mb-3">
+            This draft has unsaved changes, and Build with AI replaces what the editor holds.
+            Save draft first if you want something to come back to.
+          </Note.note>
+          <%!-- `type="button"`, because a button inside a form submits it:
+                without this, pressing Build saved the draft on the way to
+                asking the model, which is the one thing this feature does
+                not do. --%>
           <Core.button
             :if={!@building?}
             components={@components}
+            type="button"
             phx-click="build_with_ai"
             phx-target={@myself}
             disabled={is_nil(presence(form[:build_with_ai_prompt].value))}
@@ -2532,7 +2601,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         name: "groupType",
         type: "dropdown",
         label: "Layout",
-        options: [{"Members side by side", "horizontal"}, {"Members stacked", "vertical"}],
+        options: Builder.group_type_options(),
         container: true
       },
       %{

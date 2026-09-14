@@ -131,6 +131,44 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
       definition = %{"elements" => [%{"type" => "text", "name" => "email", "choices" => ["a"]}]}
       assert Builder.unsupported(definition) == [~s(Element "email" uses "choices".)]
     end
+
+    # Value, not shape. A groupType the renderer has no clause for raises
+    # rather than draws, so accepting it here would hand the page a definition
+    # that opens in the builder and takes the preview down
+    # (`FormFlow.Web.Templates.Forms.Preview` refuses the same list).
+    test "a groupType or inputType outside the ones offered is unsupported" do
+      definition = %{
+        "elements" => [
+          %{"type" => "panel", "name" => "who", "groupType" => "row", "elements" => []},
+          %{"type" => "text", "name" => "shade", "inputType" => "color"}
+        ]
+      }
+
+      assert Builder.unsupported(definition) == [
+               ~s(Element "who" has a "groupType" the form builder cannot edit.),
+               ~s(Element "shade" has a "inputType" the form builder cannot edit.)
+             ]
+    end
+
+    test "the ones the builder offers are supported" do
+      for {_label, group_type} <- Builder.group_type_options() do
+        definition = %{
+          "elements" => [
+            %{"type" => "panel", "name" => "who", "groupType" => group_type, "elements" => []}
+          ]
+        }
+
+        assert Builder.unsupported(definition) == []
+      end
+
+      for {_label, input_type} <- Builder.input_type_options() do
+        definition = %{
+          "elements" => [%{"type" => "text", "name" => "a", "inputType" => input_type}]
+        }
+
+        assert Builder.unsupported(definition) == []
+      end
+    end
   end
 
   describe "containers" do

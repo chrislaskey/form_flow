@@ -630,6 +630,162 @@ defmodule Demo.FormFlowFormsCrudTest do
       refute html =~ "I can&#39;t do that"
     end
 
+    test "a question the answer no longer has is named on the page", %{conn: conn} do
+      configure_ai(
+        {:ok, ~s({"elements": [{"type": "text", "name": "full_name", "title": "Full name"}]})}
+      )
+
+      {view, _draft} =
+        draft_page(conn, %{
+          name: "People",
+          definition: %{
+            "elements" => [
+              %{"type" => "text", "name" => "given_name", "title" => "Given name"},
+              %{"type" => "text", "name" => "family_name", "title" => "Family name"}
+            ]
+          }
+        })
+
+      describe_form(view, "Put the names on one line", %{
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "given_name", "title" => "Given name"},
+          "1" => %{"type" => "text", "name" => "family_name", "title" => "Family name"}
+        }
+      })
+
+      html = build(view)
+
+      # Merging two questions into one is a valid definition and an answer
+      # that looks like a success — the names are the only evidence it lost
+      # something
+      assert html =~
+               "Build with AI added 1 question (full_name) and removed 2 (given_name, family_name)."
+
+      assert html =~ "Any answers already given to those would not carry over."
+
+      # Still applied, and still unsaved: the warning is a warning
+      assert has_element?(
+               view,
+               ~s(input[name="dynamic_form[elements][0][name]"][value="full_name"])
+             )
+    end
+
+    test "a rearranged form warns about nothing", %{conn: conn} do
+      configure_ai(
+        {:ok,
+         ~s({"elements": [{"type": "panel", "name": "who", "groupType": "horizontal", "elements": [{"type": "text", "name": "given_name", "title": "Given name"}]}]})}
+      )
+
+      {view, _draft} =
+        draft_page(conn, %{
+          name: "People",
+          definition: %{
+            "elements" => [%{"type" => "text", "name" => "given_name", "title" => "Given name"}]
+          }
+        })
+
+      describe_form(view, "Put the name in a group", %{
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "given_name", "title" => "Given name"}
+        }
+      })
+
+      html = build(view)
+
+      refute html =~ "Build with AI added"
+      refute html =~ "would not carry over"
+    end
+
+    test "while it builds, the steps and Cancel stand in for the Build button",
+         %{conn: conn} do
+      configure_ai({:ok, @elements})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      # The click's own render is the page mid-build: `start_async` has not
+      # resolved, so this is the one moment the waiting state is on screen
+      building = view |> element(~s(button[phx-click="build_with_ai"])) |> render_click()
+
+      assert building =~ "Writing the elements"
+      assert building =~ "Checking the builder can show them"
+      assert building =~ "Cancel"
+      refute has_element?(view, ~s(button[phx-click="build_with_ai"]))
+
+      render_async(view)
+
+      refute render(view) =~ "Writing the elements"
+
+      # The answer opens the form builder, so the panel — Build button and all
+      # — comes back only when the card does
+      assert has_element?(view, ~s(input[name="dynamic_form[elements][0][name]"]))
+      assert describe_form(view, "A form for a dog licence") =~ ~s(phx-click="build_with_ai")
+    end
+
+    # A button inside a form submits it, and submitting this one saves the
+    # draft — which is the one thing Build with AI does not do. Nothing in a
+    # LiveView test presses a button the way a browser does, so the attribute
+    # is what there is to assert.
+    test "neither Build nor Cancel submits the form", %{conn: conn} do
+      configure_ai({:ok, @elements})
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      assert has_element?(view, ~s(button[phx-click="build_with_ai"][type="button"]))
+
+      building = view |> element(~s(button[phx-click="build_with_ai"])) |> render_click()
+
+      assert building =~ ~r/<button[^>]*type="button"[^>]*phx-click="cancel_build_with_ai"/
+
+      render_async(view)
+    end
+
+    test "an unsaved draft says so before the prompt is sent", %{conn: conn} do
+      configure_ai({:ok, @elements})
+
+      # `form_type` is part of a draft's details, and a form created without
+      # one reads as changed the moment the dropdown reports its default
+      {view, draft} =
+        draft_page(conn, %{
+          name: "Dogs",
+          properties: %{"form_type" => "default"},
+          definition: %{"elements" => [%{"type" => "text", "name" => "dog_name"}]}
+        })
+
+      form = Forms.get(draft.form_id)
+
+      # A change event carries every field the form has, details included: a
+      # payload missing them reads as an admin who blanked them, which is a
+      # change like any other
+      saved = %{
+        "name" => form.name,
+        "slug" => form.slug,
+        "description" => form.description || "",
+        "form_type" => "default",
+        "elements" => %{"0" => %{"type" => "text", "name" => "dog_name"}}
+      }
+
+      html = describe_form(view, "Add a breed field", saved)
+
+      refute html =~ "This draft has unsaved changes"
+
+      # An edit to the definition is what makes the draft dirty — the prompt
+      # itself never counts, or the note would be on screen the whole time.
+      # The edit is made in the form builder, because that is where a
+      # definition is edited; the Build with AI panel holds it as JSON.
+      edited = put_in(saved, ["elements", "0", "title"], "Dog name")
+
+      view
+      |> element("#forms-edit-form-form")
+      |> render_change(%{"dynamic_form" => Map.put(edited, "definition_editor", "form")})
+
+      html = describe_form(view, "Add a breed field", edited)
+
+      assert html =~ "This draft has unsaved changes"
+      assert html =~ "Save draft first if you want something to come back to."
+    end
+
     test "what the module says went wrong is what the page says", %{conn: conn} do
       configure_ai({:error, "No credits left."})
       {view, _draft} = blank_draft_page(conn)

@@ -26,12 +26,12 @@ defmodule FormFlow.Web.Templates.Forms.Components.CatalogBadge do
 
   def catalog_badge(assigns) do
     ~H"""
-    <div class={["flex flex-wrap items-center gap-2 text-xs text-zinc-600", @class]}>
+    <div class={["rounded-md border border-zinc-200 bg-white px-4 py-3 mt-6 mb-6 text-sm text-zinc-700 flex items-center gap-2", @class]}>
       <Core.badge kind={:info} components={@components}>Catalog form</Core.badge>
       <span>
-        “{@form.name}” · used in {Enum.join(Shared.usage_labels(@usages), ", ")}.
+        {@form.name} · used in {Enum.join(Shared.usage_labels(@usages), ", ")}.
       </span>
-      <span>
+      <span class="text-xs">
         To stop reusing it, remove this step from the canvas and add it again — the new step gets a
         form of its own (or a copy of this one, through Copy form); users who started this step are
         stranded.

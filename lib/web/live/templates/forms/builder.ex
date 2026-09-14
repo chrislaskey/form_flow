@@ -22,10 +22,11 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   not another container.
 
   The builder covers a subset of what a definition can hold — the properties
-  in `properties/0`, for the types in `type_options/0`. `unsupported/1` names
-  everything else, so the page can refuse to open a definition in the
-  builder rather than drop those properties the moment the admin switched
-  back to JSON. The builder edits `elements` only; `definition/2` keeps every
+  in `properties/0`, for the types in `type_options/0`, and for the two
+  properties that are dropdowns over a closed set (`group_type_options/0`,
+  `input_type_options/0`) only those values. `unsupported/1` names everything
+  else, so the page can refuse to open a definition in the builder rather
+  than drop those properties the moment the admin switched back to JSON. The builder edits `elements` only; `definition/2` keeps every
   other top-level key of the definition it is given.
   """
 
@@ -51,6 +52,16 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   @container_types ~w(panel paneldynamic)
 
   @input_types ~w(text email number tel url date time datetime-local password)
+
+  # The two properties whose value is a closed set rather than free text, so
+  # the builder offers them as dropdowns. A value outside either is one the
+  # dropdown cannot hold — and an unknown `groupType` makes DynamicForm's
+  # renderer raise rather than draw, which is why `unsupported/1` checks the
+  # value and not only the shape (`FormFlow.Web.Templates.Forms.Preview`
+  # checks the same list for the same reason).
+  @group_type_options [{"Members side by side", "horizontal"}, {"Members stacked", "vertical"}]
+
+  @group_types Enum.map(@group_type_options, &elem(&1, 1))
 
   @choice_types ~w(dropdown radiogroup checkbox tagbox)
 
@@ -101,6 +112,9 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   @doc "The `inputType` values offered for a `text` element, as dropdown options."
   def input_type_options, do: Enum.map(@input_types, &{&1, &1})
+
+  @doc "The `groupType` values offered for a `panel` element, as dropdown options."
+  def group_type_options, do: @group_type_options
 
   @doc "The editable properties and the element types each applies to."
   def properties, do: @properties
@@ -439,6 +453,11 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   end
 
   defp valid_shape?("choices", _choices), do: false
+
+  # Value, not shape: these two are dropdowns over a closed set, and anything
+  # else is a value the builder would silently change on the way in
+  defp valid_shape?("groupType", value), do: value in @group_types
+  defp valid_shape?("inputType", value), do: value in @input_types
 
   defp valid_shape?(key, members) when key in ["elements", "templateElements"],
     do: is_list(members)
