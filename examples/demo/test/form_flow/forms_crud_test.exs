@@ -661,8 +661,6 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert html =~
                "Build with AI added 1 question (full_name) and removed 2 (given_name, family_name)."
 
-      assert html =~ "Any answers already given to those would not carry over."
-
       # Still applied, and still unsaved: the warning is a warning
       assert has_element?(
                view,
@@ -782,8 +780,48 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       html = describe_form(view, "Add a breed field", edited)
 
-      assert html =~ "This draft has unsaved changes"
-      assert html =~ "Save draft first if you want something to come back to."
+      # Squished, because the sentence is wrapped in the markup and a test
+      # that pins where it wraps breaks every time somebody rewords it
+      assert squish(html) =~
+               "This draft has unsaved changes. AI tools are not always accurate and will " <>
+                 "replace what the editor holds. Save draft first if you want something to " <>
+                 "come back to."
+    end
+
+    defp squish(html), do: String.replace(html, ~r/\s+/, " ")
+
+    test "Cancel stops waiting and says nothing went wrong", %{conn: conn} do
+      configure_ai(fn -> Process.sleep(:infinity) end)
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      building = view |> element(~s(button[phx-click="build_with_ai"])) |> render_click()
+      assert building =~ "Writing the elements"
+
+      html = view |> element(~s(button[phx-click="cancel_build_with_ai"])) |> render_click()
+
+      # Killing the task is an exit like any other, and the clause for a module
+      # that crashed would otherwise report a failure the admin just chose
+      refute html =~ "Build with AI failed"
+      refute html =~ "Writing the elements"
+      assert html =~ ~s(phx-click="build_with_ai")
+
+      # The prompt is left exactly as it was, to press again
+      assert has_element?(
+               view,
+               ~s(textarea[name="dynamic_form[build_with_ai_prompt]"]),
+               "A form for a dog licence"
+             )
+    end
+
+    test "a module that raises reaches the admin as a sentence", %{conn: conn} do
+      configure_ai(fn -> raise "boom" end)
+      {view, _draft} = blank_draft_page(conn)
+
+      describe_form(view, "A form for a dog licence")
+
+      assert build(view) =~ "Build with AI failed. Please try again."
     end
 
     test "what the module says went wrong is what the page says", %{conn: conn} do
@@ -1871,6 +1909,9 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#forms-edit-form-form")
     |> render_change(%{"dynamic_form" => %{"definition_copy_source" => source.id}})
 
+    # A button inside a form submits it, and this one is not a save
+    assert has_element?(view, ~s(button[phx-click="copy_definition"][type="button"]))
+
     view
     |> element(~s(button[phx-click="copy_definition"]))
     |> render_click()
@@ -1880,6 +1921,42 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert updated.description == form.description
     assert updated.slug == form.slug
     assert Forms.get_version(draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
+  end
+
+  # The copy reloads the page from what is saved, and a name typed into the
+  # details above is not. Until the Copy button stopped submitting the form
+  # this was hidden: the stray submit saved those edits on the way past.
+  test "a copy keeps a detail typed but not saved", %{conn: conn} do
+    {:ok, source} =
+      Forms.create(%{name: "Source", definition: %{"elements" => [%{"type" => "text", "name" => "ssn"}]}})
+
+    [source_draft] = Forms.list_versions(source.id)
+    {:ok, _v1} = Forms.update_status(source_draft, :published)
+
+    {:ok, form} = Forms.create(%{name: "Target", properties: %{"form_type" => "default"}})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
+
+    change = fn params ->
+      view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
+    end
+
+    change.(%{"definition_editor" => "copy", "name" => "Target, renamed", "slug" => form.slug})
+
+    change.(%{
+      "definition_copy_source" => source.id,
+      "name" => "Target, renamed",
+      "slug" => form.slug
+    })
+
+    view |> element(~s(button[phx-click="copy_definition"])) |> render_click()
+
+    assert has_element?(view, ~s(input[name="dynamic_form[name]"][value="Target, renamed"]))
+
+    # Typed, not saved: Copy writes the definition and nothing else
+    assert Forms.get(form.id).name == "Target"
+    assert Forms.get_version(draft.id).definition == %{"elements" => [%{"type" => "text", "name" => "ssn"}]}
   end
 
   test "a related-form property offers the forms earlier in the flow", %{conn: conn} do

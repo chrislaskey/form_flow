@@ -90,6 +90,11 @@ defmodule FormFlow.Data.Clients.AI.OpenRouterTest do
                {:error, "The request failed (429). Please try again."}
     end
 
+    test "a 200 carrying nothing this understands blames the answer, not the request" do
+      assert OpenRouter.handle_response({:ok, %{status: 200, body: "not JSON at all"}}) ==
+               {:error, "The model returned no answer. Please try again."}
+    end
+
     test "a transport failure reaches the admin as a sentence and the host as a log line" do
       exception = %Mint.TransportError{reason: :nxdomain}
 

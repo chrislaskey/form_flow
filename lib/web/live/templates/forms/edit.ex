@@ -139,6 +139,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   use Phoenix.LiveComponent
 
+  require Logger
+
   import FormFlow.Web.Helpers.Paths
 
   alias Phoenix.LiveView.JS
@@ -834,9 +836,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               :for={{label, state, clock} <- building_steps(@seconds)}
               class={[
                 "flex items-center gap-2",
-                state == :done && "text-gray-500",
-                state == :running && "text-gray-900",
-                state == :pending && "text-gray-400"
+                state == :done && "text-zinc-500",
+                state == :running && "text-zinc-900",
+                state == :pending && "text-zinc-400"
               ]}
             >
               <Core.icon
@@ -850,8 +852,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 class="loading loading-spinner loading-xs text-primary"
               />
               <span :if={state == :pending} class="size-4 rounded-full border border-zinc-300" />
-              <span class={state == :running && "font-medium text-gray-900"}>{label}</span>
-              <span class="ml-auto font-mono text-xs tabular-nums text-gray-400">{clock}</span>
+              <span class={state == :running && "font-medium text-zinc-900"}>{label}</span>
+              <span class="ml-auto font-mono text-xs tabular-nums text-zinc-400">{clock}</span>
             </li>
           </ol>
         </div>
@@ -1153,7 +1155,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     changes = BuildWithAI.changes(socket.assigns.latest_json, definition)
 
     if BuildWithAI.changes?(changes) do
-      "Build with AI #{clauses(changes)}." <> removal_warning(changes)
+      "Build with AI #{clauses(changes)}."
     end
   end
 
@@ -1183,13 +1185,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp sentence(clauses),
     do: Enum.join(Enum.drop(clauses, -1), ", ") <> ", and " <> List.last(clauses)
 
-  defp removal_warning(%{removed: []}), do: ""
+  # `load/1` rebuilds the form from what is saved, and the copied definition
+  # is — but a name or description typed and not saved is not, and the rebuild
+  # would drop it. Every field the rebuilt form has comes back from the last
+  # change payload instead, except the ones the copy just replaced. Until the
+  # button stopped submitting the form this was hidden: the stray submit saved
+  # those edits on the way past.
+  defp keep_edited_details(%{assigns: %{edit_details?: false}} = socket), do: socket
 
-  defp removal_warning(%{removed: [_one]}),
-    do: " Any answers already given to it would not carry over."
+  defp keep_edited_details(socket) do
+    %{form_data: form_data, latest_data: latest_data} = socket.assigns
 
-  defp removal_warning(%{removed: _many}),
-    do: " Any answers already given to those would not carry over."
+    edited =
+      latest_data
+      |> Map.take(Map.keys(form_data))
+      |> Map.drop([:definition, :definition_editor, :elements])
+
+    assign(socket, :form_data, Map.merge(form_data, edited))
+  end
 
   defp copy_definition_content(version, source_id) do
     with %{} = source <- Forms.get(source_id),
@@ -1240,9 +1253,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   def handle_async(:build_with_ai, {:ok, {:error, message}}, socket),
     do: {:noreply, assign(socket, building?: false, editor_error: message)}
 
+  # Cancel killed the task, and killing a task is still an exit: without this
+  # clause pressing Cancel answered "Build with AI failed", which is a lie
+  # about a thing the admin just did on purpose. `cancel_async/2` has already
+  # put the page back.
+  def handle_async(:build_with_ai, {:exit, {:shutdown, :cancel}}, socket),
+    do: {:noreply, socket}
+
   # A module that raises rather than returning {:error, _} still has to reach
-  # the admin as a sentence
-  def handle_async(:build_with_ai, {:exit, _reason}, socket) do
+  # the admin as a sentence — and the host, whose module it is, has nothing
+  # but the log to debug it with
+  def handle_async(:build_with_ai, {:exit, reason}, socket) do
+    Logger.warning("FormFlow Build with AI module exited: #{inspect(reason)}")
+
     {:noreply,
      assign(socket, building?: false, editor_error: "Build with AI failed. Please try again.")}
   end
@@ -1374,6 +1397,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          socket
          |> assign(definition_json: json, latest_json: json, definition_editor: nil)
          |> load()
+         |> keep_edited_details()
          |> force_refresh_preview()}
 
       {:error, message} ->
@@ -2157,6 +2181,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         >
           <Core.button
             components={@components}
+            type="button"
             phx-click="copy_definition"
             phx-target={@myself}
             phx-value-source_form_id={form[:definition_copy_source].value}
@@ -2239,8 +2264,9 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           visible_if="{definition_editor} = 'ai'"
         >
           <Note.note :if={@dirty? and !@building?} class="mb-3">
-            This draft has unsaved changes, and Build with AI replaces what the editor holds.
-            Save draft first if you want something to come back to.
+            This draft has unsaved changes. AI tools are not always accurate
+            and will replace what the editor holds. Save draft first if you
+            want something to come back to.
           </Note.note>
           <%!-- `type="button"`, because a button inside a form submits it:
                 without this, pressing Build saved the draft on the way to

@@ -51,7 +51,14 @@ defmodule FormFlow.Config.AI do
 
   # The struct holds a credential and lives in a LiveView's assigns, so a
   # crash report, a telemetry handler, or a stray `dbg` would otherwise print
-  # the key
+  # the key.
+  #
+  # Deriving a protocol implementation after Mix has consolidated warns that
+  # it "has no effect", which an app depending on FormFlow by path sees on
+  # every rebuild. The warning overstates it: Mix re-consolidates, and
+  # `inspect(%FormFlow.Config.AI{api_key: "sk-…"})` redacts the key in those
+  # builds. Keeping the key out of the struct altogether would silence it for
+  # real, and §14 of the plan is where that argument lives.
   @derive {Inspect, except: [:api_key]}
 
   # The default model, chosen from OpenRouter's catalogue on the day this was

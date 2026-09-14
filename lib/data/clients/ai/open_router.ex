@@ -96,6 +96,11 @@ defmodule FormFlow.Data.Clients.AI.OpenRouter do
     end
   end
 
+  # A 200 with a body in no shape this understands is still the model failing
+  # to answer; "the request failed (200)" would blame the wrong thing
+  def handle_response({:ok, %{status: 200}}),
+    do: {:error, "The model returned no answer. Please try again."}
+
   def handle_response({:ok, %{status: status}}),
     do: {:error, "The request failed (#{status}). Please try again."}
 

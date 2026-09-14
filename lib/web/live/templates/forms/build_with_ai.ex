@@ -136,7 +136,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
       {:ok, %{"elements" => elements} = definition} when is_list(elements) ->
         {:ok, definition}
 
-      {:ok, %{}} ->
+      {:ok, answer} when is_map(answer) ->
         {:error, "Build with AI returned an answer with no form elements."}
 
       {:ok, _other} ->
