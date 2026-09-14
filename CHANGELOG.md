@@ -1,5 +1,175 @@
 # Changelog
 
+## v0.26.0
+
+### A fourth way to edit a definition: Build with AI
+
+`FormFlow.Web.Templates.Forms.Edit` offers **Build with AI** beside Form
+builder, JSON, and Copy existing form — *"Use AI to build new form elements
+or edit existing ones"* — and picking it puts a prompt where the JSON field
+would be, under a heading that says the same thing. The prompt asks for what
+the draft does not have yet: **"Let's create a form with fields for..."**
+while the definition is empty, **"Update the existing form by adding..."**
+once it holds something. Press **Build**, and the definition comes back in
+the editor.
+
+**Nothing is saved by building.** The definition lands in the editor, the
+draft goes dirty, and Save draft is still the only write — unlike Copy
+existing form, which writes. A definition the form builder can show opens in
+the form builder; one it cannot opens as JSON, with the warning naming what
+it was (`FormFlow.Web.Templates.Forms.Builder.unsupported/1`), the same
+refuse-rather-than-drop rule switching editors already follows. An answer
+that is not a JSON object, or is one with no elements in it — a model's
+refusal, dressed as JSON — is an error message over the editor, and the
+definition on the page is untouched.
+
+**A host says whether the feature exists, and what answers it**, with the new
+`build_with_ai` attr of `FormFlow.Web.router/1` and the form editor: a
+`FormFlow.Config.AI` struct naming the module that makes the call, the models
+to offer, the key, and the timeout. Pass nothing — the default — and the card
+stays where it is with the panel saying the feature is not set up for this
+application, because an admin who has read about it and cannot find it is
+looking at a decision their own developers made. This is the first attr that
+carries a credential: the key is the host's, passed as a value, stored by
+nothing in FormFlow, and what an admin types in the prompt leaves the host's
+servers along with the definition being edited. The README says so under
+*Optional: Build with AI*.
+
+`:available_models` is a list because the choice between a careful model and
+a quick one is the admin's, made per build with the prompt in front of them:
+more than one draws a **Model** select beside the prompt, one draws none. It
+defaults to `qwen/qwen3.8-flash`: writing a definition is following a list of
+rules and emitting a couple of thousand tokens of JSON, which a cheap current
+model does well — about a seventh of a cent a build, against three and a half
+cents for `anthropic/claude-opus-5`, which is no better at it. Model prices
+move, and a default is not a recommendation with a shelf life; name your own.
+
+**What ships is `FormFlow.Config.AI.OpenRouter`**, the struct's default: one
+POST to OpenRouter's chat-completions endpoint, so one account and one key
+reach every provider's models and adding one to the select is not a code
+change. A host that wants its own gateway, a provider's own API, a retry, or
+a spend cap points `:module` at a module of its own that `use
+FormFlow.Config.AI`. The callback is deliberately narrow — a
+`FormFlow.Config.AI.Request` in, `{:ok, text}` or `{:error, sentence}` out —
+so the library keeps what it knows about forms (what to ask for, how to read
+the answer) and the host's module keeps what it knows about the provider.
+The same struct is what a later AI-backed feature on the instance side would
+take; nothing in it is about editing a definition.
+
+**The instruction is generated from the form builder's own tables**
+(`FormFlow.Web.Templates.Forms.BuildWithAI`), not written out beside them, so
+an answer that follows it is an answer the builder can open — including the
+container keys a definition actually uses, `elements` and `templateElements`,
+rather than `children`, which is the builder's own word for the same thing.
+The answer is not schema-constrained: `response_format` cannot express a
+recursive definition, requires enumerating every property — which would
+silently drop anything the builder has no control for — and is supported per
+model *and* per provider behind it.
+
+**While it builds**, the panel is a box of steps under the prompt, each
+carrying its own clock, with Cancel the only control: the form was read and
+the description sent the moment Build was pressed, the elements are being
+written for the whole wait, and the builder is asked about them once they
+land. Nothing there is reported by the model — no percentage, no token count
+— and Cancel stops waiting rather than stopping the request, which is still
+running at the provider.
+
+The placeholder is read when the editor is switched into rather than
+followed per keystroke, and the clock and the Build button live inside a
+field's slot body, both for the same reason: `DynamicForm` rebuilds a form
+whose declaration changed from its data, so a placeholder that moved with
+what was typed — or a clock in a field attribute — would drop the prompt.
+For the same reason the page now keeps the values that arrived with the last
+change, and rebuilds the form from those rather than from the data it loaded,
+so a built form arrives with the prompt that produced it and any unsaved name
+or description edit still in place.
+
+**What the answer did to the form is said in words.** A definition that came
+back missing three questions looks exactly like one that never had them, so
+the page names them: *"Build with AI added 1 question (full_name) and removed
+2 (given_name, family_name). Any answers already given to those would not
+carry over."* Added, removed, and changed are counted separately; a renamed
+question reads as a removal and an addition, which is what it is to an answer
+already stored under the old name. Groups and blocks of HTML are not counted,
+because neither holds an answer and rearranging them is what a *correct*
+answer usually looks like.
+
+**A draft with unsaved changes says so before the prompt is sent**, since the
+answer replaces what the editor holds. Building itself never saves — that is
+the point — so the note offers the save rather than making it.
+
+The four cards are a two-column grid rather than a row that wraps. Four
+cards wrapping left the fourth alone on a line of its own at most widths;
+a grid keeps every card the same size whatever the column is doing.
+
+### The form builder refuses a value it cannot hold
+
+`FormFlow.Web.Templates.Forms.Builder.unsupported/1` checked that `groupType`
+and `inputType` were strings and nothing more, so a definition naming a layout
+or an input type the builder does not offer opened in the form builder — where
+the dropdown had no such option, and the value was quietly replaced at the
+next Save. Both are now checked against the values the builder actually
+offers, and a definition using another one opens as JSON saying which element
+and which property, the same refuse-rather-than-drop rule the rest of the
+editor follows.
+
+`Builder.allowed_properties/1` and a new `Builder.group_type_options/0` are
+public, so the one table that decides what the builder can edit is also what
+the edit page's Layout dropdown is built from — it used to carry its own copy.
+
+### The preview says what it can't draw instead of dying
+
+A `groupType` no components module has a clause for is the one value in a
+definition that makes `DynamicForm` raise rather than render, and it raises
+inside the component at diff time — after `mount/3`, where the preview's
+eager parse could not reach it. The client answered a dead preview by
+remounting it into the same crash. `FormFlow.Web.Templates.Forms.Preview` now
+checks group types before it draws anything, panels and nested-form templates
+alike, and a bad one becomes the inline message it already had for a
+definition it cannot render.
+
+### Copy existing form no longer saves the draft when you press it
+
+A `<button>` inside a `<form>` submits it unless it says otherwise, and this
+one did not — so pressing **Copy definition** saved the draft's definition and
+details on the way to copying, a write nobody asked for. It is a plain button
+now. Copy still writes the definition it copies, as it always has; what
+changes is that the name, slug, and description keep whatever is typed into
+them rather than being saved first and read back.
+
+### Custom form is now Fresh start
+
+The chooser a blank, never-published draft opens on reads **Fresh start**,
+Copy form, and Reuse form. Only the first has a new name: "Custom form" said
+what the form was rather than what picking it does, which is to leave the
+draft empty and start typing. The query parameter it leaves behind moved
+with it — a draft that was opened with `?start=custom` is now
+`?start=fresh`, and a bookmarked link with the old one shows the chooser
+again rather than the editor.
+
+### The New flow page is laid out across, not down
+
+`FormFlow.Web.Templates.Flows.New` puts Name and Slug on one row (a
+`DynamicForm` horizontal group) and the kind beside it as the same choice
+cards the form editor picks its editor with — **Simple flow** and **Complex
+flow**, side by side, each saying what the flow can hold — inside a
+`max-w-5xl` column. **Create flow** moved to the header beside Cancel, where
+every other page keeps its primary action, reaching the form below by an
+HTML `form=` reference. Cancel asks before it leaves: nothing here is saved
+yet, so leaving loses whatever was typed.
+
+### A new dependency: Req
+
+`{:req, ">= 0.4.0"}`, for the one POST `FormFlow.Config.AI.OpenRouter`
+makes. The floor is the version where the surface used here settled: the
+non-bang `Req.post/2` returning `{:ok, response} | {:error, exception}`, with
+`:json`, `:headers` as a list of tuples, and `:receive_timeout`.
+
+Hosts will see five new entries in their lock file, not one: Req brings
+`finch`, `mint`, `hpax`, `nimble_options`, and `nimble_pool`. Making it
+optional was considered and rejected — the guard is cheap, but a default that
+only works if you also add a dependency is not a default.
+
 ## v0.25.0
 
 ### Every page that draws a form can fill it in
@@ -130,125 +300,6 @@ migration creates, the three that cross over to Neo4j, and the three ways a
 graph can be read back out of SQL — with screenshots of the two diagrams the
 page draws, and a pointer to the demo for the interactive versions. The
 Neo4j guide stays what it was, the mapping itself.
-
-### A fourth way to edit a definition: Build with AI
-
-`FormFlow.Web.Templates.Forms.Edit` offers **Build with AI** beside Form
-builder, JSON, and Copy existing form — *"Use AI to build new form elements
-or edit existing ones"* — and picking it puts a prompt where the JSON field
-would be, under a heading that says the same thing. The prompt asks for what
-the draft does not have yet: **"Let's create a form with fields for..."**
-while the definition is empty, **"Update the existing form by adding..."**
-once it holds something. Press **Build**, and the definition comes back in
-the editor.
-
-**Nothing is saved by building.** The definition lands in the editor, the
-draft goes dirty, and Save draft is still the only write — unlike Copy
-existing form, which writes. A definition the form builder can show opens in
-the form builder; one it cannot opens as JSON, with the warning naming what
-it was (`FormFlow.Web.Templates.Forms.Builder.unsupported/1`), the same
-refuse-rather-than-drop rule switching editors already follows. An answer
-that is not a JSON object, or is one with no elements in it — a model's
-refusal, dressed as JSON — is an error message over the editor, and the
-definition on the page is untouched.
-
-**A host says whether the feature exists, and what answers it**, with the new
-`build_with_ai` attr of `FormFlow.Web.router/1` and the form editor: a
-`FormFlow.Config.AI` struct naming the module that makes the call, the models
-to offer, the key, and the timeout. Pass nothing — the default — and the card
-stays where it is with the panel saying the feature is not set up for this
-application, because an admin who has read about it and cannot find it is
-looking at a decision their own developers made. This is the first attr that
-carries a credential: the key is the host's, passed as a value, stored by
-nothing in FormFlow, and what an admin types in the prompt leaves the host's
-servers along with the definition being edited. The README says so under
-*Optional: Build with AI*.
-
-`:available_models` is a list because the choice between a careful model and
-a quick one is the admin's, made per build with the prompt in front of them:
-more than one draws a **Model** select beside the prompt, one draws none. It
-defaults to `qwen/qwen3.8-flash`: writing a definition is following a list of
-rules and emitting a couple of thousand tokens of JSON, which a cheap current
-model does well — about a seventh of a cent a build, against three and a half
-cents for `anthropic/claude-opus-5`, which is no better at it. Model prices
-move, and a default is not a recommendation with a shelf life; name your own.
-
-**What ships is `FormFlow.Config.AI.OpenRouter`**, the struct's default: one
-POST to OpenRouter's chat-completions endpoint, so one account and one key
-reach every provider's models and adding one to the select is not a code
-change. A host that wants its own gateway, a provider's own API, a retry, or
-a spend cap points `:module` at a module of its own that `use
-FormFlow.Config.AI`. The callback is deliberately narrow — a
-`FormFlow.Config.AI.Request` in, `{:ok, text}` or `{:error, sentence}` out —
-so the library keeps what it knows about forms (what to ask for, how to read
-the answer) and the host's module keeps what it knows about the provider.
-The same struct is what a later AI-backed feature on the instance side would
-take; nothing in it is about editing a definition.
-
-**The instruction is generated from the form builder's own tables**
-(`FormFlow.Web.Templates.Forms.BuildWithAI`), not written out beside them, so
-an answer that follows it is an answer the builder can open — including the
-container keys a definition actually uses, `elements` and `templateElements`,
-rather than `children`, which is the builder's own word for the same thing.
-The answer is not schema-constrained: `response_format` cannot express a
-recursive definition, requires enumerating every property — which would
-silently drop anything the builder has no control for — and is supported per
-model *and* per provider behind it.
-
-**While it builds**, the panel is a box of steps under the prompt, each
-carrying its own clock, with Cancel the only control: the form was read and
-the description sent the moment Build was pressed, the elements are being
-written for the whole wait, and the builder is asked about them once they
-land. Nothing there is reported by the model — no percentage, no token count
-— and Cancel stops waiting rather than stopping the request, which is still
-running at the provider.
-
-The placeholder is read when the editor is switched into rather than
-followed per keystroke, and the clock and the Build button live inside a
-field's slot body, both for the same reason: `DynamicForm` rebuilds a form
-whose declaration changed from its data, so a placeholder that moved with
-what was typed — or a clock in a field attribute — would drop the prompt.
-For the same reason the page now keeps the values that arrived with the last
-change, and rebuilds the form from those rather than from the data it loaded,
-so a built form arrives with the prompt that produced it and any unsaved name
-or description edit still in place.
-
-The four cards are a two-column grid rather than a row that wraps. Four
-cards wrapping left the fourth alone on a line of its own at most widths;
-a grid keeps every card the same size whatever the column is doing.
-
-### A new dependency: Req
-
-`{:req, ">= 0.4.0"}`, for the one POST `FormFlow.Config.AI.OpenRouter`
-makes. The floor is the version where the surface used here settled: the
-non-bang `Req.post/2` returning `{:ok, response} | {:error, exception}`, with
-`:json`, `:headers` as a list of tuples, and `:receive_timeout`.
-
-Hosts will see five new entries in their lock file, not one: Req brings
-`finch`, `mint`, `hpax`, `nimble_options`, and `nimble_pool`. Making it
-optional was considered and rejected — the guard is cheap, but a default that
-only works if you also add a dependency is not a default.
-
-### Custom form is now Fresh start
-
-The chooser a blank, never-published draft opens on reads **Fresh start**,
-Copy form, and Reuse form. Only the first has a new name: "Custom form" said
-what the form was rather than what picking it does, which is to leave the
-draft empty and start typing. The query parameter it leaves behind moved
-with it — a draft that was opened with `?start=custom` is now
-`?start=fresh`, and a bookmarked link with the old one shows the chooser
-again rather than the editor.
-
-### The New flow page is laid out across, not down
-
-`FormFlow.Web.Templates.Flows.New` puts Name and Slug on one row (a
-`DynamicForm` horizontal group) and the kind beside it as the same choice
-cards the form editor picks its editor with — **Simple flow** and **Complex
-flow**, side by side, each saying what the flow can hold — inside a
-`max-w-5xl` column. **Create flow** moved to the header beside Cancel, where
-every other page keeps its primary action, reaching the form below by an
-HTML `form=` reference. Cancel asks before it leaves: nothing here is saved
-yet, so leaving loses whatever was typed.
 
 ## v0.24.0
 
