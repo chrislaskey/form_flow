@@ -26,6 +26,14 @@ defmodule DemoWeb.DocsComponents do
   # /docs lists the same entries, so a page joins both by being added here.
   @pages [
     %{
+      id: :introduction,
+      title: "Introduction",
+      path: "/docs/introduction",
+      description:
+        "What FormFlow is, why it stores forms as data, and what it takes to " <>
+          "use it in an application."
+    },
+    %{
       id: :data_modeling,
       title: "Data modeling",
       path: "/docs/data-modeling",

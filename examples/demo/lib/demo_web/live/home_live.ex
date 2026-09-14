@@ -1,11 +1,18 @@
 defmodule DemoWeb.HomeLive do
   @moduledoc """
-  `/` — what the demo is, which user it is being viewed as, and the version
-  of FormFlow it was compiled against.
+  `/` — what FormFlow is and why it exists, which user the demo is being
+  viewed as, and the version it was compiled against.
+
+  The prose is `DemoWeb.IntroductionComponents`', the README's introduction,
+  shared with `/docs/introduction` so the two openings cannot drift apart.
+  This page heads it with plain headings; the docs page heads it with the
+  sections its nav jumps to.
   """
 
   use DemoWeb, :live_view
 
+  import DemoWeb.IntroductionComponents
+  import DemoWeb.PageComponents
   import DemoWeb.PersonaComponents
 
   @impl true
@@ -21,13 +28,28 @@ defmodule DemoWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <div class="space-y-10">
+      <div class="space-y-10 max-w-3xl">
         <header class="space-y-2">
-          <h1 class="text-2xl font-semibold">FormFlow demo</h1>
-          <p class="text-base-content/70">
-            Batteries included library for creating dynamic form-based user flows in Phoenix.
-          </p>
+          <h1 class="text-2xl font-semibold">FormFlow</h1>
+          <.tagline />
         </header>
+
+        <section id="why-form-flow" class="space-y-3">
+          <.h2 class="mb-0">Why FormFlow?</.h2>
+          <.why_form_flow />
+        </section>
+
+        <section id="how-do-i-use-it" class="space-y-3">
+          <.h2 class="mb-0">How do I use it?</.h2>
+
+          <.how_do_i_use_it />
+
+          <.p>
+            This demo is one of those applications. The
+            <.link navigate={~p"/docs/introduction"} class="link">docs</.link>
+            cover how it is put together.
+          </.p>
+        </section>
 
         <.pick_perspective current_user={@current_user} />
 

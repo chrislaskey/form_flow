@@ -20,6 +20,14 @@ defmodule DemoWeb.HomeLiveTest do
     assert render(element(view, "#form-flow-version")) =~ version
   end
 
+  test "renders the README's pitch", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/")
+
+    assert html =~ "Why FormFlow?"
+    assert html =~ "forms as data"
+    assert has_element?(view, "#how-do-i-use-it")
+  end
+
   test "is the only route at the root: nothing falls through to it", %{conn: conn} do
     assert get(conn, "/flows").status == 404
   end
