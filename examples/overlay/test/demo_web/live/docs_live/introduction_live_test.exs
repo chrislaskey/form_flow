@@ -12,7 +12,7 @@ defmodule DemoWeb.DocsLive.IntroductionLiveTest do
     assert has_element?(view, "#how-do-i-use-it")
   end
 
-  test "the nav jumps to every section the page renders", %{conn: conn} do
+  test "the nav jumps to every section the page renders, in page order", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/docs/introduction")
 
     document = LazyHTML.from_fragment(html)
@@ -22,11 +22,14 @@ defmodule DemoWeb.DocsLive.IntroductionLiveTest do
       |> LazyHTML.query("#docs-nav a[href^='#']")
       |> LazyHTML.attribute("href")
 
-    assert anchors == ["#why-form-flow", "#how-do-i-use-it"]
+    headings =
+      document
+      |> LazyHTML.query("h2[id]")
+      |> LazyHTML.attribute("id")
+      |> Enum.map(&("#" <> &1))
 
-    for anchor <- anchors do
-      assert LazyHTML.query(document, anchor) != []
-    end
+    assert anchors != []
+    assert anchors == headings
   end
 
   test "opens with the same words as the demo index", %{conn: conn} do

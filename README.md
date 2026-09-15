@@ -26,37 +26,39 @@ functionality, FormFlow makes it fast to get started building flows.
 But more importantly, it **stays easy to manage even as the complexity grows**
 across multiple forms, multiple user types, and beyond.
 
-## Data-driven systems are hard to customize, right?
+## How easy is it to customize?
 
 Storing flows and forms in data means everything is stable and consistent. It's
 great for things to be uniform, but what if you need to customize something?
+This is a common problem, and often times data-driven systems are rigid.
 
-This is a common problem, and often times data derived systems are rigid.
-
-So when building FormFlow, true, easy to use, flexible customization is built into
-the core of it's design, and not an afterthought.
+When creating FormFlow, true, easy to use, flexible **customization is built into
+the core of it's design**, and not an afterthought.
 
 Almost everything is customizable, from the flow logic to the detailed
-rendering. All of it is done using standard Elixir code. No macro DSL language
-to learn. No hooks to memorize. Simple changes can be done by passing component
-attributes. More complex things can be done by passing Elixir modules with
-custom implementations.
+rendering. All of it is customized using standard Elixir and Phoenix code.
+No macro DSL language to learn. Simple changes can be done by with
+well-documented component attributes. More complex customization can be done by
+passing Elixir modules with custom callback implementations.
 
-When it comes to UI/UX, it supports using your applications CoreComponents, so
-everything from icons to error states in field inputs is native to your app.
+Nothing's worse than a library that doesn't feel like a part of the existing
+app. So when it comes to UI/UX, it supports your existing applications
+CoreComponents, so everything from icons to error states in field inputs is
+native to your app.
 
 ## How do I use it?
 
 FormFlow is built as an Elixir library. It's compatible with any modern 
-Phoenix LiveView application. It supports both SQLite and PostgreSQL for the
-database layer. While not required, it also has optional support for
-Neo4J that makes it even more efficient, especially for complex workflows.
+Phoenix LiveView application. It supports both **SQLite and PostgreSQL** for the
+database layer. While not required, it also has **optional Neo4J** graph
+database support for that makes it even more efficient, especially for complex
+workflows.
 
-If you have an existing Phoenix LiveView application, it's easy to install as
-a dependency and click immediately into the existing application.
+If you have an existing Phoenix LiveView application, it's easy to install the
+library as a mix.exs dependency and fits into the existing application.
 
 If you don't use Phoenix for your main app, don't worry! FormFlow can be
-deployed as a standalone app easily.
+deployed as a standalone app by wrapping it in Phoenix.
 
 ## Licensing
 

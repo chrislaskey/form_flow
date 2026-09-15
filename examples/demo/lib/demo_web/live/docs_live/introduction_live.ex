@@ -22,7 +22,9 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
   # and the heading it jumps to cannot say different things.
   @sections [
     %{id: "why-form-flow", title: "Why FormFlow?"},
-    %{id: "how-do-i-use-it", title: "How do I use it?"}
+    %{id: "how-easy-is-it-to-customize", title: "How easy is it to customize?"},
+    %{id: "how-do-i-use-it", title: "How do I use it?"},
+    %{id: "licensing", title: "Licensing"}
   ]
 
   @impl true
@@ -47,6 +49,10 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
           <.why_form_flow />
         </.docs_section>
 
+        <.docs_section {section("how-easy-is-it-to-customize")}>
+          <.how_easy_is_it_to_customize />
+        </.docs_section>
+
         <.docs_section {section("how-do-i-use-it")}>
           <.how_do_i_use_it />
 
@@ -58,6 +64,10 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
             picks up where this page leaves off: the tables the flows are stored
             in, and the three ways they can be queried.
           </.p>
+        </.docs_section>
+
+        <.docs_section {section("licensing")}>
+          <.licensing />
         </.docs_section>
       </.docs_layout>
     </Layouts.app>

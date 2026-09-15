@@ -39,6 +39,12 @@ defmodule DemoWeb.HomeLive do
           <.why_form_flow />
         </section>
 
+        <section id="how-easy-is-it-to-customize" class="space-y-3">
+          <.h2 class="mb-0">How easy is it to customize?</.h2>
+
+          <.how_easy_is_it_to_customize />
+        </section>
+
         <section id="how-do-i-use-it" class="space-y-3">
           <.h2 class="mb-0">How do I use it?</.h2>
 
@@ -49,6 +55,12 @@ defmodule DemoWeb.HomeLive do
             <.link navigate={~p"/docs/introduction"} class="link">docs</.link>
             cover how it is put together.
           </.p>
+        </section>
+
+        <section id="licensing" class="space-y-3">
+          <.h2 class="mb-0">Licensing</.h2>
+
+          <.licensing />
         </section>
 
         <.pick_perspective current_user={@current_user} />
