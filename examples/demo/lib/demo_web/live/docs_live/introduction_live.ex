@@ -45,6 +45,8 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
 
         <.tagline />
 
+        <.screenshot name={:overview} />
+
         <.docs_section {section("why-form-flow")}>
           <.why_form_flow />
         </.docs_section>

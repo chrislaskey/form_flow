@@ -211,6 +211,13 @@ echo -e '\n# Vendored form_flow source, created by deploy.sh for Docker builds\n
 echo "==> Applying overlay/"
 cp -R overlay/. demo/
 
+# The README's screenshots, which GitHub reads straight out of examples/. The
+# demo's introduction pages show the same files, so they are served from
+# priv/static rather than fetched from raw.githubusercontent — one copy in the
+# repository, and a demo that renders with no network.
+echo "==> Copying the README screenshots into priv/static"
+cp screenshot-*.gif demo/priv/static/images/
+
 # 5. Install deps, create the database, build assets
 echo "==> mix setup (deps, database, assets)"
 (cd demo && mix setup)

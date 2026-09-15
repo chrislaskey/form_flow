@@ -32,6 +32,23 @@ defmodule DemoWeb.DocsLive.IntroductionLiveTest do
     assert anchors == headings
   end
 
+  test "shows the README's screenshots, from files the app ships", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/docs/introduction")
+
+    sources =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("img[src*='screenshot']")
+      |> LazyHTML.attribute("src")
+
+    assert length(sources) == 2
+
+    for src <- sources do
+      file = src |> String.split("?") |> hd() |> Path.basename()
+      assert File.exists?(Path.join([:code.priv_dir(:demo), "static", "images", file]))
+    end
+  end
+
   test "opens with the same words as the demo index", %{conn: conn} do
     {:ok, _view, docs} = live(conn, ~p"/docs/introduction")
     {:ok, _view, index} = live(conn, ~p"/")

@@ -17,6 +17,42 @@ defmodule DemoWeb.IntroductionComponents do
 
   import DemoWeb.PageComponents
 
+  # The README's GIFs. GitHub reads them out of examples/; the demo serves the
+  # same files from priv/static, copied in by examples/regenerate.sh. Named
+  # here once so a page asks for a screenshot by what it shows.
+  @screenshots %{
+    overview: %{
+      file: "screenshot-overview-v0.26.0.gif",
+      alt: "Building a flow in the FormFlow admin UI, from the flow overview to the form editor"
+    },
+    health: %{
+      file: "screenshot-health-v0.26.0.gif",
+      alt: "The health page listing the problems found in a flow, and the flow being fixed"
+    }
+  }
+
+  @doc """
+  One of the README's screenshots, held to the width of the prose beside it.
+
+  The GIFs are wide and long-running, so they are decoded lazily and left to
+  scale rather than cropped.
+  """
+  attr :name, :atom, required: true, values: Map.keys(@screenshots)
+  attr :class, :string, default: nil
+
+  def screenshot(assigns) do
+    assigns = assign(assigns, :screenshot, Map.fetch!(@screenshots, assigns.name))
+
+    ~H"""
+    <img
+      src={~p"/images/#{@screenshot.file}"}
+      alt={@screenshot.alt}
+      loading="lazy"
+      class={["w-full max-w-5xl rounded-lg border border-gray-300", @class]}
+    />
+    """
+  end
+
   @doc """
   The one-line description of the library, set off the way the README's
   blockquote sets it off.
@@ -53,18 +89,25 @@ defmodule DemoWeb.IntroductionComponents do
     </.p>
 
     <.p>
-      The nice thing about data is it's much easier to check for potential issues
-      that cause problems for users. And by using data, we can be certain all the
-      forms and flows work consistently using the same rules no matter how
-      complex the business case is you're tackling.
-    </.p>
-
-    <.p>
       Using data also means it is easy to change. With drag-and-drop functionality,
       FormFlow makes it fast to get started building flows. But more importantly, it
       <strong>stays easy to manage even as the complexity grows</strong>
       across multiple forms, multiple user types, and beyond.
     </.p>
+
+    <.p>
+      The best part about data is it's much easier to check for potential issues
+      that cause problems for users. And by using data, we can be certain all the
+      forms and flows work consistently using the same rules no matter how complex
+      the business case is you're tackling.
+    </.p>
+
+    <.p>
+      FormFlow has a built-in health check that makes it easy to spot potential
+      issues before it reaches users:
+    </.p>
+
+    <.screenshot name={:health} />
     """
   end
 

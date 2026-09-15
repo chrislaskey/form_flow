@@ -28,11 +28,13 @@ defmodule DemoWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
-      <div class="space-y-10 max-w-3xl">
+      <div class="space-y-10 max-w-4xl">
         <header class="space-y-2">
           <h1 class="text-2xl font-semibold">FormFlow</h1>
           <.tagline />
         </header>
+
+        <.screenshot name={:overview} />
 
         <section id="why-form-flow" class="space-y-3">
           <.h2 class="mb-0">Why FormFlow?</.h2>
