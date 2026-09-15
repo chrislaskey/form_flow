@@ -39,10 +39,11 @@ defmodule DemoWeb.IntroductionComponents do
   def why_form_flow(assigns) do
     ~H"""
     <.p>
-      Web apps are great for building forms. Coding an individual form is easier
-      than ever, especially using LLM based tools. But the more complex the flow
-      gets, the harder and harder it is to maintain and ensure things are working
-      correctly for users as they move from one flow to the next.
+      Web apps are great for building forms. Creating an individual form in code is
+      easier than ever, especially using LLM based tools. <strong>But there's a problem</strong>.
+      The more complex the flow gets, the harder and harder it is to maintain and
+      ensure things are working correctly for users as they move from one flow to
+      the next.
     </.p>
 
     <.p>
@@ -54,15 +55,15 @@ defmodule DemoWeb.IntroductionComponents do
     <.p>
       The nice thing about data is it's much easier to check for potential issues
       that cause problems for users. And by using data, we can be certain all the
-      forms and flows are rendered consistently using the same rules no matter how
+      forms and flows work consistently using the same rules no matter how
       complex the business case is you're tackling.
     </.p>
 
     <.p>
-      Another nice thing about data is it can be easily changed. With drag-and-drop
+      Using data also means it is easy to change. With drag-and-drop
       functionality, FormFlow makes it fast to get started building flows. But more
-      importantly, it stays easy to manage even as the complexity grows across
-      multiple forms, multiple user types, and beyond.
+      importantly, it <strong>stays easy to manage even as the complexity grows</strong>
+      across multiple forms, multiple user types, and beyond.
     </.p>
     """
   end
