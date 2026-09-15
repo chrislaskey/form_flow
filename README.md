@@ -4,6 +4,10 @@
 > Use drag-and-drop UIs to build complex user journeys. Reliable, verifiable,
 > and deterministic results.
 
+<p align="center">
+  <img title="v0.26.0 Overview Screenshot" src="https://raw.githubusercontent.com/chrislaskey/form_flow/refs/heads/main/examples/screenshot-overview-v0.26.0.gif" width="1200">
+</p>
+
 ## Why FormFlow?
 
 Web apps are great for building forms. Creating an individual form in code is
@@ -16,15 +20,22 @@ FormFlow solves this problem by approaching things differently. Rather than
 creating forms as code, it writes **forms as data**. In fact, the library stores
 the entire journey (which we call the flow) in data.
 
-The nice thing about data is it's much easier to check for potential
-issues that cause problems for users. And by using data, we can be certain all
-the forms and flows are work consistently using the same rules no matter
-how complex the business case is you're tackling.
-
 Using data also means it is easy to change. With drag-and-drop
 functionality, FormFlow makes it fast to get started building flows.
 But more importantly, it **stays easy to manage even as the complexity grows**
 across multiple forms, multiple user types, and beyond.
+
+The best part about data is it's much easier to check for potential
+issues that cause problems for users. And by using data, we can be certain all
+the forms and flows are work consistently using the same rules no matter
+how complex the business case is you're tackling.
+
+FormFlow has a built-in health check that makes it easy to spot potential
+issues before it reaches users:
+
+<p align="center">
+  <img title="v0.26.0 Health Screenshot" src="https://raw.githubusercontent.com/chrislaskey/form_flow/refs/heads/main/examples/screenshot-health-v0.26.0.gif" width="1200">
+</p>
 
 ## How easy is it to customize?
 

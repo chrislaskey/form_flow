@@ -85,7 +85,7 @@ defmodule DemoWeb.IntroductionComponents do
 
     <.p>
       Almost everything is customizable, from the flow logic to the detailed
-      rendering. All of it is <strong>customized using standard Elixir and Phoenix code</strong>.
+      rendering. All of it is customized using standard Elixir and Phoenix code.
       No macro DSL language to learn. Simple changes can be done with
       well-documented component attributes. More complex customization can be done
       by passing Elixir modules with custom callback implementations.

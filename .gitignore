@@ -29,3 +29,5 @@ form_flow-*.tar
 archive
 
 .env
+
+.DS_store
