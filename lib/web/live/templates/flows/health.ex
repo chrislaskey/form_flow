@@ -5,22 +5,22 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   `FormFlow.Data.Templates.Flows.Health.check/2` makes of the flow's whole
   tree, every entry with its explanation, and the switch to ignore one.
 
-  The page **runs the check** — `Health.refresh/2`, which also writes the
-  status the badges read (`FormFlow.Web.Templates.Components.Health`) — so
+  The page **runs the check** - `Health.refresh/2`, which also writes the
+  status the badges read (`FormFlow.Web.Templates.Components.Health`) - so
   a visit is what brings a lagging badge up to date, and a flow never
-  checked gets its badge here. The header names the flow — the trail leads
-  back to its show page — with Overview beside it; under it, what the report
-  is of (the flow's kind, steps, subflows, forms, perspectives, and types —
+  checked gets its badge here. The header names the flow - the trail leads
+  back to its show page - with Overview beside it; under it, what the report
+  is of (the flow's kind, steps, subflows, forms, perspectives, and types -
   the report's `summary`), how it stands, and when it was checked.
 
-  Then two panes. On the left, every entry as a row — a dot in its level's
+  Then two panes. On the left, every entry as a row - a dot in its level's
   colour, grey once ignored, and where it is: the step named by the way
-  down, or the flow itself — with how many checks passed under the list.
+  down, or the flow itself - with how many checks passed under the list.
   On the right, the selected entry: its level, its message, why it matters,
   where it is and which check found it, what to do, an **Open** button that
   goes to the step (a form step's form page, a subflow's canvas, or the
   containing flow's editor for a Start or End node and for an entry with
-  the flow itself), and the **Ignore** switch — the same control as the
+  the flow itself), and the **Ignore** switch - the same control as the
   Show/Edit switch on the flow pages. Turning it on records the entry as
   ignored on the flow (`Health.ignore/3`) by `user_id`, the host's identity
   for the admin; off removes the record (`Health.stop_ignoring/3`). Both
@@ -123,11 +123,11 @@ defmodule FormFlow.Web.Templates.Flows.Health do
           nil
 
         {:error, :not_found} ->
-          "That entry could not be saved — the flow may have changed. The report below is current."
+          "That entry could not be saved - the flow may have changed. The report below is current."
       end
 
     # The toggle wrote the status from the report it held; reading the flow
-    # again picks up the marks, and the report as it stands now — or that
+    # again picks up the marks, and the report as it stands now - or that
     # the flow is gone
     health = Health.check(socket.assigns.flow.id, check_options(socket.assigns))
 
@@ -154,13 +154,13 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     )
   end
 
-  # `code@id/id` — the pair that identifies an entry, as one URL-safe word
+  # `code@id/id` - the pair that identifies an entry, as one URL-safe word
   defp key(%Entry{code: code, path: path}), do: "#{code}@#{Enum.join(path, "/")}"
 
   defp find_entry(%Health{entries: entries}, key), do: Enum.find(entries, &(key(&1) == key))
 
-  # Where Open goes, and what it is called: the step the entry is about —
-  # a form step's form page, a subflow step's canvas — or, for a Start or
+  # Where Open goes, and what it is called: the step the entry is about -
+  # a form step's form page, a subflow step's canvas - or, for a Start or
   # End node, a step whose entity is missing, and an entry with a flow
   # itself, the editor of the flow the entry sits in, where it is wired.
   defp open_target(%Entry{} = entry, assigns) do
@@ -191,7 +191,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   # Start, End, or a node since deleted: the editor it sits on
   defp open_path(%Entry{path: path}, _node, base), do: edit_path(base, Enum.drop(path, -1))
 
-  # The editor of the flow at `path` — the root's, or the drill-in editor
+  # The editor of the flow at `path` - the root's, or the drill-in editor
   # addressed by the node embedding it
   defp edit_path(base, []), do: "#{base}/edit"
   defp edit_path(base, path), do: "#{base}/nodes/#{List.last(path)}/edit"
@@ -257,7 +257,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
       </dl>
 
       <%!-- How it stands: the open entries by level, the ignored ones, and
-            how many checks found nothing — each a dot in the list's colours,
+            how many checks found nothing - each a dot in the list's colours,
             grey when there are none --%>
       <p id={"#{@id}-standing"} class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <.count dot={dot(:error)} count={@health.counts.error} noun="error" />
@@ -268,7 +268,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
       </p>
 
       <Core.alert :if={@health.entries == []} components={@components} kind={:success}>
-        Nothing to report — every check passed.
+        Nothing to report - every check passed.
       </Core.alert>
 
       <div
@@ -409,7 +409,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   attr(:dot, :string, required: true, doc: "the dot's colour class, when there are any")
   attr(:count, :integer, required: true)
   attr(:noun, :string, required: true)
-  attr(:verb, :string, default: nil, doc: ~s(follows the noun — "3 checks passing"))
+  attr(:verb, :string, default: nil, doc: ~s(follows the noun - "3 checks passing"))
 
   # "2 errors" beside a dot in the level's colour; grey and muted when none.
   # "info" and "ignored" do not take an s.
@@ -457,7 +457,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     end)
   end
 
-  defp flow_type_names(%Health{summary: %{form_flow_types: []}}, _flow_types), do: "—"
+  defp flow_type_names(%Health{summary: %{form_flow_types: []}}, _flow_types), do: "-"
 
   defp flow_type_names(%Health{summary: %{form_flow_types: ids}}, flow_types) do
     ids
@@ -471,7 +471,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     end)
   end
 
-  # "Ignored by demo-admin on 2026-09-08" — with what the record has
+  # "Ignored by demo-admin on 2026-09-08" - with what the record has
   defp ignored_by(%{user_id: user_id, ignored_at: at}) do
     ["Ignored", user_id && "by #{user_id}", at && "on #{Calendar.strftime(at, "%Y-%m-%d")}"]
     |> Enum.reject(&is_nil/1)

@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Components.Core do
   `components` module when one is given.
 
   Each function here mirrors the attrs of its `FormFlow.Web.CoreComponents`
-  counterpart that FormFlow's own markup actually uses — not the module's
+  counterpart that FormFlow's own markup actually uses - not the module's
   full contract, since a host overriding `components` implements the real
   functions with whatever attrs it needs; this module only shapes the calls
   FormFlow itself makes. `components` is stripped before dispatch, so it
@@ -64,7 +64,7 @@ defmodule FormFlow.Web.Components.Core do
   pages: the name travels, the drawing does not.
 
   `"stethoscope"` is the exception. Heroicons has none, so it never goes to
-  a host — a host's `icon/1` written for `hero-*` names would raise on it —
+  a host - a host's `icon/1` written for `hero-*` names would raise on it -
   and FormFlow draws it inline. A host that wants its own draws it in the
   health badge's place, not here.
   """

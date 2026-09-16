@@ -3,14 +3,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
   # The initial schema, in two parts:
   #
-  # Forms — a form template split into an identity (the lineage) and its
+  # Forms - a form template split into an identity (the lineage) and its
   # definitions (versions), plus an instance of a user filling one out.
   # Mirrors FormFlow.Data.Templates.Form, FormFlow.Data.Templates.Form.Version,
   # and FormFlow.Data.Instances.Form. Published versions are immutable; every
-  # definition — draft or published — is a version row, and instances pin the
+  # definition - draft or published - is a version row, and instances pin the
   # exact version they were filled against (see archive/form-versioning.md).
   #
-  # Flows — a property graph in the Neo4j style, stored relationally. Nodes
+  # Flows - a property graph in the Neo4j style, stored relationally. Nodes
   # carry labels (a set) and properties; relationships carry a single label
   # and properties. `flow_id` is a real column so the database can enforce
   # membership and cascade deletes; the schemas also keep a copy of it inside
@@ -19,21 +19,21 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   # Flows are created first: `template_forms.owner_flow_id` references them.
   #
   # `tenant_id` on flows, template forms, nodes, and relationships is the
-  # host tenant a row belongs to — an opaque host identity, NULL for a host
+  # host tenant a row belongs to - an opaque host identity, NULL for a host
   # with no tenants, stamped at creation and immutable; a node or
   # relationship takes its flow's. Like `flow_id` on nodes it is written to
   # both locations: the column, for indexing, and a copy inside `properties`,
-  # the location that carries over to Neo4j — so a graph query can narrow to
+  # the location that carries over to Neo4j - so a graph query can narrow to
   # a tenant without a hop to the flow.
   #
-  # `slug` on flows, template forms, and nodes is a secondary identifier — a
+  # `slug` on flows, template forms, and nodes is a secondary identifier - a
   # stable name a host looks a root flow, a catalog form, or a step up by
   # across environments, where ids differ (FormFlow.Data.Templates.Slug).
   # Nullable, dual-written like `tenant_id`, and unique per tenant within its
   # table: the unique index is over `slug` and `COALESCE(tenant_id, '')`
   # because both databases treat NULLs as distinct, which would let a host
   # with no tenants reuse a slug freely. `slug` leads the index so a lookup
-  # by slug alone uses it. Owned subflows and owned forms carry none — their
+  # by slug alone uses it. Owned subflows and owned forms carry none - their
   # step's slug is the handle.
   #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
@@ -42,67 +42,67 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #
   # Columns worth explaining:
   #
-  #   * `template_forms.owner_flow_id` — the ownership, mirroring
+  #   * `template_forms.owner_flow_id` - the ownership, mirroring
   #     `flows.owner_flow_id`: which root flow's private property this form
   #     is. NULL = a reusable catalog form, listed in /forms. `:nilify_all`
   #     because cleanup of owned forms is explicit context code (deleting a
-  #     flow deletes its owned forms deliberately — a nilified owner must never
+  #     flow deletes its owned forms deliberately - a nilified owner must never
   #     silently become a catalog entry).
-  #   * `template_forms.copied_from_form_id` — provenance: which lineage this
+  #   * `template_forms.copied_from_form_id` - provenance: which lineage this
   #     one was copied from (yearly rollover), for cross-cycle identity and
   #     for carrying last cycle's answers forward.
-  #   * `template_forms.prefills` — the lineage's named sets of test answers
+  #   * `template_forms.prefills` - the lineage's named sets of test answers
   #     (`FormFlow.Data.Templates.Form.Prefill`), a map of name to envelope.
   #     On the lineage and not on a version: prefills are not version
   #     specific, and one set travels with the form through every publish.
   #   * The `(name)` unique index is scoped to the catalog
-  #     (`owner_flow_id IS NULL`) — one namespace: owned forms may repeat
+  #     (`owner_flow_id IS NULL`) - one namespace: owned forms may repeat
   #     names across yearly copies; catalog forms stay unambiguous in every
   #     picker.
-  #   * `template_form_versions.version` — NULL until publish. The plain
+  #   * `template_form_versions.version` - NULL until publish. The plain
   #     unique index works because multiple NULLs never collide, so published
   #     versions get uniqueness with no partial-index or CHECK logic. Status
   #     values (draft | published | archived) are enforced in the changeset,
   #     not the database.
-  #   * `instance_forms.template_form_version_id` — the pin: the exact
+  #   * `instance_forms.template_form_version_id` - the pin: the exact
   #     definition this instance renders against. There is deliberately no
-  #     lineage column beside it — the lineage is derived through the pin, and
+  #     lineage column beside it - the lineage is derived through the pin, and
   #     a stored copy would need a desync guard. `:restrict` so answer sets
   #     can never be orphaned or cascade-deleted by template changes.
-  #   * `instance_form_events` — append-only audit: pin migrations, reopens,
+  #   * `instance_form_events` - append-only audit: pin migrations, reopens,
   #     status changes, with prior data snapshotted when a migration discards
   #     it. `:restrict` from events to instances: deleting an instance goes
   #     through an explicit delete API that removes events deliberately.
-  #   * `instance_flows` — one traversal of a root flow (a journey). The root
-  #     is referenced live — no flow versioning, edits propagate to journeys
-  #     in flight — and `:restrict`ed: journeys can never be orphaned by
+  #   * `instance_flows` - one traversal of a root flow (a journey). The root
+  #     is referenced live - no flow versioning, edits propagate to journeys
+  #     in flight - and `:restrict`ed: journeys can never be orphaned by
   #     template deletion. `user_id` is the creating user and `tenant_id`
   #     the host tenant it belongs to, both opaque host identities, stamped
   #     at creation and immutable. Traversal state is never stored; it is
   #     derived (FormFlow.Data.Instances.FlowProgress).
-  #   * `instance_forms.user_id` + `tenant_id` — the same two stamps on a form
+  #   * `instance_forms.user_id` + `tenant_id` - the same two stamps on a form
   #     instance: the user who started it and the tenant it belongs to.
-  #   * `instance_forms.instance_flow_id` + `path` — the visit identity of an
+  #   * `instance_forms.instance_flow_id` + `path` - the visit identity of an
   #     in-journey form instance: the chain of node ids from the root flow
   #     through each embedding subflow node to the form node itself.
   #     NULL/empty = a standalone fill. Deliberately no node FK: editor saves
   #     replace all nodes (clear_contents), so any FK action would fire on
-  #     every routine save — and a node column would be a derivable copy of
+  #     every routine save - and a node column would be a derivable copy of
   #     last(path).
-  #   * `instance_forms.superseded_at` — stamped by strand reconciliation on
+  #   * `instance_forms.superseded_at` - stamped by strand reconciliation on
   #     the old instance when its successor is created; derivation skips
   #     superseded rows. The unique index is scoped to active rows: one
   #     *active* form instance per visit, while superseded rows remain as
   #     attestation records that never block a revived path.
-  #   * `instance_flow_events` — the journey's append-only audit, mirroring
+  #   * `instance_flow_events` - the journey's append-only audit, mirroring
   #     `instance_form_events` discipline (`:restrict`, explicit deletes).
-  #   * `nodes.subflow_id` — the reference: this node embeds that flow. NULL
+  #   * `nodes.subflow_id` - the reference: this node embeds that flow. NULL
   #     on form nodes. `on_delete: :nothing` on purpose: deletion protection
   #     lives in FormFlow.Data.Templates.Flows, where it can refuse with a friendly
-  #     error and where delete ordering is explicit — RESTRICT would race the
+  #     error and where delete ordering is explicit - RESTRICT would race the
   #     ownership cascade inside a single statement.
-  #   * `nodes.form_id` — the form-node counterpart of `subflow_id`: this node
-  #     collects that form (the lineage, never a version — version resolution
+  #   * `nodes.form_id` - the form-node counterpart of `subflow_id`: this node
+  #     collects that form (the lineage, never a version - version resolution
   #     is a read-time and instance-pin concern). Same `:nothing` rationale.
   #
   # The SQLite version of this file is intentionally a near-copy rather than a
@@ -360,7 +360,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       index(:form_flow_instance_forms, [:instance_flow_id], prefix: context.prefix)
     )
 
-    # One *active* form instance per visit — superseded rows stay as
+    # One *active* form instance per visit - superseded rows stay as
     # attestation records without blocking a revived path from being filled
     create_if_not_exists(
       unique_index(:form_flow_instance_forms, [:instance_flow_id, :path],
@@ -570,7 +570,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       timestamps(type: :utc_datetime_usec)
     end
 
-    # Unique, so the same pair can't be linked twice with the same label — a
+    # Unique, so the same pair can't be linked twice with the same label - a
     # deliberate divergence from Neo4j, where parallel relationships are legal.
     # Its source_id prefix doubles as the outbound traversal index. Named here
     # because the name Ecto derives from the columns runs past Postgres's
@@ -583,7 +583,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       )
     )
 
-    # Inbound traversal ("what points at N?") — the reverse direction the
+    # Inbound traversal ("what points at N?") - the reverse direction the
     # unique index above can't serve
     create_if_not_exists(
       index(:form_flow_template_flow_relationships, [:target_id, :label], prefix: context.prefix)

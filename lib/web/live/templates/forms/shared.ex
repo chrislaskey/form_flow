@@ -4,8 +4,8 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   common: the details they edit, and the prefills they fill their preview
   with.
 
-  A form's **details** — its name, slug, description, and type with the
-  type's property values — belong to the lineage, not to a version. They
+  A form's **details** - its name, slug, description, and type with the
+  type's property values - belong to the lineage, not to a version. They
   change the moment they are saved, and every version shows the change,
   published ones included. Two pages edit them through the same `DynamicForm`
   fields: `FormFlow.Web.Templates.Forms.Edit` while the form has never been
@@ -15,7 +15,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   deliberately, on a page that says so. This module is the data those
   fields read and write, so the two pages agree on what a save does.
 
-  Through a step the Name and Slug fields are the step's — the node's
+  Through a step the Name and Slug fields are the step's - the node's
   label, which is what the instance pages show users, and the node's slug.
   An owned form's name is the same value, written alongside; a catalog
   form's name and slug are its own, edited on its catalog page, and from a
@@ -30,15 +30,15 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   (`FormFlow.Web.Components.Forms.PrefillMenu` and its dialog), so what
   these two pages agree on is here: the assigns the picker reads, and the URL
   the selection lives in. What the *three* pages that write a prefill agree
-  on — the instance's Edit page is the third — is
+  on - the instance's Edit page is the third - is
   `FormFlow.Web.Components.Forms.Prefills`.
 
   What is nowhere shared is what a page does about a navigation: Show goes
   straight there, while Edit has a draft whose unsaved content a reload
   would discard, so it asks first.
 
-  Writing a prefill never touches a version, which is why a published form —
-  with no draft to edit, and so no edit page — still has somewhere to keep
+  Writing a prefill never touches a version, which is why a published form -
+  with no draft to edit, and so no edit page - still has somewhere to keep
   them: its Show page.
   """
 
@@ -52,9 +52,9 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   @doc """
   The fields' data: the saved details, with the saved type's property
   values under their field names. The type is the one the form is governed
-  by — the saved one, else the first the page offers, the same fallback the
+  by - the saved one, else the first the page offers, the same fallback the
   instance pages make when they render the form
-  (`FormFlow.Web.Instances.Forms.Shared.form_type/2`) — so a form that never
+  (`FormFlow.Web.Instances.Forms.Shared.form_type/2`) - so a form that never
   picked one saves what it was already getting, explicitly.
   """
   def details(form, node, form_types) do
@@ -73,7 +73,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   end
 
   @doc """
-  What the last save wrote, in the shape `details_from/3` reports — the
+  What the last save wrote, in the shape `details_from/3` reports - the
   baseline a page's `dirty?` compares against, so its Save can go primary
   exactly when the fields differ from what is persisted.
   """
@@ -100,7 +100,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
 
   @doc """
   The fields' data after the type dropdown changed: what was typed, with
-  the new type's property fields — holding the saved values when it is the
+  the new type's property fields - holding the saved values when it is the
   saved type, blank otherwise. `DynamicForm` rebuilds a form whose fields
   changed from its data, so at that moment the data becomes the pending
   values and what was typed survives. `keep` names the page's own fields
@@ -118,13 +118,13 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   end
 
   @doc """
-  Saves the details a payload holds: each value to its owner — the step's
+  Saves the details a payload holds: each value to its owner - the step's
   name and slug to the node (`Flows.update_node/2`), the rest to the form
   row. `{:ok, form, node}`, or `{:error, reason}` for
   `save_details_error/2` to word.
 
   A catalog form is one lineage for every step reusing it, so a
-  `:related_form` value — a position in one flow — cannot be its: the rule
+  `:related_form` value - a position in one flow - cannot be its: the rule
   `Flows.reuse_form/3` applies when a step picks such a form, applied from
   this side when such a form picks a step. The type alone is fine; it is
   the choice that points somewhere. `FormFlow.Data.Templates.Flows.Health`
@@ -158,8 +158,8 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   @doc "The sentence a refused `save_details/4` shows."
   def save_details_error(form, {:related_form_shared, property}) do
     "“#{form.name}” is shared by every flow that uses it, so it can't point " <>
-      "“#{property.name}” at a step of one flow. Copy the form into this flow instead — " <>
-      "the Copy form choice on the step's page — or clear the choice."
+      "“#{property.name}” at a step of one flow. Copy the form into this flow instead - " <>
+      "the Copy form choice on the step's page - or clear the choice."
   end
 
   def save_details_error(_form, %Ecto.Changeset{} = changeset) do
@@ -167,11 +167,11 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   end
 
   @doc """
-  The form's stored `properties` map with a type applied — an unset type
+  The form's stored `properties` map with a type applied - an unset type
   removes the key and the property values with it, so "no choice" stays
   "use the configured default" rather than pinning whatever the default
   happened to be at save time. A type's property values are replaced whole,
-  so switching types leaves nothing of the old one behind — and a type with
+  so switching types leaves nothing of the old one behind - and a type with
   nothing entered stores no values key at all.
   """
   def form_properties(form, nil, _values) do
@@ -211,12 +211,12 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   def slug_label(_node), do: "Step slug"
 
   def slug_placeholder(nil) do
-    "A stable name for looking this form up in code — lowercase letters, numbers, _ and -. " <>
+    "A stable name for looking this form up in code - lowercase letters, numbers, _ and -. " <>
       "It does not follow a rename."
   end
 
   def slug_placeholder(_node) do
-    "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
+    "A stable name for looking this step up in code - lowercase letters, numbers, _ and -. " <>
       "It does not follow a rename."
   end
 
@@ -256,7 +256,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
 
   @doc """
   The form's prefills, the one the URL names, and the name it named when
-  the form has not got it — assigned together, since a page draws all three
+  the form has not got it - assigned together, since a page draws all three
   (`FormFlow.Web.Components.Forms.PrefillPicker`).
   """
   def assign_prefills(socket, form, name) do
@@ -288,7 +288,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   # A part of the page: its title and one line saying what belongs there,
   # styled like DynamicForm's own nested-form heading so a page's sections
   # read as one family with its Elements. Actions ride on the title's line
-  # and the description takes the line under both — sharing a row with the
+  # and the description takes the line under both - sharing a row with the
   # controls would leave it a narrow column, wrapping a sentence that reads
   # across.
   attr(:title, :string, required: true)

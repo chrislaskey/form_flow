@@ -1,6 +1,6 @@
 defmodule FormFlow.Data.Templates.Slug do
   @moduledoc """
-  `FormFlow.Data.Templates.Slug` — the secondary identifier of a root
+  `FormFlow.Data.Templates.Slug` - the secondary identifier of a root
   `FormFlow.Data.Templates.Flow`, a catalog `FormFlow.Data.Templates.Form`,
   or a step (`FormFlow.Data.Templates.Flow.Node`).
 
@@ -11,7 +11,7 @@ defmodule FormFlow.Data.Templates.Slug do
   `id`, which differs between environments. It is optional, unique per
   tenant within its table, and never used as a foreign key. It never
   follows a rename: once set it stays until an admin changes it. The three
-  uses are distinct — a host naming a step knows it is naming a step — so
+  uses are distinct - a host naming a step knows it is naming a step - so
   uniqueness is per table, not across them.
 
   ## Generation
@@ -29,11 +29,11 @@ defmodule FormFlow.Data.Templates.Slug do
       words whole: "Dog License Application 2026" is `dla2026`
     * a name with nothing usable falls back to the kind: `flow` or `form`
 
-  A **step** — a form or subflow node — gets one when its flow is saved:
+  A **step** - a form or subflow node - gets one when its flow is saved:
   its label's segment under the root flow's slug, joined by `_`, so the
   "User Information" step of `dla2026` is `dla2026_user-inform`, wherever
   in the tree it sits. The subflow or form a save creates for a step is
-  that step's private property and has no slug of its own — the step's is
+  that step's private property and has no slug of its own - the step's is
   the handle, and the entity is reached through it. The default is only a
   default: it carries no structure, and an admin may replace it with
   anything. A slug already taken in the tenant gets `-2`, `-3`, … appended,
@@ -46,7 +46,7 @@ defmodule FormFlow.Data.Templates.Slug do
 
   `validate_slug/2` runs in all three changesets: lowercase, `[a-z0-9]`
   plus `_` and `-`, at most `max_length/0` characters, unique per tenant. A
-  blank slug is `nil` — a template or a step may legitimately have none.
+  blank slug is `nil` - a template or a step may legitimately have none.
   """
 
   import Ecto.Changeset
@@ -62,7 +62,7 @@ defmodule FormFlow.Data.Templates.Slug do
   def max_length, do: @max_length
 
   @doc """
-  The slug segment for `name` — see the moduledoc for the rule — or
+  The slug segment for `name` - see the moduledoc for the rule - or
   `fallback` when the name has nothing usable in it.
   """
   def segment(name, fallback) do
@@ -75,7 +75,7 @@ defmodule FormFlow.Data.Templates.Slug do
   end
 
   # The budget counts letters, not the hyphen: the first word takes what it
-  # needs, the second what is left — and no hyphen when nothing is
+  # needs, the second what is left - and no hyphen when nothing is
   defp hyphenate(first, second) do
     first = String.slice(first, 0, @segment_length)
 
@@ -104,7 +104,7 @@ defmodule FormFlow.Data.Templates.Slug do
   def join(prefix, segment), do: prefix <> "_" <> segment
 
   @doc """
-  `slug` with the old root prefix swapped for the new one — what a copied
+  `slug` with the old root prefix swapped for the new one - what a copied
   step gets when its root is copied under a new slug. A slug not under the
   old prefix (one an admin wrote by hand) is returned as it is.
   """
@@ -119,7 +119,7 @@ defmodule FormFlow.Data.Templates.Slug do
   @doc """
   `candidate` if no row of `schema` in the tenant has it, otherwise the first
   free `candidate-2`, `candidate-3`, …. A `nil` tenant is the scope of rows
-  with no tenant — the whole table, for a host with no tenants.
+  with no tenant - the whole table, for a host with no tenants.
   """
   def available(_schema, nil, _tenant_id), do: nil
 
@@ -135,7 +135,7 @@ defmodule FormFlow.Data.Templates.Slug do
     |> Enum.find(&(not MapSet.member?(taken, &1)))
   end
 
-  # The common case — the candidate is free — is one lookup the unique index
+  # The common case - the candidate is free - is one lookup the unique index
   # serves; the prefix scan below, which no index serves, runs only on a
   # collision. Steps make this matter: a save or a copy asks once per new
   # step, not once per flow.
@@ -143,7 +143,7 @@ defmodule FormFlow.Data.Templates.Slug do
     Repo.exists?(in_tenant(from(s in schema, where: s.slug == ^candidate), tenant_id))
   end
 
-  # Every slug starting with the candidate — a superset of what could
+  # Every slug starting with the candidate - a superset of what could
   # collide (LIKE treats the candidate's underscores as wildcards, which
   # only widens the match), so the suffix chosen is always free
   defp taken(schema, candidate, tenant_id) do
@@ -156,7 +156,7 @@ defmodule FormFlow.Data.Templates.Slug do
   defp in_tenant(query, tenant_id), do: from(s in query, where: s.tenant_id == ^tenant_id)
 
   @doc """
-  The changeset rules for a slug — normalized to lowercase and trimmed,
+  The changeset rules for a slug - normalized to lowercase and trimmed,
   format and length checked, and the tenant-scoped unique index mapped to a
   `:slug` error by `index_name`.
   """
@@ -180,7 +180,7 @@ defmodule FormFlow.Data.Templates.Slug do
   end
 
   @doc """
-  `attrs` with `slug` filled in when they carry none — atom or string keys,
+  `attrs` with `slug` filled in when they carry none - atom or string keys,
   matching what is already there, since `Ecto.Changeset.cast/4` refuses a
   mix.
   """

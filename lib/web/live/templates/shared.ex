@@ -28,7 +28,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The type id a stored value amounts to: itself when set, otherwise the first
-  of `types` — the one every page resolves an unset type to
+  of `types` - the one every page resolves an unset type to
   (`FormFlow.Web.Instances.Forms.Shared.flow_type/2`), so the edit and show
   pages present a flow that never chose as what it will behave as. `nil`
   when there are no types to choose from.
@@ -38,7 +38,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The page's `flow_types` for the flow at the context's `:subflow`: flow
-  types apply to "forms" flows, so a "subflows" flow — or no flow — gets
+  types apply to "forms" flows, so a "subflows" flow - or no flow - gets
   none, and no dropdown.
   """
   def flow_types_for(%FormFlow.Context{subflow: %{label: "forms"}}, assigns),
@@ -46,7 +46,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   def flow_types_for(_context, _assigns), do: []
 
-  @doc "The properties the type with `id` declares — none for no type."
+  @doc "The properties the type with `id` declares - none for no type."
   def properties(types, id) do
     case type(types, id) do
       nil -> []
@@ -56,8 +56,8 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The types with every `:related_form` property's options filled in: the
-  forms of the root flow `root_id` that come before the node `node_id` —
-  the one embedding what is being edited — in the order a user works them,
+  forms of the root flow `root_id` that come before the node `node_id` -
+  the one embedding what is being edited - in the order a user works them,
   as `{qualified label, path}`. A related form is a choice whose choices the
   flow supplies, so filling them here lets the rest of the page treat it as
   any other choice type.
@@ -65,7 +65,7 @@ defmodule FormFlow.Web.Templates.Shared do
   The property's description gains a note when there is something to say: no
   node in scope (a catalog form, a root flow) means no earlier forms to offer;
   and a saved value (`property_values`, the template's) that none of the
-  options match — the flow was rearranged, or the value was edited by hand —
+  options match - the flow was rearranged, or the value was edited by hand -
   is a choice the admin has to make again, since the field can't show it.
   """
   def fill_related_forms(types, root_id, node_id, property_values \\ %{}) do
@@ -84,8 +84,8 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
-  @no_earlier_forms "No earlier forms to choose from — open this form from its flow."
-  @stale_choice "The saved choice is no longer in this flow — choose again."
+  @no_earlier_forms "No earlier forms to choose from - open this form from its flow."
+  @stale_choice "The saved choice is no longer in this flow - choose again."
 
   defp fill_related_form(%Property{type: :related_form} = property, options, property_values) do
     notes = [
@@ -114,7 +114,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The forms a root flow's steps point at, subflows included, in the order a
-  user works them, as `{qualified label, form, node}` — the label is the
+  user works them, as `{qualified label, form, node}` - the label is the
   step's (`FormFlow.Data.Instances.FlowProgress.qualified_label/1`,
   "Documents / Proof of address"), the form the lineage it points at, the
   node the step itself, whose `slug` is how the pages name a flow's form
@@ -149,7 +149,7 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc """
   Where a form is used, one line per step, from
   `FormFlow.Data.Templates.Flows.form_usages/1`: the root flow's name, then
-  the containing flow's when the step sits in a subflow — "Dog License /
+  the containing flow's when the step sits in a subflow - "Dog License /
   Application", or "Dog License" for a step in the root itself. Each place
   once: two steps of one flow pointing at the same form read as one use.
   """
@@ -211,7 +211,7 @@ defmodule FormFlow.Web.Templates.Shared do
   def input_type(%Property{type: :number}), do: "number"
   def input_type(%Property{}), do: nil
 
-  @doc "A property's choices for its field — nil for a type without any."
+  @doc "A property's choices for its field - nil for a type without any."
   def field_options(%Property{type: :related_form, options: []}), do: nil
 
   def field_options(%Property{options: options} = property) do
@@ -219,7 +219,7 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
-  The stored property values as the identity form's `data` entries — one per
+  The stored property values as the identity form's `data` entries - one per
   property the type declares, under the field name.
   """
   def field_data(properties, property_values) do
@@ -261,7 +261,7 @@ defmodule FormFlow.Web.Templates.Shared do
   def display_value(%Property{type: :related_form, options: options}, value) do
     case List.keyfind(options || [], value, 1) do
       {label, _path} -> label
-      nil -> "Missing — no longer in this flow"
+      nil -> "Missing - no longer in this flow"
     end
   end
 
@@ -278,7 +278,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The perspectives the type with `id` declares (`FormFlow.Config.Flows.Type`'s
-  `:perspectives`) — the identity form's multi-select for a flow of that
+  `:perspectives`) - the identity form's multi-select for a flow of that
   type. None for no type, or a type that declares none.
   """
   def perspectives(types, id) do
@@ -289,7 +289,7 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
-  Every perspective any of `types` declares, once each by id — what a
+  Every perspective any of `types` declares, once each by id - what a
   canvas needs to name the perspectives of subflow nodes whose embedded
   flows may be of different types.
   """
@@ -303,7 +303,7 @@ defmodule FormFlow.Web.Templates.Shared do
   @perspectives_help "Which kinds of user this flow's forms are for. None means everyone."
 
   @doc """
-  The perspectives field's help text — with a note when the flow stores an id
+  The perspectives field's help text - with a note when the flow stores an id
   the type no longer declares: the field cannot show it, and the next save
   drops it, so the admin should know.
   """
@@ -314,7 +314,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
       stale ->
         @perspectives_help <>
-          " The saved choice #{Enum.join(stale, ", ")} is no longer offered — it is dropped on save."
+          " The saved choice #{Enum.join(stale, ", ")} is no longer offered - it is dropped on save."
     end
   end
 
@@ -327,8 +327,8 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   The copy dialog's submit: `FormFlow.Data.Templates.Flows.copy/2` of `flow`
-  with the dialog's `name` and `slug` — a blank name is the one the dialog
-  offered (`copy_name/1`), a blank slug leaves the choice to `copy/2` — and
+  with the dialog's `name` and `slug` - a blank name is the one the dialog
+  offered (`copy_name/1`), a blank slug leaves the choice to `copy/2` - and
   `opts`: the host's types (`flow_types:`, `form_types:`) so the copy's
   health is checked once and cached, and `user_id:`, the admin, for the
   copy's `created` event. Returns the copy, or the message the dialog
@@ -365,10 +365,10 @@ defmodule FormFlow.Web.Templates.Shared do
   def status_options, do: Enum.map(Templates.Flow.statuses(), &{status_label(&1), &1})
 
   @doc """
-  What a status means for users, in one or two sentences — drawn under the
+  What a status means for users, in one or two sentences - drawn under the
   dropdown on the flow edit page as the choice is made, and as a badge's
-  title. The three facts of `FormFlow.Data.Templates.Flow.allows?/2` — start,
-  continue, see — said as what a user can do.
+  title. The three facts of `FormFlow.Data.Templates.Flow.allows?/2` - start,
+  continue, see - said as what a user can do.
   """
   def status_summary("draft"),
     do:
@@ -396,7 +396,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   def status_summary("archived"),
     do:
-      "Put away. Users see nothing of it — not even their own instances — while admins " <>
+      "Put away. Users see nothing of it - not even their own instances - while admins " <>
         "keep the flow, its instances, and its history."
 
   def status_summary(_unknown), do: nil
@@ -411,7 +411,7 @@ defmodule FormFlow.Web.Templates.Shared do
   def status_kind(_draft_read_only_archived_or_other), do: :neutral
 
   @doc """
-  How many instances a root flow has, and how many are still in progress —
+  How many instances a root flow has, and how many are still in progress -
   the sentence under the status dropdown, so an admin reads who a change
   reaches before making it. `nil` for an owned flow, whose instances are
   the root's.
@@ -432,8 +432,8 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
-  A health check's code as the pages say it — `:form_not_published` reads
-  "form not published" — on the health page's list and the History page's
+  A health check's code as the pages say it - `:form_not_published` reads
+  "form not published" - on the health page's list and the History page's
   line alike.
   """
   def check_name(code) when is_atom(code), do: code |> Atom.to_string() |> check_name()
@@ -445,7 +445,7 @@ defmodule FormFlow.Web.Templates.Shared do
 
   @doc """
   How many of a root flow's journeys were started during pre-release
-  (`FormFlow.Data.Instances.Flows.list_pre_release/1`) — what the status
+  (`FormFlow.Data.Instances.Flows.list_pre_release/1`) - what the status
   dialog offers to delete as the flow leaves that status. Zero for a flow
   in any other status, and for an owned flow.
   """
@@ -457,7 +457,7 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc """
   The status dialog's Save, for the show page and the flows index:
   `Flows.update_status/3` with `params["status"]`, signed by `user_id`, and
-  then — when `params["delete_pre_release"]` is `"true"` — the journeys
+  then - when `params["delete_pre_release"]` is `"true"` - the journeys
   started during pre-release deleted
   (`FormFlow.Data.Instances.Flows.delete_pre_release/2`, which logs how
   many). The offer holds only as `flow` leaves `pre_release`; on any other
@@ -498,8 +498,8 @@ defmodule FormFlow.Web.Templates.Shared do
   defp delete_pre_release(_flow, _status, _params, _user_id), do: {:ok, 0}
 
   @doc """
-  A moment as the pages say it — "just now", "3 minutes ago", "2 hours
-  ago", "5 days ago" — as of the render; nothing ticks. The absolute time
+  A moment as the pages say it - "just now", "3 minutes ago", "2 hours
+  ago", "5 days ago" - as of the render; nothing ticks. The absolute time
   goes in the element's title beside it.
   """
   def relative(%DateTime{} = at) do
@@ -523,10 +523,10 @@ defmodule FormFlow.Web.Templates.Shared do
   defp blank_to_nil(_value), do: nil
 
   @doc """
-  The message a failed template save shows. A slug the changeset refused —
-  taken, or malformed — is named, since it is the one field an admin can
-  fix by typing. A refusal on `:nodes` — a step pasted from a source that is
-  gone, a step the tree does not own, a removed form that still has data —
+  The message a failed template save shows. A slug the changeset refused -
+  taken, or malformed - is named, since it is the one field an admin can
+  fix by typing. A refusal on `:nodes` - a step pasted from a source that is
+  gone, a step the tree does not own, a removed form that still has data -
   is already a sentence saying what to do, and is shown as it is; anything
   else is the generic retry.
   """

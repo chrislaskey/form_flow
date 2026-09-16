@@ -1,7 +1,7 @@
 defmodule FormFlow.Web.Instances.Forms.Edit do
   @moduledoc """
   `FormFlow.Web.Instances.Forms.Edit` LiveComponent renders one position of a
-  flow instance as the real, editable form — the pinned version's definition
+  flow instance as the real, editable form - the pinned version's definition
   through `DynamicForm`, with the data the form's `FormFlow.Config.Forms.Type`
   supplies (`initial_data/2`: the stored answers by default, plus whatever a
   host's type prefills).
@@ -12,12 +12,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`).
 
   What is only true here: **this is the page that starts a form.** A
-  position with no instance yet gets one created on mount — which is the
-  moment the form version is pinned — gated by the flow type's `editable?/2`
+  position with no instance yet gets one created on mount - which is the
+  moment the form version is pinned - gated by the flow type's `editable?/2`
   the flow instance's page asks before offering the link, and by the host
   `on_mount`, asked first: a refused or redirected visitor
   starts nothing. Starting is idempotent afterwards, so this URL is an
-  ordinary link from everywhere and survives a refresh or a Back — and a form
+  ordinary link from everywhere and survives a refresh or a Back - and a form
   either gate can't be started by typing its URL.
 
   An already-submitted position renders no form at all: its answers live at
@@ -27,10 +27,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   Submitting asks the form's type what to record (`snapshot/2`),
   writes the answers and marks the instance completed with that record on
   its event (`FormFlow.Data.Instances.Forms.update_status/4`), then derives
-  the flow instance's progress once more — the form just submitted now
-  counts as done — into the one context both types' `handle_complete/2`
+  the flow instance's progress once more - the form just submitted now
+  counts as done - into the one context both types' `handle_complete/2`
   receive. The form's type reacts to the completion; the flow's type says
-  where to go: the next form of this flow, or — when it has none left — the
+  where to go: the next form of this flow, or - when it has none left - the
   next actionable position anywhere in the flow instance, which is what
   carries a user out of a finished subflow and into the next. It navigates to
   that position's own URL here, which does the starting; with nothing
@@ -42,14 +42,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   raises is logged after a completion that stands.
 
   DynamicForm's default success message targets the parent LiveView's
-  `handle_info/2` — the host's process, not ours — so `on_success` routes the
+  `handle_info/2` - the host's process, not ours - so `on_success` routes the
   payload back into this component via `send_update`, and the redirect happens
   in `handle_async` (redirects are forbidden inside `update/2`).
 
   ## Prefills
 
-  While the flow is a `draft` or in `pre_release` — being tried out rather
-  than used — the page draws the form's prefills over the form
+  While the flow is a `draft` or in `pre_release` - being tried out rather
+  than used - the page draws the form's prefills over the form
   (`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`): the picker
   fills it in from a saved set of answers, and the **⋮** menu writes them,
   the same New / Edit / Capture / Delete the template pages carry
@@ -64,36 +64,36 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   they submit. And every write is guarded on the status again, behind the
   menu that is only drawn under it: applying a prefill puts values in the
   user's own form, which they could have typed anyway, but *writing* one
-  publishes those values to everyone who can reach the form — which is what
+  publishes those values to everyone who can reach the form - which is what
   the dialog says on screen. Who may write one in an `open` flow is a
   question this page does not answer yet.
 
   ## The states it draws
 
   Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
-  its own `render/1` clause, and nothing else — there is no catch-all, so a
+  its own `render/1` clause, and nothing else - there is no catch-all, so a
   state nobody accounted for raises rather than drawing an editable form to
   whoever reached it:
 
-    * `:flow_not_found` — "This flow no longer exists."
-    * `:redirecting` — nothing, while the host's `on_mount` navigates away
-    * `:refused` — the host's message alone
-    * `:not_visible` — "This form is not part of your work here."
-    * `:not_started` — why it could not be started, and the way back
-    * `:broken_definition` — the parse error, inline
-    * `:completed` — "This form has already been submitted.", and the link
+    * `:flow_not_found` - "This flow no longer exists."
+    * `:redirecting` - nothing, while the host's `on_mount` navigates away
+    * `:refused` - the host's message alone
+    * `:not_visible` - "This form is not part of your work here."
+    * `:not_started` - why it could not be started, and the way back
+    * `:broken_definition` - the parse error, inline
+    * `:completed` - "This form has already been submitted.", and the link
       to its answers
-    * `:ready` — the form
+    * `:ready` - the form
 
   The submit guards on `:ready` alone. It arrives through `update/2` rather
   than `handle_event/3`, so that is where the guard sits. Excluding
-  `:completed` refuses a *stale* submit — one that lands after the page has
+  `:completed` refuses a *stale* submit - one that lands after the page has
   already re-rendered as submitted. It is not what makes a double submit
   safe: the submit clause does not recompute the state, so a second submit
   arriving before the navigation still reads `:ready` and still leans on
   `FormFlow.Data.Instances.Forms.update_status/4` being idempotent, which it
   is. Refusing it silently is right for the same reason the events are
-  silent — the page it lands on is already saying the form was submitted, so
+  silent - the page it lands on is already saying the form was submitted, so
   there is nothing left to tell the user.
 
   `:broken_definition` outranking `:completed` is a deliberate ordering: a
@@ -122,18 +122,18 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # Who may write a prefill here: the status the menu is drawn under
   # (`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`), and a
-  # resolved form lineage to write it to. Not a permission — where the menu
+  # resolved form lineage to write it to. Not a permission - where the menu
   # is drawn is the whole restriction, and this is that same rule asked on
   # the way in (`archive/plans/prefills-for-testing.md` §15).
   defguardp prefills_writable?(socket)
             when socket.assigns.prefills_offered? and socket.assigns.context.form != nil
 
   # The submit arrives here rather than through `handle_event/3`, so this is
-  # where it is guarded — on `:ready` alone, so a page the gate would refuse
+  # where it is guarded - on `:ready` alone, so a page the gate would refuse
   # cannot write. `:completed` is excluded because a submit arriving at a
   # page that has already re-rendered as submitted is stale: the state and
   # the render are assigned together, so such a page is showing the notice,
-  # not a form. It is not what stops a double submit — a submit does not
+  # not a form. It is not what stops a double submit - a submit does not
   # recompute the state, so a second one arriving before the navigation is
   # still `:ready`, and still relies on `apply_status/5` being idempotent.
   @impl true
@@ -218,7 +218,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # same dialog, the same five events (`FormFlow.Web.Components.Forms.Prefills`).
   #
   # Every write is guarded, unlike `pick_prefill` above. Applying a prefill
-  # puts answers in the user's own form — values they could have typed — so a
+  # puts answers in the user's own form - values they could have typed - so a
   # forged event costs nothing; writing one puts them where every other user
   # of this form can read them, so the status the menu is drawn under is
   # asked again here rather than trusted from the DOM.
@@ -239,7 +239,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # Capture: the answers came off the rendered form and ride in with the
   # click (`FormFlow.Web.Components.Forms.PrefillMenu`). Here the form is the
-  # user's own, in this very process — the hook reads the DOM all the same,
+  # user's own, in this very process - the hook reads the DOM all the same,
   # which is what lets one mechanism serve a page whose form is in a child
   # LiveView and a page whose form is right here.
   def handle_event("capture_prefill", %{"params" => params}, socket)
@@ -264,7 +264,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
           {:noreply, reload(socket)}
         end
 
-      # Refused — the dialog stays open over what was typed, which is the
+      # Refused - the dialog stays open over what was typed, which is the
       # only copy of it: the fields are the assign, not the browser's DOM
       {:error, message} ->
         {:noreply,
@@ -279,7 +279,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     %{context: context, prefill: prefill} = socket.assigns
 
     case prefill && Templates.Forms.delete_prefill(context.form, prefill.name) do
-      # The URL still names it and now names nothing that is there — the same
+      # The URL still names it and now names nothing that is there - the same
       # state a link to a prefill someone else deleted arrives in, and the
       # form loses the answers it was filled with
       {:ok, _form} -> {:noreply, reload(socket)}
@@ -373,7 +373,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       :ok
   end
 
-  # After submit: where the user goes, as a URL. Nothing is started here —
+  # After submit: where the user goes, as a URL. Nothing is started here -
   # the page that addresses a position is the one that starts it.
   defp next_destination(%Context{flow_instance: flow_instance} = context, assigns) do
     case next_path(context, assigns) do
@@ -383,7 +383,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   end
 
   # The flow's type answers first, and the flow instance answers when that
-  # flow has nothing left, carrying the user on to whatever follows it — the
+  # flow has nothing left, carrying the user on to whatever follows it - the
   # nearest form that is theirs to work, skipping other perspectives' flows.
   defp next_path(context, assigns) do
     case assigns.type.module.handle_complete(context, assigns.callback_data) do
@@ -440,7 +440,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # The flow's type says this form is not for the viewer — another
+  # The flow's type says this form is not for the viewer - another
   # perspective's work. Nothing of it is shown, started or not.
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
@@ -497,7 +497,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # Already submitted, so there is nothing to edit until it is reopened —
+  # Already submitted, so there is nothing to edit until it is reopened -
   # which happens beside the answers, on Show.
   def render(%{page_state: :completed} = assigns) do
     ~H"""
@@ -579,7 +579,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         </p>
       </div>
 
-      <%!-- The form itself is the form type's to draw (edit_component/1) —
+      <%!-- The form itself is the form type's to draw (edit_component/1) -
             the default is the DynamicForm form alone; a review draws an
             earlier form's answers beside it --%>
       {@form_type.module.edit_component(%{
@@ -606,7 +606,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # The id the form type is handed, and — with `-form` on the end — the DOM id
+  # The id the form type is handed, and - with `-form` on the end - the DOM id
   # of the `<form>` it draws, which is what Capture reads
   # (`FormFlow.Config.Forms.Type`'s `edit_component/1` renders `DynamicForm.form`
   # under this id, and DynamicForm's renderer adds the suffix). Spelled once,
@@ -617,5 +617,5 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   defp blocked_message(%{form: nil}), do: "This form is not part of this flow."
 
   defp blocked_message(_assigns),
-    do: "This form isn't available yet — it comes later in the flow."
+    do: "This form isn't available yet - it comes later in the flow."
 end

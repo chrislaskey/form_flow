@@ -4,9 +4,9 @@ defmodule FormFlow.Data.Templates.Flow.Event do
   audit trail of a flow template, mirroring the two instance-side logs
   (`FormFlow.Data.Instances.Flow.Event`, `FormFlow.Data.Instances.Form.Event`)
   and their discipline: every row carries the responsible principal
-  (`user_id`, an opaque host-app identity — the admin at the page, or
+  (`user_id`, an opaque host-app identity - the admin at the page, or
   nothing when a host passes none), rows are never updated, and events never
-  cascade-delete with their flow — the two paths that remove a flow row,
+  cascade-delete with their flow - the two paths that remove a flow row,
   `FormFlow.Data.Templates.Flows.delete/1` and the sweep of unreachable
   subflows inside a save, delete the log deliberately first.
 
@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Templates.Flow.Event do
   `health_ignored` and `health_unignored` are written by
   `FormFlow.Data.Templates.Flows.Health.ignore/3` and `stop_ignoring/3`
   beside the record they keep on the flow, with the entry's `"code"`,
-  `"path"`, and `"subject"` in `snapshot` — the record says what is ignored
+  `"path"`, and `"subject"` in `snapshot` - the record says what is ignored
   now; the log says who decided it, and when a decision was reversed.
   `pre_release_instances_deleted` is written by
   `FormFlow.Data.Instances.Flows.delete_pre_release/2` with the `"count"`

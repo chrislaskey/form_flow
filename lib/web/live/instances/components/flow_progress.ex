@@ -1,16 +1,16 @@
 defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   @moduledoc """
   `FormFlow.Web.Instances.Components.Flows.Progress` function component renders
-  a "forms" flow's forms and their state — the sequence a user is working
+  a "forms" flow's forms and their state - the sequence a user is working
   through, above the form they are filling.
 
   The component is type-agnostic: it draws what it is given. Whether to draw
   it at all and which forms can be jumped to (`clickable`) are the flow
-  type's decisions — `progress_component/1` and `editable?/2` of
-  `FormFlow.Config.Flows.Type` — asked by `FormFlow.Web.Instances.Forms.Shared`.
+  type's decisions - `progress_component/1` and `editable?/2` of
+  `FormFlow.Config.Flows.Type` - asked by `FormFlow.Web.Instances.Forms.Shared`.
 
-  A jumpable form is a link to that position's fill page — which is the page
-  that starts it, so jumping needs no event of its own — and every other one
+  A jumpable form is a link to that position's fill page - which is the page
+  that starts it, so jumping needs no event of its own - and every other one
   is the same badge as plain text. The badge itself is identical either way,
   so the row doesn't shift as forms become reachable; the link only wraps it.
 
@@ -33,7 +33,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   attr(:clickable, :any,
     default: nil,
     doc:
-      "a MapSet of the paths that can be navigated to — the current form " <>
+      "a MapSet of the paths that can be navigated to - the current form " <>
         "belongs in it only if navigating to it would do something; nil for none"
   )
 
@@ -87,13 +87,13 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
     >
       <span class="font-mono">{marker(@form.status, @index)}</span>
       <span>{@form.label}</span>
-      <span class="sr-only">— {elem(badge(@form.status), 0)}</span>
+      <span class="sr-only">- {elem(badge(@form.status), 0)}</span>
     </Core.badge>
     """
   end
 
   @doc """
-  A form's derived status as `{text, kind}` — the wording and the
+  A form's derived status as `{text, kind}` - the wording and the
   `FormFlow.Web.CoreComponents.badge/1` palette every surface showing
   progress uses.
   """

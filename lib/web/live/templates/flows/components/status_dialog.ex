@@ -5,7 +5,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
   page and the flows index: a dropdown of `FormFlow.Data.Templates.Flow.statuses/0`
   (a `select` through `FormFlow.Web.Components.Core.input/1`, so a host's
   `components` draws it), and under it what the chosen status means for
-  users and how many instances it reaches — the same words the Edit page
+  users and how many instances it reaches - the same words the Edit page
   draws under its own Status field, which is the third place a status is
   changed and the one that waits for Save.
 
@@ -13,7 +13,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
   were started during it (`pre_release_count`) and offers a box, **Delete
   them**, unticked; `FormFlow.Web.Templates.Shared.save_status/3` acts on
   it. The trial run is the pre-release users' and the real run begins with
-  the change, so the offer is made where the change is — but the deletion
+  the change, so the offer is made where the change is - but the deletion
   is theirs to choose, never the default.
 
   The caller owns the flow around it: opening, the `status_picked` event the
@@ -32,14 +32,14 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
 
   attr(:status, :string,
     required: true,
-    doc: "the status chosen so far — the flow's, until picked"
+    doc: "the status chosen so far - the flow's, until picked"
   )
 
   attr(:counts, :map, default: nil, doc: "`Shared.instance_counts/1` of the flow")
 
   attr(:pre_release_count, :integer,
     default: 0,
-    doc: "`Shared.pre_release_count/1` of the flow — the instances the dialog offers to delete"
+    doc: "`Shared.pre_release_count/1` of the flow - the instances the dialog offers to delete"
   )
 
   attr(:delete_pre_release?, :boolean, default: false, doc: "whether the offer's box is ticked")

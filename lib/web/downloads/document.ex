@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Downloads.Document do
   in.
 
   It sits between the two halves of a download on purpose. On one side, a
-  parser turns a resource into this — the parsers live beside the components
+  parser turns a resource into this - the parsers live beside the components
   that draw the same resource on screen, and
   `FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance` is the one
   that reads a form instance today. On the other, a renderer turns this into
@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Downloads.Document do
     * `:title` - the heading, the one line that says what this is
     * `:subtitle` - what it belongs to, drawn under the title; `nil` for none
     * `:details` - `{label, value}` pairs about the resource itself rather
-      than its content — when it was submitted, what version it is against —
+      than its content - when it was submitted, what version it is against -
       drawn as a block under the heading
     * `:sections` - the content, in order, as `t:section/0` structs
     * `:filename` - the base name a download is saved as, without an
@@ -39,14 +39,14 @@ defmodule FormFlow.Web.Downloads.Document do
       static content
     * `{:group, title, entries}` - a run inside a section: one entry of a
       repeating question, or a panel inside one. `title` is `nil` for a run
-      the definition heads with nothing, which is still its own group —
+      the definition heads with nothing, which is still its own group -
       where the entries begin and end is the point, and a heading is not the
       only thing that says so. Groups nest, and hold the same three shapes,
       because the forms they come from nest: a repeating question inside a
       repeating question is a group of groups
 
   Every value is a string by the time it reaches here. Formatting a stored
-  answer — a list, a choice's stored value, a boolean — is the parser's
+  answer - a list, a choice's stored value, a boolean - is the parser's
   job, so that every renderer prints the same words.
   """
 
@@ -73,7 +73,7 @@ defmodule FormFlow.Web.Downloads.Document do
     @moduledoc """
     One titled run of a `FormFlow.Web.Downloads.Document`'s content.
 
-    `:title` is `nil` for the run before the first heading — a form's
+    `:title` is `nil` for the run before the first heading - a form's
     top-level questions, drawn with no heading of their own.
     """
 
@@ -86,7 +86,7 @@ defmodule FormFlow.Web.Downloads.Document do
   end
 
   @doc """
-  Whether the document has any content to draw — a section holding at least
+  Whether the document has any content to draw - a section holding at least
   one entry. A renderer draws its "nothing here" line instead when it does
   not; the heading and details are still worth printing, since they say what
   the empty thing was.

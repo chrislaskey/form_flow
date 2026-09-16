@@ -5,15 +5,15 @@ defmodule FormFlow.Web.Components.Forms.PrefillPicker do
   the form's prefills (`FormFlow.Data.Templates.Form.Prefill`), and whatever
   actions the page puts beside it.
 
-  It is on both sides of the library — the template pages, where a form is
+  It is on both sides of the library - the template pages, where a form is
   being built and looked at, and a form instance, where a flow that is not
-  open yet is walked through — so it lives here rather than under either.
+  open yet is walked through - so it lives here rather than under either.
   What differs between them is the `actions` slot: the pages that *write*
   prefills put their menu there, and the pages that only apply one pass
   none.
 
   The select carries no label of its own: with one control in the row, the
-  placeholder — **Prefill** — says what it is, and the row stays a control
+  placeholder - **Prefill** - says what it is, and the row stays a control
   rather than a section. It is never disabled, so a form with no prefills yet
   still opens to say there are none rather than looking broken.
 
@@ -21,7 +21,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillPicker do
   when the select is cleared; the page decides what that means, since on a
   page with unsaved content it is a navigation to ask about first.
 
-  `missing` is the name a URL asked for that this form has not got — a link
+  `missing` is the name a URL asked for that this form has not got - a link
   to a prefill since deleted, or one saved against another form. The select
   shows nothing selected, which on its own looks like the link was ignored,
   so the picker says which name it could not find.
@@ -42,7 +42,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillPicker do
   attr(:class, :any, default: nil)
   attr(:components, :atom, default: nil)
 
-  slot(:actions, doc: "what the page offers beside the select — a menu, or nothing")
+  slot(:actions, doc: "what the page offers beside the select - a menu, or nothing")
 
   def prefill_picker(assigns) do
     ~H"""

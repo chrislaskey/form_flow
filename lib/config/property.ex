@@ -1,11 +1,11 @@
 defmodule FormFlow.Config.Property do
   @moduledoc """
-  One setting a flow or form type asks an admin for — its definition: what
+  One setting a flow or form type asks an admin for - its definition: what
   it's called, how its field renders, what it accepts.
 
   A `FormFlow.Config.Flows.Type` or `FormFlow.Config.Forms.Type` declares its
   properties as a list of these. The edit pages render one field per property
-  under the type dropdown — the type picked decides which fields appear — and
+  under the type dropdown - the type picked decides which fields appear - and
   store what the admin enters on the template, keyed by `:id`. Those entered
   values are the type's *property values*, read back through
   `FormFlow.Config.Forms.Type.property_values/1`,
@@ -43,13 +43,13 @@ defmodule FormFlow.Config.Property do
   ## Related forms
 
   A `:related_form` points at another form of the same flow, for a type whose
-  behavior involves it — a review form showing an earlier form's answers, a
+  behavior involves it - a review form showing an earlier form's answers, a
   form copying values from one. Its options are the forms that come *before*
   the one being edited, in the order a user works them, labeled the way the
   user-facing pages label them ("Documents / Proof of address"); a form has
   no earlier forms until it sits in a flow, so a catalog form's field offers
-  none. The stored value is the chosen form's path — its node ids from the
-  root flow down, joined with `/` — which is what identifies one form
+  none. The stored value is the chosen form's path - its node ids from the
+  root flow down, joined with `/` - which is what identifies one form
   position even when a reusable form or subflow appears twice in a flow.
   """
 

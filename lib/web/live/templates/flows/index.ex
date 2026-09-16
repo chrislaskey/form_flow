@@ -2,7 +2,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
-  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` — the
+  A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` - the
   name with its slug beneath it, the id, status
   (`FormFlow.Data.Templates.Flow`'s table, as a badge whose title says what
   it means), summary counts and timestamps, with Overview, Show, and Edit
@@ -22,14 +22,14 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       />
 
   Without a `sort` param the table sorts by creation time, matching
-  `Flows.list/0` — injected into the params handed to Slab so pagination
+  `Flows.list/0` - injected into the params handed to Slab so pagination
   stays deterministic instead of leaning on unspecified database order.
 
   The count columns aren't sortable: they are virtual fields populated by
   the query's select, not real columns Slab could compile into `ORDER BY`.
 
   `base` is the path prefix the flows pages are mounted under, used to build
-  the links — with the default `""`, rows link to `/flows/:id`.
+  the links - with the default `""`, rows link to `/flows/:id`.
 
   ## Filters
 
@@ -56,8 +56,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   ## Health
 
   Every row carries the flow's health as a
-  `FormFlow.Web.Templates.Components.Health` badge — a green check, the
-  count of open entries, or a dash for a flow never checked — linking to
+  `FormFlow.Web.Templates.Components.Health` badge - a green check, the
+  count of open entries, or a dash for a flow never checked - linking to
   the flow's health page. The badge reads the status cached on the row's
   own struct (`FormFlow.Data.Templates.Flows.Health.status/1`), so the
   listing runs no check: the health page does, and every save refreshes
@@ -66,16 +66,16 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   ## The row menu
 
   Beside Overview, Show, and Edit, every row has a ⋮ menu for the actions
-  that do something rather than go somewhere — Duplicate Flow (the label is
+  that do something rather than go somewhere - Duplicate Flow (the label is
   *Duplicate* because the canvas's Copy means "to the clipboard"; the code
   stays `copy`, see `FormFlow.Web.Templates.Flows.Show`) and Change status
   (`FormFlow.Web.Templates.Flows.Components.StatusDialog`, the show page's
   dialog, saving through `Flows.update_status/3` signed by `user_id` and
-  reloading the listing) — and one link, History (`FormFlow.Web.Templates.Flows.History`),
+  reloading the listing) - and one link, History (`FormFlow.Web.Templates.Flows.History`),
   a lesser page than Overview kept out of the row. Duplicate Flow opens
   the same dialog the show page does
   (`FormFlow.Web.Templates.Flows.Components.CopyDialog`),
-  prefilled for that row's flow, and lands on the copy's show page — the
+  prefilled for that row's flow, and lands on the copy's show page - the
   row is loaded whole for it (`FormFlow.Data.Templates.Flows.get/1`), since
   the listing's rows carry counts, not contents. `flow_types` and
   `form_types` are the host's lists, passed so the copy's health is checked
@@ -155,8 +155,8 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   end
 
   # The row's flow, loaded whole, is what the dialog and `copy/2` take; a row
-  # that has gone since the listing drew — deleted, or another tenant's id
-  # sent by hand — is refused with a message rather than copied.
+  # that has gone since the listing drew - deleted, or another tenant's id
+  # sent by hand - is refused with a message rather than copied.
   @impl true
   def handle_event("request_copy", %{"id" => id}, socket) do
     case listed_flow(id, socket.assigns.tenant_id) do
@@ -264,7 +264,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   defp archived_count(tenant_id, false),
     do: Repo.aggregate(Flows.roots_query(tenant_id: tenant_id, status: "archived"), :count)
 
-  # This page with `archived` switched — the sort kept, the page number
+  # This page with `archived` switched - the sort kept, the page number
   # dropped, since the rows it counted have changed
   defp archived_toggle_path(%{uri: uri, base: base}, show?) do
     {path, params} =
@@ -317,7 +317,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <Core.alert :if={@empty?} components={@components}>
-        No flows yet — create the first one.
+        No flows yet - create the first one.
       </Core.alert>
 
       <Core.alert :if={@all_hidden?} components={@components}>

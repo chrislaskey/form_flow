@@ -4,17 +4,17 @@ defmodule FormFlow.Config.Flows.Type do
   user filling them out.
 
   A host passes a list of these as the `flow_types` attr of
-  `FormFlow.Web.router/1` and the LiveComponents — the same list on the
+  `FormFlow.Web.router/1` and the LiveComponents - the same list on the
   admin pages, where a type is chosen, and on every instance page, where it
-  acts — usually from one function of its own that starts from `defaults/0`.
-  The struct is what the host describes, and its `:module` — `use`ing this
-  behaviour — is what the type does. `:id` is the value stored in the flow's
+  acts - usually from one function of its own that starts from `defaults/0`.
+  The struct is what the host describes, and its `:module` - `use`ing this
+  behaviour - is what the type does. `:id` is the value stored in the flow's
   `properties["form_flow_type"]`.
 
   Two lists on the struct are what an admin sets per flow of the type.
   `:properties` are the type's settings (`FormFlow.Config.Property`), one
   field each on the identity form. `:perspectives` are the kinds of user a
-  flow of this type can be for (`FormFlow.Config.Flows.Perspective`) — a
+  flow of this type can be for (`FormFlow.Config.Flows.Perspective`) - a
   review type declares its reviewers and approvers, a plain wizard declares
   none and is for everyone. The identity form offers the picked type's as a
   multi-select, and the picked ids are stored on the flow. A host sets both
@@ -22,19 +22,19 @@ defmodule FormFlow.Config.Flows.Type do
   its `flow_types` can be `defaults/0` with `perspectives` filled in.
 
   Every callback takes the `FormFlow.Context` of one form in one flow
-  instance — `:form_progress` is the form, `:flow_progress` its flow's forms
-  in order — plus `callback_data`, the host's own map from the attr of that
+  instance - `:form_progress` is the form, `:flow_progress` its flow's forms
+  in order - plus `callback_data`, the host's own map from the attr of that
   name. The defaults, `FormFlow.Config.Flows.Type.Default`,
   are the in-order wizard: a form can be edited where the flow allows it, and
   finishing a form moves to the nearest place work can happen next. A type
   overrides only what it changes, and can call the defaults from an override.
 
   Two callbacks answer two different questions about the viewer. `visible?/2`
-  is whether the flow's forms are *for* this viewer at all — the default
+  is whether the flow's forms are *for* this viewer at all - the default
   reads the flow's perspectives (`FormFlow.Config.Flows.Perspective`), so a
   reviewer never sees the applicant's forms, and the pages hide, skip, and
   refuse a position that is not. `editable?/2` is whether the flow allows
-  work at this position *now* — the order rule. The pages ask `visible?/2`
+  work at this position *now* - the order rule. The pages ask `visible?/2`
   first, so a type's `editable?/2` never has to repeat the perspective test.
   """
 
@@ -54,8 +54,8 @@ defmodule FormFlow.Config.Flows.Type do
         }
 
   @doc """
-  The library's flow types, in display order: the in-order wizard first —
-  the fallback for a flow that never chose — then the any-order wizard. What
+  The library's flow types, in display order: the in-order wizard first -
+  the fallback for a flow that never chose - then the any-order wizard. What
   the `flow_types` attr defaults to, and what a host's own list starts from:
 
       def flow_types do
@@ -85,7 +85,7 @@ defmodule FormFlow.Config.Flows.Type do
 
   @doc """
   What an admin entered for the flow's type's `:properties`, keyed by
-  property key — stored on the flow under
+  property key - stored on the flow under
   `properties["form_flow_type_property_values"]`. Empty when the type
   declares none or nothing was entered.
   """
@@ -97,7 +97,7 @@ defmodule FormFlow.Config.Flows.Type do
   def property_values(nil), do: %{}
 
   @doc """
-  Whether the forms of the flow at `:subflow` are for this viewer — shown on
+  Whether the forms of the flow at `:subflow` are for this viewer - shown on
   the flow instance's page, counted toward where they go next, and openable
   at all. The default is `FormFlow.Config.Flows.Perspective.visible?/1`: the
   flow's stored perspectives against the viewer's `:perspectives`, with a
@@ -108,7 +108,7 @@ defmodule FormFlow.Config.Flows.Type do
   @callback visible?(Context.t(), map()) :: boolean()
 
   @doc """
-  Whether the user may edit the form at `:form_progress` — start it when it
+  Whether the user may edit the form at `:form_progress` - start it when it
   has no instance yet, or keep working on one already started. The order
   rule only: the pages ask `visible?/2` first.
   """
@@ -116,7 +116,7 @@ defmodule FormFlow.Config.Flows.Type do
 
   @doc """
   Where the user goes after completing the form at `:form_progress`: the
-  next form of this flow, or `nil` when the flow has nothing left for them —
+  next form of this flow, or `nil` when the flow has nothing left for them -
   the flow instance then carries them on to whatever follows it. The context
   is derived fresh after the write, so the form just submitted counts as done.
 
@@ -127,7 +127,7 @@ defmodule FormFlow.Config.Flows.Type do
   @callback handle_complete(Context.t(), map()) :: FormProgress.t() | nil
 
   @doc """
-  The flow's progress, drawn above the form being edited — return `nil` to
+  The flow's progress, drawn above the form being edited - return `nil` to
   draw nothing. `assigns` are those of
   `FormFlow.Web.Instances.Components.Flows.Progress.flow_progress/1`, plus
   `:context` and `:callback_data`.

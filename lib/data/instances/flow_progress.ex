@@ -1,7 +1,7 @@
 defmodule FormFlow.Data.Instances.FlowProgress do
   @moduledoc """
-  Derives the traversal state of a whole root flow instance — a journey (see
-  `FormFlow.Data.Instances` for the term) — as a pure function of the live
+  Derives the traversal state of a whole root flow instance - a journey (see
+  `FormFlow.Data.Instances` for the term) - as a pure function of the live
   flow tree and the form instances filled inside it.
   Nothing here is persisted, which is the point: derived state cannot desync
   from the template (instances plan, D2). Statuses fold upward through the
@@ -17,27 +17,27 @@ defmodule FormFlow.Data.Instances.FlowProgress do
 
   Two views of that one derivation:
 
-    * `derive/2` — every position's status, keyed by path. The primitive the
+    * `derive/2` - every position's status, keyed by path. The primitive the
       join rule is expressed in.
-    * `forms/2` — the journey's *form* positions only, as an ordered list of
+    * `forms/2` - the journey's *form* positions only, as an ordered list of
       `FormFlow.Data.Instances.FormProgress` structs carrying the label,
       live instance, and owning flow alongside the status. This is what the
       user-facing pages render.
 
   Order, for `forms/2`, is the order a user works them: breadth-first from
-  Start, descending into subflows the moment one is reached — the same scan
+  Start, descending into subflows the moment one is reached - the same scan
   `next_path_position/2` performs. `forms_in_flow/2` narrows the list to one
-  "forms" flow's own — the sequence a user works through, front to back:
+  "forms" flow's own - the sequence a user works through, front to back:
   `actionable?/1` is where the flow allows work, which is where the default
   flow type lets a user edit.
 
-  Form instances with `superseded_at` set are skipped everywhere — they are
+  Form instances with `superseded_at` set are skipped everywhere - they are
   attestation records left behind by strand reconciliation, not live
   traversal state.
 
   The tree comes from `FormFlow.Data.Templates.Flows.resolve_tree/1`. The
   journey's stamped `status` and this module answer different questions and
-  may legitimately diverge after a template edit — `complete?/2` is the
+  may legitimately diverge after a template edit - `complete?/2` is the
   derivation-side answer.
   """
 
@@ -67,7 +67,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   end
 
   @doc """
-  Whether the root flow's End is reached — every predecessor completed,
+  Whether the root flow's End is reached - every predecessor completed,
   recursively through subflows. Requires at least one End node: a malformed
   flow without one is never derivably complete.
   """
@@ -81,9 +81,9 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   end
 
   @doc """
-  The next actionable position: the first form position in flow order —
+  The next actionable position: the first form position in flow order -
   breadth-first from Start, descending into subflows the moment they are
-  reachable — whose status is `:available` or `:in_progress`. Returns its
+  reachable - whose status is `:available` or `:in_progress`. Returns its
   path, or nil when nothing is actionable (journey done, or blocked).
   """
   @spec next_path_position(tree :: map() | nil, form_instances :: [struct()]) :: path() | nil
@@ -96,7 +96,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   The journey's form positions in the order they are worked, each as a
   `FormFlow.Data.Instances.FormProgress`.
 
-  Positions the tree no longer has are absent — a stranded instance is not a
+  Positions the tree no longer has are absent - a stranded instance is not a
   form of the flow any more (`FormFlow.Data.Instances.Flows.list_stranded/2`
   is where those surface).
   """
@@ -108,7 +108,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   end
 
   @doc """
-  The forms sharing a position's "forms" flow, in order — the sequence the
+  The forms sharing a position's "forms" flow, in order - the sequence the
   user works through.
 
   Positions are compared by their parent path rather than by flow id: the
@@ -128,14 +128,14 @@ defmodule FormFlow.Data.Instances.FlowProgress do
 
   @doc """
   Whether the flow allows work on a form: its predecessors are done, or it is
-  already started. Anything else is gated — including, after a submit, the
+  already started. Anything else is gated - including, after a submit, the
   form just completed. The same test `next_path_position/2` scans for.
   """
   @spec actionable?(FormProgress.t()) :: boolean()
   def actionable?(%FormProgress{status: status}), do: status in [:available, :in_progress]
 
   @doc """
-  A form's label prefixed with the subflows drilled through to reach it —
+  A form's label prefixed with the subflows drilled through to reach it -
   "Documents / Proof of address". Unqualified for a form in the root flow,
   where there is nothing to prefix.
   """
@@ -156,8 +156,8 @@ defmodule FormFlow.Data.Instances.FlowProgress do
     first_actionable(starts, MapSet.new(), tree, prefix, statuses, outgoing, nodes_by_id)
   end
 
-  # Scans a queue of node ids in flow order — breadth-first along the edges,
-  # so nearer positions win — returning the first actionable position: an
+  # Scans a queue of node ids in flow order - breadth-first along the edges,
+  # so nearer positions win - returning the first actionable position: an
   # available or in-progress form, or the first such position *inside* an
   # actionable subflow (descend the moment one is reachable).
   defp first_actionable([], _seen, _tree, _prefix, _statuses, _outgoing, _nodes_by_id), do: nil
@@ -292,7 +292,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
 
   # Completion is intrinsic for Start (trivially complete), form nodes
   # (their instance's stamped status), and subflow nodes (their interior
-  # End); End and unknown kinds complete when every predecessor does — the
+  # End); End and unknown kinds complete when every predecessor does - the
   # committed AND-join. The visiting set breaks edge cycles: a node on a
   # cycle is never derivably complete.
   defp completed?(node, ctx, visiting) do

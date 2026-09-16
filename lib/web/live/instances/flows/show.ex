@@ -1,8 +1,8 @@
 defmodule FormFlow.Web.Instances.Flows.Show do
   @moduledoc """
   `FormFlow.Web.Instances.Flows.Show` LiveComponent is one flow instance's
-  detail page: every form in flow order with its derived state — Available /
-  In progress / Done / Pending — plus any stranded answers (filled at a
+  detail page: every form in flow order with its derived state - Available /
+  In progress / Done / Pending - plus any stranded answers (filled at a
   position the flow no longer has).
 
   Which forms appear, and which offer to start, is not this page's decision:
@@ -21,7 +21,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   navigation lands.
 
   Every action here navigates, because a form's URL addresses its *position*
-  and so exists before its instance row does — starting happens on the form
+  and so exists before its instance row does - starting happens on the form
   page itself (see `FormFlow.Web.Instances.Forms.Show`). Start, Continue and
   View are links wearing a button's clothes for that reason. Reopen is the
   exception: it changes state, so it posts an event, and it lives beside the
@@ -33,23 +33,23 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   `FormFlow.Web.Instances.Shared.page_state/1` and draws four states, each
   in its own `render/1` clause and with no catch-all:
 
-    * `:flow_not_found` — "This flow no longer exists."
-    * `:redirecting` — nothing, while the host's `on_mount` navigates away
-    * `:refused` — the host's message alone
-    * `:ready` — the forms and their state
+    * `:flow_not_found` - "This flow no longer exists."
+    * `:redirecting` - nothing, while the host's `on_mount` navigates away
+    * `:refused` - the host's message alone
+    * `:ready` - the forms and their state
 
   Reopen needs both rules. The state says whether the page may act at all;
   it cannot say whether it may act on *this* position, and the position
   arrives from the client. So the event also finds the row it names among
-  the ones the page drew — rows are only forms the flow's type calls
+  the ones the page drew - rows are only forms the flow's type calls
   visible, and Reopen is only drawn on a completed row that has an instance.
   Without that second rule the event is not a reopen at all: an unstarted
   position falls through to `FormFlow.Data.Instances.Forms.update_status/4`'s
   create, which would start a form here, past the gate Edit is built around.
 
   That rule closes it for this page, not for the library. The create
-  resolves a position's node with a bare lookup — no tenant, no flow
-  narrowing — so **any** caller handing
+  resolves a position's node with a bare lookup - no tenant, no flow
+  narrowing - so **any** caller handing
   `FormFlow.Data.Instances.Forms.update_status/4` a client-supplied path has
   the same hole. Narrowing the lookup to the journey's own tree is the
   follow-up; it touches the data layer and needs its own audit of what would
@@ -94,7 +94,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   # The state the page is in, computed once where the loading and the gate
   # ran. Every render clause matches on it and the one event guards on it,
-  # because a LiveComponent's events are reachable whenever it is mounted —
+  # because a LiveComponent's events are reachable whenever it is mounted -
   # which it is even when the page drew a refusal instead.
   defp assign_page_state(socket) do
     assign(socket, :page_state, FormFlow.Web.Instances.Shared.page_state(socket.assigns))
@@ -102,7 +102,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   # Reopening a position the page did not offer is not something the page
   # can do, so the row it names has to be one it drew: visible to the
-  # viewer, completed, and holding an instance — the same three things the
+  # viewer, completed, and holding an instance - the same three things the
   # Reopen button is drawn for.
   @impl true
   def handle_event("reopen", %{"path" => joined}, socket)
@@ -117,7 +117,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
-  # it. Only a well-formed one, though — the params are matched here too, so
+  # it. Only a well-formed one, though - the params are matched here too, so
   # a "reopen" carrying no position is as much a `FunctionClauseError` as an
   # event name nothing answers to. Silence is for a refusal, not for a
   # message this page does not understand.
@@ -163,8 +163,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
         flow = tree && tree.flow
 
-        # The page's own context — the flow instance as a whole, no form in
-        # scope — for the host's on_mount to answer with
+        # The page's own context - the flow instance as a whole, no form in
+        # scope - for the host's on_mount to answer with
         context = %Context{
           user_id: socket.assigns.user_id,
           tenant_id: socket.assigns.tenant_id,
@@ -202,7 +202,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   end
 
   # Every form the viewer's perspectives are for, with the one question its
-  # own flow's type answers here — forms of a flow that is not for the viewer
+  # own flow's type answers here - forms of a flow that is not for the viewer
   # are not rows at all.
   defp rows(forms, tree, flow_instance, assigns) do
     for form <- forms,
@@ -233,7 +233,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   end
 
   # The viewer's part is done when every form they can see is completed and
-  # the instance as a whole is not — what remains is someone else's
+  # the instance as a whole is not - what remains is someone else's
   defp part_done?(rows, flow_instance) do
     rows != [] and flow_instance.status != "completed" and
       Enum.all?(rows, &(&1.form.status == :completed))
@@ -310,7 +310,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           <Core.badge components={@components} kind={kind}>{text}</Core.badge>
           <span>{FlowProgress.qualified_label(row.form)}</span>
           <span class="ml-auto flex items-center gap-2">
-            <%!-- Start is the offer to begin work here — an any-order wizard
+            <%!-- Start is the offer to begin work here - an any-order wizard
                   makes it on forms an in-order one keeps closed. A form
                   already started continues instead; both land on the same
                   page, which is the one that starts the form. --%>

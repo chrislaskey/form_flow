@@ -94,7 +94,7 @@ defmodule FormFlow.Data.Migration do
   Migrates FormFlow's tables down to and including `:version`.
 
   Defaults to the initial version, which removes every table FormFlow created
-  — including the data in them.
+  - including the data in them.
   """
   def down(opts \\ []) when is_list(opts) do
     context = context(opts, :down)

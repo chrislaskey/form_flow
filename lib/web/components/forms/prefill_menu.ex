@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
 
   It goes in `FormFlow.Web.Components.Forms.PrefillPicker`'s `actions` slot
   on the two template pages, which is where prefills are written. The pages
-  that only apply one — a form instance being filled — pass no actions, so
+  that only apply one - a form instance being filled - pass no actions, so
   the picker is a picker there and nothing more.
 
   A `<details>` dropdown, as the flows index's row actions: open and close
@@ -26,7 +26,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
   the DOM is the only thing the surfaces share: the template pages draw their
   form in a child LiveView of their own (`FormFlow.Web.Templates.Forms.Preview`)
   and an instance draws it in the page's own process, while both put the same
-  `<form>` on screen. `form_id` is which form — an explicit attr, since a
+  `<form>` on screen. `form_id` is which form - an explicit attr, since a
   template page has two (the preview, and the editor's own fields) and the
   answers are always the preview's.
 

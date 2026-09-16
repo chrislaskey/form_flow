@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF do
   The default `FormFlow.Web.Downloads.Renderer`: a `FormFlow.Web.Downloads.Document`
   laid out as a PDF, with no dependency to install.
 
-  The layout is one column and deliberately plain — a heading, the details
+  The layout is one column and deliberately plain - a heading, the details
   under it, then each section's fields as a small bold label with its value
   beneath. A group indents its contents, so a repeating question inside a
   repeating question reads as the nesting it is. It is a record of what someone answered, meant to be filed and
@@ -11,8 +11,8 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF do
   `FormFlow.Web.Downloads.Renderer.PDF.Writer`, which is where the format's
   limits are written down.
 
-  A host that wants more than this — letterhead, columns, a typeface of its
-  own — writes its own renderer around a real HTML-to-PDF engine and mounts
+  A host that wants more than this - letterhead, columns, a typeface of its
+  own - writes its own renderer around a real HTML-to-PDF engine and mounts
   that instead; the document it receives is the same one this module draws.
   See `FormFlow.Web.Downloads.Renderer`.
   """
@@ -117,7 +117,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF do
 
   # An unanswered question prints an em dash rather than a gap, so a reader
   # can tell "no answer" from "the renderer lost it"
-  defp blank(""), do: "—"
-  defp blank(nil), do: "—"
+  defp blank(""), do: "-"
+  defp blank(nil), do: "-"
   defp blank(value), do: value
 end

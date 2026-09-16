@@ -1,7 +1,7 @@
 defmodule FormFlow.Web.Templates.Forms.Components.CatalogBadge do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Components.CatalogBadge` function component
-  says, on a step's form page, that the step reuses a catalog form — and
+  says, on a step's form page, that the step reuses a catalog form - and
   where else that form is used, since an edit or a publish here reaches all
   of those places. "Catalog" is the word `/forms` uses for itself.
 
@@ -32,7 +32,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.CatalogBadge do
         {@form.name} · used in {Enum.join(Shared.usage_labels(@usages), ", ")}.
       </span>
       <span class="text-xs">
-        To stop reusing it, remove this step from the canvas and add it again — the new step gets a
+        To stop reusing it, remove this step from the canvas and add it again - the new step gets a
         form of its own (or a copy of this one, through Copy form); users who started this step are
         stranded.
       </span>

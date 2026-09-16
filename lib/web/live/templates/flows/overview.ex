@@ -3,13 +3,13 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   `FormFlow.Web.Templates.Flows.Overview` LiveComponent shows one root flow
   whole: every level at once, read-only, at `/flows/:id/overview`.
 
-  `FormFlow.Web.Templates.Flows.Show` and `.Edit` work one level at a time —
+  `FormFlow.Web.Templates.Flows.Show` and `.Edit` work one level at a time -
   a subflow node's Open button drills into that subflow's own canvas. That
   is how a flow is built. This page is how a flow is *read*: it resolves the
   tree (`FormFlow.Data.Templates.Flows.resolve_tree/1`), keeps only the
   nodes connected to each level's Start
-  (`FormFlow.Data.Templates.Flows.connected_tree/1`) — the positions a user
-  filling the flow in can actually reach — and draws every subflow expanded
+  (`FormFlow.Data.Templates.Flows.connected_tree/1`) - the positions a user
+  filling the flow in can actually reach - and draws every subflow expanded
   in place (`FormFlow.Web.Components.Overview`). Unconnected nodes are not
   drawn here; the drill-down is where they are seen and fixed.
 

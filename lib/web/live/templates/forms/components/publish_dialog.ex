@@ -5,7 +5,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   plain-language presets (bug / small / big fix) as a `DynamicForm` radiogroup,
   with the blast radius restated before anything moves.
 
-  The caller owns the flow around it: opening (only after the first publish —
+  The caller owns the flow around it: opening (only after the first publish -
   with no published history there is nobody to migrate), the `on_success`
   callback that performs the publish, and the `cancel_publish` event the
   Cancel button sends to `target`.
@@ -22,7 +22,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   attr(:counts_by_flow, :list,
     default: [],
     doc:
-      "the same counts attributed to root flows (`Forms.instance_counts_by_flow/1`) — " <>
+      "the same counts attributed to root flows (`Forms.instance_counts_by_flow/1`) - " <>
         "how an admin learns a catalog form's publish reaches several flows"
   )
 
@@ -33,7 +33,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   attr(:saved_note, :boolean,
     default: false,
     doc:
-      "warn that publishing uses the last saved definition — the Edit page, and only " <>
+      "warn that publishing uses the last saved definition - the Edit page, and only " <>
         "while it holds unsaved edits for that warning to be about"
   )
 
@@ -54,7 +54,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
         </p>
 
         <p :if={@saved_note} class="my-3 text-sm text-amber-600">
-          <span class="font-bold">Warning!</span> Publishing only uses the last saved definition — unsaved edits are not included.
+          <span class="font-bold">Warning!</span> Publishing only uses the last saved definition - unsaved edits are not included.
           Save first.
         </p>
 
@@ -72,11 +72,11 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
             required
             default="small_fix"
             options={[
-              {"Bug fix — in-progress users move to this version and keep their answers (they may see new required fields); completed instances are untouched.",
+              {"Bug fix - in-progress users move to this version and keep their answers (they may see new required fields); completed instances are untouched.",
                "bug_fix"},
-              {"Small fix — existing users keep the version they started; new users get this one.",
+              {"Small fix - existing users keep the version they started; new users get this one.",
                "small_fix"},
-              {"Big fix — everyone must fill this version out: #{@counts["in_progress"]} in-progress instance(s) will be reset and #{@counts["completed"]} completed instance(s) reopened. Prior answers are kept in the audit trail.",
+              {"Big fix - everyone must fill this version out: #{@counts["in_progress"]} in-progress instance(s) will be reset and #{@counts["completed"]} completed instance(s) reopened. Prior answers are kept in the audit trail.",
                "big_fix"}
             ]}
             metadata={%{"style" => "vertical"}}
@@ -102,7 +102,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   end
 
   # One line per status with instances: "In progress: 1 in Dog License, 1 in
-  # Cat License". Standalone instances — no flow — are said to be so.
+  # Cat License". Standalone instances - no flow - are said to be so.
   defp attribution(counts_by_flow) do
     for {status, key} <- [{"In progress", :in_progress}, {"Completed", :completed}],
         parts = for(%{^key => n} = entry <- counts_by_flow, n > 0, do: "#{n} in #{place(entry)}"),

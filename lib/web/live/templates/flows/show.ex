@@ -3,12 +3,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   `FormFlow.Web.Templates.Flows.Show` LiveComponent displays one flow.
 
   Loads the flow with `FormFlow.Data.Templates.Flows.get/1` and renders it
-  read-only in the editor canvas (see `FormFlow.Web.Components.Editor`) — pan
+  read-only in the editor canvas (see `FormFlow.Web.Components.Editor`) - pan
   and zoom work, but changing anything means clicking through to the edit
   page. The delete button removes the flow and navigates back to the index.
   Duplicate Flow, on a root flow, opens a dialog for the copy's name and
   slug (`FormFlow.Web.Templates.Flows.Components.CopyDialog`) and lands on
-  the copy's show page — the same dialog the flows index opens from a row's
+  the copy's show page - the same dialog the flows index opens from a row's
   menu. The button says *Duplicate* where the code says *copy*
   (`FormFlow.Data.Templates.Flows.copy/2`) because the canvas already has a
   Copy, in its ⋮ node menu, meaning "to the clipboard, paste later"; this
@@ -19,18 +19,18 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   Two addressing modes, matching the router:
 
-    * `flow_id` — a flow shown directly, `/flows/:id`
-    * `root_id` + `node_id` — a subflow reached by drill-in,
+    * `flow_id` - a flow shown directly, `/flows/:id`
+    * `root_id` + `node_id` - a subflow reached by drill-in,
       `/flows/:root_id/nodes/:node_id`; the node's `subflow_id` is the flow
       shown here, with a breadcrumb back to the root
 
   A subflow node's Open button pushes `form_flow:open_subflow`, which
-  navigates to that node's show page under the same root — drill-in is
+  navigates to that node's show page under the same root - drill-in is
   navigation, so it works on this read-only page too.
 
   Delete means different things in the two modes. At the top level it deletes
   the flow and everything it owns. On a drill-in page it removes the parent's
-  subflow step (`FormFlow.Data.Templates.Flows.delete_node/1`) — the child's
+  subflow step (`FormFlow.Data.Templates.Flows.delete_node/1`) - the child's
   flows go with it through garbage collection.
   Deleting the child *flow* directly would be refused while the parent still
   references it, which is why that is not what the button does.
@@ -144,7 +144,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   @impl true
   def handle_event("form_flow:flow_changed", _params, socket) do
-    # The canvas is read-only, so this shouldn't fire — ignored if it does
+    # The canvas is read-only, so this shouldn't fire - ignored if it does
     {:noreply, socket}
   end
 
@@ -170,7 +170,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     node = Flows.get_node(node_id)
 
     # Compute the destination before deleting: the *containing* flow's edit
-    # page — edit mode is sticky, and deleting a step is an editing action
+    # page - edit mode is sticky, and deleting a step is an editing action
     to = parent_edit_path(socket.assigns, node)
 
     {:ok, _node} = Flows.delete_node(node)
@@ -274,7 +274,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   # The context's refusal, as a sentence: it says why on `:id`, prefixed
-  # "cannot be deleted: " — a subflow deleted on its own, a flow with
+  # "cannot be deleted: " - a subflow deleted on its own, a flow with
   # instances, an owned form with submitted data
   defp delete_error(changeset) do
     case Keyword.get(changeset.errors, :id) do
@@ -336,7 +336,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Status: {Shared.status_label(@flow.status)}
           </Core.button>
-          <%!-- The whole flow at once, every level, read-only — the root's,
+          <%!-- The whole flow at once, every level, read-only - the root's,
                 from any depth. Show and Edit stay one level at a time. --%>
           <Core.button components={@components} navigate={overview_path(assigns)} class="btn btn-ghost">
             Flow Overview
@@ -432,7 +432,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       />
 
       <%!-- The flow's own fields, below the canvas, as the edit page lays
-            them out — three to a row, who the flow is and then what it is —
+            them out - three to a row, who the flow is and then what it is -
             read here rather than edited. A step's name and slug through a
             node, the flow's own at the root. --%>
       <dl class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -478,7 +478,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
     ~H"""
-    <span class="text-zinc-400">—</span>
+    <span class="text-zinc-400">-</span>
     """
   end
 
@@ -516,7 +516,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   defp slug_label(%{node_id: nil}), do: "Slug"
   defp slug_label(_assigns), do: "Step slug"
 
-  # The flow's type rendered as its human name — the stored one, or the
+  # The flow's type rendered as its human name - the stored one, or the
   # first type an unset one amounts to; nil for a flow with no types
   defp type_label(assigns) do
     with type when is_binary(type) <- shown_type(assigns) do
@@ -531,7 +531,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     Shared.effective_type(assigns.flow_types, assigns.flow.properties["form_flow_type"])
   end
 
-  # The perspectives the flow is for, by name — the stored ids resolved
+  # The perspectives the flow is for, by name - the stored ids resolved
   # through its type's; an id the type no longer declares is not shown
   defp perspective_names(assigns) do
     declared = Shared.perspectives(assigns.flow_types, shown_type(assigns))
@@ -542,7 +542,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   # The stored type's property values, paired with the properties that
-  # declare them, for the header — only those with a value
+  # declare them, for the header - only those with a value
   defp type_property_values(assigns) do
     values = FormFlow.Config.Flows.Type.property_values(assigns.flow)
 

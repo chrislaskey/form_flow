@@ -1,12 +1,12 @@
 defmodule FormFlow.Web.Templates.Forms.Details do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Details` LiveComponent edits a form's
-  details — name, slug, description, and type — on their own page.
+  details - name, slug, description, and type - on their own page.
 
   The details belong to the lineage, not to a version: a save here shows on
   every version at once, published ones included, and no draft or publish
   is involved. The page says so above the fields, and points back at the
-  form's page — where drafts are — for anything about the form's content.
+  form's page - where drafts are - for anything about the form's content.
   Until a form has been published there is nothing that could be disturbed,
   and `FormFlow.Web.Templates.Forms.Edit` edits the details beside the
   draft's definition; this page is where they are edited once it has, and
@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   version editor's are (`FormFlow.Web.Templates.Forms.Shared`).
 
   `DynamicForm` runs the validation lifecycle, and `on_success` routes the
-  valid payload back here through `send_update/2` — the `%{event: "save"}`
+  valid payload back here through `send_update/2` - the `%{event: "save"}`
   clause of `update/2` performs the save.
   """
 
@@ -122,7 +122,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   defp load_form(_assigns, %{form_id: form_id}) when not is_nil(form_id), do: Forms.get(form_id)
   defp load_form(_assigns, _node), do: nil
 
-  # What the page draws about that form — nothing at all when there is none
+  # What the page draws about that form - nothing at all when there is none
   defp details(_assigns, nil, _node),
     do: [form_types: [], pending_type: nil, usages: [], saved_values: nil, form_data: nil]
 
@@ -171,7 +171,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   defp pending_type(_payload, current), do: current
 
   # Switching the type dropdown re-renders the property fields, and
-  # DynamicForm rebuilds a form whose fields changed from its data — so at
+  # DynamicForm rebuilds a form whose fields changed from its data - so at
   # that moment the data becomes the pending values, and what the admin was
   # typing survives
   defp reset_form_data_on_switch(socket, pending_type, payload) do
@@ -262,7 +262,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
       </Core.alert>
 
       <%!-- A step editing a catalog form is editing it for every flow that
-            uses it — said before the first keystroke --%>
+            uses it - said before the first keystroke --%>
       <CatalogBadge.catalog_badge
         :if={Shared.reusing?(@node, @form)}
         form={@form}

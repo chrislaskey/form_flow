@@ -5,7 +5,7 @@ defmodule FormFlow.Web.Templates.Components.ChoiceCard do
   the whole card filled when it is the one picked.
 
   For the choices a page makes a decision out of rather than collects an
-  answer to — what kind of flow to create, which editor the draft is edited in.
+  answer to - what kind of flow to create, which editor the draft is edited in.
   A row of plain radios cannot say what each one does before it is clicked, and
   these choices differ in consequence, not just in kind.
 

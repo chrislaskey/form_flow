@@ -3,8 +3,8 @@ defmodule FormFlow.Config.AI.Request do
   One request to a language model, in the terms every provider shares: the
   standing instruction, the thing being asked, and how much answer to allow.
 
-  Built by the page that wants something — `FormFlow.Web.Templates.Forms.Edit`
-  builds the one that writes a form definition — and handed to the
+  Built by the page that wants something - `FormFlow.Web.Templates.Forms.Edit`
+  builds the one that writes a form definition - and handed to the
   `FormFlow.Config.AI` module the host configured.
 
   `:model` rides on the request rather than on the config because it is the
@@ -12,8 +12,8 @@ defmodule FormFlow.Config.AI.Request do
   (`FormFlow.Config.AI.model_options/1`). A page that offers no choice puts
   `FormFlow.Config.AI.default_model/1` here, which is the same value.
 
-  `:max_tokens` is a property of what is being asked for — a form is big, a
-  one-line summary is not — which is why it sits here and not on the config,
+  `:max_tokens` is a property of what is being asked for - a form is big, a
+  one-line summary is not - which is why it sits here and not on the config,
   which is a property of the host's account. The default is a ceiling a
   non-streaming request can reach without the provider's own HTTP timeout
   arriving first.

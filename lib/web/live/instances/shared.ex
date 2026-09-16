@@ -6,14 +6,14 @@ defmodule FormFlow.Web.Instances.Shared do
 
   A LiveComponent's `handle_event/3` is reachable whenever the component is
   mounted, and these pages are mounted even when they drew a refusal instead
-  of themselves — the host's `on_mount` said no, the flow's type says this
+  of themselves - the host's `on_mount` said no, the flow's type says this
   form is another perspective's work, the flow instance is gone. Which
   buttons were rendered gates nothing. So the page computes the state once,
   every `render/1` clause matches on it, and every `handle_event/3` guards on
   it.
 
   Two functions, because two kinds of page ask. `page_state/1` is every
-  instance page's half — the flow instance and the host's gate.
+  instance page's half - the flow instance and the host's gate.
   `form_page_state/1` is that plus the states only a page showing one form
   can be in. The flow instance's page and the listing have no form in scope
   and no page-level `visible?`, so they ask the narrower one.
@@ -37,15 +37,15 @@ defmodule FormFlow.Web.Instances.Shared do
   other, and it is deliberate: `:refused` outranks `:not_started`, so a
   refused viewer cannot learn from the page whether a form was started.
   `:broken_definition` outranks `:completed`, so a submitted form whose
-  definition no longer parses says the more informative of the two — there
+  definition no longer parses says the more informative of the two - there
   is nothing to edit either way.
 
   `:not_visible` asks for a `:form` as well as a false `:visible?`, and that
   is not a detail. `FormFlow.Web.Instances.Forms.Shared` answers
   `{false, false}` for a position the tree no longer has, so **every
   stranded position is `visible?: false`**. The `:form` test is what sends a
-  stranded position with no answers to `:not_started` — where the pages say
-  "This form is not part of this flow." — and lets a stranded one that has
+  stranded position with no answers to `:not_started` - where the pages say
+  "This form is not part of this flow." - and lets a stranded one that has
   answers still show them.
 
   ## Two rules, not one
@@ -60,7 +60,7 @@ defmodule FormFlow.Web.Instances.Shared do
   ## An invariant, not a branch
 
   There is no state for "the definition is missing". A form instance always
-  has a version — the pin is `on_delete: :restrict` — so the branch could
+  has a version - the pin is `on_delete: :restrict` - so the branch could
   not fire, and an unreachable branch is an untestable one. If that ever
   breaks, a crash is more traceable than a silent "can't be rendered".
   `:broken_definition` is a different thing and does fire: a stored
@@ -127,7 +127,7 @@ defmodule FormFlow.Web.Instances.Shared do
   `:see` (`FormFlow.Data.Templates.Flow.allows?/2`), with the one rule the
   table cannot hold because it is about a person: a `pre_release` flow is
   open to the users the page names in `pre_release_user_ids` and a draft to
-  everyone else — and to a viewer with no `user_id` at all, since `nil` is
+  everyone else - and to a viewer with no `user_id` at all, since `nil` is
   never in the list. The listing asks at render and again at the click; the
   instance pages ask at mount and at every write. The data layer, which
   knows no viewer, does what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
@@ -135,9 +135,9 @@ defmodule FormFlow.Web.Instances.Shared do
   The third argument is a page's assigns, and it is read for two keys only:
   `:user_id`, and `:pre_release_user_ids` as a **list** (the attr already
   resolved, `resolve_pre_release_user_ids/1`). So a host's own route asks
-  the same question with a bare map —
+  the same question with a bare map -
   `status_allows?(flow, :see, %{user_id: id, pre_release_user_ids: ids})`
-  — and for any status but `pre_release` the map is not read at all. A
+  - and for any status but `pre_release` the map is not read at all. A
   page that asks before resolving its attr does not get a guess: a function
   still in the assign is a `FunctionClauseError`, which is the honest answer
   to asking who may see a flow before knowing.
@@ -156,20 +156,20 @@ defmodule FormFlow.Web.Instances.Shared do
 
   @doc """
   The page's `pre_release_user_ids` attr, assigned as the list it stands
-  for: the list it was given, or what its function returns for this page —
+  for: the list it was given, or what its function returns for this page -
   a function of the page's `FormFlow.Context` and `callback_data`, for a
   host whose pre-release users are a role or a team rather than ids it can
   write down; it returns `[context.user_id]` when the viewer qualifies and
   `[]` when not, or the team's ids. `nil` is nobody.
 
   Every page calls this once its `:context` is assigned and before anything
-  asks `status_allows?/3` — `FormFlow.Web.Instances.Forms.Shared.assigns/1`
+  asks `status_allows?/3` - `FormFlow.Web.Instances.Forms.Shared.assigns/1`
   for the form pages, `FormFlow.Web.Instances.Flows.Show`'s load before its
-  rows, `FormFlow.Web.Instances.Forms.Shared.on_mount/3` for the listing —
+  rows, `FormFlow.Web.Instances.Forms.Shared.on_mount/3` for the listing -
   so the function runs once per page, with a context that is there; a list
   passes through, so a second call costs nothing. The context is the
   page's: on the listing it has the user, tenant, and perspectives and no
-  flow, so the rule cannot vary by flow — it is who may pre-release on
+  flow, so the rule cannot vary by flow - it is who may pre-release on
   this page, as the attr is per page.
   """
   def resolve_pre_release_user_ids(socket) do

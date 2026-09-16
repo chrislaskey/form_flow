@@ -6,7 +6,7 @@ defmodule FormFlow.Data.Templates.Flows do
   A flow is the aggregate: the `form_flow_template_flows` row plus its
   `FormFlow.Data.Templates.Flow.Node` and
   `FormFlow.Data.Templates.Flow.Relationship` children.
-  `create/1` and `update/2` accept the whole aggregate — pass `:nodes` and
+  `create/1` and `update/2` accept the whole aggregate - pass `:nodes` and
   `:relationships` in the attributes and the contents are written alongside the
   row, in one transaction, nodes before the relationships that reference them.
 
@@ -16,28 +16,28 @@ defmodule FormFlow.Data.Templates.Flows do
 
   A node whose `subflow_id` is set embeds another flow. Every such flow is
   private: its `owner_flow_id` points at the root flow it belongs to (the
-  ownership root — flat, not the immediate parent), it is cleaned up
+  ownership root - flat, not the immediate parent), it is cleaned up
   automatically when it stops being referenced (see `update/2`) or when its
   root is deleted, and a save refuses a subflow step pointing at a flow the
   tree does not own. A subflow wanted elsewhere is copied there by pasting
   its step (see "Pasting a step"). Sharing by reference is for forms alone (see "Reusing a
   catalog form"): a form is a leaf, one lineage and one version pin per
-  instance, while a subflow is a subtree — its own forms, the paths through
-  it, its perspectives and type — and sharing one across trees makes every
+  instance, while a subflow is a subtree - its own forms, the paths through
+  it, its perspectives and type - and sharing one across trees makes every
   operation on it ambiguous about which tree it is happening to.
 
   ## Declared flavor
 
   Every flow declares its flavor at creation in `label`: `"forms"` flows
-  contain form steps, `"subflows"` flows contain subflow steps — never mixed
+  contain form steps, `"subflows"` flows contain subflow steps - never mixed
   (structural Start/End nodes are exempt). Saves validate the rule, and the
   label is immutable: converting means wrapping in a new parent flow.
 
   Saving a `"subflows"` flow also creates the children: any subflow node
-  without a `subflow_id` gets a fresh flow — owned by the root, seeded with
+  without a `subflow_id` gets a fresh flow - owned by the root, seeded with
   `starter_nodes/0`, named from the node's canvas label, its own label taken
   from the node's `data.subflow_label` (declared when the node was added in
-  the editor) — and the node is pointed at it.
+  the editor) - and the node is pointed at it.
 
   ## Canvas write-throughs
 
@@ -47,36 +47,36 @@ defmodule FormFlow.Data.Templates.Flows do
   `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
   type back into the node's `data` for display. Three write-throughs exist:
 
-    * `data.form_flow_type` on a subflow node — the embedded flow's
+    * `data.form_flow_type` on a subflow node - the embedded flow's
       presentation type, stored only in that flow's
       `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`).
       Popped from the node's properties at save; an absent key clears the
       child's property, so picking "default" un-pins rather than freezing a
       value. A type that changes takes the old type's property values with
-      it — they belonged to that type — while the canvas itself never edits
+      it - they belonged to that type - while the canvas itself never edits
       property values; those are set on the flow's own page.
-    * `data.form_type` on a form node — the collected form's type, stored only
+    * `data.form_type` on a form node - the collected form's type, stored only
       in the form lineage's `properties["form_type"]`
-      (see `FormFlow.Data.Templates.Form`), with the same rules — **when
+      (see `FormFlow.Data.Templates.Form`), with the same rules - **when
       this flow tree owns the form**. A catalog form is typed on its own
       page, once for every flow that reuses it (`reuse_form/3`); a type
       picked for it on one flow's canvas is not written, and the canvas
       shows the form's true type again on its next load.
-    * `data.label` on a subflow or form node — the step's name, what the
+    * `data.label` on a subflow or form node - the step's name, what the
       instance pages show users. Unlike the types the label *stays* on the
       node: it is the stored value, never projected from the entity. Renaming
       the node also renames the embedded flow or the collected form **when
-      this flow tree owns it** — always, for a subflow; for a form, unless
-      it is the catalog's — so an owned entity's `name` and its step's label
+      this flow tree owns it** - always, for a subflow; for a form, unless
+      it is the catalog's - so an owned entity's `name` and its step's label
       are one value, and a catalog form keeps its own name for every
       consumer. The entity's own edit pages keep the same
       pair in step from the other side (`update_node/2`). A blank or missing
-      label renames nothing — names are never blanked from the canvas.
+      label renames nothing - names are never blanked from the canvas.
 
   ## Pasting a step
 
-  The canvas copies one step at a time and pastes it — onto the same canvas
-  or another flow's — as a new node whose `data.copy_of_node_id` names the
+  The canvas copies one step at a time and pastes it - onto the same canvas
+  or another flow's - as a new node whose `data.copy_of_node_id` names the
   node it was copied from. Nothing is written until the save. `update/2`
   then, before anything else reads the nodes, copies the entity behind the
   source for the pasted step, the way `copy/2` copies a tree: an owned form
@@ -87,18 +87,18 @@ defmodule FormFlow.Data.Templates.Flows do
   once is never copied again. The pasted step is a new step: it takes the
   default slug for its label under this root's prefix (a slug hand-set on
   the source is not carried), and its label and type write through to the
-  copied entity like any step's — the canvas puts the source's type in the
+  copied entity like any step's - the canvas puts the source's type in the
   pasted node's data, and where a payload names none the source entity's
   fills in, since a step saved with no type is set to the default and loses
-  its property values. The paste is refused —
-  the whole save, with an error on `:nodes` — when the source is gone (the
+  its property values. The paste is refused -
+  the whole save, with an error on `:nodes` - when the source is gone (the
   clipboard outlives a delete, and a step copied before it was saved was
   never there) or belongs to another tenant, the rule `reuse_form/3`
   applies to forms.
 
   A `:related_form` value inside the copied entity is a path from the
   root, so it depends on where the paste lands. A path into what was
-  copied — the source flow's prefix, then a copied node — is rebased onto
+  copied - the source flow's prefix, then a copied node - is rebased onto
   the destination flow's prefix with its nodes mapped: a Review pasted
   into another flow's subflow still reviews its own copied About. Any other
   path is kept as it is: still right pasted anywhere in the same tree,
@@ -109,13 +109,13 @@ defmodule FormFlow.Data.Templates.Flows do
 
   ## Step slugs
 
-  A step — a form or subflow node — carries a `slug`, the handle a host
+  A step - a form or subflow node - carries a `slug`, the handle a host
   names it by (`FormFlow.Data.Templates.Slug`), and the canvas never writes
   it. A save carries each surviving node's slug across by id, ignoring the
   properties copy the canvas round-trips, and gives every new step a
   default: its label's segment under the root flow's slug, `-N` when taken
   among the tenant's steps. The subflow or form a save creates for a step
-  gets no slug of its own — the step's is the handle, and the entity is
+  gets no slug of its own - the step's is the handle, and the entity is
   reached through the step. A seed names its steps by passing `slug:` in a
   node's attributes; an admin, from the step's page (`update_node/2`); a
   host looks one up with `get_node_by_slug/2`.
@@ -125,8 +125,8 @@ defmodule FormFlow.Data.Templates.Flows do
   A form step points at a form *lineage* (`FormFlow.Data.Templates.Flow.Node`'s
   `form_id`), and saving a flow gives every new form step a blank owned
   lineage of its own (`create_missing_forms/2`). `reuse_form/3` points the
-  step at a catalog form instead — one lineage, shared by every flow whose
-  steps point at it, so an edit or a publish reaches them all at once — and
+  step at a catalog form instead - one lineage, shared by every flow whose
+  steps point at it, so an edit or a publish reaches them all at once - and
   deletes the owned lineage the step abandons. A step leaves a catalog form
   the way it leaves any form: removed from the canvas and added again, it
   is a new step with a fresh owned form and the chooser, where Copy form
@@ -155,7 +155,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   Owned subflow children are deliberately excluded: they live inside their
   root and are reached by drill-in, not listed beside it. `opts[:tenant_id]`
-  narrows to one tenant — a listing convenience, not access control.
+  narrows to one tenant - a listing convenience, not access control.
   """
   def list(opts \\ []) do
     Repo.all(from(f in roots_query(opts), order_by: [asc: f.inserted_at]))
@@ -170,7 +170,7 @@ defmodule FormFlow.Data.Templates.Flows do
   layer `order_by`, `limit`/`offset`, and `Repo.aggregate(:count)` on top
   without fighting the grouping. `opts[:tenant_id]` narrows as in `list/1`;
   `opts[:status]` filters to the flows in one status and
-  `opts[:exclude_status]` filters out the flows in one — how the flows index
+  `opts[:exclude_status]` filters out the flows in one - how the flows index
   keeps archived flows out of the listing until asked, and counts them.
   """
   def roots_query(opts \\ []) do
@@ -225,7 +225,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  The flow's row alone — no nodes, no relationships — or `nil`. For the
+  The flow's row alone - no nodes, no relationships - or `nil`. For the
   callers that want one fact about a flow at a moment, its `status` at a
   click above all (`FormFlow.Web.Instances.Shared.status_allows?/3`), and
   not the tree `get/1` loads with it.
@@ -242,7 +242,7 @@ defmodule FormFlow.Data.Templates.Flows do
   `get/1`, or `nil`. `opts[:tenant_id]` scopes the lookup to one tenant; a
   host with no tenants needs nothing more than the slug. Slugs are unique per
   tenant, not across them, so without `tenant_id:` a slug that several
-  tenants hold raises `Ecto.MultipleResultsError` — a multitenant host
+  tenants hold raises `Ecto.MultipleResultsError` - a multitenant host
   always passes it.
 
       FormFlow.Data.Templates.Flows.get_by_slug("dla2026")
@@ -266,7 +266,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Fetches one node by id, or `nil`. Drill-in URLs carry node ids — the node's
+  Fetches one node by id, or `nil`. Drill-in URLs carry node ids - the node's
   `subflow_id` is the flow they open.
   """
   def get_node(id) do
@@ -279,7 +279,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Fetches one step by its slug (`FormFlow.Data.Templates.Slug`), or `nil` —
+  Fetches one step by its slug (`FormFlow.Data.Templates.Slug`), or `nil` -
   the node, with `flow_id`, `subflow_id`, and `form_id` for the caller to
   follow. `opts[:tenant_id]` scopes the lookup to one tenant, as
   `get_by_slug/2` does, and matters more here: every step has a generated
@@ -298,13 +298,13 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Updates a step — what the step's page edits on the node itself:
+  Updates a step - what the step's page edits on the node itself:
 
-    * `:label` — the step's name, written as the node's `data.label`, the
+    * `:label` - the step's name, written as the node's `data.label`, the
       name the instance pages show for the position
       (`FormFlow.Data.Instances.FlowProgress`). A blank or missing label
-      renames nothing — names are never blanked.
-    * `:slug` — the step's handle (`FormFlow.Data.Templates.Slug`). A blank
+      renames nothing - names are never blanked.
+    * `:slug` - the step's handle (`FormFlow.Data.Templates.Slug`). A blank
       clears it; absent leaves it. A slug another step in the tenant holds
       is refused with an error on `:slug`.
 
@@ -336,7 +336,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   Every step that points at the form lineage `form_id`, as
-  `%{node:, flow:, root:}` — the step, the flow it is in, and that flow's
+  `%{node:, flow:, root:}` - the step, the flow it is in, and that flow's
   ownership root (the flow itself when it is a root), so a caller can say
   "Dog License / Application". Oldest root first, then oldest flow, then
   step. Empty for a form no step uses.
@@ -375,27 +375,27 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   Points a form step at a catalog form: the step *becomes* that form, and
-  from then on shares it with every other flow whose steps point at it — an
+  from then on shares it with every other flow whose steps point at it - an
   edit through any of them is an edit for all, and a publish migrates the
   instances of all of them (`FormFlow.Data.Templates.Forms.update_status/3`).
   The owned form the step pointed at is deleted; a catalog form the step
-  pointed at before is left alone — it belongs to the catalog, not the step.
-  The step itself — its id, its label, its slug — is untouched: nothing
+  pointed at before is left alone - it belongs to the catalog, not the step.
+  The step itself - its id, its label, its slug - is untouched: nothing
   about the node changes but `form_id`. In one transaction; returns the
   repointed node.
 
   Refused as:
 
-    * `{:error, :owned_form}` — `form` belongs to a flow tree. Only catalog
+    * `{:error, :owned_form}` - `form` belongs to a flow tree. Only catalog
       forms (`owner_flow_id` nil) can be shared: an owned form is deleted
       with its tree, out from under any other flow pointing at it.
-    * `{:error, :other_tenant}` — `form` belongs to another tenant than the
+    * `{:error, :other_tenant}` - `form` belongs to another tenant than the
       step's flow.
-    * `{:error, :related_form}` — `form`'s type declares a `:related_form`
+    * `{:error, :related_form}` - `form`'s type declares a `:related_form`
       property (`FormFlow.Config.Forms.Type.related_form_property/2` over
       `opts[:form_types]`, the host's types; the library's by default). Its
       value is a step path in one flow, so the form cannot serve two.
-    * `{:error, :step_form_published}` — the step's own form has a published
+    * `{:error, :step_form_published}` - the step's own form has a published
       version. A published form may have instances, which the repoint
       would strand and the delete refuse; a never-published one cannot.
 
@@ -442,7 +442,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # What the step leaves behind: nothing, a catalog form (left where it is),
-  # or an owned form — which goes, so it must never have been published
+  # or an owned form - which goes, so it must never have been published
   defp abandonable(nil), do: :ok
   defp abandonable(%Templates.Form{owner_flow_id: nil}), do: :ok
 
@@ -451,7 +451,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # The abandoned owned form is deleted now rather than at the tree's next
-  # sweep — unless another step of the tree still points at it (a duplicated
+  # sweep - unless another step of the tree still points at it (a duplicated
   # node), in which case it is theirs
   defp abandon_form(nil), do: :ok
   defp abandon_form(%Templates.Form{owner_flow_id: nil}), do: :ok
@@ -492,11 +492,11 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   The node attributes every flow starts from: a pinned `Start` and `End`,
-  nothing else — the user connects the dots. One universal seed for both
+  nothing else - the user connects the dots. One universal seed for both
   flavors, used for new flows and for subflow children created at save.
 
   Laid out left to right, matching the editor's horizontal orientation, with
-  `End` listed (and so inserted) first — `FormFlow.Data.Templates.Flows.get/1`
+  `End` listed (and so inserted) first - `FormFlow.Data.Templates.Flows.get/1`
   loads a flow's nodes in insertion order, and the editor's add actions place
   a new node to the right of the *last* one, so `Start` inserted last is what
   puts the first node someone adds to the right of `Start` rather than `End`.
@@ -539,10 +539,10 @@ defmodule FormFlow.Data.Templates.Flows do
       {:ok, flow} =
         FormFlow.Data.Templates.Flows.create(%{nodes: [...], relationships: [...]})
 
-  Pass `:owner_flow_id` to create a flow owned by a root flow — the default
+  Pass `:owner_flow_id` to create a flow owned by a root flow - the default
   for subflows. A missing `:slug` is generated from the name for a root flow
   (`FormFlow.Data.Templates.Slug`); an owned flow gets none unless one is
-  given — its step's slug is the handle.
+  given - its step's slug is the handle.
   """
   def create(attrs \\ %{}, opts \\ []) do
     attrs = Slug.put_default(attrs, default_slug(attrs))
@@ -558,8 +558,8 @@ defmodule FormFlow.Data.Templates.Flows do
     end)
   end
 
-  # A root flow's birth is logged; an owned subflow has no log of its own —
-  # its status and its history are the root's, as its health is — so a save
+  # A root flow's birth is logged; an owned subflow has no log of its own -
+  # its status and its history are the root's, as its health is - so a save
   # that creates one writes nothing, and the sweep that removes one deletes
   # nothing but rows
   defp insert_created(%Flow{owner_flow_id: nil} = flow, opts),
@@ -568,7 +568,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp insert_created(%Flow{} = _owned, _opts), do: {:ok, nil}
 
   @doc """
-  Moves a flow's status — one of `FormFlow.Data.Templates.Flow.statuses/0` —
+  Moves a flow's status - one of `FormFlow.Data.Templates.Flow.statuses/0` -
   and writes the `status_changed` event that says who did it and from what,
   in one transaction. `opts[:user_id]` is the admin's identity for the
   event; `opts[:snapshot]` adds to the event's map beside `"from"` and
@@ -577,9 +577,9 @@ defmodule FormFlow.Data.Templates.Flows do
   Any status may move to any other: real programs go sideways and get fixed
   in unexpected ways, and the log is what makes trusting the admin safe.
   The row is read again inside the transaction, so `"from"` is the status
-  the flow had at the write, not the one the caller loaded — two admins
+  the flow had at the write, not the one the caller loaded - two admins
   changing it at once each log what they actually changed. The same status
-  again is a no-op — `{:ok, flow}` and no event. A status the flow cannot
+  again is a no-op - `{:ok, flow}` and no event. A status the flow cannot
   have is `{:error, :unknown_status}`; a flow deleted since it was loaded is
   `{:error, :not_found}`. What each status lets a user do is the table on
   `FormFlow.Data.Templates.Flow`.
@@ -624,7 +624,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  How many instances a root flow has, by their status — the same shape as
+  How many instances a root flow has, by their status - the same shape as
   `FormFlow.Data.Templates.Forms.instance_counts/1`: `"in_progress"` and
   `"completed"` counts, zero when none. What the status field on the edit
   page says a change reaches.
@@ -643,7 +643,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  A flow's log (`FormFlow.Data.Templates.Flow.Event`), newest first — what
+  A flow's log (`FormFlow.Data.Templates.Flow.Event`), newest first - what
   the history page draws. The flow's own rows only: an owned subflow's
   `created` is not its root's history.
   """
@@ -664,7 +664,7 @@ defmodule FormFlow.Data.Templates.Flows do
     )
   end
 
-  # An owned flow — a subflow — has no slug of its own; its step's is the handle
+  # An owned flow - a subflow - has no slug of its own; its step's is the handle
   defp default_slug(attrs) do
     if Slug.get(attrs, :owner_flow_id) do
       nil
@@ -681,7 +681,7 @@ defmodule FormFlow.Data.Templates.Flows do
   Updates a flow.
 
   When `attrs` include `:nodes` or `:relationships`, the flow's contents are
-  replaced to match — existing rows are deleted and the given ones written.
+  replaced to match - existing rows are deleted and the given ones written.
   Attributes without contents leave the contents untouched.
 
   Replacing contents also garbage-collects: owned flows in the same ownership
@@ -690,14 +690,14 @@ defmodule FormFlow.Data.Templates.Flows do
   an owned subflow (and its whole private subtree) goes away.
 
   `properties` keys with a leading underscore are the library's own
-  bookkeeping — `FormFlow.Data.Templates.Flows.Health`'s cached status and
-  ignored records — written by the library between a page's loads. A caller
+  bookkeeping - `FormFlow.Data.Templates.Flows.Health`'s cached status and
+  ignored records - written by the library between a page's loads. A caller
   saving the map it holds is saving a copy from before those writes, so its
   underscore keys are ignored and the ones stored at the time of the save
   kept: a caller cannot set or clear them by passing a map (see
   `guides/neo4j.md`). The stored keys are read as the changeset is built, not
   under a lock, so a bookkeeping write in the same instant as the save can
-  still be lost — a race far narrower than the tab-open window this closes.
+  still be lost - a race far narrower than the tab-open window this closes.
   """
   def update(%Flow{} = flow, attrs) do
     save(Flow.changeset(flow, keep_bookkeeping(flow, attrs)), attrs, &Repo.update/1, sweep?: true)
@@ -726,11 +726,11 @@ defmodule FormFlow.Data.Templates.Flows do
   @doc """
   Deletes a root flow, everything it owns, and their nodes and relationships.
 
-  Refused with an error changeset on `:id` for an owned flow — a subflow is
+  Refused with an error changeset on `:id` for an owned flow - a subflow is
   deleted by removing its step from the flow that embeds it (`delete_node/1`),
   never on its own, since the embedding node would be left pointing at
-  nothing — and while instances of the whole flow have been started against
-  it — journeys, `FormFlow.Data.Instances.Flow` records: they reference
+  nothing - and while instances of the whole flow have been started against
+  it - journeys, `FormFlow.Data.Instances.Flow` records: they reference
   their root live and can never be orphaned by template deletion (the
   `:restrict` FK on `instance_flows.template_flow_id` is the database
   backstop; this
@@ -750,7 +750,7 @@ defmodule FormFlow.Data.Templates.Flows do
         owned?(flow) ->
           refuse_delete(
             flow,
-            "cannot be deleted: it is a subflow of another flow — remove its step from that " <>
+            "cannot be deleted: it is a subflow of another flow - remove its step from that " <>
               "flow's canvas instead"
           )
 
@@ -771,13 +771,13 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  The flow aggregate with subflow references resolved, recursively — the
+  The flow aggregate with subflow references resolved, recursively - the
   tree `FormFlow.Data.Instances.FlowProgress` derives against. Returns
   `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`, or
   `nil` for an unknown id.
 
   A seen-set guards against reference cycles (a cyclic reference resolves
-  to no subtree); a repeated *sibling* reference — the diamond — still
+  to no subtree); a repeated *sibling* reference - the diamond - still
   resolves at each position, as it must: each position is a distinct
   traversal.
   """
@@ -807,8 +807,8 @@ defmodule FormFlow.Data.Templates.Flows do
   Narrows a resolved tree (`resolve_tree/1`) to its connected nodes: at
   every level, the nodes reachable from that flow's Start nodes by following
   relationships forward, and the relationships among them. Nodes a user
-  filling the flow in could never reach — a form step nothing points at, a
-  fragment wired only to End — are dropped, together with their
+  filling the flow in could never reach - a form step nothing points at, a
+  fragment wired only to End - are dropped, together with their
   relationships. Subflows are narrowed the same way, recursively; a subflow
   node that is itself unreachable takes its subtree with it.
 
@@ -852,12 +852,12 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # Owned forms are deleted explicitly — their owner FK nilifies on flow
+  # Owned forms are deleted explicitly - their owner FK nilifies on flow
   # deletion, and a nil owner is the *definition* of a catalog form, so
   # leaving them to the FK would launder every owned form into /forms.
   # Ordering matters: the instance-data check comes first (refuse before
   # destroying anything), the form rows go last (their node FK, though
-  # :nothing, still enforces — nodes must delete first).
+  # :nothing, still enforces - nodes must delete first).
   defp delete_tree_with_owned_forms(flow, tree_ids) do
     forms =
       case owned_forms_deletable(flow) do
@@ -875,7 +875,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Deletes one node from its flow — the drill-in "delete this subflow".
+  Deletes one node from its flow - the drill-in "delete this subflow".
 
   The node row goes (its relationships cascade), and the ownership domain is
   swept: the subflow the node referenced becomes unreachable and is
@@ -894,13 +894,13 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  Copies a flow: a new flow with new ids throughout — its name (or the
+  Copies a flow: a new flow with new ids throughout - its name (or the
   `name:` given), label, and properties as they are, its contents copied,
-  relationships re-pointed at the copied nodes — and returns it with its
+  relationships re-pointed at the copied nodes - and returns it with its
   contents loaded.
 
-  Every subflow of the source is copied along with it — a subflow is its
-  tree's own — while a catalog form a step points at stays a shared
+  Every subflow of the source is copied along with it - a subflow is its
+  tree's own - while a catalog form a step points at stays a shared
   reference; an owned form is copied with provenance
   (`FormFlow.Data.Templates.Forms.copy/2`). An entity two steps of the
   source share (a step the canvas duplicated) is copied once, and both
@@ -916,7 +916,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   ## Where the copy lands
 
-  Beside the source, as a root flow — of the source's tenant, in the
+  Beside the source, as a root flow - of the source's tenant, in the
   source's flavor. The source may itself be an owned subflow, which then
   becomes a root of its own. A subflow wanted *inside* a tree is not made
   here: pasting its step on that tree's canvas copies it and points a step
@@ -927,14 +927,14 @@ defmodule FormFlow.Data.Templates.Flows do
   suffix (`FormFlow.Data.Templates.Slug.available/3`), or a default from
   its name when the source, being owned, had none (`copy_slug/1`). Copied
   steps keep the shape of their slugs: a default under the source tree's
-  root slug is rewritten under the copy's — `dla2026_user-inform` under a
-  copy slugged `dla2027` becomes `dla2027_user-inform` — and a hand-set slug
+  root slug is rewritten under the copy's - `dla2026_user-inform` under a
+  copy slugged `dla2027` becomes `dla2027_user-inform` - and a hand-set slug
   gets a free suffix. Owned subflows and forms have no slug to copy.
 
   `name:` names the copy; the subflows under it keep their own names, as
   their steps keep their labels. Without it the copy takes the source's
-  name. The copy is a **draft** whatever the source's status — not offered
-  to users until an admin opens it — and the copy itself gets a `created`
+  name. The copy is a **draft** whatever the source's status - not offered
+  to users until an admin opens it - and the copy itself gets a `created`
   event (`FormFlow.Data.Templates.Flow.Event`) carrying `user_id:`, the
   admin copying, when given; the subflows copied under it have no log of
   their own.
@@ -944,11 +944,11 @@ defmodule FormFlow.Data.Templates.Flows do
 
       {:ok, copy} = FormFlow.Data.Templates.Flows.copy(flow, name: "Dog License 2027", slug: "dla2027")
 
-  The source's cached health status does not come along — it describes a
-  check the copy has not had — but its ignored entries do, re-pointed at
+  The source's cached health status does not come along - it describes a
+  check the copy has not had - but its ignored entries do, re-pointed at
   the copied nodes: the copy has the source's shape, so the same findings
-  are fine on purpose. Given both `flow_types:` and `form_types:` — the
-  host's lists — the copy is checked once and its status cached
+  are fine on purpose. Given both `flow_types:` and `form_types:` - the
+  host's lists - the copy is checked once and its status cached
   (`FormFlow.Data.Templates.Flows.Health.refresh/2`); given one or neither
   it is not, since a check with the library's default types for either list
   could cache a type warning the host's lists would not raise.
@@ -985,8 +985,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   The slug a root copy of `flow` takes when `copy/2` is given none: the
-  source's with a free `-N` suffix, or — when the source is owned and has
-  none — the default a root created from its name would get (`create/1`).
+  source's with a free `-N` suffix, or - when the source is owned and has
+  none - the default a root created from its name would get (`create/1`).
   What the copy dialog prefills, so an admin sees the slug before making it.
   """
   def copy_slug(%Flow{} = flow) do
@@ -1002,7 +1002,7 @@ defmodule FormFlow.Data.Templates.Flows do
     root_tree = resolve_tree(root.id)
     tree = if root.id == flow.id, do: root_tree, else: resolve_tree(flow.id)
 
-    # The copy is a root, so its paths are rebased as a root's — which also
+    # The copy is a root, so its paths are rebased as a root's - which also
     # drops the old root's prefix from an owned source's
     context = %{
       plan: copy_plan(tree),
@@ -1020,7 +1020,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # A new id for every node of the tree, at every level, before anything is
-  # written — so a reference from one part of the copy to another is
+  # written - so a reference from one part of the copy to another is
   # re-pointed as the row holding it is written (see copy/2). A subflow two
   # steps share sits at both positions in the tree and is planned once.
   defp copy_plan(nil), do: %{}
@@ -1036,7 +1036,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # Only updates sweep: replacing existing contents is the one way owned
-  # flows become unreachable. Creates must not — a child flow created
+  # flows become unreachable. Creates must not - a child flow created
   # mid-save of its parent would sweep the domain before the parent's node
   # points at it, collecting itself.
   defp save(changeset, attrs, operation, sweep?: sweep?) do
@@ -1086,13 +1086,13 @@ defmodule FormFlow.Data.Templates.Flows do
   @source_gone "The step it was copied from no longer exists"
   @source_other_tenant "The step it was copied from belongs to another tenant"
 
-  # A pasted step — a node whose data names the node it was copied from (see
-  # "Pasting a step") — has its entity copied here, before anything else
+  # A pasted step - a node whose data names the node it was copied from (see
+  # "Pasting a step") - has its entity copied here, before anything else
   # reads the attrs, so it reaches the insert as an ordinary node pointing at
   # fresh entities of this tree: the stale ids the canvas round-tripped would
   # otherwise make it share the source's, or fail the ownership check. The
-  # marker is consumed. Each paste is its own copy — two pastes of one step
-  # in a save are two steps, not one shared — and a refused paste refuses
+  # marker is consumed. Each paste is its own copy - two pastes of one step
+  # in a save are two steps, not one shared - and a refused paste refuses
   # the save, an error on :nodes like the flavor and ownership rules give.
   defp copy_pasted_steps(flow, nodes_attrs) do
     result =
@@ -1162,7 +1162,7 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # The first position of the flow being pasted into, in stored order — a
+  # The first position of the flow being pasted into, in stored order - a
   # flow at two positions has two, one has to be chosen, and health reports
   # the paths if it was the other. nil for a flow no step embeds, which
   # rebases nothing rather than rebasing as a root.
@@ -1175,7 +1175,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # The type the write-through applies to the copied entity is read off the
   # pasted node's data, where the canvas carries the source's. A caller that
-  # sends none — a hand-built payload — would otherwise set the copy to the
+  # sends none - a hand-built payload - would otherwise set the copy to the
   # default type and lose its property values, so the source entity's fills
   # in where the data names none.
   defp put_new_type(properties, nil), do: properties
@@ -1227,7 +1227,7 @@ defmodule FormFlow.Data.Templates.Flows do
     |> Ecto.Changeset.add_error(:nodes, message)
   end
 
-  # The paths at which `flow_id` sits in a resolved tree — [] for the root
+  # The paths at which `flow_id` sits in a resolved tree - [] for the root
   # itself, else the node ids from the root down to each step embedding it,
   # one per step, in the order the nodes were stored (`Flow`'s preload order)
   defp flow_prefixes(nil, _flow_id), do: []
@@ -1260,7 +1260,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # What a canvas save edits *through* a node rather than on it (see "Canvas
   # write-throughs" above), collected per node id. The types are popped from
-  # the node's properties so exactly one copy exists — nil intents included,
+  # the node's properties so exactly one copy exists - nil intents included,
   # because the editor removes the key when "default" is picked, and that must
   # clear the entity's property. The label is only read: it stays on the node
   # as well, for entity-less nodes and save-time child naming.
@@ -1306,7 +1306,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp put_node_properties(attrs, _properties), do: attrs
 
-  # The slugs the flow's nodes hold now, by id — read before the contents are
+  # The slugs the flow's nodes hold now, by id - read before the contents are
   # replaced, so a node the canvas sends back keeps its slug. The properties
   # copy is ignored because slugs are edited on the step's page, never on the
   # canvas, so the copy can be older than the column; were the canvas to edit
@@ -1322,7 +1322,7 @@ defmodule FormFlow.Data.Templates.Flows do
     end)
   end
 
-  # Every step — a form or subflow node — has a slug. The ones that arrived
+  # Every step - a form or subflow node - has a slug. The ones that arrived
   # without one (new on the canvas, or created programmatically) get the
   # default: the label's segment under the root flow's slug, made free among
   # the tenant's steps. One update at a time, in canvas order, so two
@@ -1369,7 +1369,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # The write-throughs, last so save-time entity creation has run and every
   # subflow or form node has its entity. Two nodes referencing the same shared
-  # entity apply in turn — last write wins. No-ops skip the update, so routine
+  # entity apply in turn - last write wins. No-ops skip the update, so routine
   # saves don't touch every entity's timestamps.
   defp apply_canvas_intents(flow, intents) do
     nodes =
@@ -1389,7 +1389,7 @@ defmodule FormFlow.Data.Templates.Flows do
     end)
   end
 
-  # An id-less programmatic node recorded no intent — nothing to apply
+  # An id-less programmatic node recorded no intent - nothing to apply
   defp apply_canvas_intent(_node, nil), do: :unchanged
 
   defp apply_canvas_intent(%{subflow_id: subflow_id}, intent)
@@ -1438,7 +1438,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # The entity's properties with the canvas's type applied under `key`. A type
-  # that changes — to another or to none — drops the property values entered
+  # that changes - to another or to none - drops the property values entered
   # for the old one (under `key <> "_property_values"`), which belonged to it;
   # the same type again keeps them.
   defp put_type(properties, key, type) do
@@ -1449,9 +1449,9 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # A rename only for an entity this flow tree owns — a catalog form keeps
+  # A rename only for an entity this flow tree owns - a catalog form keeps
   # its own name for every consumer; the step's label is
-  # this flow's word for it — and only when the canvas holds a real name that
+  # this flow's word for it - and only when the canvas holds a real name that
   # differs: a blank or missing label never blanks an entity's name
   defp rename_change(%{owner_flow_id: nil}, _label), do: %{}
 
@@ -1473,7 +1473,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # The homogeneity rule for the declared flavor: a "forms" flow never holds
   # subflow steps, a "subflows" flow never holds form steps. Start/End are
-  # structural and pass. The editor is the primary guard — this is the belt
+  # structural and pass. The editor is the primary guard - this is the belt
   # for callers bypassing it.
   defp validate_flavor(flow, nodes_attrs) do
     error =
@@ -1523,7 +1523,7 @@ defmodule FormFlow.Data.Templates.Flows do
         |> Ecto.Changeset.change()
         |> Ecto.Changeset.add_error(
           :nodes,
-          "a subflow step must point at a flow this flow owns — copy the flow to use it here"
+          "a subflow step must point at a flow this flow owns - copy the flow to use it here"
         )
 
       {:error, changeset}
@@ -1548,7 +1548,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # Save-time child creation: every subflow node declared its child's flavor
   # when it was added in the editor (data.subflow_label), so missing children
-  # can be created without asking anyone — owned by the root, universally
+  # can be created without asking anyone - owned by the root, universally
   # seeded, named from the canvas label.
   defp create_missing_subflows(flow, nodes) do
     root_id = flow.owner_flow_id || flow.id
@@ -1593,8 +1593,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # Garbage collection after a save: owned flows in this ownership domain
   # that are no longer reachable through subflow references get deleted, with
-  # their contents — and owned forms no longer referenced by any node in the
-  # domain go with them. Multi-level removal comes for free — a removed
+  # their contents - and owned forms no longer referenced by any node in the
+  # domain go with them. Multi-level removal comes for free - a removed
   # subflow's own children stop being reachable too.
   defp sweep_unreachable(flow) do
     root_id = flow.owner_flow_id || flow.id
@@ -1617,7 +1617,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # Owned forms whose form nodes were all removed. Deletion goes through the
   # context (the node FK is :nothing by design), which refuses while instance
-  # data exists — and then so does this save: instance data is never orphaned
+  # data exists - and then so does this save: instance data is never orphaned
   # silently, the user is told the removed step still has submissions.
   defp sweep_unreferenced_forms(flow, root_id, flow_ids) do
     referenced =
@@ -1646,7 +1646,7 @@ defmodule FormFlow.Data.Templates.Flows do
           |> Ecto.Changeset.change()
           |> Ecto.Changeset.add_error(
             :nodes,
-            "the removed form \"#{form.name}\" still has submitted data — " <>
+            "the removed form \"#{form.name}\" still has submitted data - " <>
               "delete its instances first, or keep the step"
           )
           |> Repo.rollback()
@@ -1659,7 +1659,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   # The owned forms a flow deletion will take with it, or a friendly refusal
   # when any of them still holds instance data. The actual deletion happens after
-  # the flow tree (nodes first — their form FK enforces even as :nothing).
+  # the flow tree (nodes first - their form FK enforces even as :nothing).
   defp owned_forms_deletable(flow) do
     forms = Repo.all(from(f in Templates.Form, where: f.owner_flow_id == ^flow.id))
 
@@ -1719,7 +1719,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # then the flow rows themselves.
   defp delete_flows(ids) do
     # Events first: their foreign key restricts, so a flow cannot go while
-    # its log stands — the log is deleted on purpose, here, never by cascade
+    # its log stands - the log is deleted on purpose, here, never by cascade
     Repo.delete_all(from(e in Event, where: e.flow_id in ^ids))
     Repo.delete_all(from(n in Node, where: n.flow_id in ^ids))
     Repo.delete_all(from(f in Flow, where: f.id in ^ids))
@@ -1728,8 +1728,8 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # Copies one flow and, recursively, everything it owns, against the plan.
-  # `owner_id` is nil for the copy itself, a root, and — ownership being
-  # flat — that root for everything copied under it.
+  # `owner_id` is nil for the copy itself, a root, and - ownership being
+  # flat - that root for everything copied under it.
   # `copied` holds the subflows and owned forms copied so far by source id,
   # so an entity two steps share is copied once. Returns {copy_id, copied}.
   defp copy_flow(tree, owner_id, slug, name, context, copied) do
@@ -1767,8 +1767,8 @@ defmodule FormFlow.Data.Templates.Flows do
     {copy_id, copy_contents(tree, copy_id, domain_id, context, copied)}
   end
 
-  # The nodes of one flow of the tree — each with its planned id, its slug
-  # rewritten under the destination's prefix, and its entity copied — and
+  # The nodes of one flow of the tree - each with its planned id, its slug
+  # rewritten under the destination's prefix, and its entity copied - and
   # the relationships among them, into the flow `into_id`. This is the unit
   # a node copy will share with a flow copy: a flow copy calls it once per
   # level, a node copy once with a selection.
@@ -1817,11 +1817,11 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp rewritten(slug, {old_prefix, new_prefix}), do: Slug.rewrite(slug, old_prefix, new_prefix)
 
-  # The subflow or form behind a step, copied for the copied step — once per
+  # The subflow or form behind a step, copied for the copied step - once per
   # source entity, however many steps point at it. A subflow is copied
   # whole, owned by the destination's root; an owned form is copied with
   # provenance and its paths rewritten; a catalog form is shared, so the
-  # reference is the same — sharing is for forms whose consumers want
+  # reference is the same - sharing is for forms whose consumers want
   # lockstep updates (archive/form-versioning.md, Decision 6).
   defp copy_entity(node, subtree, domain_id, context, copied) do
     {subflow_id, copied} = copy_subflow(node.subflow_id, subtree, domain_id, context, copied)
@@ -1832,8 +1832,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp copy_subflow(nil, _subtree, _domain_id, _context, copied), do: {nil, copied}
 
-  # A reference the tree could not resolve — a flow that is gone, or a
-  # cycle — copies as no reference, and health reports it
+  # A reference the tree could not resolve - a flow that is gone, or a
+  # cycle - copies as no reference, and health reports it
   defp copy_subflow(_subflow_id, nil, _domain_id, _context, copied), do: {nil, copied}
 
   defp copy_subflow(subflow_id, subtree, domain_id, context, copied) do
@@ -1875,14 +1875,14 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  # Property values that are paths — node ids joined by "/", how a
-  # :related_form value names a position (FormFlow.Config.Property) —
+  # Property values that are paths - node ids joined by "/", how a
+  # :related_form value names a position (FormFlow.Config.Property) -
   # re-pointed at the copied nodes, wherever they sit in a flow's or form's
   # properties. Only a path into what is being copied moves: the source
   # flow's prefix, then a node in the plan. It is rebased onto the
   # destination flow's prefix with the rest mapped, so a subflow pasted a
   # level deeper still finds its own forms. Any other path is left as it is
-  # — still right when the copy lands in the same tree, a stale choice
+  # - still right when the copy lands in the same tree, a stale choice
   # health reports when it does not. A string is a path only when every
   # segment is an id. Lists are left alone: the health records inside a
   # root's properties hold paths as lists, and Health.for_copy/2 is what
@@ -1936,7 +1936,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # Save-time form creation, the form-node mirror of create_missing_subflows:
   # a form node without a form gets a fresh owned lineage (with one blank
   # draft), named from the canvas label, owned by the ownership root. Neither
-  # child gets a slug — the step's is the handle.
+  # child gets a slug - the step's is the handle.
   defp create_missing_forms(flow, nodes) do
     root_id = flow.owner_flow_id || flow.id
 

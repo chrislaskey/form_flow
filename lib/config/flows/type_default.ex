@@ -1,6 +1,6 @@
 defmodule FormFlow.Config.Flows.Type.Default do
   @moduledoc """
-  The public face of `FormFlow.Config.Flows.Type`'s defaults — the in-order
+  The public face of `FormFlow.Config.Flows.Type`'s defaults - the in-order
   wizard's behavior, for a custom type to reach when its override wants to
   build on the default rather than replace it.
 

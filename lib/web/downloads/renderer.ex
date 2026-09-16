@@ -36,7 +36,7 @@ defmodule FormFlow.Web.Downloads.Renderer do
 
   `render/3` gets both because they answer different questions. The
   `FormFlow.Web.Downloads.Document` is the resource already flattened into
-  headings, fields, and values — everything a renderer needs to print
+  headings, fields, and values - everything a renderer needs to print
   something correct without knowing what a flow instance is. The
   `FormFlow.Context` is the request FormFlow answered, the same struct every
   other callback in the library receives, for a renderer that wants more
@@ -54,7 +54,7 @@ defmodule FormFlow.Web.Downloads.Renderer do
   @doc """
   The bytes to send, and the content type to send them as.
 
-  `{:error, message}` is a rendering failure the host should see — the
+  `{:error, message}` is a rendering failure the host should see - the
   controller turns it into a 500 with the message. Returning an error is for
   a renderer that cannot draw this document; a renderer that simply has
   nothing to say draws an empty page and returns `:ok`.
@@ -63,7 +63,7 @@ defmodule FormFlow.Web.Downloads.Renderer do
               {:ok, binary(), content_type :: String.t()} | {:error, String.t()}
 
   @doc """
-  The file extension, without a dot — `"pdf"`, `"html"`. Appended to the
+  The file extension, without a dot - `"pdf"`, `"html"`. Appended to the
   document's `:filename` to name the download.
   """
   @callback extension() :: String.t()

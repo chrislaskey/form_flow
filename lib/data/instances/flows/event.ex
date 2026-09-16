@@ -1,18 +1,18 @@
 defmodule FormFlow.Data.Instances.Flow.Event do
   @moduledoc """
   `FormFlow.Data.Instances.Flow.Event` Ecto Schema for the append-only
-  audit trail of a whole root flow instance — a journey — mirroring
+  audit trail of a whole root flow instance - a journey - mirroring
   `FormFlow.Data.Instances.Form.Event`
   discipline: every row carries the responsible user (`user_id`, an opaque
-  host-app identity — any principal, including system ones), rows are never
-  updated, and events never cascade-delete with their journey — removal
+  host-app identity - any principal, including system ones), rows are never
+  updated, and events never cascade-delete with their journey - removal
   goes through `FormFlow.Data.Instances.Flows.delete_instance/2`,
   deliberately.
 
-  Events record *mutations* — they are not a pure data audit of every
+  Events record *mutations* - they are not a pure data audit of every
   answer change. `snapshot` holds free-form notes: what was stranded by a
   template edit, what an admin decided about it. Progress derivation never
-  reads events — they are audit, not state, which is what keeps them unable
+  reads events - they are audit, not state, which is what keeps them unable
   to split from the live flow.
   """
 

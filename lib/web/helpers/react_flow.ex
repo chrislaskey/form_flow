@@ -30,7 +30,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
 
       ReactFlow.to_json(data)
 
-  Keys stay exactly as ReactFlow spells them, camel case included — `markerEnd`,
+  Keys stay exactly as ReactFlow spells them, camel case included - `markerEnd`,
   `sourceHandle`, `animated`.
 
   ## What ReactFlow requires
@@ -40,7 +40,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     * **`position` is required on every node.** ReactFlow's layout reads
       `node.position.x` directly; there is no default and no automatic layout in
       ReactFlow core.
-    * **Edges are never inferred.** ReactFlow draws exactly the edges you list —
+    * **Edges are never inferred.** ReactFlow draws exactly the edges you list -
       listing nodes in order does not connect them. An edge needs `id`, `source`,
       and `target`.
     * `type` is optional and falls back to ReactFlow's `"default"` node.
@@ -55,7 +55,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     * `kind` - `"start"`, `"form"`, or `"end"`. Sets the node's colour, and
       which connection handles it gets
 
-  `to_data/1` adds a third key, `labels` — the node's stored
+  `to_data/1` adds a third key, `labels` - the node's stored
   `FormFlow.Data.Templates.Flow.Node.labels`, shown under the title. It isn't
   something you set by hand in the map above; see Persistence below.
 
@@ -67,18 +67,18 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   `FormFlow.Data.Templates.Flow` records, and are inverses of each other:
 
     * A ReactFlow node becomes a `FormFlow.Data.Templates.Flow.Node` whose
-      `properties` are the node map itself, minus `id` — position, type, data,
+      `properties` are the node map itself, minus `id` - position, type, data,
       and anything else ReactFlow supports round-trips untouched.
     * A ReactFlow edge becomes a `FormFlow.Data.Templates.Flow.Relationship`
       the same way, minus `id`, `source`, and `target`, which become columns.
-      Every relationship gets the label `"CONNECTS_TO"` — the editor's edges
+      Every relationship gets the label `"CONNECTS_TO"` - the editor's edges
       all mean the same thing today.
     * Ids from the editor (`"1"`, `"4"`) are replaced with generated UUIDs at
       save time; ids that already are UUIDs are kept, so unchanged records are
       updated in place rather than recreated. `to_flow_attrs/1`'s `id_map`
       return value is how a caller finds out what a given editor id became.
 
-  Saved properties also carry a `"flow_id"` key — the schemas keep a copy of
+  Saved properties also carry a `"flow_id"` key - the schemas keep a copy of
   the `flow_id` column inside `properties` (see
   `FormFlow.Data.Templates.Flow.Node`). It rides through the editor and back
   as any other property; the column stays authoritative on save.
@@ -86,28 +86,28 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   Four exceptions to the pure pass-through, all display projections
   `to_data/1` merges into a node's `data`:
 
-    * `labels` — the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
-      Nothing sets it the other way — the editor never writes labels back, so
+    * `labels` - the node's stored `FormFlow.Data.Templates.Flow.Node.labels`.
+      Nothing sets it the other way - the editor never writes labels back, so
       `to_flow_attrs/1` just carries whatever it finds there like any other
       property, and the changeset re-derives the authoritative value on save.
-    * `form_flow_type` — the *embedded flow's* `properties["form_flow_type"]`,
+    * `form_flow_type` - the *embedded flow's* `properties["form_flow_type"]`,
       on subflow nodes (requires the node's `:subflow` preloaded, which
       `FormFlow.Data.Templates.Flows.get/1` does). This one does flow back:
       the canvas dropdown edits it, and `FormFlow.Data.Templates.Flows`
       pops it out of the node's properties at save and writes it through to
-      the embedded flow — the single stored copy.
-    * `form_type` — the same for form nodes: the *collected form's*
+      the embedded flow - the single stored copy.
+    * `form_type` - the same for form nodes: the *collected form's*
       `properties["form_type"]` (requires `:form` preloaded), edited by the
       canvas dropdown and written through to the form lineage at save.
-    * `perspectives` — the *embedded flow's* `properties["perspectives"]`
+    * `perspectives` - the *embedded flow's* `properties["perspectives"]`
       (`FormFlow.Config.Flows.Perspective`), on subflow nodes, for the node
       to name who the subflow is for. Display only: perspectives are set on
-      the subflow's own identity form, so this one does *not* flow back —
+      the subflow's own identity form, so this one does *not* flow back -
       `FormFlow.Data.Templates.Flows` drops it from the node's properties at
       save.
 
   `data.label` is *not* projected. The node's stored label is the step's
-  name — what `FormFlow.Data.Instances.FlowProgress` shows users — and the
+  name - what `FormFlow.Data.Instances.FlowProgress` shows users - and the
   pages that rename a step write it to the node and, when this flow tree owns
   the entity behind the step, to that entity's `name` as well
   (`FormFlow.Data.Templates.Flows`). A catalog form or a reusable subflow
@@ -136,12 +136,12 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   written in Elixir (atom keys). See the module documentation for the mapping.
 
   The result also carries `id_map`: editor node/edge id (string) to the id it
-  was saved under. For an id that was already a UUID this is the identity —
+  was saved under. For an id that was already a UUID this is the identity -
   the mapping only does real work for the editor's temporary ids (`"1"`,
   `"4"`), generated fresh on every call since nothing here is stored yet. A
-  caller that needs to know what a just-created node's id became — e.g. to
+  caller that needs to know what a just-created node's id became - e.g. to
   navigate straight to it after the save this attrs map is about to go
-  into — reads it from here rather than guessing.
+  into - reads it from here rather than guessing.
   """
   def to_flow_attrs(data) when is_map(data) do
     %{"nodes" => nodes, "edges" => edges} =
@@ -172,7 +172,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   end
 
   @doc """
-  Converts a loaded `FormFlow.Data.Templates.Flow` back into ReactFlow data —
+  Converts a loaded `FormFlow.Data.Templates.Flow` back into ReactFlow data -
   the inverse of `to_flow_attrs/1`. Node and edge ids are the records' UUIDs.
   """
   def to_data(%FormFlow.Data.Templates.Flow{} = flow) do
@@ -183,9 +183,9 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   end
 
   @doc """
-  Converts a resolved flow tree — the `%{flow:, nodes:, relationships:,
+  Converts a resolved flow tree - the `%{flow:, nodes:, relationships:,
   subflows:}` shape of `FormFlow.Data.Templates.Flows.resolve_tree/1` and
-  `connected_tree/1` — into nested ReactFlow data, for the overview canvas
+  `connected_tree/1` - into nested ReactFlow data, for the overview canvas
   (`FormFlow.Web.Templates.Flows.Overview`):
 
       %{
@@ -236,7 +236,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     Map.update(properties, "data", %{"labels" => labels}, &Map.put(&1, "labels", labels))
   end
 
-  # The embedded flow's type, projected into data for the canvas dropdown —
+  # The embedded flow's type, projected into data for the canvas dropdown -
   # the load-side mirror of the save-side pop in
   # FormFlow.Data.Templates.Flows. An untyped, absent, or unloaded subflow
   # (%Ecto.Association.NotLoaded{} has no :properties) merges nothing.
@@ -273,7 +273,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     end
   end
 
-  # The collected form's type, projected into data for the canvas dropdown —
+  # The collected form's type, projected into data for the canvas dropdown -
   # the form-node twin of put_form_flow_type/2
   defp put_form_type(properties, node) do
     case node.form do
@@ -285,18 +285,18 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     end
   end
 
-  # Atom or string keys in, string keys out — the same normalization the data
+  # Atom or string keys in, string keys out - the same normalization the data
   # goes through anyway on its way to the browser
   defp string_keys(data) do
     data |> Phoenix.json_library().encode!() |> Phoenix.json_library().decode!()
   end
 
-  # Existing UUIDs pass through unchanged — a load-bearing invariant, not a
+  # Existing UUIDs pass through unchanged - a load-bearing invariant, not a
   # convenience: form-instance `path`s (the visit identity of in-journey
   # fills) reference node ids, so a save that re-idented existing nodes
   # would strand every in-flight journey (instances plan, "path
-  # stability"). Only non-UUID ids — ReactFlow's temp ids for newly added
-  # nodes — get fresh UUIDs.
+  # stability"). Only non-UUID ids - ReactFlow's temp ids for newly added
+  # nodes - get fresh UUIDs.
   defp uuid(id) do
     case Ecto.UUID.cast(id) do
       {:ok, id} -> id

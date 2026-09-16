@@ -4,8 +4,8 @@ defmodule FormFlow.Data.Instances.Form.Event do
   trail of an instance form.
 
   Every pin migration, reopen, and status change writes one event carrying
-  the responsible user (`user_id`, an opaque host-app identity — any
-  principal, including "system:pin-migration"-style identities — threaded
+  the responsible user (`user_id`, an opaque host-app identity - any
+  principal, including "system:pin-migration"-style identities - threaded
   from day one, because retrofitting identity into a state machine was the
   reference system's unfinished TODO). `reopened` has two writers: a user
   reopening a completed form, and the `:reopen_carry` / `:reopen_reset`
@@ -14,7 +14,7 @@ defmodule FormFlow.Data.Instances.Form.Event do
   user's reopen leaves both nil.
 
   `snapshot` is a free-form payload. When a migration discards or
-  replaces data (reset, prune), the prior answers survive here — which is
+  replaces data (reset, prune), the prior answers survive here - which is
   why events never cascade-delete with their instance: removing an instance
   goes through `FormFlow.Data.Instances.Forms.delete_instance/2`, which
   deletes events deliberately. It also holds what a form type chose to

@@ -2,7 +2,7 @@ defmodule FormFlow.Web.Templates.Components.Note do
   @moduledoc """
   `FormFlow.Web.Templates.Components.Note` function component renders a
   templates page's note: a sentence the admin should read before using the
-  page, with the links it needs — where the form's details are edited, that
+  page, with the links it needs - where the form's details are edited, that
   a save here reaches every version.
 
   A bordered white card the width of the page, opening with **Note:**, so it

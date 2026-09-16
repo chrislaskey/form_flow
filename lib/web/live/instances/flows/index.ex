@@ -5,7 +5,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   A `Slab.table` over `FormFlow.Data.Instances.Flows.list_query/1`, the same
   way the template indexes are built: Slab runs in query mode against the host
-  app's repo, so sorting and pagination come from the URL — pass the current
+  app's repo, so sorting and pagination come from the URL - pass the current
   `uri` and `params` from `handle_params/3` (the `FormFlow.Web.Router`
   component forwards both).
 
@@ -18,22 +18,22 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       />
 
   Without a `sort` param the table sorts newest first, matching
-  `FormFlow.Data.Instances.Flows.list/1` — injected into the params handed to
+  `FormFlow.Data.Instances.Flows.list/1` - injected into the params handed to
   Slab so pagination stays deterministic instead of leaning on unspecified
   database order.
 
   The flow's name comes from the `:template_flow` association, which Slab
   preloads *after* filtering, sorting, and counting, so it is deliberately not
-  sortable — it is a joined value, not a column Slab could compile into
+  sortable - it is a joined value, not a column Slab could compile into
   `ORDER BY`.
 
   "The current user" means the router's `user_id` attr: by default the list
   is narrowed to instances that user created, and starting one stamps them as
-  its creator. The host decides otherwise through the `instances` attr — a
+  its creator. The host decides otherwise through the `instances` attr - a
   reviewer's page passes `Instances.Flows.list_query()` bare to list
   everyone's. Which flow templates the page is about is the `flows` attr:
-  the flows it offers to start, refusing to start any other, and — when the
-  host names some in particular and leaves `instances` to its default — the
+  the flows it offers to start, refusing to start any other, and - when the
+  host names some in particular and leaves `instances` to its default - the
   flows whose instances the default listing shows, so a page for Dog License
   lists the user's Dog License instances and not their renewals. `nil` is
   every root flow of the tenant, offered and listed alike; a host that wants
@@ -45,7 +45,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   Starting a new flow stays a plain list rather than a second table: Slab
   reads `sort` and `page` straight from the URL, so two Slab tables on one
-  page would share — and fight over — the same params.
+  page would share - and fight over - the same params.
 
   ## The states it draws
 
@@ -53,14 +53,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   `FormFlow.Web.Instances.Shared.page_state/1` and draws three states, each
   in its own `render/1` clause and with no catch-all:
 
-    * `:redirecting` — nothing, while the host's `on_mount` navigates away
-    * `:refused` — the host's message alone
-    * `:ready` — the listing, and the flows it offers to start
+    * `:redirecting` - nothing, while the host's `on_mount` navigates away
+    * `:refused` - the host's message alone
+    * `:ready` - the listing, and the flows it offers to start
 
   Start needs both rules: the state, and then that the flow is one the page
   offered. The state is not redundant. A refused viewer has no
-  `:page_flows` at all — the listing is built inside the gate's `on_ok`, so
-  it is never assigned — and the second rule alone would crash on the
+  `:page_flows` at all - the listing is built inside the gate's `on_ok`, so
+  it is never assigned - and the second rule alone would crash on the
   missing assign. It also covers the case where assigns outlive their
   decision: they persist across `update/2`, so a gate that allows on mount
   and refuses later would otherwise leave the earlier listing standing.
@@ -115,7 +115,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   # The state the page is in, computed once the gate has answered. Unlike
   # the other three pages this one does not load *then* ask: its load is the
   # gate's `on_ok`, so a refused viewer never has a listing built for them
-  # at all. Making this page "look like the others" would undo that —
+  # at all. Making this page "look like the others" would undo that -
   # `:page_flows` would be assigned before the refusal, and Start's second
   # rule would be checking a list the viewer was refused.
   defp assign_page_state(socket) do
@@ -123,8 +123,8 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   end
 
   # The listing itself, built only once the host allowed the page: the
-  # host's query and the host's flows to start — or the defaults, the user's
-  # own and every root of the tenant — each narrowed to the router's tenant.
+  # host's query and the host's flows to start - or the defaults, the user's
+  # own and every root of the tenant - each narrowed to the router's tenant.
   # The resolved flows live under `:page_flows` so the host's `flows` stays
   # what it said, render after render.
   defp load(socket) do
@@ -182,9 +182,9 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     {:noreply, push_navigate(socket, to: to)}
   end
 
-  # Both rules. The state says whether the page may act at all — and a
+  # Both rules. The state says whether the page may act at all - and a
   # refused viewer has no `:page_flows` to check, since the listing is built
-  # inside the gate's `on_ok` — and then only a flow the page offered can be
+  # inside the gate's `on_ok` - and then only a flow the page offered can be
   # started from it.
   @impl true
   def handle_event("start", %{"flow-id" => flow_id}, socket)
@@ -198,14 +198,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
-  # it. Only a well-formed one, though — the params are matched here too, so
+  # it. Only a well-formed one, though - the params are matched here too, so
   # a "start" carrying no flow is as much a `FunctionClauseError` as an
   # event name nothing answers to. Silence is for a refusal, not for a
   # message this page does not understand.
   def handle_event("start", %{"flow-id" => _flow_id}, socket), do: {:noreply, socket}
 
   # The status is the pages' rule, and it is asked again here, at the
-  # click, from the row as it now is — the page offered the flow when it
+  # click, from the row as it now is - the page offered the flow when it
   # drew, and it may have stopped taking starts since. The data layer does
   # what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
   defp start(socket, flow_id) do
@@ -231,7 +231,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     end
   end
 
-  # The listing's status column, as `{text, kind}` — the wording the flow
+  # The listing's status column, as `{text, kind}` - the wording the flow
   # instance pages use for the same two states, in the same palette as a
   # form's own badge (`FormFlow.Web.Instances.Components.Flows.Progress.badge/1`).
   defp status_badge("completed"), do: {"Completed", :success}
@@ -239,7 +239,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   # Newest first by default. Only injected when the URL carries no sort of its
   # own, so clicking any header still starts ascending like every other
-  # column — a bare `sort_direction` default would flip that.
+  # column - a bare `sort_direction` default would flip that.
   defp table_params(%{"sort" => _chosen} = params), do: params
 
   defp table_params(params) do
@@ -280,7 +280,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
       <Core.alert :if={@empty?} components={@components} class="mb-4">
-        Nothing started yet — start a flow below.
+        Nothing started yet - start a flow below.
       </Core.alert>
 
       <Slab.table

@@ -2,15 +2,15 @@ defmodule FormFlow.Data.Instances.Forms do
   @moduledoc """
   `FormFlow.Data.Instances.Forms` context module for form instances.
 
-  The lifecycle of a form instance filled inside a whole root flow instance —
-  a journey (see `FormFlow.Data.Instances`) — runs through one entry point,
+  The lifecycle of a form instance filled inside a whole root flow instance -
+  a journey (see `FormFlow.Data.Instances`) - runs through one entry point,
   `update_status/4`, addressed by that journey plus the position within it:
   the `path` through the flow's tree. That is the same consolidation
   `FormFlow.Data.Templates.Forms.update_status/3` gives the template side.
   The two statuses make three transitions:
 
-    * `update_status(journey, path, :in_progress)` — "the user is working
-      here." On an empty position this *creates* the instance — created on
+    * `update_status(journey, path, :in_progress)` - "the user is working
+      here." On an empty position this *creates* the instance - created on
       first start, not when the journey starts, because creation is what
       pins the version: the row permanently records which published
       definition the user saw, so creating rows any earlier would pin
@@ -18,11 +18,11 @@ defmodule FormFlow.Data.Instances.Forms do
       published in the meantime. On a completed instance it *reopens*
       (back to `in_progress`, `completed_at` cleared, `reopened` event),
       keeping the answers for editing. Already in progress: a no-op.
-    * `update_status(journey, path, :completed, data: answers)` — submit:
+    * `update_status(journey, path, :completed, data: answers)` - submit:
       the answers land in `data`, `status`/`completed_at` are stamped, and
       a `status_changed` event is written. Completion is what unlocks
       successor positions in `FormFlow.Data.Instances.FlowProgress`.
-      Completing a completed instance is a no-op — reopen first.
+      Completing a completed instance is a no-op - reopen first.
 
   Deletion stays its own named operation: `delete_instance/2` is the host's
   retention decision, made visibly. Events never cascade-delete with their
@@ -31,7 +31,7 @@ defmodule FormFlow.Data.Instances.Forms do
 
   Two browser tabs starting the same untouched position race their inserts;
   the `(instance_flow_id, path)` unique index lets exactly one win.
-  Deliberately unhandled for now — the loser surfaces the changeset error
+  Deliberately unhandled for now - the loser surfaces the changeset error
   and the user retries; catch-and-fetch can be added if it becomes a real
   irritation. The same goes for concurrent edits: the changeset's optimistic
   lock raises `Ecto.StaleEntryError` rather than silently overwriting, and a
@@ -49,7 +49,7 @@ defmodule FormFlow.Data.Instances.Forms do
   def get(instance_form_id), do: Repo.get(Instances.Form, instance_form_id)
 
   @doc """
-  The live instance at a journey position, or nil — the row a position is
+  The live instance at a journey position, or nil - the row a position is
   addressed by. Superseded instances are skipped: they are attestation
   records, not the answers being worked on.
   """
@@ -58,7 +58,7 @@ defmodule FormFlow.Data.Instances.Forms do
   end
 
   @doc """
-  An instance's event trail, oldest first — `inserted_at` then `id`, so
+  An instance's event trail, oldest first - `inserted_at` then `id`, so
   events written in one transaction keep a stable order. `event:` filters by
   kind (`"created"`, `"migrated"`, `"reopened"`, `"status_changed"`).
   """
@@ -82,27 +82,27 @@ defmodule FormFlow.Data.Instances.Forms do
   end
 
   @doc """
-  Moves the form instance at a journey position to `status` — the one entry
+  Moves the form instance at a journey position to `status` - the one entry
   point for opening, submitting, and reopening (see the moduledoc).
 
   `opts`:
 
-    * `:data` — the answers, written on `:completed` (left untouched when
+    * `:data` - the answers, written on `:completed` (left untouched when
       absent, so a bare re-stamp never wipes answers)
-    * `:user_id` — the acting user, recorded on the event and, when the
+    * `:user_id` - the acting user, recorded on the event and, when the
       call creates the instance, stamped on it as the user who started it
-    * `:tenant_id` — the host tenant, stamped on the instance when the call
+    * `:tenant_id` - the host tenant, stamped on the instance when the call
       creates it
-    * `:snapshot` — free-form event payload
+    * `:snapshot` - free-form event payload
 
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
-  position with no instance), `{:error, :unknown_position}` (no such node —
+  position with no instance), `{:error, :unknown_position}` (no such node -
   the flow may have been edited), `{:error, :not_a_form_position}`,
   `{:error, :no_published_version}` (the form was never published), or an
   error changeset.
 
-  The flow's status is not consulted: whether a user may still continue —
-  start, reopen, submit — is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
+  The flow's status is not consulted: whether a user may still continue -
+  start, reopen, submit - is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
   so that a host's admin tooling can reopen a form in a read-only year or
   repair a record in an archived one. This function does what it is asked.
   """
@@ -157,10 +157,10 @@ defmodule FormFlow.Data.Instances.Forms do
   copies other instances' events hold of its answers are blanked first
   (`redact_snapshots/1`, so a failed redaction aborts the deletion rather
   than leaving copies behind), then its events (the `restrict` FK forbids
-  any other order), then the instance. This is the only deletion path —
+  any other order), then the instance. This is the only deletion path -
   there is no cascade.
 
-  `redact: false` skips the redaction — for a caller deleting the whole
+  `redact: false` skips the redaction - for a caller deleting the whole
   journey, whose copies go with it (`FormFlow.Data.Instances.Flows.delete_instance/2`).
   """
   def delete_instance(%Instances.Form{} = instance, opts \\ []) do
@@ -177,7 +177,7 @@ defmodule FormFlow.Data.Instances.Forms do
   end
 
   @doc """
-  Blanks the answers in every review snapshot that references `instance` —
+  Blanks the answers in every review snapshot that references `instance` -
   the copies review submissions made of it, found by
   `"reviewed"."instance_id"` in the `snapshot` of the `status_changed`
   events of the journey's other instances, superseded ones included (a
@@ -188,7 +188,7 @@ defmodule FormFlow.Data.Instances.Forms do
 
   This is the only sanctioned update of an event row
   (`FormFlow.Data.Instances.Form.Event`). It is for deleting one instance
-  out of a surviving journey — `delete_instance/2` runs it first — and is
+  out of a surviving journey - `delete_instance/2` runs it first - and is
   public for a host's own erasure flow. Deleting the whole journey takes
   the copies with it, so `FormFlow.Data.Instances.Flows.delete_instance/2`
   skips it. A standalone instance has no journey and no copies.

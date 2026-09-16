@@ -7,7 +7,7 @@ defmodule FormFlow.Config.AI.OpenRouter do
 
   OpenRouter is one account in front of every provider's models, which is
   what makes `:available_models` a list a host can add to without touching
-  code — the ids are its slugs, `"qwen/qwen3.8-flash"`,
+  code - the ids are its slugs, `"qwen/qwen3.8-flash"`,
   `"deepseek/deepseek-v4-flash"`, `"anthropic/claude-sonnet-5"`.
 
   Delegates to the private internal implementation in

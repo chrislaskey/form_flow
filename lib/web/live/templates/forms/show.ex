@@ -1,33 +1,33 @@
 defmodule FormFlow.Web.Templates.Forms.Show do
   @moduledoc """
-  `FormFlow.Web.Templates.Forms.Show` LiveComponent shows one form — a
+  `FormFlow.Web.Templates.Forms.Show` LiveComponent shows one form - a
   specific version, or the resolved default.
 
   Two addressing modes, mirroring the flows pages:
 
-    * `form_id` (+ optional `version_id`) — standalone, from the catalog:
+    * `form_id` (+ optional `version_id`) - standalone, from the catalog:
       `/forms/:id` and `/forms/:id/versions/:version_id`
-    * `root_id` + `node_id` (+ optional `version_id`) — drill-in from a flow,
+    * `root_id` + `node_id` (+ optional `version_id`) - drill-in from a flow,
       `/flows/:root/nodes/:node_id/form...`, with a breadcrumb back through
       the embedding subflow to the root
 
   Without a `version_id` the page resolves the latest *published* version;
   when nothing has been published yet it falls back to the newest draft (with
-  its draft badge — viewing a draft read-only is the pre-publish preview).
+  its draft badge - viewing a draft read-only is the pre-publish preview).
   Instances never resolve this way: they render only through their own pins.
 
   Publishing happens here: the dialog offers the three presets (bug / small /
   big fix) with plain-language descriptions and restates the blast radius
   before anything moves.
 
-  A published or archived version's actions fork it — New draft from this
-  version — and, while a draft exists, lead to the newest one: Continue
+  A published or archived version's actions fork it - New draft from this
+  version - and, while a draft exists, lead to the newest one: Continue
   editing latest draft. The default view is the latest published version, so
   without that a draft already under way is easy to miss. Only a published
   version can be archived. With no draft under way, New draft from this
   version is the next thing to do, and is primary.
 
-  The form's details — name, slug, description, type — are listed as a fact
+  The form's details - name, slug, description, type - are listed as a fact
   sheet under the header, and **Edit form details** leads to
   `FormFlow.Web.Templates.Forms.Details`, where they change for every
   version at once.
@@ -37,9 +37,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   The preview has the form's prefills over it, as the draft editor's does
   (`FormFlow.Web.Templates.Forms.Edit`, "Prefills"): the picker fills the
   version being looked at with a saved set of answers, and the **⋮** menu
-  writes them — including **Capture prefill**, which reads the preview as it
+  writes them - including **Capture prefill**, which reads the preview as it
   has been filled in by hand. They are here and not only there because a
-  prefill belongs to the form rather than to a version — a form with
+  prefill belongs to the form rather than to a version - a form with
   everything published has no draft to edit, and so no edit page, and this is
   where it keeps them.
 
@@ -161,7 +161,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     )
   end
 
-  # The stored form_type rendered as its human name — nil when unset (the
+  # The stored form_type rendered as its human name - nil when unset (the
   # default applies)
   defp form_type_label(assigns) do
     with type when is_binary(type) <- assigns.form.properties["form_type"] do
@@ -173,7 +173,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   # The stored type's property values, paired with the properties that
-  # declare them, for the header — only those with a value
+  # declare them, for the header - only those with a value
   defp type_property_values(assigns) do
     values = FormFlow.Config.Forms.Type.property_values(assigns.form)
 
@@ -218,7 +218,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       {:noreply, assign(socket, :publishing?, true)}
     else
       # Nothing has ever been published, so no instance can exist and no
-      # migration policy is meaningful — the dialog would prompt about
+      # migration policy is meaningful - the dialog would prompt about
       # nobody. Publish directly; every later publish prompts.
       publish_directly(socket)
     end
@@ -274,7 +274,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   # Nothing on this page is unsaved, so a prefill is chosen and the page
-  # reloads with it named — no asking first, which is the one thing the
+  # reloads with it named - no asking first, which is the one thing the
   # editor's copy of this does differently (`FormFlow.Web.Templates.Forms.Edit`)
   @impl true
   def handle_event("pick_prefill", %{"prefill" => name}, socket) do
@@ -327,7 +327,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           {:noreply, remount_preview(socket)}
         end
 
-      # Refused — the dialog stays open over what was typed, which is the
+      # Refused - the dialog stays open over what was typed, which is the
       # only copy of it: the fields are the assign, not the browser's DOM
       {:error, message} ->
         {:noreply,
@@ -344,7 +344,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
     case prefill && Forms.delete_prefill(form, prefill.name) do
       {:ok, form} ->
-        # The URL still names it, and now names nothing that is there — the
+        # The URL still names it, and now names nothing that is there - the
         # same state a link to a prefill someone else deleted arrives in
         {:noreply,
          socket
@@ -515,7 +515,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       <p :if={@node == nil and @form.owner_flow_id == nil} class="mb-3 text-xs text-zinc-500">
         <span :if={@usages == []}>Not used in any flow yet.</span>
         <span :if={@usages != []}>
-          Used in {Enum.join(Templates.Shared.usage_labels(@usages), ", ")} — edits and publishes reach every one of them.
+          Used in {Enum.join(Templates.Shared.usage_labels(@usages), ", ")} - edits and publishes reach every one of them.
         </span>
       </p>
 
@@ -554,7 +554,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         components={@components}
         class="mb-3"
       >
-        This draft was based on a version that is no longer the latest — review before publishing.
+        This draft was based on a version that is no longer the latest - review before publishing.
       </Core.alert>
 
       <div class="flex flex-wrap gap-6">
@@ -646,7 +646,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
     ~H"""
-    <span class="text-zinc-400">—</span>
+    <span class="text-zinc-400">-</span>
     """
   end
 
@@ -684,11 +684,11 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     end
   end
 
-  # The newest draft, or nil — `versions` is newest first
+  # The newest draft, or nil - `versions` is newest first
   defp latest_draft(versions), do: Enum.find(versions, &(&1.status == "draft"))
 
-  # Once, after a version changed: every root with a step on this form — one
-  # for an owned form, every user of a catalog form — recomputes its health
+  # Once, after a version changed: every root with a step on this form - one
+  # for an owned form, every user of a catalog form - recomputes its health
   defp refresh_health(socket) do
     Health.refresh_for_form(socket.assigns.form.id,
       flow_types: socket.assigns.flow_types,
@@ -718,7 +718,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     do: assign(socket, prefill_dialog: dialog, prefill_error: nil)
 
   # A prefill's answers ride in the preview's session, and a child LiveView
-  # never re-reads one — so answers that changed mean a fresh child
+  # never re-reads one - so answers that changed mean a fresh child
   defp remount_preview(socket),
     do: assign(socket, :preview_rev, socket.assigns.preview_rev + 1)
 
@@ -732,7 +732,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     preserve_query_params("#{form_base_path(assigns)}/edit", assigns.params, ["mode"])
   end
 
-  # This same page, with the prefill named — or without it, which is what
+  # This same page, with the prefill named - or without it, which is what
   # selecting nothing means
   defp prefill_path(assigns, name) do
     Shared.prefill_path(

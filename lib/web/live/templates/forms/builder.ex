@@ -13,7 +13,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   from its label), and numbers arrive as the decimals a number input casts
   to.
 
-  Two element types hold other elements — a **group** (`panel`, whose
+  Two element types hold other elements - a **group** (`panel`, whose
   members belong to the enclosing form) and a **nested form**
   (`paneldynamic`, a repeating template with a scope of its own). Either
   carries its members in the entry's `children`, a second nested form inside
@@ -21,7 +21,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   builder shows one level of that: a container holds questions and content,
   not another container.
 
-  The builder covers a subset of what a definition can hold — the properties
+  The builder covers a subset of what a definition can hold - the properties
   in `properties/0`, for the types in `type_options/0`, and for the two
   properties that are dropdowns over a closed set (`group_type_options/0`,
   `input_type_options/0`) only those values. `unsupported/1` names everything
@@ -55,7 +55,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   # The two properties whose value is a closed set rather than free text, so
   # the builder offers them as dropdowns. A value outside either is one the
-  # dropdown cannot hold — and an unknown `groupType` makes DynamicForm's
+  # dropdown cannot hold - and an unknown `groupType` makes DynamicForm's
   # renderer raise rather than draw, which is why `unsupported/1` checks the
   # value and not only the shape (`FormFlow.Web.Templates.Forms.Preview`
   # checks the same list for the same reason).
@@ -69,7 +69,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   # Which element types each editable property applies to. This one table
   # drives what the page shows for a type (`visible_if/1`), what an entry
-  # writes back (`element/1` ignores anything else — a hidden field keeps
+  # writes back (`element/1` ignores anything else - a hidden field keeps
   # the value it had, and that value must not leak into the JSON), and what
   # `unsupported/1` accepts. `children` is the builder's own name for a
   # container's members; the JSON key depends on the type.
@@ -102,7 +102,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   @children_key %{"panel" => "elements", "paneldynamic" => "templateElements"}
 
   @doc """
-  The element types the builder offers, as dropdown options — every type at
+  The element types the builder offers, as dropdown options - every type at
   the form level, and everything but the containers inside one, since the
   builder shows one level of nesting.
   """
@@ -165,7 +165,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   Entries arrive either as the atom-keyed, cast maps of a `DynamicForm`
   payload or as the string-keyed maps `entries/1` produced. An entry writes
-  only the properties that apply to its type and only those with a value —
+  only the properties that apply to its type and only those with a value -
   `isRequired: false` is the default and is left out, as the JSON would be
   written by hand. A container always writes its members, even none.
   """
@@ -204,8 +204,8 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   defp property_value(_property, value), do: value
 
   @doc """
-  Applies the one move an entry asked for through its `move` field — `"up"`
-  or `"down"` — swapping it with its neighbour, and clears the request from
+  Applies the one move an entry asked for through its `move` field - `"up"`
+  or `"down"` - swapping it with its neighbour, and clears the request from
   every entry, at any level. `{:moved, entries}` when one asked; `:none`
   otherwise.
 
@@ -335,13 +335,13 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   end
 
   @doc """
-  Why the builder cannot show a definition — one sentence per problem, or
+  Why the builder cannot show a definition - one sentence per problem, or
   `[]` when it can. A blank definition can always be shown.
 
   Checks each element's type against `type_options/0`, its properties
   against `properties/0` for that type, each value's shape against what the
-  entry's control can hold — a string, a number, a boolean, a list of
-  choices that are strings or `value`/`text` objects — and that no container
+  entry's control can hold - a string, a number, a boolean, a list of
+  choices that are strings or `value`/`text` objects - and that no container
   sits inside another, since the builder shows one level.
   """
   def unsupported(definition) when definition == %{}, do: []
@@ -391,8 +391,8 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   @doc """
   The properties an element type may carry, **as the definition spells
-  them**: `properties/0`'s keys with `children` — the builder entry's own
-  name for a container's members — replaced by the JSON key that type writes
+  them**: `properties/0`'s keys with `children` - the builder entry's own
+  name for a container's members - replaced by the JSON key that type writes
   them under, `elements` for a group and `templateElements` for a nested
   form.
 

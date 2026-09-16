@@ -1,9 +1,9 @@
 defmodule FormFlow.Web.Components.Forms.Types.Default do
   @moduledoc """
-  `FormFlow.Config.Forms.Type`'s defaults — what every form type inherits for
+  `FormFlow.Config.Forms.Type`'s defaults - what every form type inherits for
   the callbacks it doesn't override: the form renders whatever the user has
-  answered so far, it renders as the form alone — editable on the edit page,
-  read-only on the Show page — nothing is recorded when it is submitted, and
+  answered so far, it renders as the form alone - editable on the edit page,
+  read-only on the Show page - nothing is recorded when it is submitted, and
   nothing happens afterwards.
   """
 
@@ -37,7 +37,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
     ~H"""
     <%!-- Read-only is the whole job: the disabled fieldset switches off every
           control inside (a native HTML behavior) and the submit button is
-          hidden. DynamicForm's render_only is NOT this — it is a
+          hidden. DynamicForm's render_only is NOT this - it is a
           parent-owns-the-form mode requiring a Phoenix.HTML.Form. --%>
     <fieldset disabled class="max-w-md">
       <DynamicForm.form

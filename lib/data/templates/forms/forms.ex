@@ -3,8 +3,8 @@ defmodule FormFlow.Data.Templates.Forms do
   `FormFlow.Data.Templates.Forms` context module for form templates: the
   lineage/version lifecycle and the publish operation.
 
-  A form is a lineage (`FormFlow.Data.Templates.Form` — pure identity) plus
-  versions (`FormFlow.Data.Templates.Form.Version` — every definition, draft
+  A form is a lineage (`FormFlow.Data.Templates.Form` - pure identity) plus
+  versions (`FormFlow.Data.Templates.Form.Version` - every definition, draft
   or published). Published versions are immutable; a fix is a new version,
   and what happens to existing instances is a publish-time policy, not a
   migration file. The design and its rationale live in
@@ -15,34 +15,34 @@ defmodule FormFlow.Data.Templates.Forms do
   Any number of drafts may coexist per lineage. `create_draft/2` forks a
   *published* version (or starts blank), `update_draft/2` edits under an
   optimistic lock, and `stale_draft?/1` reports when the base is no longer
-  the latest published version. There is no merge machinery — publishes are
+  the latest published version. There is no merge machinery - publishes are
   last-publish-wins with linear numbering.
 
   ## Publishing
 
   `update_status(version, :published, opts)` publishes a draft in one
-  transaction: the lineage row is locked (Postgres — SQLite's single writer
+  transaction: the lineage row is locked (Postgres - SQLite's single writer
   makes the lock unnecessary, and its grammar has no `FOR UPDATE`), the next
   number is computed over every version ever published (archived included),
   and the migration policy is applied to existing instances:
 
-    * `preset: :bug_fix | :small_fix | :big_fix` — expands to the knobs below
-    * `in_progress: :keep | :carry | :reset` — existing in-progress instances
+    * `preset: :bug_fix | :small_fix | :big_fix` - expands to the knobs below
+    * `in_progress: :keep | :carry | :reset` - existing in-progress instances
       stay pinned, move to the new version keeping their data, or move and
       start over
-    * `completed: :untouched | :reopen_carry | :reopen_reset` — completed
+    * `completed: :untouched | :reopen_carry | :reopen_reset` - completed
       instances are attestation records and stay untouched by default
-    * `renames: %{"old" => "new"}` — re-keys carried data (applied before
+    * `renames: %{"old" => "new"}` - re-keys carried data (applied before
       prune: a renamed field's old key is by definition absent from the new
       definition)
-    * `prune: true` — drops carried keys not present in the new definition,
+    * `prune: true` - drops carried keys not present in the new definition,
       snapshotting them into the event. Applies only when the definition
       declares its fields (`"fields" => [%{"name" => ...}, ...]`); a
       definition without declared fields prunes nothing rather than
       everything.
-    * `user_id:` — opaque host-app identity stamped into every event
+    * `user_id:` - opaque host-app identity stamped into every event
 
-  The default preset is `:small_fix` (keep / untouched) — the least
+  The default preset is `:small_fix` (keep / untouched) - the least
   surprising for existing users. Every pin move writes an append-only
   `FormFlow.Data.Instances.Form.Event`.
 
@@ -51,7 +51,7 @@ defmodule FormFlow.Data.Templates.Forms do
   `list_prefills/1`, `get_prefill/2`, `create_prefill/2`, `update_prefill/3`,
   and `delete_prefill/2` are the lineage's named sets of test answers
   (`FormFlow.Data.Templates.Form.Prefill`). They read and write one column of
-  one row — the whole set is a single value — so each takes the form and
+  one row - the whole set is a single value - so each takes the form and
   returns the form it wrote, with the set as it now stands. A prefill is
   addressed by its name, and `update_prefill/3` given another name moves it
   there, which is how one is renamed.
@@ -83,7 +83,7 @@ defmodule FormFlow.Data.Templates.Forms do
   A `:definition` key in the attributes seeds the draft; everything else is
   lineage identity. A missing `:slug` is generated from the name for a
   catalog form (`FormFlow.Data.Templates.Slug`); an owned form
-  (`:owner_flow_id`) gets none unless one is given — its step's slug is the
+  (`:owner_flow_id`) gets none unless one is given - its step's slug is the
   handle. Returns the form with its versions preloaded.
   """
   def create(attrs \\ %{}) do
@@ -122,7 +122,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Deletes a lineage and its versions.
 
   Refuses with `{:error, :has_instances}` when any instance pins any of the
-  lineage's versions — instance data can never be orphaned — and with
+  lineage's versions - instance data can never be orphaned - and with
   `{:error, :in_use}` while any step still points at the lineage: the
   node's foreign key would refuse anyway, and a catalog form shared by
   several flows is deleted by removing those steps first.
@@ -146,18 +146,18 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Copies a lineage — the rollover operation behind copying a flow tree.
+  Copies a lineage - the rollover operation behind copying a flow tree.
 
   The copy is a new lineage with `copied_from_form_id` provenance. A source
   with a published version copies as a single **published v1** carrying the
-  latest published definition — version history stays with the original,
+  latest published definition - version history stays with the original,
   reachable via provenance, and drafts do not copy. A source that has never
   been published copies its most recently updated draft as a draft: the copy
   of an unpublished thing is an unpublished thing.
 
   The copy carries the source's prefills, so a form rolled over for next
-  year opens with last year's test answers, and its `properties` — its form
-  type and that type's property values — so a rolled-over form behaves as
+  year opens with last year's test answers, and its `properties` - its form
+  type and that type's property values - so a rolled-over form behaves as
   the source did;
   `properties:` replaces them, which is how a flow copy hands over the
   values with their step paths re-pointed at the copied tree
@@ -166,10 +166,10 @@ defmodule FormFlow.Data.Templates.Forms do
   copy's it resolves to nothing, and the form's edit page says so
   (`FormFlow.Web.Templates.Shared.fill_related_forms/4`).
 
-  Pass `owner_flow_id:` to make the copy a flow tree's private property —
+  Pass `owner_flow_id:` to make the copy a flow tree's private property -
   the normal case; a copy without an owner lands in the catalog and must not
   collide on `name`. The copy's slug is `opts[:slug]`; otherwise an owned
-  copy has none — its step's slug is the handle — and a catalog copy takes
+  copy has none - its step's slug is the handle - and a catalog copy takes
   the source's with a free `-N` suffix
   (`FormFlow.Data.Templates.Slug.available/3`), or a default from the name
   when the source, being owned, had none.
@@ -214,7 +214,7 @@ defmodule FormFlow.Data.Templates.Forms do
   `opts[:tenant_id]` scopes the lookup to one tenant; a host with no tenants
   needs nothing more than the slug. Slugs are unique per
   tenant, not across them, so without `tenant_id:` a slug that several
-  tenants hold raises `Ecto.MultipleResultsError` — a multitenant host
+  tenants hold raises `Ecto.MultipleResultsError` - a multitenant host
   always passes it.
   Only a catalog form has a slug; an owned form
   is reached through its step
@@ -237,7 +237,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   Owned forms live inside their flow trees and are reached by drill-in,
   never listed beside the catalog. `opts[:tenant_id]` narrows to one tenant
-  — a listing convenience, not access control.
+  - a listing convenience, not access control.
   """
   def list(opts \\ []) do
     Repo.all(from(f in catalog_query(opts), order_by: [asc: f.inserted_at]))
@@ -245,7 +245,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   @doc """
   The catalog listing as a composable query: the reusable forms (never
-  owned ones), unordered — for callers like Slab's table in query mode
+  owned ones), unordered - for callers like Slab's table in query mode
   that layer their own ordering and pagination on top. `opts[:tenant_id]`
   narrows as in `list/1`.
   """
@@ -258,7 +258,7 @@ defmodule FormFlow.Data.Templates.Forms do
   defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
 
   @doc """
-  A form's prefills in name order, ignoring case — the sets of test answers
+  A form's prefills in name order, ignoring case - the sets of test answers
   an admin saved to fill it with (`FormFlow.Data.Templates.Form.Prefill`).
   """
   def list_prefills(%Form{prefills: prefills}) do
@@ -279,7 +279,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Saves a new prefill on a form: `:name`, and the `:data` it fills the form
   with, plus an optional `:description` and the `:user_id` of the admin
   saving it. Refused with a changeset error on `:name` when the form already
-  has a prefill by that name — the name is the handle, so one form's
+  has a prefill by that name - the name is the handle, so one form's
   prefills each have their own.
   """
   def create_prefill(%Form{} = form, attrs) do
@@ -293,7 +293,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Edits the prefill a form saved under `name` — the same attributes
+  Edits the prefill a form saved under `name` - the same attributes
   `create_prefill/2` takes. A `:name` that differs renames it, moving the
   entry to the new name, which must be free; `{:error, :not_found}` when the
   form has no prefill by the name given.
@@ -361,7 +361,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Whether any version of the lineage was ever published — archived included,
+  Whether any version of the lineage was ever published - archived included,
   since version numbers are never reissued and instances may still pin them.
   The first publish is the special case that skips the migration-policy
   dialog: with no published history, no instance can exist.
@@ -382,7 +382,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Counts a lineage's instances by status — the publish dialog's blast radius
+  Counts a lineage's instances by status - the publish dialog's blast radius
   ("N in-progress instances will be reset").
   """
   def instance_counts(form_id) do
@@ -402,10 +402,10 @@ defmodule FormFlow.Data.Templates.Forms do
 
   @doc """
   `instance_counts/1` attributed to the root flows the instances were
-  started in — what tells an admin publishing a catalog form which flows
+  started in - what tells an admin publishing a catalog form which flows
   the publish reaches. One entry per root flow with instances, as
   `%{flow_id:, flow_name:, in_progress:, completed:}`, flows by name;
-  standalone instances — filled outside any flow — come last with a `nil`
+  standalone instances - filled outside any flow - come last with a `nil`
   flow. Empty when the lineage has no instances.
   """
   def instance_counts_by_flow(form_id) do
@@ -443,7 +443,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Creates a draft for a lineage.
 
   `based_on: version_id` forks a published or archived version of the same
-  lineage — the definition is copied and the provenance recorded, powering
+  lineage - the definition is copied and the provenance recorded, powering
   `stale_draft?/1` (a draft forked from an archived version is stale from
   the start whenever something else is published, which is the truth of it).
   Drafts cannot fork drafts (`{:error, :based_on_draft}`). Without
@@ -474,7 +474,7 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Updates a draft's definition under the optimistic lock.
 
-  Returns `{:error, :stale}` when the draft changed under the caller —
+  Returns `{:error, :stale}` when the draft changed under the caller -
   surface it as "this draft changed under you", never silently overwrite.
   Non-drafts are immutable and error in the changeset.
   """
@@ -487,7 +487,7 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Deletes a draft. Published and archived versions cannot be deleted.
 
-  Refuses with `{:error, :has_instances}` if anything pins the draft —
+  Refuses with `{:error, :has_instances}` if anything pins the draft -
   impossible today (instances pin published versions), but the test-instance
   seam will change that, and a raise from the FK is the wrong answer.
   """
@@ -501,7 +501,7 @@ defmodule FormFlow.Data.Templates.Forms do
   def delete_draft(%Version{}), do: {:error, :not_draft}
 
   @doc """
-  Whether a draft's base is no longer the latest published version —
+  Whether a draft's base is no longer the latest published version -
   the "based on v3, v4 has landed since" warning. Blank drafts (no base)
   are never stale.
   """
@@ -517,7 +517,7 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Transitions a version's status.
 
-  `update_status(version, :published, opts)` is the publish operation — see
+  `update_status(version, :published, opts)` is the publish operation - see
   the moduledoc for the policy options. `update_status(version, :archived)`
   archives a published version: it drops out of `get_latest_version/1` (so
   archiving the latest is a de-facto rollback to the previous one), stops
@@ -535,7 +535,7 @@ defmodule FormFlow.Data.Templates.Forms do
     Repo.transaction(fn ->
       lock_lineage(version.form_id)
 
-      # Reloaded inside the lock — the caller's struct may predate a
+      # Reloaded inside the lock - the caller's struct may predate a
       # concurrent publish of the same draft
       case Repo.get(Version, version.id) do
         nil -> Repo.rollback(:not_found)
@@ -600,7 +600,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   defp postgres?, do: Repo.repo().__adapter__() == Ecto.Adapters.Postgres
 
-  # Over every version ever published — archived included. Computing over
+  # Over every version ever published - archived included. Computing over
   # status == "published" alone would reissue an archived version's number
   # and trip the unique index.
   defp next_version_number(form_id) do
@@ -699,7 +699,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   # Renames re-key first, then prune drops keys absent from the new
-  # definition — the only correct order: a renamed field's old key is by
+  # definition - the only correct order: a renamed field's old key is by
   # definition not in the new definition. Returns {data, dropped} where
   # dropped is what prune removed (the event's snapshot).
   defp transform_data(data, published, policy) do
@@ -716,7 +716,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   defp prune_data(data, published, %{prune: true}) do
     case declared_field_names(published.definition) do
-      # A definition that doesn't declare its fields prunes nothing —
+      # A definition that doesn't declare its fields prunes nothing -
       # never everything
       nil -> {data, %{}}
       names -> {Map.take(data, names), Map.drop(data, names)}

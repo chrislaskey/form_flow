@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Controllers.Downloads do
 
   A LiveView cannot send a file: it holds a websocket, not a response. So a
   download is an ordinary link out of the page to an ordinary `GET`, which
-  is what this route is — mounted once in the host's router, and pointed at
+  is what this route is - mounted once in the host's router, and pointed at
   from wherever a download makes sense. Today that is the user-facing
   form page (`FormFlow.Web.Instances.Forms.Show`); the route is shaped so
   the other resources the library will let people take away hang off the
@@ -34,19 +34,19 @@ defmodule FormFlow.Web.Controllers.Downloads do
 
   One path, and everything the request is about in the query string. The
   path carries nothing, which is the point: a host can mount this anywhere,
-  however deeply nested, and — more usefully — can point the pages at an
+  however deeply nested, and - more usefully - can point the pages at an
   endpoint of its own instead, generating the document itself with no route
   of FormFlow's involved. Nothing about the shape has to be matched but the
   three params.
 
-  `path[]` repeated is the position — the chain of node ids from the root
+  `path[]` repeated is the position - the chain of node ids from the root
   flow down to the form node, exactly as `FormFlow.Web.Instances.Paths`
-  builds it — so it arrives as the list it is rather than a string with a
+  builds it - so it arrives as the list it is rather than a string with a
   separator a host has to know. `disposition` is the one difference between
   Download and Print; anything but `print` is a download.
 
   Where the links point is the router's `download_path` attr, per mount,
-  falling back to `path/0` — what `config :form_flow, download_path:` says
+  falling back to `path/0` - what `config :form_flow, download_path:` says
   this application serves. Neither set, and the pages offer no download at
   all: it is a feature an application turns on. `form_path/4` builds the
   URLs and this module parses them, so the two cannot drift.
@@ -62,17 +62,17 @@ defmodule FormFlow.Web.Controllers.Downloads do
         form_flow_router_download_routes()
       end
 
-  The flow's status is checked here — a flow whose status hides it from
-  users (`FormFlow.Data.Templates.Flow.allows?/2`, `:see`) is 403 — but
+  The flow's status is checked here - a flow whose status hides it from
+  users (`FormFlow.Data.Templates.Flow.allows?/2`, `:see`) is 403 - but
   who a `pre_release` flow's users are is a router attr this route never
   sees, so for that one status the token is the gate: it was minted by a
   page that did check. A leaked download URL is the one place a pre-release
   flow is visible to someone the page did not name, for the token's
   lifetime.
 
-  Per-resource authorization — the `on_mount` gate the instance pages ask
+  Per-resource authorization - the `on_mount` gate the instance pages ask
   before they render anything, asked here too, with the request's `user_id`
-  and `tenant_id` reaching the context — is the next piece of this work.
+  and `tenant_id` reaching the context - is the next piece of this work.
   Until then the request is resolved with no user: the document is built
   from the stored answers alone, and no `FormFlow.Config` callback that
   reads `:user_id` sees one.
@@ -93,7 +93,7 @@ defmodule FormFlow.Web.Controllers.Downloads do
   Where this application serves downloads from, or `nil` if it does not
   serve them at all.
 
-  Nothing by default — taking a form away is a feature an application opts
+  Nothing by default - taking a form away is a feature an application opts
   into, and one that does not want it should not have pages offering it:
 
       config :form_flow, download_path: "/form-flow/downloads"
@@ -110,7 +110,7 @@ defmodule FormFlow.Web.Controllers.Downloads do
   when it is not told: `path/0` when the application configured one, and
   `#{@default_mount}` otherwise.
 
-  Unlike `path/0` this never returns `nil` — a declared route has to answer
+  Unlike `path/0` this never returns `nil` - a declared route has to answer
   somewhere. An application that mounts the route but configures no path is
   serving downloads nothing links to until a page passes `download_path`
   itself, which is a legitimate way to offer them on one page only.
@@ -121,7 +121,7 @@ defmodule FormFlow.Web.Controllers.Downloads do
   @doc """
   The URL that carries one minted token to the download endpoint.
 
-  `base` is where downloads are served — the router's `download_path` attr,
+  `base` is where downloads are served - the router's `download_path` attr,
   or `path/0` behind it. The token is the whole request: who, which form,
   and which of Download and Print, all inside it, so nothing rides beside it
   and nothing beside it is read:

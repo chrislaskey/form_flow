@@ -7,15 +7,15 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
 
   The page owns the panel, the button, and where the answer lands; this
   module owns everything about the conversation. The split is what makes the
-  parts most likely to change — the instruction's wording, the shapes a
-  model's answer arrives in — testable without a LiveView.
+  parts most likely to change - the instruction's wording, the shapes a
+  model's answer arrives in - testable without a LiveView.
 
   The instruction is **generated from the form builder's own tables**
   (`FormFlow.Web.Templates.Forms.Builder.type_options/0` and
   `allowed_properties/1`), not written out beside them, so an answer that
   follows the instruction is an answer `Builder.unsupported/1` accepts. A
   model told about a type the builder dropped, or a property it never had,
-  would write definitions that open as JSON with a warning — which is the
+  would write definitions that open as JSON with a warning - which is the
   failure this generation exists to prevent.
 
   Nothing here talks to a provider. `FormFlow.Config.AI` is the module that
@@ -37,7 +37,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
   the definition as it stands, and what the admin asked for.
 
   The definition arrives as the JSON text the page already holds rather than
-  as a map, because that text is what the admin is looking at — including an
+  as a map, because that text is what the admin is looking at - including an
   edit they have typed and not saved.
   """
   @spec request(String.t(), String.t(), String.t() | nil) :: Request.t()
@@ -59,7 +59,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
 
   @doc """
   What a model is told a definition is, generated from the tables that decide
-  what the form builder can show — so an answer that follows the instruction
+  what the form builder can show - so an answer that follows the instruction
   is an answer the builder can open
   (`FormFlow.Web.Templates.Forms.Builder.unsupported/1`).
   """
@@ -73,7 +73,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
     elements, in the order the user fills them in.
 
     Every element has a "type" and a "name", and every question also has a
-    "title". The "title" is the question as the user reads it — the words on
+    "title". The "title" is the question as the user reads it - the words on
     screen, and the only name anybody but you sees. The "name" is the key the
     answer is stored under: lowercase, words joined by underscores, unique in
     the form, and never shown to anyone.
@@ -119,7 +119,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
 
   The answer is text, and a model told not to use a code fence sometimes uses
   one anyway, so the fence comes off first. Everything else is an error
-  sentence for the admin — the prompt is still on screen to change and press
+  sentence for the admin - the prompt is still on screen to change and press
   again.
 
   An object with no elements is refused here rather than left to
@@ -149,8 +149,8 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
 
   @doc """
   What an answer did to the form's questions: the names it `:added`, the ones
-  it `:removed` — renamed counts as removed, since a name is all a stored
-  answer has to find its question by — and the ones it `:changed` but kept, each
+  it `:removed` - renamed counts as removed, since a name is all a stored
+  answer has to find its question by - and the ones it `:changed` but kept, each
   in the order they are asked.
 
   Everything is empty when there is nothing to compare against: a definition
@@ -166,7 +166,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
   the commonest shape of a *correct* answer. A nested form does count: its own
   name holds the list of entries.
 
-  Two limits worth knowing, both of which under-report rather than cry wolf —
+  Two limits worth knowing, both of which under-report rather than cry wolf -
   the right way round for a warning nobody asked for. Names are compared across
   the whole definition rather than per scope, so a form using one name in two
   scopes can hide a change. And a question is `:changed` by its own properties
@@ -203,7 +203,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
     do: added != [] or removed != [] or changed != []
 
   # Every question in the definition, in order, as `{name, its own
-  # properties}` — its members left out, so a group holding a changed question
+  # properties}` - its members left out, so a group holding a changed question
   # is not itself reported as changed
   defp questions(container) do
     container
@@ -222,7 +222,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAI do
   defp members(_element), do: []
 
   defp type_lines do
-    Enum.map_join(Builder.type_options(), "\n", fn {label, type} -> "  * #{type} — #{label}" end)
+    Enum.map_join(Builder.type_options(), "\n", fn {label, type} -> "  * #{type} - #{label}" end)
   end
 
   # A property whose value is a closed set is worth spelling out: a model told

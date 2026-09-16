@@ -2,11 +2,11 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
   @moduledoc false
 
   # The initial schema for SQLite. See FormFlow.Data.Migrations.Postgres.V01
-  # for what the tables and columns mean — the DDL is deliberately duplicated
+  # for what the tables and columns mean - the DDL is deliberately duplicated
   # rather than shared so each adapter can diverge as the schema grows.
   #
   # Differences from Postgres: no schemas so `context.prefix` is ignored, no
-  # GIN indexes (labels and properties are stored as JSON text and scanned —
+  # GIN indexes (labels and properties are stored as JSON text and scanned -
   # fine for the expected shape of loading one flow and working in memory),
   # and no column defaults for arrays/maps (the Ecto schemas default them).
 

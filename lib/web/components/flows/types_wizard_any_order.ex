@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Components.Flows.Types.WizardAnyOrder do
   Flow type `"wizard_any_order"`: a "forms" flow whose forms can be completed
   in any order. Every form that isn't done can be edited, so the user can
   jump ahead, and completing one moves them to the next form still
-  unfinished — wrapping back to the beginning, since they may have skipped
+  unfinished - wrapping back to the beginning, since they may have skipped
   something there. When every form is done it hands them back to the flow
   instance.
   """

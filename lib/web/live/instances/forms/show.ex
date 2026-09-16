@@ -1,12 +1,12 @@
 defmodule FormFlow.Web.Instances.Forms.Show do
   @moduledoc """
   `FormFlow.Web.Instances.Forms.Show` LiveComponent renders the answers at one
-  position of a flow instance, read-only — the pinned version's definition
+  position of a flow instance, read-only - the pinned version's definition
   through `DynamicForm`, filled in with what is in `data`, every control
   disabled and no submit. The answers are the form's `FormFlow.Config.Forms.Type`'s
   to draw (`show_component/1`), as they are on Edit: the default is the
-  disabled form alone, and a type that draws more around them here — a review
-  showing what it reviewed — does so on this page too.
+  disabled form alone, and a type that draws more around them here - a review
+  showing what it reviewed - does so on this page too.
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Edit`, which is where
   work happens: `/:id/forms/*path` is this page,
@@ -19,8 +19,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   It is also where the answers are taken away from: Download PDF and Print
   send the browser out to a download endpoint, because a LiveView holds a
-  websocket and cannot send a file. Both send the same document — the
-  disposition header is the only difference — and both resolve the position
+  websocket and cannot send a file. Both send the same document - the
+  disposition header is the only difference - and both resolve the position
   the way this page does, so what is printed is what is shown. They are
   drawn only when the page knows where downloads live: the `download_path`
   attr, or `config :form_flow, download_path:` behind it. An application
@@ -35,17 +35,17 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   ## The states it draws
 
   Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
-  its own `render/1` clause, and nothing else — there is no catch-all, so a
+  its own `render/1` clause, and nothing else - there is no catch-all, so a
   state nobody accounted for raises rather than drawing the page to whoever
   reached it:
 
-    * `:flow_not_found` — "This flow no longer exists."
-    * `:redirecting` — nothing, while the host's `on_mount` navigates away
-    * `:refused` — the host's message alone
-    * `:not_visible` — "This form is not part of your work here."
-    * `:not_started` — why there is nothing to show, and the way onward
-    * `:broken_definition` — the parse error, inline
-    * `:ready` and `:completed` — the answers, and what may be done with them
+    * `:flow_not_found` - "This flow no longer exists."
+    * `:redirecting` - nothing, while the host's `on_mount` navigates away
+    * `:refused` - the host's message alone
+    * `:not_visible` - "This form is not part of your work here."
+    * `:not_started` - why there is nothing to show, and the way onward
+    * `:broken_definition` - the parse error, inline
+    * `:ready` and `:completed` - the answers, and what may be done with them
 
   Both actions guard on that same state, on `:ready` or `:completed`: the
   answers of a submitted form are as reopenable and as downloadable as those
@@ -93,7 +93,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   # The state the page is in, computed once where the loading and the gate
   # ran. Every render clause matches on it and every event guards on it,
-  # because a LiveComponent's events are reachable whenever it is mounted —
+  # because a LiveComponent's events are reachable whenever it is mounted -
   # which it is even when the page drew a refusal instead. A button that was
   # never rendered is not a check.
   defp assign_page_state(socket) do
@@ -127,7 +127,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
     # The status is the pages' rule, asked again at the click from the flow
-    # as it now is — Reopen was drawn while continuing was allowed, and the
+    # as it now is - Reopen was drawn while continuing was allowed, and the
     # year may have closed since
     flow = Templates.Flows.get_row(flow_instance.template_flow_id)
 
@@ -151,7 +151,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
-  # it. An *unknown* event still raises — there is no blanket clause.
+  # it. An *unknown* event still raises - there is no blanket clause.
   def handle_event("reopen", _params, socket), do: {:noreply, socket}
 
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
@@ -208,7 +208,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  # The flow's type says this form is not for the viewer — another
+  # The flow's type says this form is not for the viewer - another
   # perspective's work. Nothing of it is shown, started or not.
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
@@ -230,7 +230,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  # Nothing filled in here yet, so there are no answers to show — only why,
+  # Nothing filled in here yet, so there are no answers to show - only why,
   # and the way onward when there is one.
   def render(%{page_state: :not_started} = assigns) do
     ~H"""
@@ -329,7 +329,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
               // Opened now, while the click is still the user's gesture: a
               // window.open after the round trip below is what popup blockers
-              // are for. Download needs no tab — an attachment does not
+              // are for. Download needs no tab - an attachment does not
               // navigate the page it was asked from.
               const disposition = trigger.dataset.disposition
               const tab = disposition === "print" ? window.open("", "_blank") : null
@@ -401,5 +401,5 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   defp unstarted_message(%{editable?: true}), do: "You haven't started this form yet."
 
   defp unstarted_message(_assigns),
-    do: "This form isn't available yet — it comes later in the flow."
+    do: "This form isn't available yet - it comes later in the flow."
 end

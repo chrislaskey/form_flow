@@ -4,13 +4,13 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   renders the copy dialog shared by the flow Show page and the flows index:
   the copy's name and slug, prefilled with what
   `FormFlow.Data.Templates.Flows.copy/2` would pick, and one sentence on what
-  comes along. On screen the action is *Duplicate* — the canvas's Copy means
-  "to the clipboard" — while the code, the events, and this module keep the
+  comes along. On screen the action is *Duplicate* - the canvas's Copy means
+  "to the clipboard" - while the code, the events, and this module keep the
   word `copy` (see `FormFlow.Web.Templates.Flows.Show`).
 
   The caller owns the flow around it: opening, the `copy` event the form
   submits to `target` with `name` and `slug`, the `cancel_copy` event the
-  Cancel button sends, and the error it hands back when the copy is refused —
+  Cancel button sends, and the error it hands back when the copy is refused -
   a taken slug, the one field an admin can fix by typing, so the dialog stays
   open with the message rather than closing over it.
   """
@@ -42,7 +42,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
           <div>
             <Core.input components={@components} type="text" name="slug" label="Slug" value={@slug} />
             <span class="mt-1 block text-xs text-zinc-500">
-              A stable name for looking the copy up in code — lowercase letters, numbers, _ and -.
+              A stable name for looking the copy up in code - lowercase letters, numbers, _ and -.
               Left blank, the flow's slug with a free suffix; a blank name is the one offered.
             </span>
           </div>

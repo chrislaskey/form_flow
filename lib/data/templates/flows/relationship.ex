@@ -5,11 +5,11 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
 
   Follows Neo4j's property graph model: a relationship connects a `source` node
   to a `target` node, carries a single `label` (where a node carries many), and
-  has `properties` of its own — edge data like conditions or display hints
+  has `properties` of its own - edge data like conditions or display hints
   belongs there, not on the nodes it connects.
 
   A source/target pair can only be linked once per label. That is a deliberate
-  divergence from Neo4j, where parallel relationships are legal — in a flow
+  divergence from Neo4j, where parallel relationships are legal - in a flow
   diagram a duplicate connection is a data error.
 
   Deleting either endpoint node deletes the relationship (Neo4j's DETACH DELETE
@@ -18,9 +18,9 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   `flow_id` is written to both locations: the dedicated column, so the
   database can index membership and cascade deletes, and a `"flow_id"` key
   inside `properties`, which is the copy that carries over to Neo4j, where
-  there is no column. The changeset keeps the copy in sync — the column is
+  there is no column. The changeset keeps the copy in sync - the column is
   authoritative, and a stale `"flow_id"` arriving in `properties` is
-  overwritten. `tenant_id` — the flow's, stamped at insert — is written the
+  overwritten. `tenant_id` - the flow's, stamped at insert - is written the
   same way, so the Neo4j property map carries the tenant on every edge as
   well as every node, and so does the relationship's own `id`.
 
@@ -54,7 +54,7 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   @doc """
   Builds a changeset for a relationship.
 
-  `:id` is castable so callers can supply their own UUIDs — that is how ids
+  `:id` is castable so callers can supply their own UUIDs - that is how ids
   stay stable when `FormFlow.Data.Templates.Flows.update/2` replaces a flow's
   contents.
   """
@@ -89,7 +89,7 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
     end
   end
 
-  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # The dual-write: properties carry a copy of the column, for Neo4j - and
   # none when the column is empty
   defp copy_into_properties(changeset, field, key) do
     properties = get_field(changeset, :properties) || %{}

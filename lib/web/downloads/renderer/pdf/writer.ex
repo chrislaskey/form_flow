@@ -4,7 +4,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   the next one when it runs out, and assemble the result into a valid file.
 
   It exists so that `FormFlow.Web.Downloads.Renderer.PDF` can produce a real PDF
-  with no dependency — no Chrome, no wkhtmltopdf, nothing to install
+  with no dependency - no Chrome, no wkhtmltopdf, nothing to install
   alongside the application. That buys downloads that work the moment the
   library is mounted, and costs everything a browser engine would have given:
   the two standard fonts below, no images, no colour beyond greys, no
@@ -24,7 +24,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   Every draw call advances the cursor and starts a new page when what it is
   about to draw would not fit, so a caller never tracks the y position or
   counts pages. `space/2` moves the cursor without drawing, and never breaks
-  a page by itself — trailing whitespace at a page boundary would otherwise
+  a page by itself - trailing whitespace at a page boundary would otherwise
   push a heading onto a page of its own.
 
   ## Fonts and text
@@ -39,7 +39,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   through, Latin-1 accents pass through, the handful of typographic
   characters that keep appearing in pasted text (curly quotes, en and em
   dashes, the ellipsis and bullet) are mapped to their WinAnsi bytes, and
-  anything else — anything outside Latin-1, so every non-Latin script —
+  anything else - anything outside Latin-1, so every non-Latin script -
   becomes `?`. A host serving those needs a renderer with a real font
   engine behind it, which is what `FormFlow.Web.Downloads.Renderer` is for.
   """
@@ -54,7 +54,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   @bottom @margin
 
   # Helvetica and Helvetica-Bold advance widths, in 1/1000 em, for codepoints
-  # 32..126 — the Adobe core-font metrics. Anything else measures at
+  # 32..126 - the Adobe core-font metrics. Anything else measures at
   # @default_width, which is about the average of each table.
   @helvetica_widths [
                       278,
@@ -309,7 +309,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
 
     * `:title` - the document title, written into the PDF's metadata, which
       is what a reader shows in its window and what a browser suggests when
-      printing. Not drawn — a caller draws its own heading
+      printing. Not drawn - a caller draws its own heading
     * `:footer` - a line drawn small and grey at the foot of every page,
       before the page number. `nil` for the page number alone
   """
@@ -319,7 +319,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   end
 
   @doc """
-  The page width available to a caller, in points — what `text/3` wraps
+  The page width available to a caller, in points - what `text/3` wraps
   within, less any `:indent`.
   """
   @spec content_width() :: number()

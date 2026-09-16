@@ -5,8 +5,8 @@ defmodule FormFlow.Web.Instances.Components.FormPage do
 
   What a page says when it has no form to render is not here. Those messages
   are `FormFlow.Web.Components.Core.alert/1`, written at each page's own
-  `render/1` clause — Show says a form hasn't been started, Edit says it
-  can't be started or is already submitted — because the wording and the way
+  `render/1` clause - Show says a form hasn't been started, Edit says it
+  can't be started or is already submitted - because the wording and the way
   onward belong to the page, and the box around them belongs to every page in
   the library alike.
   """

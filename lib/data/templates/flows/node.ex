@@ -2,7 +2,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   @moduledoc """
   `FormFlow.Data.Templates.Flow.Node` Ecto Schema for a node in a flow.
 
-  Follows Neo4j's property graph model: a node has `labels` (a set of strings —
+  Follows Neo4j's property graph model: a node has `labels` (a set of strings -
   nodes can carry several) and `properties` (an open map of domain data). What a
   node *means* lives entirely in those two fields; the only structural columns
   are its identity and which flow it belongs to.
@@ -15,7 +15,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   `flow_id` is written to both locations: the dedicated column, so the
   database can index membership and cascade deletes, and a `"flow_id"` key
   inside `properties`, which is the copy that carries over to Neo4j, where
-  there is no column. The changeset keeps the copy in sync — the column is
+  there is no column. The changeset keeps the copy in sync - the column is
   authoritative, and a stale `"flow_id"` arriving in `properties` is
   overwritten.
 
@@ -27,16 +27,16 @@ defmodule FormFlow.Data.Templates.Flow.Node do
 
   ## Subflows and forms
 
-  A node that embeds another flow carries that flow's id in `subflow_id` —
+  A node that embeds another flow carries that flow's id in `subflow_id` -
   the reference behind `FormFlow.Data.Templates.Flows`' subflow operations. A form
-  node carries its form's *lineage* id in `form_id` — never a version id:
+  node carries its form's *lineage* id in `form_id` - never a version id:
   which version to show is a read-time and instance-pin concern (see
   `archive/form-versioning.md`, Decision 3). Both references follow
   the same dual-write rule as `flow_id`, with one addition: when only the
   `properties` copy arrives (the editor round-trips properties untouched), the
   column takes its value from the copy, so a subflow or form node surviving
   an editor save keeps its reference. In Neo4j the subflow reference becomes an `EMBEDS`
-  relationship — see the Neo4j guide (`guides/neo4j.md`).
+  relationship - see the Neo4j guide (`guides/neo4j.md`).
 
   ## Slug and tenant
 
@@ -53,13 +53,13 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   `properties`. Slugs are edited on the step's page, never on the canvas, so
   the copy the canvas round-trips can be older than the column: a save
   carries each surviving node's slug across by id, and a stale `"slug"`
-  arriving in properties is overwritten from the column — or removed, when
+  arriving in properties is overwritten from the column - or removed, when
   the column is empty. Taking it from the copy, the way `form_id` is taken,
   would let a tab opened before an admin changed the slug put the old one
   back on its next save.
 
   `tenant_id` is the flow's, stamped when the node is inserted and immutable
-  afterwards — a flow never changes tenants — and dual-written like the
+  afterwards - a flow never changes tenants - and dual-written like the
   rest, so a Neo4j query can narrow to a tenant without a hop to the
   `:Flow` node. It is also what makes the slug's per-tenant unique index
   possible.
@@ -92,7 +92,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   @doc """
   Builds a changeset for a node.
 
-  `:id` is castable so callers can supply their own UUIDs — that is how ids
+  `:id` is castable so callers can supply their own UUIDs - that is how ids
   stay stable when `FormFlow.Data.Templates.Flows.update/2` replaces a flow's
   contents. `:tenant_id` is castable at insert and immutable afterwards.
   """
@@ -119,7 +119,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
 
   # The id has to exist before it can be copied into `properties`, and for a
   # new node without one it would otherwise be minted by the adapter at
-  # insert — after the changeset has run, too late for the copy. `get_field`,
+  # insert - after the changeset has run, too late for the copy. `get_field`,
   # not `get_change`: a loaded node already has its id in the data, and
   # `put_new_change/3` would hand it a fresh one on every update.
   defp put_new_id(changeset) do
@@ -138,7 +138,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   end
 
   # The editor round-trips properties untouched, so a saved subflow or form
-  # node arrives with only the properties copy — the column takes its value
+  # node arrives with only the properties copy - the column takes its value
   # from it. `put_new`, not `put`: a reference already in the attributes wins
   # over the copy (`FormFlow.Data.Templates.Flows.copy/2` relies on this: it
   # passes the *new* id so a stale property copy can't re-point a copied node
@@ -159,7 +159,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   end
 
   # Labels categorize what a node *is*, Neo4j-style. The editor never sets
-  # them — they are derived from the ReactFlow `kind`/`type` already in
+  # them - they are derived from the ReactFlow `kind`/`type` already in
   # properties, so every node gets one without the client needing to know the
   # mapping. Only kicks in when nothing already set labels explicitly (a flow
   # copy carries a source node's labels forward as-is).
@@ -189,7 +189,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
     end
   end
 
-  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # The dual-write: properties carry a copy of the column, for Neo4j - and
   # none when the column is empty, so a stale copy the canvas round-tripped
   # (a slug the admin cleared) cannot outlive the column
   defp copy_into_properties(changeset, field, key) do

@@ -9,17 +9,17 @@ defmodule FormFlow.Config.AI do
   gets its own attr holding one of these, named for whatever the screen calls
   it, rather than widening `build_with_ai` into a general `ai` attr and
   breaking that name's tie to the card an admin reads. The struct is the
-  configuration, and its `:module` — `use`ing this behaviour — is what talks
+  configuration, and its `:module` - `use`ing this behaviour - is what talks
   to the provider. `FormFlow.Config.AI.OpenRouter` is the one the library
   ships, and the default; a host with its own gateway, a provider's own API,
   or a stub for tests names its own.
 
   Nothing here is specific to building a form. The same struct is what a
   later instance-side feature would take, which is why the callback speaks
-  in prompts and text rather than in definitions — what to ask for and what
+  in prompts and text rather than in definitions - what to ask for and what
   to do with the answer belong to the page asking.
 
-      # config/runtime.exs — the host's own settings, read by the host
+      # config/runtime.exs - the host's own settings, read by the host
       config :my_app, :build_with_ai,
         api_key: System.get_env("OPENROUTER_API_KEY")
 
@@ -117,10 +117,10 @@ defmodule FormFlow.Config.AI do
   `request` is a `FormFlow.Config.AI.Request`: a `:system` instruction, the
   `:prompt` itself, the `:model` the admin picked, and a `:max_tokens`
   ceiling. `config` is the struct the host passed, so the module reads its
-  `:api_key` and `:timeout` from it rather than from anywhere else — and the
+  `:api_key` and `:timeout` from it rather than from anywhere else - and the
   models it may be asked for are the ones that config offered.
 
-  Returns `{:ok, text}` with the model's answer as it came back — no
+  Returns `{:ok, text}` with the model's answer as it came back - no
   parsing, no trimming of code fences; the caller decides what the text
   means. `{:error, message}` is a sentence to show an admin: a failed
   request, a refusal, an answer cut off by the token ceiling. It is shown on

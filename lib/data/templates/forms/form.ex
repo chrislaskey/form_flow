@@ -1,10 +1,10 @@
 defmodule FormFlow.Data.Templates.Form do
   @moduledoc """
-  `FormFlow.Data.Templates.Form` Ecto Schema for a form template's identity —
+  `FormFlow.Data.Templates.Form` Ecto Schema for a form template's identity -
   the lineage.
 
   A form's stable identity (name, description, ownership) lives here;
-  every definition — draft or published — is a
+  every definition - draft or published - is a
   `FormFlow.Data.Templates.Form.Version` row. The split is what makes
   versioning work: nodes and URLs point at the lineage, instances pin a
   version, and "which version to show" is a read-time question (see
@@ -15,29 +15,29 @@ defmodule FormFlow.Data.Templates.Form do
   `owner_flow_id` mirrors `FormFlow.Data.Templates.Flow`'s ownership: an owned
   form is a flow tree's private property (the ownership root, flat), created
   by the editor and cleaned up with its flow. `nil` means a reusable catalog form,
-  listed in `/forms` and shared by reference. Catalog names are unique — the
+  listed in `/forms` and shared by reference. Catalog names are unique - the
   catalog is one namespace; owned forms may repeat names freely (yearly
   copies of "W-2 Details").
 
-  `copied_from_form_id` records provenance across copies — which lineage this
-  one was rolled over from — for cross-cycle identity and for carrying last
+  `copied_from_form_id` records provenance across copies - which lineage this
+  one was rolled over from - for cross-cycle identity and for carrying last
   cycle's answers forward.
   It is not castable: only `FormFlow.Data.Templates.Forms.copy/2` sets it.
 
   ## Tenancy
 
-  `tenant_id` is the host tenant the lineage belongs to — an opaque host
-  identity, `nil` for a host with no tenants — stamped at creation and
+  `tenant_id` is the host tenant the lineage belongs to - an opaque host
+  identity, `nil` for a host with no tenants - stamped at creation and
   immutable afterwards; owned forms and copies take their flow tree's. Like a
   node's `flow_id` it is written to both locations: the dedicated column,
   so the database can index and narrow by it, and a `"tenant_id"` key inside
   `properties`, the copy that carries over to Neo4j. The changeset keeps
-  the copy in sync — the column is authoritative, and a stale `"tenant_id"`
+  the copy in sync - the column is authoritative, and a stale `"tenant_id"`
   arriving in `properties` is overwritten.
 
   ## Slug
 
-  `slug` is a catalog form's secondary identifier — see
+  `slug` is a catalog form's secondary identifier - see
   `FormFlow.Data.Templates.Slug`: optional, unique per tenant, editable,
   never following a rename, and dual-written into `properties["slug"]` the
   same way. `FormFlow.Data.Templates.Forms.create/1` fills one in from the
@@ -48,7 +48,7 @@ defmodule FormFlow.Data.Templates.Form do
 
   `prefills` is the form's named sets of test answers
   (`FormFlow.Data.Templates.Form.Prefill`), a map of the name an admin typed
-  to the entry holding that set — what an admin fills the form with while
+  to the entry holding that set - what an admin fills the form with while
   trying it out, on the preview and in a journey. It is a column of its own
   rather than a key in `properties`, which is the host's open domain data
   and the library's to leave alone, and it is on the lineage rather than on
@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Templates.Form do
   the form through every publish.
 
   The whole set is one value, so a write rewrites it and the last write
-  wins — the accepted cost of keeping prefills where the form already is.
+  wins - the accepted cost of keeping prefills where the form already is.
   It moves only through `prefills_changeset/2`, never `changeset/2`, so an
   ordinary form update cannot drop it, and there is no database constraint
   behind the shape: `prefills_changeset/2` is what keeps it storable.
@@ -81,12 +81,12 @@ defmodule FormFlow.Data.Templates.Form do
     field(:slug, :string)
 
     # Open domain data in the Neo4j property-graph style, like a flow's.
-    # Carries "form_type" — the id of the `FormFlow.Config.Forms.Type`
+    # Carries "form_type" - the id of the `FormFlow.Config.Forms.Type`
     # deciding how the form behaves for a user; absent means the default
     # applies.
     field(:properties, :map, default: %{})
 
-    # Named sets of test answers, by name — see the moduledoc and
+    # Named sets of test answers, by name - see the moduledoc and
     # `FormFlow.Data.Templates.Form.Prefill`
     field(:prefills, :map, default: %{})
 
@@ -99,7 +99,7 @@ defmodule FormFlow.Data.Templates.Form do
   end
 
   @doc """
-  Builds a changeset for a form lineage — identity fields and properties only.
+  Builds a changeset for a form lineage - identity fields and properties only.
 
   The definition lives on versions, never here, and the prefills move only
   through `prefills_changeset/2`. `copied_from_form_id` is not castable;
@@ -119,7 +119,7 @@ defmodule FormFlow.Data.Templates.Form do
   end
 
   @doc """
-  The one changeset that moves `prefills` — the whole set at once, since it
+  The one changeset that moves `prefills` - the whole set at once, since it
   is one value. Callers go through `FormFlow.Data.Templates.Forms`, which
   builds the new set from the old one.
 
@@ -159,7 +159,7 @@ defmodule FormFlow.Data.Templates.Form do
     end
   end
 
-  # The dual-write: properties carry a copy of the column, for Neo4j — and
+  # The dual-write: properties carry a copy of the column, for Neo4j - and
   # none when the column is empty
   defp copy_into_properties(changeset, field, key) do
     properties = get_field(changeset, :properties) || %{}

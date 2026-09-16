@@ -9,7 +9,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   the renderer would take the whole admin page down with it. A child LiveView
   runs in its own process: if the preview crashes, the client remounts only
   the preview and the surrounding page keeps working. Previews render
-  arbitrary user-authored JSON — the one place in the admin UI where a crash
+  arbitrary user-authored JSON - the one place in the admin UI where a crash
   is an expected input, not a bug.
 
   Two layers of protection:
@@ -23,16 +23,16 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   Mounted via `live_render`, never at the router, so addressing comes through
   the `session` map. Two modes:
 
-    * `"version_id"` — Show: the definition is loaded fresh from the database
-    * `"definition"` — Edit: the current (possibly unsaved, possibly invalid)
+    * `"version_id"` - Show: the definition is loaded fresh from the database
+    * `"definition"` - Edit: the current (possibly unsaved, possibly invalid)
       JSON string from the editor rides in directly
 
   Either way the session also carries `"id"`, the `live_render` id, reused as
-  the inner form's id. A child LiveView never re-reads its session — the
+  the inner form's id. A child LiveView never re-reads its session - the
   embedder re-renders the preview by changing the `live_render` id, which
   remounts it with a fresh session.
 
-  `"data"` is what the form starts filled in with — the answers of the
+  `"data"` is what the form starts filled in with - the answers of the
   prefill the page has selected (`FormFlow.Data.Templates.Form.Prefill`), or
   nothing. The embedder holds the form, so it reads the prefill and passes
   the answers down; this page never looks one up. Answers for questions the
@@ -90,7 +90,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
   end
 
   # Building the changeset here as well as parsing: a definition can parse
-  # and still be unrenderable — a question with no name, say — and that
+  # and still be unrenderable - a question with no name, say - and that
   # error would otherwise surface inside DynamicForm's component at render,
   # where nothing catches it
   defp parse(socket, definition) do
@@ -107,12 +107,12 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
 
   # A group type this preview's components module has no clause for is the
   # one value in a definition that makes DynamicForm raise rather than draw,
-  # and it raises at diff time — inside the component, after `mount/3` has
+  # and it raises at diff time - inside the component, after `mount/3` has
   # returned, where the rescue above cannot reach it and the client answers
   # by remounting into the loop this eager check exists to prevent. So it is
   # asked here, before anything is drawn, against the layouts the form
   # builder offers (`FormFlow.Web.Templates.Forms.Builder.group_type_options/0`)
-  # — which are `DynamicForm.CoreComponents`', the module this page renders
+  # - which are `DynamicForm.CoreComponents`', the module this page renders
   # with.
   defp check_group_types!(%DynamicForm.Instance{elements: elements}) do
     allowed = Enum.map(Builder.group_type_options(), &elem(&1, 1))
@@ -172,7 +172,7 @@ defmodule FormFlow.Web.Templates.Forms.Preview do
     ~H"""
     <div>
       <Core.alert :if={@submitted?} kind={:success} class="mb-3">
-        Valid submission — this is a preview, nothing was saved.
+        Valid submission - this is a preview, nothing was saved.
       </Core.alert>
       <DynamicForm.form
         id={"#{@id}-form"}

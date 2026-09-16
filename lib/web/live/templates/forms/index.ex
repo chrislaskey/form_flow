@@ -2,7 +2,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Index` LiveComponent lists the form catalog.
 
-  A `Slab.table` over `FormFlow.Data.Templates.Forms.catalog_query/0` —
+  A `Slab.table` over `FormFlow.Data.Templates.Forms.catalog_query/0` -
   owned forms live inside their flow trees and are reached by drill-in,
   never listed here. Slab runs in query mode against the host app's repo,
   so sorting and pagination come from the URL: pass the current `uri` and
@@ -17,11 +17,11 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       />
 
   Without a `sort` param the table sorts by creation time, matching
-  `Forms.list/1` — injected into the params handed to Slab so pagination
+  `Forms.list/1` - injected into the params handed to Slab so pagination
   stays deterministic instead of leaning on unspecified database order.
 
   `base` is the path prefix the forms pages are mounted under, used to build
-  the links — with the default `""`, rows link to `/forms/:id`.
+  the links - with the default `""`, rows link to `/forms/:id`.
 
   The "Used in" column names the flows whose steps point at each form
   (`FormFlow.Data.Templates.Flows.form_usages/1`): a catalog form is shared
@@ -72,7 +72,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
       </Header.header>
 
       <Core.alert :if={@empty?} components={@components}>
-        No forms yet — create the first one.
+        No forms yet - create the first one.
       </Core.alert>
 
       <Slab.table
@@ -114,7 +114,7 @@ defmodule FormFlow.Web.Templates.Forms.Index do
   # One query per row, for a page of ten
   defp used_in(form) do
     case Shared.usage_labels(Flows.form_usages(form.id)) do
-      [] -> "—"
+      [] -> "-"
       places -> Enum.join(places, ", ")
     end
   end

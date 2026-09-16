@@ -4,17 +4,17 @@ defmodule FormFlow.Web.Templates.Components.Header do
   header every templates page puts above its own content: what the page is
   about on the left, its actions on the right.
 
-  The left side is two lines. The **title** names the thing on the page —
+  The left side is two lines. The **title** names the thing on the page -
   the root flow, then, lighter, the subflow or form reached inside it, then
   whatever the page has to say about it as `metadata` (its kind, its type,
   its version), each of those after a middle dot. Under it, smaller, the
   **breadcrumb**: Form Flow / Flows|Forms / Root / Parent / this page, the
-  trail back out. The right side is the page's `actions` — buttons, in the
+  trail back out. The right side is the page's `actions` - buttons, in the
   order the page lists them.
 
   Side by side only where there is room for both: a page can carry half a
   dozen actions, and below `xl` they take the width the title needs. So the
-  two stack there — title, then the actions under it, wrapping — and sit on
+  two stack there - title, then the actions under it, wrapping - and sit on
   one line from `xl` up.
 
       <Header.header base={@base} section="flows" root={@root} name={@flow.name}>
@@ -25,34 +25,34 @@ defmodule FormFlow.Web.Templates.Components.Header do
         </:actions>
       </Header.header>
 
-  `name` is what this page is about — the flow's or form's name. Without
+  `name` is what this page is about - the flow's or form's name. Without
   one the page is a section's index, whose section is its name: the title
   reads "Flows" and the trail ends there. Without a section either, the
-  page is the templates landing — the root the first crumb, "⧉ Form Flow",
-  always leads back to — so the title reads "Form Flow" and the trail is
+  page is the templates landing - the root the first crumb, "⧉ Form Flow",
+  always leads back to - so the title reads "Form Flow" and the trail is
   that one crumb. A `crumb` slot replaces the trailing crumb when the page
-  wants more than the plain name — the form edit page links its name back
+  wants more than the plain name - the form edit page links its name back
   to the show page.
 
   A drill-in (`root` given) always walks through "Flows", whichever kind of
-  page sits at the end of it — reaching a form or a subflow both mean
+  page sits at the end of it - reaching a form or a subflow both mean
   walking the flows tree to get there. Without a root, the page names its
   own top-level section instead (`section`): `"flows"` for a flow shown or
   edited directly, `"forms"` for a form from the catalog.
 
   `root` and `parent_node` are the structs the pages already load
-  (`FormFlow.Data.Templates.Flow` and `.Flow.Node`) — `nil` for either skips
+  (`FormFlow.Data.Templates.Flow` and `.Flow.Node`) - `nil` for either skips
   its crumb. `parent_node` is the *immediate* embedding node
   (`FormFlow.Data.Templates.Flows.embedding_node/2`), which is as far back
   as a breadcrumb goes regardless of how many levels a form is actually
   nested.
 
   `mode` decides whether the Root and Parent crumbs target their flow's
-  edit page or its show page — `"edit"` for the one, anything else (`nil`
+  edit page or its show page - `"edit"` for the one, anything else (`nil`
   included) for the other. It answers "was the visitor editing this flow
   before they got here", not "is this page itself in edit mode":
   `FormFlow.Web.Templates.Flows.Edit`'s own breadcrumb is sticky by
-  construction — Root always targets `.../edit` — so it passes the literal
+  construction - Root always targets `.../edit` - so it passes the literal
   `"edit"`, while the form pages pass whatever query string got them here
   (see `FormFlow.Web.Helpers.Paths.preserve_query_params/3`'s `mode`),
   since crossing into a form is ordinarily where stickiness ends (see that
@@ -60,11 +60,11 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   Two navigation styles, matched to what the rest of the page already does:
 
-    * `target` set (only `Flows.Edit` passes one, its own `@myself`) — every
+    * `target` set (only `Flows.Edit` passes one, its own `@myself`) - every
       crumb pushes `"navigate"` with `phx-value-to` instead of linking
       directly, the same event the canvas's own Show button and Open use,
       so an unsaved edit still prompts before the crumb discards it.
-    * `target` unset (every other page) — a plain `<.link navigate>`.
+    * `target` unset (every other page) - a plain `<.link navigate>`.
   """
 
   use Phoenix.Component
@@ -77,22 +77,22 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   attr(:section, :string,
     default: nil,
-    doc: ~s("flows" or "forms" — the section the page is in; nil on the landing)
+    doc: ~s("flows" or "forms" - the section the page is in; nil on the landing)
   )
 
   attr(:name, :string,
     default: nil,
-    doc: "what the page is about — a flow's or form's name; nil on a section's index"
+    doc: "what the page is about - a flow's or form's name; nil on a section's index"
   )
 
   attr(:root, :map,
     default: nil,
-    doc: "the root `FormFlow.Data.Templates.Flow` — nil outside a drill-in"
+    doc: "the root `FormFlow.Data.Templates.Flow` - nil outside a drill-in"
   )
 
   attr(:parent_node, :map,
     default: nil,
-    doc: "the immediate embedding `FormFlow.Data.Templates.Flow.Node` — form pages only"
+    doc: "the immediate embedding `FormFlow.Data.Templates.Flow.Node` - form pages only"
   )
 
   attr(:mode, :string, default: nil, doc: ~s(\"edit\" routes Root/Parent to their edit pages))
@@ -105,7 +105,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
   attr(:components, :atom, default: nil)
 
   slot(:metadata,
-    doc: "what the page says about the thing — its kind, type, version — one per slot"
+    doc: "what the page says about the thing - its kind, type, version - one per slot"
   )
 
   slot(:crumb, doc: "the trailing crumb, when it is more than the plain name")

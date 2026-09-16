@@ -2,12 +2,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   @moduledoc """
   `FormFlow.Web.Templates.Forms.Edit` LiveComponent edits one draft.
 
-  Drafts only — published and archived definitions are immutable, and this
+  Drafts only - published and archived definitions are immutable, and this
   page refuses to render them editable. The versioning chrome around the
   definition is the point: the optimistic-lock "changed under you" conflict,
   the stale-draft warning, and the picker between coexisting drafts.
 
-  The form's **details** — name, slug, description, type — are edited here
+  The form's **details** - name, slug, description, type - are edited here
   too, above the definition, but only until the form is first published.
   They belong to the lineage and change the moment they are saved, so once
   a published version would show the change they move to their own page,
@@ -16,24 +16,24 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   and write.
 
   The definition is edited one of four ways, picked by the choice cards
-  above it (`definition_editor` — still a radio group, drawn as cards by
+  above it (`definition_editor` - still a radio group, drawn as cards by
   `editor_cards/1` because the pick decides what the rest of the page is,
   and a card says what each one does; they carry no label of their own,
   since cards that each describe themselves need no sentence over
   them): in the **Form builder**, a
   `DynamicForm` nested form with one entry per element
   (`FormFlow.Web.Templates.Forms.Builder` converts between the two), as
-  **JSON** in a comment field, by **Copy existing form** — a select of
+  **JSON** in a comment field, by **Copy existing form** - a select of
   the forms to copy from (`copy_sources/2`: through a step, this root flow's
-  own forms and then the catalog; from the catalog, every form there is —
+  own forms and then the catalog; from the catalog, every form there is -
   the catalog first, then every flow's) and a button that writes the picked
-  form's resolved definition onto this draft, and nothing else of it — or by
+  form's resolved definition onto this draft, and nothing else of it - or by
   **Build with AI**, a prompt describing the form to build or the change to
   make to the one that is here. All
   four sit in the one form under `visible_if`, so whatever is hidden keeps
   its content and stops being required. Content moves between the editors
-  only when the radio changes — the `%{event: "change"}` clause decodes the
-  JSON into entries, or writes the entries back into the JSON — never per
+  only when the radio changes - the `%{event: "change"}` clause decodes the
+  JSON into entries, or writes the entries back into the JSON - never per
   keystroke;
   Copy and Build with AI hold the JSON in the hidden field meanwhile, so
   Save from either saves what was typed. A definition the builder cannot
@@ -41,15 +41,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   has no control for, JSON that does not parse) refuses the switch and says
   why, rather than dropping what it cannot show; Copy and Build with AI
   refuse JSON that
-  does not parse for the same reason — the field they would hold it in is
+  does not parse for the same reason - the field they would hold it in is
   hidden, and a syntax error would surface on Save where nobody could see
   it. The builder opens by default whenever
   it can show the saved definition, and Copy is offered only while there is
   another form to copy from.
 
   **Build with AI** sends the prompt, and the definition as it stands, to
-  the model the `build_with_ai` attr configured — a `FormFlow.Config.AI`,
-  whose `:module` makes the call — and puts what comes back in the editor:
+  the model the `build_with_ai` attr configured - a `FormFlow.Config.AI`,
+  whose `:module` makes the call - and puts what comes back in the editor:
   the form builder when it can show it, JSON when it cannot, and an error
   over the editor when the answer is not a definition at all. Nothing is
   saved; the draft goes dirty and Save draft is still the only write, which
@@ -64,7 +64,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   While a build runs the page holds a `@building?` and a clock that ticks
   through `send_update_after/3`, and both are read only inside a field's
-  slot body — `DynamicForm` rebuilds a form whose declaration changed, so a
+  slot body - `DynamicForm` rebuilds a form whose declaration changed, so a
   clock in a field attribute would clear the prompt once a second. For the
   same reason the answer rebuilds the form from `@latest_data`, the values
   that arrived with the last change, rather than from `form_data`, which is
@@ -82,13 +82,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   **Capture prefill** goes the other way: fill the preview in by hand and it
   becomes the dialog's answers, so a prefill is written by working the form
-  rather than by typing JSON. The form it reads is always the preview's — the
-  editor's own fields are the definition, not answers — and it is captured as
+  rather than by typing JSON. The form it reads is always the preview's - the
+  editor's own fields are the definition, not answers - and it is captured as
   it stands, invalid values and all, since a form is tested with bad answers
   as often as good ones.
 
   **The selection lives in the URL** (`?prefill=Happy+path`), so it survives
-  a refresh and can be handed to someone else as a link — and so choosing
+  a refresh and can be handed to someone else as a link - and so choosing
   one is a navigation, which reloads the page. A draft with unsaved editor
   content therefore asks first, the way the canvas asks before a breadcrumb
   discards an edit: the dialog's Save is the editor form's own submit
@@ -98,7 +98,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   Prefills belong to the form, not to this version, so writing one never
   touches the draft and needs no save. Only what is *selected* moves through
   the URL: creating one selects it, renaming one follows the new name, and
-  deleting one leaves the URL naming a prefill that is not there — which
+  deleting one leaves the URL naming a prefill that is not there - which
   selects nothing, the same state a link to a prefill someone else deleted
   arrives in.
 
@@ -111,7 +111,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   gate (the JSON-syntax check in JSON mode, the entries written into the
   document in form mode; either way the definition map rides the payload's
   `extra`), and `on_success` routes the valid payload back to this
-  LiveComponent through `send_update/2` — the `%{event: "save"}` clause of
+  LiveComponent through `send_update/2` - the `%{event: "save"}` clause of
   `update/2` performs the actual `update_draft/2`.
 
   Addressed like `FormFlow.Web.Templates.Forms.Show`, standalone
@@ -119,18 +119,18 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   (`/flows/:root/nodes/:node_id/form/versions/:version_id/edit`).
 
   A draft that is blank and has never been published shows nothing but a
-  choice, in place of the identity form: Fresh start (an explicit no-op —
+  choice, in place of the identity form: Fresh start (an explicit no-op -
   the fields are already ready once chosen), Copy form (pick another form
-  — the same `copy_sources/2` —
-  and write its description, form type, and definition onto this one —
+  - the same `copy_sources/2` -
+  and write its description, form type, and definition onto this one -
   never its name or slug: through a step both are the step's, and Copy
   does not touch the step; standalone they are this form's own identity),
-  or — through a step only, since a
-  catalog form opened from the catalog has nothing to repoint — Reuse form,
+  or - through a step only, since a
+  catalog form opened from the catalog has nothing to repoint - Reuse form,
   the same pointer the radio's fourth choice is. Selecting
   either of the first two is what reveals the rest of the page
   (`awaiting_start?`), and the chooser stops being offered on any later
-  visit the moment either triggering fact changes — a save, a publish — so
+  visit the moment either triggering fact changes - a save, a publish - so
   nothing tracks that a choice was made, beyond Fresh start's own
   `?start=fresh` (see `select_fresh_path/1`; Copy needs no such marker,
   since writing the definition already makes the draft not blank; Reuse
@@ -214,7 +214,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The payload's content came from whichever editor was showing before this
-  # change, so the definition — for dirtiness and the preview — is read by
+  # change, so the definition - for dirtiness and the preview - is read by
   # that editor, and only then is a change of editor applied
   def update(%{event: "change", payload: payload}, socket) do
     {payload, moved?} = move_element(payload)
@@ -246,7 +246,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # The debounced preview refresh, delivered by the timer schedule_preview_refresh/1
   # set. A stale token is a timer superseded by a later change, and is
-  # dropped — the message can't be recalled once it is in the mailbox.
+  # dropped - the message can't be recalled once it is in the mailbox.
   def update(%{event: "refresh_preview", token: token}, socket) do
     if token == socket.assigns.preview_refresh_token do
       {:ok, socket |> assign(:preview_refresh_token, nil) |> force_refresh_preview()}
@@ -256,7 +256,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The clock on the running step, one second at a time. A LiveComponent has
-  # no handle_info/2, so the timer is a send_update_after to itself — the
+  # no handle_info/2, so the timer is a send_update_after to itself - the
   # same mechanism the preview refresh uses, and guarded the same way: a
   # token from a superseded build is already in the mailbox and is dropped.
   def update(%{event: "tick", token: token}, socket) do
@@ -297,7 +297,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         {:ok,
          assign(socket,
            error:
-             "This draft changed under you — someone else saved it. " <>
+             "This draft changed under you - someone else saved it. " <>
                "Reload to pick up their version.",
            notice: nil
          )}
@@ -398,13 +398,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> assign(:saved_values, saved_values(form, node, version, socket.assigns.edit_details?))
     |> assign(:form_data, form_data(form, socket.assigns))
     |> assign(:dirty?, false)
-    # What the preview currently shows, and the editor's latest content —
+    # What the preview currently shows, and the editor's latest content -
     # both start at the saved definition; change events move latest_json,
     # and a refresh copies it over and bumps the rev
     |> assign_new(:preview_json, fn %{definition_json: json} -> json end)
     |> assign_new(:latest_json, fn %{definition_json: json} -> json end)
     # The values that arrived with the last change, which is what Build with
-    # AI reads its prompt from and rebuilds the form from — `form_data` is
+    # AI reads its prompt from and rebuilds the form from - `form_data` is
     # the values as they were loaded and has never held a keystroke
     |> assign_new(:latest_data, fn %{form_data: data} -> data end)
   end
@@ -415,7 +415,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp maybe_refresh_preview(socket), do: socket
 
   # Only the preview waits. Remounting or re-rendering it per keystroke would
-  # be wasteful, so with auto-refresh on it follows 500ms of quiet — while
+  # be wasteful, so with auto-refresh on it follows 500ms of quiet - while
   # every other consequence of a change (the dirty flag, an editor switch, a
   # moved element) happens at once. Each change supersedes the pending
   # refresh, by token.
@@ -461,7 +461,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       Phoenix.PubSub.broadcast(pubsub_server, socket.assigns.preview_topic, message)
 
       # Track what was pushed so the guard above means "changed since the
-      # last push", not "changed since page load" — otherwise editing back
+      # last push", not "changed since page load" - otherwise editing back
       # to the exact saved text would skip the push and strand the preview
       # on the intermediate content. Also keeps the live_render session
       # fresh for any future remount.
@@ -472,7 +472,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Re-rendering the preview means remounting it: a child LiveView never
-  # re-reads its session, so the id carries the rev — a bump makes
+  # re-reads its session, so the id carries the rev - a bump makes
   # live_render mount a fresh child with the new definition in its session
   defp refresh_preview_by_re_render(socket) do
     if socket.assigns.latest_json != socket.assigns.preview_json do
@@ -484,11 +484,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  # What the last save wrote, in the shape DynamicForm reports — the baseline
+  # What the last save wrote, in the shape DynamicForm reports - the baseline
   # `dirty?` compares against, so the Save button can go primary exactly when
   # the form differs from what's persisted (matching the flows editor). The
   # definition is compared as the map that is persisted, the one shape both
-  # editors produce — so re-indenting the JSON is not a change, and neither
+  # editors produce - so re-indenting the JSON is not a change, and neither
   # is opening the builder. The details count only while this page edits
   # them.
   defp saved_values(nil, _node, _version, _edit_details?), do: nil
@@ -510,7 +510,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # An element's up/down arrow sets its entry's `move` field and fires the
   # form's change, so the request arrives here with every other value as the
   # admin left it. The reordered entries replace the payload's, and become
-  # the form's data — DynamicForm rebuilds from that, the same way an editor
+  # the form's data - DynamicForm rebuilds from that, the same way an editor
   # switch or a form-type switch already does.
   defp move_element(payload) do
     case Builder.move(payload.data[:elements] || []) do
@@ -528,7 +528,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # mode: the text, decoded when it parses so it compares to the saved map,
   # the raw text otherwise (which never compares equal, so bad JSON is dirty).
   # Form mode: the entries written into the document the JSON field still
-  # holds — the builder edits `elements` and leaves every other key alone.
+  # holds - the builder edits `elements` and leaves every other key alone.
   defp current_definition(payload, "form") do
     Builder.definition(
       decoded_definition(payload.data[:definition]),
@@ -545,7 +545,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
-  # What the preview shows: in form mode, the elements that are complete —
+  # What the preview shows: in form mode, the elements that are complete -
   # a row without a type or a name yet is not an element, and the preview
   # would otherwise fail on it with every keystroke of a new one
   defp preview_definition(payload, %{assigns: %{definition_editor: "form"}}, _definition) do
@@ -582,7 +582,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # property the builder has no control for would be gone the moment the
   # admin switched back to JSON. `definition` is what the payload held, read
   # by the editor the admin is leaving. JSON, Copy, and Build with AI hold
-  # the definition the same way — as text in the JSON field — so moving to
+  # the definition the same way - as text in the JSON field - so moving to
   # any of them writes it there; Copy and Build with AI additionally need it
   # to parse, since the field is hidden there and a syntax error would
   # surface on Save where nobody could see it.
@@ -666,7 +666,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # The raw param, not the applied changeset data: a type the admin just
   # picked is a change to act on before the changeset has cast it. A blank
   # is not a type: the dropdown is required and offers no blank once it holds
-  # a value, so one arrives only from a submission built by hand — it keeps
+  # a value, so one arrives only from a submission built by hand - it keeps
   # the current type, and so the form's definition, which is what lets the
   # "can't be blank" error stay on screen (a changed definition rebuilds the
   # form from its data, errors and all).
@@ -680,11 +680,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp presence(value), do: value
 
   # The one-time chooser: offered only for a draft that is both blank and
-  # has never been published — nothing published means nothing at stake
+  # has never been published - nothing published means nothing at stake
   # (same test `FormFlow.Web.Templates.Forms.Show` uses to skip the
   # migration-policy dialog on a first publish), and a blank definition
   # means there is nothing here a copy would overwrite. Either fact turning
-  # false — a save, a publish — is what makes the chooser stop being
+  # false - a save, a publish - is what makes the chooser stop being
   # offered; nothing tracks that a choice was made, because none is needed.
   defp show_chooser?(nil, _version, _published?), do: false
   defp show_chooser?(_form, nil, _published?), do: false
@@ -695,13 +695,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # start's own way of saying the choice was already made
   defp awaiting_start?(show_chooser?, params), do: show_chooser? and params["start"] != "fresh"
 
-  # What both copies — the chooser's Copy form and the editor's Copy
-  # existing form — offer to copy from, as `{label, form id}` options.
+  # What both copies - the chooser's Copy form and the editor's Copy
+  # existing form - offer to copy from, as `{label, form id}` options.
   # Through a step: this root flow's own forms first, in the order a user
   # works them, then the catalog. Standalone, from the catalog: every form
-  # there is — the catalog first, then every flow's owned forms, flow by
-  # flow. Never this form itself, and a form seen twice — a catalog form
-  # reused at a step — only once, where it was seen first. Lists from two
+  # there is - the catalog first, then every flow's owned forms, flow by
+  # flow. Never this form itself, and a form seen twice - a catalog form
+  # reused at a step - only once, where it was seen first. Lists from two
   # or three places, merged here; the catalog alone is what reusing a form
   # offers, and stays its own list.
   defp copy_sources(nil, _root_id), do: []
@@ -718,7 +718,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp copy_source_lists(root_id, form), do: [flow_sources(root_id), catalog_sources(form)]
 
   # Every option says where its form comes from, then how that place shows
-  # it — this root flow's forms by their step, the catalog's by name — with
+  # it - this root flow's forms by their step, the catalog's by name - with
   # the slug last, the way an admin looks it up in code: the step's slug for
   # a flow's form ("Current flow - Documents / Proof of address
   # (dla2026_proof-of-ad)"), the form's own for a catalog form ("Reusable
@@ -747,13 +747,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp option_label("", source, shown), do: "#{shown} (#{source.slug})"
   defp option_label(origin, source, shown), do: "#{origin} - #{option_label("", source, shown)}"
 
-  # The absolute half of "last updated 3 days ago on ..." — the relative
+  # The absolute half of "last updated 3 days ago on ..." - the relative
   # phrase says how long, this says when
   defp updated_stamp(version),
     do: Calendar.strftime(version.updated_at, "%Y-%m-%d at %-I:%M%P UTC")
 
   # The four ways to edit one definition: what the radio offers, and what
-  # each card says it does. The descriptions matter more than the labels do —
+  # each card says it does. The descriptions matter more than the labels do -
   # one of them replaces the whole definition, which "Copy existing form"
   # alone does not say.
   @editors [
@@ -785,16 +785,16 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # The editor choice, drawn as cards rather than a row of radios: the choice
   # decides what the rest of the page is, and a card has the second line the
-  # consequence needs. Still the form's own radio group — the `<:field>` body
+  # consequence needs. Still the form's own radio group - the `<:field>` body
   # takes over the control while DynamicForm keeps the label, the errors, and
-  # the changeset — so `visible_if` reads it exactly as before.
+  # the changeset - so `visible_if` reads it exactly as before.
   #
   # Two to a row rather than as many as fit: wrapping left the fourth card
   # alone on a line of its own at most widths, and a grid keeps every card
   # the same size whatever the column is doing.
   # The waiting state: the steps, their clocks, and Cancel. Three of the four
-  # steps are instantaneous and are ticked the moment Build is pressed —
-  # because they have genuinely happened — so the only row that moves is the
+  # steps are instantaneous and are ticked the moment Build is pressed -
+  # because they have genuinely happened - so the only row that moves is the
   # one the request is in, and its clock is the whole elapsed time. None of
   # this is reported by the model: it is the page's own bookkeeping, which is
   # why there is no percentage and no token count.
@@ -880,7 +880,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {"Read the form as it stands", :done, "0:00"},
       {"Sent your description", :done, "0:00"},
       {"Writing the elements", :running, building_clock(seconds)},
-      {"Checking the builder can show them", :pending, "—"}
+      {"Checking the builder can show them", :pending, "-"}
     ]
   end
 
@@ -911,7 +911,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp editor_options(copy_sources),
     do: Enum.map(editor_choices(copy_sources), &{&1.label, &1.value})
 
-  # What the prompt asks for: a form, or a change to the one that is here —
+  # What the prompt asks for: a form, or a change to the one that is here -
   # a definition with nothing in it has nothing to edit, and the two
   # requests read nothing alike. Read when the admin switches into Build
   # with AI (`switch_editor/3`) and held until they switch in again, rather
@@ -930,7 +930,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp ai_placeholder(json), do: ai_placeholder(decoded_definition(json))
 
   # What a step can be pointed at: the catalog, minus forms whose type ties
-  # them to one flow — a `:related_form` value is a step path there
+  # them to one flow - a `:related_form` value is a step path there
   # (`FormFlow.Config.Forms.Type.related_form_property/2`), the same test
   # `Flows.reuse_form/3` refuses on. Owned forms are never offered: their
   # tree's deletion would take them out from under this flow. None
@@ -944,12 +944,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         do: source
   end
 
-  # The select's options: the form's name, its slug, and — since a step
-  # reusing an unpublished form cannot be started until it publishes —
+  # The select's options: the form's name, its slug, and - since a step
+  # reusing an unpublished form cannot be started until it publishes -
   # whether it has ever been published
   defp reuse_options(reuse_forms) do
     for source <- reuse_forms do
-      published = if Forms.ever_published?(source.id), do: "", else: " — draft, never published"
+      published = if Forms.ever_published?(source.id), do: "", else: " - draft, never published"
       {option_label("", source, source.name) <> published, source.id}
     end
   end
@@ -976,7 +976,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp reuse_error(:owned_form, _target, _form_types),
-    do: "Only catalog forms can be reused — that form belongs to a flow."
+    do: "Only catalog forms can be reused - that form belongs to a flow."
 
   defp reuse_error(:other_tenant, _target, _form_types),
     do: "That form belongs to another tenant."
@@ -996,8 +996,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp form_data(nil, _assigns), do: nil
 
-  # The form's data: the definition as its editor holds it, and — while this
-  # page edits them — the details (`FormFlow.Web.Templates.Forms.Shared.details/3`)
+  # The form's data: the definition as its editor holds it, and - while this
+  # page edits them - the details (`FormFlow.Web.Templates.Forms.Shared.details/3`)
   defp form_data(form, assigns) do
     %{definition: assigns.definition_json, definition_editor: assigns.definition_editor}
     |> Map.merge(
@@ -1017,7 +1017,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp put_elements(form_data, _assigns), do: form_data
 
   # Switching the type dropdown re-renders the property fields, and
-  # DynamicForm rebuilds a form whose fields changed from its data — so at
+  # DynamicForm rebuilds a form whose fields changed from its data - so at
   # that moment the data becomes the pending values, and what the admin was
   # typing survives. Otherwise it holds still, which is what keeps
   # in-progress input alive.
@@ -1043,11 +1043,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The chooser's Copy: the source's description, form type and its
-  # property values become *this* lineage's — never its name, which is the
+  # property values become *this* lineage's - never its name, which is the
   # step's (`FormFlow.Web.Templates.Forms.Shared.step_name/2`); the source's resolved
-  # definition (latest published, else newest draft — the same fallback
+  # definition (latest published, else newest draft - the same fallback
   # `FormFlow.Web.Templates.Forms.Show` resolves a bare URL to) becomes
-  # *this* draft's. Neither this form's id nor its slug moves — a property
+  # *this* draft's. Neither this form's id nor its slug moves - a property
   # value tied to this form's own place in the flow (a `related_form`
   # choice, say) would be meaningless copied from the source's; the existing
   # stale-choice handling (`FormFlow.Web.Templates.Shared.fill_related_forms/4`)
@@ -1082,11 +1082,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     Forms.get_latest_version(form_id) || List.first(Forms.list_versions(form_id))
   end
 
-  # Copy existing form: only the source's resolved definition moves — name,
+  # Copy existing form: only the source's resolved definition moves - name,
   # slug, description, and form type are untouched. Available any time, not
   # gated by `show_chooser?/2`.
   # Where a built definition lands: the form builder when it can show it,
-  # JSON when it cannot — the same test `initial_editor/1` makes, and the
+  # JSON when it cannot - the same test `initial_editor/1` makes, and the
   # same refusal-beats-dropping rule `switch_editor/3` follows. The form is
   # rebuilt from the last change payload, not from `form_data`, so the prompt
   # that produced this form and any unsaved detail edits are still there.
@@ -1111,7 +1111,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       latest_data: form_data,
       latest_json: json,
       # Dirtiness is otherwise computed from a change event, and there is
-      # none here — but Save draft must go primary the moment a form appears
+      # none here - but Save draft must go primary the moment a form appears
       dirty?: true,
       notice: nil,
       editor_error: answer_note(socket, definition, showable?)
@@ -1150,7 +1150,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # What the answer did to the questions, which nothing else on the page would
   # say: a definition missing three of them looks exactly like a definition
   # that never had them. Nothing is saved yet, which is what makes this worth
-  # saying here rather than at Save — the draft on screen is still undoable.
+  # saying here rather than at Save - the draft on screen is still undoable.
   defp changes_note(socket, definition) do
     changes = BuildWithAI.changes(socket.assigns.latest_json, definition)
 
@@ -1160,7 +1160,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # "added 1 question (nickname), removed 2 (given_name, family_name), and
-  # changed 1 (date_of_birth)" — the count first, so the sentence reads the
+  # changed 1 (date_of_birth)" - the count first, so the sentence reads the
   # same whether a form gained one question or twenty, and the names after it,
   # because a removed one is the admin's to recognise.
   defp clauses(%{added: added, removed: removed, changed: changed}) do
@@ -1186,7 +1186,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     do: Enum.join(Enum.drop(clauses, -1), ", ") <> ", and " <> List.last(clauses)
 
   # `load/1` rebuilds the form from what is saved, and the copied definition
-  # is — but a name or description typed and not saved is not, and the rebuild
+  # is - but a name or description typed and not saved is not, and the rebuild
   # would drop it. Every field the rebuilt form has comes back from the last
   # change payload instead, except the ones the copy just replaced. Until the
   # button stopped submitting the form this was hidden: the stray submit saved
@@ -1261,7 +1261,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     do: {:noreply, socket}
 
   # A module that raises rather than returning {:error, _} still has to reach
-  # the admin as a sentence — and the host, whose module it is, has nothing
+  # the admin as a sentence - and the host, whose module it is, has nothing
   # but the log to debug it with
   def handle_async(:build_with_ai, {:exit, reason}, socket) do
     Logger.warning("FormFlow Build with AI module exited: #{inspect(reason)}")
@@ -1276,7 +1276,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       {:noreply, assign(socket, :publishing?, true)}
     else
       # Nothing has ever been published, so no instance can exist and no
-      # migration policy is meaningful — publish directly, like Show does
+      # migration policy is meaningful - publish directly, like Show does
       publish_directly(socket)
     end
   end
@@ -1309,7 +1309,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     {:noreply, assign(socket, :chooser_selection, selection)}
   end
 
-  # Fresh start changes nothing about the form or draft — there is no data
+  # Fresh start changes nothing about the form or draft - there is no data
   # event that would make `show_chooser?/2` false on its own, unlike Copy.
   # `?start=fresh` is what a reload of this exact page reads back to know the
   # choice was already made.
@@ -1329,8 +1329,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The step becomes the picked catalog form, the source riding the click.
-  # The draft this URL names belongs to the form the step just left — deleted,
-  # if it was the step's own — so the page leaves for the step's form page,
+  # The draft this URL names belongs to the form the step just left - deleted,
+  # if it was the step's own - so the page leaves for the step's form page,
   # which resolves the catalog form.
   @impl true
   def handle_event("reuse_form", %{"source_form_id" => source_id}, socket) do
@@ -1351,7 +1351,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The one-time copy: writes the source's identity (description, form type
-  # and its property values — never the name or slug) and its resolved
+  # and its property values - never the name or slug) and its resolved
   # definition onto *this* lineage and draft. This form's own slug is never
   # touched, since it already carries this node's place in the flow (or its
   # own, standalone).
@@ -1380,7 +1380,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Copy existing form. Unlike the chooser's Copy form, this is always
-  # available — it isn't gated by `show_chooser?/2` — and it touches only the
+  # available - it isn't gated by `show_chooser?/2` - and it touches only the
   # definition: no name, slug, description, or form type moves. The source
   # comes with the click: the button reads it off the form's own dropdown.
   # Reloading with no editor picked lands on whichever editor can show what
@@ -1410,7 +1410,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # Build with AI. The prompt and the model are read off the last change
   # payload rather than off the click, and the definition sent with them is
-  # the one on the page — an admin who pasted JSON and asked for a change
+  # the one on the page - an admin who pasted JSON and asked for a change
   # gets the change applied to what they pasted. Switching into Build with
   # AI already refused JSON that does not parse, so what goes in parsed.
   @impl true
@@ -1465,7 +1465,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Which prefill the preview is filled with is in the URL, so choosing one
-  # is a navigation — and a navigation with unsaved editor content is what
+  # is a navigation - and a navigation with unsaved editor content is what
   # the save-first dialog is for (`pending_prefill_path`).
   @impl true
   def handle_event("pick_prefill", %{"prefill" => name}, socket) do
@@ -1506,7 +1506,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # A write of either kind lands on the form, never on the draft, so there is
-  # nothing here to save first — only what it does to the *selection* can
+  # nothing here to save first - only what it does to the *selection* can
   # send the page somewhere (`selects_another?/3`)
   @impl true
   def handle_event("save_prefill", %{"name" => name, "data" => json}, socket) do
@@ -1528,7 +1528,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           {:noreply, remount_preview(socket)}
         end
 
-      # Refused — the dialog stays open over what was typed, which is the
+      # Refused - the dialog stays open over what was typed, which is the
       # only copy of it: the fields are the assign, not the browser's DOM
       {:error, message} ->
         {:noreply,
@@ -1545,7 +1545,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
     case prefill && Forms.delete_prefill(form, prefill.name) do
       {:ok, form} ->
-        # The URL still names it, and now names nothing that is there — the
+        # The URL still names it, and now names nothing that is there - the
         # same state a link to a prefill someone else deleted arrives in
         {:noreply,
          socket
@@ -1585,7 +1585,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # A prefill's answers ride in the preview's session, and a child LiveView
-  # never re-reads one — so answers that changed mean a fresh child, however
+  # never re-reads one - so answers that changed mean a fresh child, however
   # the definition is being kept up to date (`force_refresh_preview/1`).
   defp remount_preview(socket) do
     socket
@@ -1608,8 +1608,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Once, after a save that changed a version or the form's identity: every
-  # root with a step on this form — one for an owned form, every user of a
-  # catalog form — recomputes its health
+  # root with a step on this form - one for an owned form, every user of a
+  # catalog form - recomputes its health
   defp refresh_health(socket) do
     Health.refresh_for_form(socket.assigns.form.id, health_options(socket))
   end
@@ -1672,7 +1672,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         DynamicForm.Payload.add_error(
           payload,
           :definition,
-          "is not valid JSON — fix the syntax and save again"
+          "is not valid JSON - fix the syntax and save again"
         )
     end
   end
@@ -1721,10 +1721,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Nothing else on the page until a choice is made: the identity form, the
-  # definition, the header's Save/Publish — none of them mean anything yet.
+  # definition, the header's Save/Publish - none of them mean anything yet.
   # Fresh start's Select has to leave a mark server-side or reloading this
   # exact page would show the chooser again forever (the data itself never
-  # changes for it, unlike Copy) — a query param is the only channel that
+  # changes for it, unlike Copy) - a query param is the only channel that
   # survives `push_navigate`'s full remount (see `select_fresh_path/1`).
   def render(%{awaiting_start?: true} = assigns) do
     ~H"""
@@ -1777,7 +1777,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           <%!-- The first place the three stop being parallel: Fresh start and
                 Copy fill the form this step already has; Reuse throws that
                 form away and points the step at the catalog's. Only through
-                a step — a catalog form has nothing to repoint. --%>
+                a step - a catalog form has nothing to repoint. --%>
           <label :if={@reuse_forms != []} class="flex items-center gap-2">
             <input
               type="radio"
@@ -1934,11 +1934,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       </Core.alert>
 
       <Core.alert :if={Forms.stale_draft?(@version)} kind={:warning} components={@components} class="mb-3">
-        This draft was based on a version that is no longer the latest — review before publishing.
+        This draft was based on a version that is no longer the latest - review before publishing.
       </Core.alert>
 
       <%!-- A step editing a catalog form is editing it for every flow that
-            uses it — said before the first keystroke --%>
+            uses it - said before the first keystroke --%>
       <CatalogBadge.catalog_badge
         :if={Shared.reusing?(@node, @form)}
         form={@form}
@@ -1950,13 +1950,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       <%!-- One form, one Save: the form's details (until the form is
         first published) above the version's definition, separated by a
         read-only strip saying which draft is being edited. The save event
-        writes each value to its owner — details to the form row and the
+        writes each value to its owner - details to the form row and the
         step, definition to the draft. Picking a different draft belongs
         on Show, where the version history lists them all.
 
         Two columns from lg up, stacked below: the whole form on the left,
         the preview on the right. They grow 3 against 2 from a zero basis,
-        so the split is 60/40 of the space the gap leaves — the editor gets
+        so the split is 60/40 of the space the gap leaves - the editor gets
         the wider half because its element rows hold several fields each.
         Past max-w-3xl the fields stop widening and hand the slack to the
         preview, which the flex algorithm redistributes once the capped
@@ -1973,7 +1973,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         !@wide_preview? && "lg:[&>:first-child]:grow-[3] lg:[&>:first-child]:basis-0",
         # The Name and Slug row, whose members share the width instead of
         # sizing to their content as a horizontal group's members do. The
-        # underscores are escaped — Tailwind reads a bare one as a space —
+        # underscores are escaped - Tailwind reads a bare one as a space -
         # and the sigil keeps the source text Tailwind scans identical to the
         # class the page renders.
         ~S"[&_[data-dynamic-form-group=name\_and\_slug]>div>*]:grow",
@@ -2088,8 +2088,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </Shared.section_heading>
         </:field>
         <%!-- Three ways to edit one definition, under one radio. Each hides
-              with visible_if — hidden, it keeps its content and stops being
-              required — and content crosses between the editors only when
+              with visible_if - hidden, it keeps its content and stops being
+              required - and content crosses between the editors only when
               the radio changes (switch_editor/3). Copy needs another form to
               copy from, so with none the radio doesn't offer it. --%>
         <:field
@@ -2147,7 +2147,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Copy existing form: fields of this form rather than a form of
               their own, so they sit in the version group; the button reads
               the picked source off the form. A dropdown needs options, so
-              none of this renders with nothing to copy from — nor does the
+              none of this renders with nothing to copy from - nor does the
               radio offer it then. --%>
         <:field
           :if={@copy_sources != []}
@@ -2157,7 +2157,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           visible_if="{definition_editor} = 'copy'"
         >
           <Shared.section_heading title="Copy existing form" class="mt-6">
-            Replace this draft's definition with another form's — a reusable form from the
+            Replace this draft's definition with another form's - a reusable form from the
             catalog, or a step's form from a flow. The name, slug, description, and form type
             stay as they are.
           </Shared.section_heading>
@@ -2192,7 +2192,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         </:field>
         <%!-- Build with AI: the prompt, and the definition it would work
               from held in the hidden JSON field the way Copy holds it. The
-              placeholder is the only thing that changes with the draft —
+              placeholder is the only thing that changes with the draft -
               a blank one has no form to edit yet (ai_placeholder/1). --%>
         <:field
           group="version"
@@ -2204,8 +2204,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             Use AI to build new form elements or edit existing ones.
           </Shared.section_heading>
         </:field>
-        <%!-- Nothing configured: the card stays — the product has the
-              feature — and the panel says whose decision the absence is.
+        <%!-- Nothing configured: the card stays - the product has the
+              feature - and the panel says whose decision the absence is.
               There is no textarea, because there is nothing to type into
               that could be sent. --%>
         <:field
@@ -2230,7 +2230,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           visible_if="{definition_editor} = 'ai'"
         />
         <%!-- Which model is the admin's choice, made with the prompt in
-              front of them, out of what the host offered — so it is a field
+              front of them, out of what the host offered - so it is a field
               of the form, and one model is no choice at all. Its options and
               default come from the config, which holds still while the page
               is live. --%>
@@ -2250,8 +2250,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               which is the same values an attribute would carry without
               echoing the whole prompt into the DOM.
 
-              Everything that moves while a build runs — `@building?`, the
-              clock — is inside this slot body, which DynamicForm strips
+              Everything that moves while a build runs - `@building?`, the
+              clock - is inside this slot body, which DynamicForm strips
               before the comparison that decides whether to rebuild the form.
               In a field attribute the clock would rebuild the form once a
               second and clear the prompt with it. --%>
@@ -2293,7 +2293,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- The form builder: one entry per element, its fields named after
               the SurveyJS properties they set. Which fields show for a type,
               and which the entry writes back, come from one table in
-              Builder — a hidden field keeps its held value, and that value
+              Builder - a hidden field keeps its held value, and that value
               must not reach the JSON.
 
               Two scopes render the same field list (element_fields/1): the
@@ -2310,7 +2310,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           entry_title="Element {panelIndex}"
           add_text="Add element"
           remove_text="Remove element"
-          no_entries_text="No elements yet — add one to start building the form."
+          no_entries_text="No elements yet - add one to start building the form."
           key="name"
           key_error="is already used by another element"
           generate_ids={false}
@@ -2404,7 +2404,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
         <%!-- Sticky beside a long editor: the preview stays in view while
               the admin scrolls the fields, and scrolls on its own when it is
-              the taller of the two. Only once the columns sit side by side —
+              the taller of the two. Only once the columns sit side by side -
               stacked or full width, sticky would pin it over the editor, and
               a preview given the whole width is meant to run as tall as the
               form it shows. --%>
@@ -2416,7 +2416,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         ]}>
           <%!-- Going full width moves the preview to the top of the page,
                 which is above an admin who was down among the elements with
-                the preview pinned beside them — and nothing about the new
+                the preview pinned beside them - and nothing about the new
                 layout says to scroll up. This marker exists only in the wide
                 state, so the hook mounts on the way in and never on the way
                 back, and it scrolls the preview into view. Nearest, not
@@ -2495,7 +2495,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           </Shared.section_heading>
           <%!-- Prefills sit between the heading and the preview, because
                 they are about what the preview shows rather than about how
-                it is shown — the heading's own actions are the layout ones.
+                it is shown - the heading's own actions are the layout ones.
                 Choosing one reloads the page with it named in the URL, so
                 the choice survives a refresh and can be handed to someone
                 else as a link. --%>
@@ -2555,7 +2555,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       />
 
       <%!-- Choosing a prefill reloads the page, which is where an unsaved
-            draft would go — so it asks first, the way the canvas asks before
+            draft would go - so it asks first, the way the canvas asks before
             a crumb discards an edit. Save is the editor form's own submit
             button, reached by id from out here, so saving from this dialog
             is the same save as the header's. --%>
@@ -2589,7 +2589,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   defp preview_id(assigns), do: "#{assigns.id}-preview-r#{assigns.preview_rev}"
 
-  # The pending type's properties, one field each — none once the details
+  # The pending type's properties, one field each - none once the details
   # have left for their own page
   defp details_properties(%{edit_details?: false}), do: []
 
@@ -2682,7 +2682,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         label: "Visible if",
         placeholder: "{other_element} = 'value'",
         description:
-          "A SurveyJS expression over the other elements' names — {subject} = 'support', or {email} notempty. Leave blank to always show it."
+          "A SurveyJS expression over the other elements' names - {subject} = 'support', or {email} notempty. Leave blank to always show it."
       }
     ]
     |> Enum.reject(&(inside? and &1[:container]))
@@ -2704,12 +2704,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # Set the entry's hidden `move` field, fire the form's change from it, and
-  # clear it again — entirely on the client, no event of its own to handle.
+  # clear it again - entirely on the client, no event of its own to handle.
   # The form is serialized as the event fires, so the request is in that one
   # change and no other. Clearing it here matters: the server renders the
   # field's value as "" every time, so a value set on the client is never
   # patched away, and a request left in the DOM would ride every later
-  # change too — swapping the elements back and forth on each keystroke.
+  # change too - swapping the elements back and forth on each keystroke.
   defp move_element_js(field, direction) do
     JS.set_attribute({"value", direction}, to: "##{field.id}")
     |> JS.dispatch("input", to: "##{field.id}")
@@ -2790,7 +2790,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     )
   end
 
-  # This same edit page, with the prefill named — or without it, which is
+  # This same edit page, with the prefill named - or without it, which is
   # what selecting nothing means
   defp prefill_path(assigns, name) do
     Shared.prefill_path(
@@ -2800,7 +2800,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     )
   end
 
-  # This same edit page, with `start=fresh` added — `mode` carries forward
+  # This same edit page, with `start=fresh` added - `mode` carries forward
   # if it was already there. Reloading is what makes Fresh start's choice
   # stick, since nothing about the form or draft changed to make
   # `show_chooser?/2` false on its own.

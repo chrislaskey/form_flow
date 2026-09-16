@@ -1,17 +1,17 @@
 defmodule FormFlow.Data.Templates.Flows.Health do
   @moduledoc """
-  `FormFlow.Data.Templates.Flows.Health` checks a root flow — the whole
-  tree, subflows included — and reports what it finds as a list of
+  `FormFlow.Data.Templates.Flows.Health` checks a root flow - the whole
+  tree, subflows included - and reports what it finds as a list of
   `FormFlow.Data.Templates.Flows.Health.Entry` structs sorted worst first,
   with the worst level as the one-word answer. A health check, in prose;
   what it lists are **entries**, not problems, because a check reads the
-  flow's shape and can be wrong about what is fine on purpose — see
+  flow's shape and can be wrong about what is fine on purpose - see
   "Ignoring an entry" below.
 
   The pages draw it: every flow page carries a badge with the flow's cached
   status (`status/1`), and `/flows/:id/health` lays the whole report out.
-  Nothing here writes anything but its own bookkeeping on the root flow —
-  the cached status and the ignores — and nothing refuses a save on it: the
+  Nothing here writes anything but its own bookkeeping on the root flow -
+  the cached status and the ignores - and nothing refuses a save on it: the
   checks describe a flow as it stands, so an admin building one sees what is
   left to do, and a finished flow shows none.
 
@@ -19,9 +19,9 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
     * `check/2` with a root flow's **id** loads the tree
       (`FormFlow.Data.Templates.Flows.resolve_tree/1`), preloads each form's
-      versions — the one thing the tree does not carry that the checks need
-      — and runs the checks. `nil` for an unknown id.
-    * `check/2` with a **tree** — the map `resolve_tree/1` returns — runs
+      versions - the one thing the tree does not carry that the checks need
+      - and runs the checks. `nil` for an unknown id.
+    * `check/2` with a **tree** - the map `resolve_tree/1` returns - runs
       the checks and touches no database. That is what makes the checks
       testable on hand-built trees, and what a later caller checking
       unsaved canvas contents would build one for.
@@ -41,11 +41,11 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:no_end` | error | the flow has no End node |
   | `:end_unreachable` | error | following relationships forward from Start never arrives at an End |
   | `:form_missing` | error | a connected form step points at no form, or at one that no longer exists |
-  | `:form_not_published` | error | a connected form step's form has no published version — users cannot start it (`FormFlow.Data.Instances.Forms` pins the latest published version) |
+  | `:form_not_published` | error | a connected form step's form has no published version - users cannot start it (`FormFlow.Data.Instances.Forms` pins the latest published version) |
   | `:subflow_missing` | error | a connected subflow step points at no flow, or at one that could not be resolved |
-  | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value — the Review type's "Form to review", say |
-  | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches — either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
-  | `:related_form_shared` | error | a catalog form — one lineage shared by every step reusing it — has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
+  | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value - the Review type's "Form to review", say |
+  | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches - either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
+  | `:related_form_shared` | error | a catalog form - one lineage shared by every step reusing it - has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
   | `:unconnected` | warning | a node no Start reaches; users can never get there |
   | `:dead_end` | warning | a node Start reaches that nothing follows, so End never waits for it |
   | `:no_steps` | warning | Start reaches End with no form or subflow step between them |
@@ -54,34 +54,34 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:unpublished_changes` | info | a form has a draft whose definition differs from its latest published version |
 
   Each entry carries, besides its one-sentence `message`, a paragraph on
-  why the check matters and a sentence on what to do — per code, from
-  `FormFlow.Data.Templates.Flows.Health.Entry.explanation/1` and `fix/1` —
+  why the check matters and a sentence on what to do - per code, from
+  `FormFlow.Data.Templates.Flows.Health.Entry.explanation/1` and `fix/1` -
   so a page has the words and a host drawing its own has them too.
 
   "Connected" is the reading `FormFlow.Data.Templates.Flows.connected_tree/1`
   and `FormFlow.Data.Instances.FlowProgress` share: reachable from a Start
-  node following relationships forward. Checks on what a step points at —
-  its form, its subflow, their types — run for connected steps only. An
+  node following relationships forward. Checks on what a step points at -
+  its form, its subflow, their types - run for connected steps only. An
   unconnected step is reported once, as unconnected; whatever is behind it
   is not a user's concern until it is wired in, and reporting it too would
   bury the one thing to do.
 
   The report also counts what it evaluated, in `checks_run`: one per node
   per check that applies to it, one per flow per flow-level check. So
-  `checks_run - length(entries)` is how many checks passed — the number a
+  `checks_run - length(entries)` is how many checks passed - the number a
   page shows beside an empty list, so "nothing to report" is visibly the
   result of looking.
 
   ## Levels
 
-  `:error` — a user cannot work the flow as it stands. `:warning` — the
-  flow works, but part of it does not take part. `:info` — nothing changes
+  `:error` - a user cannot work the flow as it stands. `:warning` - the
+  flow works, but part of it does not take part. `:info` - nothing changes
   for users, but an admin may want to know. See
   `FormFlow.Data.Templates.Flows.Health.Entry`.
 
   Two questions follow, and both have a function so a host's badge answers
-  them the way the library's does: `ok?/1` — is **nothing** open, info
-  included; and `healthy?/1` — is nothing **wrong**, meaning no open error
+  them the way the library's does: `ok?/1` - is **nothing** open, info
+  included; and `healthy?/1` - is nothing **wrong**, meaning no open error
   or warning, with `wrong/1` the count of those. The badge draws `healthy?/1`
   (a check, in the info colour when only info entries remain), since a draft
   with unpublished changes is the normal state of a form being worked on and
@@ -94,11 +94,11 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   flows cannot afford per row. So the result is **cached on the root flow**,
   under `properties["_health_metadata"]["status"]`: the `level`, the
   `counts`, the `summary`, `checks_run`, and `checked_at`. `status/1` reads
-  it off a flow struct — no query — and that is what the badges on the
+  it off a flow struct - no query - and that is what the badges on the
   index and the flow pages draw. `refresh/2` recomputes it: the full check,
-  written back, once, **at the end of each save** — the flow edit page's
+  written back, once, **at the end of each save** - the flow edit page's
   save, a step's rename, a form's publish or archive or draft, a step
-  deleted, a form reused, a copy made — called by the page or the operation
+  deleted, a form reused, a copy made - called by the page or the operation
   that owns the whole save, never from inside the context functions a save
   calls many times. A missed caller means a badge that lags, never a page
   that is wrong: the health page runs the check on every visit and writes
@@ -113,17 +113,17 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   ## Ignoring an entry
 
-  A check cannot know what is fine on purpose — a step left unwired for a
+  A check cannot know what is fine on purpose - a step left unwired for a
   later phase, a draft kept beside the published version. An admin who
   keeps seeing "5 warnings" stops reading them, and misses the sixth. So an
   entry can be **ignored**: `ignore/3` records it on the root flow, under
   `properties["_health_metadata"]["ignored_entries"]`, with who ignored it
-  and when; from then on `check/2` still lists it — marked, in `Entry`'s
-  `:ignored` — but it no longer counts toward `level` and `counts`, so the
+  and when; from then on `check/2` still lists it - marked, in `Entry`'s
+  `:ignored` - but it no longer counts toward `level` and `counts`, so the
   badge says what is new. `stop_ignoring/3` removes the record. An entry is
   matched by its `code` and `path`, both stable across saves (the canvas
-  keeps node ids), and a record whose entry has gone — the step was wired,
-  or deleted — is dropped the next time `refresh/2` or either toggle
+  keeps node ids), and a record whose entry has gone - the step was wired,
+  or deleted - is dropped the next time `refresh/2` or either toggle
   writes. Both toggles write the status too, from the report they hold, so
   the badge follows without a second check, and each writes an event to the
   flow's log (`FormFlow.Data.Templates.Flow.Event`, `health_ignored` and
@@ -163,7 +163,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   `level` is the worst level among the entries not ignored, `:ok` when
   none; `counts` counts those by level, and the ignored ones under
   `:ignored`; `entries` has every entry, worst first, an ignored one in
-  its place — ignoring changes what counts, not where it is listed, so
+  its place - ignoring changes what counts, not where it is listed, so
   a list an admin is working down does not reorder under them. `summary`
   describes the flow that was checked, whole tree, for a page to say what
   the report is of: its `label`, how many `steps` (form and subflow nodes),
@@ -210,7 +210,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         }
 
   @doc """
-  Checks a root flow, by id or as a resolved tree — see the moduledoc.
+  Checks a root flow, by id or as a resolved tree - see the moduledoc.
 
       FormFlow.Data.Templates.Flows.Health.check(flow.id, form_types: form_types)
       #=> %FormFlow.Data.Templates.Flows.Health{level: :error, entries: [...]}
@@ -218,8 +218,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       flow.id |> Flows.resolve_tree() |> Health.check()
 
   An owned subflow's id is its root's check: a subflow's health is its
-  root's, as its status and history are, so the report — and anything
-  `ignore/3` writes from it — lands on the root. `nil` for an id no flow
+  root's, as its status and history are, so the report - and anything
+  `ignore/3` writes from it - lands on the root. `nil` for an id no flow
   has. Reads only; `refresh/2` is the check that writes.
   """
   @spec check(Ecto.UUID.t() | map() | nil, keyword()) :: t() | nil
@@ -276,7 +276,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   # What the report is of: the tree's steps counted at every level,
-  # connected or not — this describes the flow as built, not as reachable
+  # connected or not - this describes the flow as built, not as reachable
   defp summary(tree) do
     nodes = all_nodes(tree)
     flows = all_flows(tree)
@@ -306,7 +306,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     [tree.flow | Enum.flat_map(tree.nodes, &all_flows(tree.subflows[&1.id]))]
   end
 
-  @doc "Whether nothing is left to act on — no entry at any level that is not ignored."
+  @doc "Whether nothing is left to act on - no entry at any level that is not ignored."
   @spec ok?(t()) :: boolean()
   def ok?(%__MODULE__{entries: entries}), do: Enum.all?(entries, & &1.ignored)
 
@@ -324,13 +324,13 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   @doc """
   How many open entries say something is wrong with the flow: the errors and
-  the warnings. Info entries are left out — they describe work in progress,
+  the warnings. Info entries are left out - they describe work in progress,
   not a flow left in a bad state. Takes a report or a cached status.
   """
   @spec wrong(t() | status()) :: non_neg_integer()
   def wrong(%{counts: counts}), do: counts.error + counts.warning
 
-  @doc "Whether nothing is wrong — no open error or warning. Info may remain; see `ok?/1`."
+  @doc "Whether nothing is wrong - no open error or warning. Info may remain; see `ok?/1`."
   @spec healthy?(t() | status()) :: boolean()
   def healthy?(%{counts: _counts} = report), do: wrong(report) == 0
 
@@ -344,8 +344,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # --- the cached status -------------------------------------------------------
 
   @doc """
-  The status `refresh/2` last cached on `flow` — a root flow struct, as the
-  index rows and the flow pages already hold one — or `nil` for a flow never
+  The status `refresh/2` last cached on `flow` - a root flow struct, as the
+  index rows and the flow pages already hold one - or `nil` for a flow never
   checked. No query: it reads `properties`. See "The cached status".
 
       Health.status(flow)
@@ -373,15 +373,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   @doc """
-  Runs the check over the root flow `flow_or_id` belongs to — a root, or an
-  owned subflow, whose root is found through `owner_flow_id` — and caches
+  Runs the check over the root flow `flow_or_id` belongs to - a root, or an
+  owned subflow, whose root is found through `owner_flow_id` - and caches
   the result on the root (`status/1`), dropping ignored records that match
   no entry any more. Returns the report, or `nil` for a flow that no longer
-  exists — including one deleted between the check and the write. Takes
+  exists - including one deleted between the check and the write. Takes
   `check/2`'s options.
 
   Call it **once, at the end of a save**, from the page or the operation
-  that owns the whole save — never from inside a function a save calls per
+  that owns the whole save - never from inside a function a save calls per
   record. See "The cached status".
 
       Health.refresh(flow, flow_types: flow_types, form_types: form_types)
@@ -418,7 +418,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   @doc """
   `refresh/2` for every root flow that uses the form lineage `form_id`
-  (`FormFlow.Data.Templates.Flows.form_usages/1`) — what a form's pages call
+  (`FormFlow.Data.Templates.Flows.form_usages/1`) - what a form's pages call
   after a publish, an archive, or a draft saved or deleted, since a catalog
   form's lineage is shared by every flow with a step on it, and an owned
   form's one usage is its own tree.
@@ -436,8 +436,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   `properties` as a root copy of the flow starts with them
   (`FormFlow.Data.Templates.Flows.copy/2`): without the cached status, which
   describes a check the copy has not had, and with the ignored records
-  re-pointed through `plan` — the copy's id for each of the source's node
-  ids — since the copy has the source's shape, and what was fine on purpose
+  re-pointed through `plan` - the copy's id for each of the source's node
+  ids - since the copy has the source's shape, and what was fine on purpose
   there is fine on purpose here. A record naming a node the plan does not
   know is dropped: it describes a step the copy does not have.
   """
@@ -469,7 +469,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   @doc """
-  `properties` without the health bookkeeping — what an owned copy of a
+  `properties` without the health bookkeeping - what an owned copy of a
   flow starts with (`FormFlow.Data.Templates.Flows.copy/2`), since health
   is the root's and the tree it joins has its own.
   """
@@ -529,7 +529,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     )
   end
 
-  # The root's current records — those the report still finds — through
+  # The root's current records - those the report still finds - through
   # `change`; then the report as it stands with them, as the status. The
   # report already holds what a second check would find. The event goes in
   # the same transaction as the record, so the log never says what the flow
@@ -573,7 +573,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # the same instant could still lose one, a race narrow enough to accept).
   # The one column is written, not the changeset: bookkeeping derived from
   # the flow does not move the flow's own `updated_at`. A root deleted
-  # underneath is an error, not a crash — the page it came from may be open
+  # underneath is an error, not a crash - the page it came from may be open
   # in another tab.
   defp write_metadata(root_id, change, after_write \\ &Function.identity/1) do
     Repo.transaction(fn ->
@@ -790,7 +790,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     for node <- connected_nodes(scope), kind(node) != :end do
       if Map.has_key?(scope.outgoing, node.id),
         do: :pass,
-        else: node_entry(node, scope, :warning, :dead_end, "leads nowhere — nothing follows it")
+        else: node_entry(node, scope, :warning, :dead_end, "leads nowhere - nothing follows it")
     end
   end
 
@@ -878,7 +878,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
             scope,
             :error,
             :form_not_published,
-            "has no published version — users cannot start it"
+            "has no published version - users cannot start it"
           )
         ]
 
@@ -898,7 +898,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end
   end
 
-  # Versions not loaded — a hand-built tree that says nothing about them
+  # Versions not loaded - a hand-built tree that says nothing about them
   defp version_results(_node, _form, _scope), do: []
 
   defp form_type_results(node, form, scope, opts) do
@@ -935,11 +935,11 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   # A catalog form is one lineage for every step reusing it, with one place
-  # for its type's property values, so a `:related_form` value — a position
-  # in one flow — can be right in one flow only; every other sees a stale
+  # for its type's property values, so a `:related_form` value - a position
+  # in one flow - can be right in one flow only; every other sees a stale
   # pick, and re-picking there breaks the first. The form pages refuse the
   # choice (`FormFlow.Web.Templates.Forms.Edit`); this catches what arrived
-  # otherwise — a copied flow whose step reuses such a form, a host writing
+  # otherwise - a copied flow whose step reuses such a form, a host writing
   # properties directly. A type that merely declares the property, unset,
   # points at nothing and is fine.
   defp shared_form_results(node, %{owner_flow_id: nil}, type, values, scope) do
@@ -993,7 +993,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   # One check per property the type declares. `entry` builds the struct with
-  # the right subject — the flow or the node — so this can serve both
+  # the right subject - the flow or the node - so this can serve both
   defp property_results(properties, values, opts, entry) do
     Enum.map(properties, fn %Property{} = property ->
       value = values[property.id]
@@ -1017,7 +1017,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   # The runtime resolves a related form among the connected positions only,
   # so a form the tree has but no Start reaches is as absent as one deleted
-  # — the message says which, since the fix differs
+  # - the message says which, since the fix differs
   defp related_form_text(property, value, opts) do
     if MapSet.member?(opts.form_paths, split_path(value)),
       do: "points “#{property.name}” at a form no Start reaches",
@@ -1030,7 +1030,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   defp split_path(value), do: value
 
   # The form positions in the tree, as the paths a :related_form value
-  # names: `:all` of them, or the `:connected` ones — those a Start reaches
+  # names: `:all` of them, or the `:connected` ones - those a Start reaches
   # at every level down, which is where the runtime looks
   # (`FormFlow.Config.Forms.Type.related_form/2` over the progress list)
   defp form_paths(nil, _prefix, _which), do: MapSet.new()
@@ -1052,7 +1052,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # --- building entries -----------------------------------------------------
 
   # An entry with the flow itself. The subject is the subflows on the way
-  # down — "Review does not connect Start to End" — or "This flow" for the
+  # down - "Review does not connect Start to End" - or "This flow" for the
   # root, which the listing already names; the struct's subject is nil then.
   defp flow_entry(scope, level, code, text) do
     subject =
@@ -1097,7 +1097,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # --- reading nodes ---------------------------------------------------------
 
   # Structural references first (a saved node always carries them), labels
-  # next, and the canvas's own data.kind last — what a node not yet saved
+  # next, and the canvas's own data.kind last - what a node not yet saved
   # has, since labels are derived from it at save
   defp kind(node) do
     cond do

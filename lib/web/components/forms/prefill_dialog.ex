@@ -1,12 +1,12 @@
 defmodule FormFlow.Web.Components.Forms.PrefillDialog do
   @moduledoc """
   `FormFlow.Web.Components.Forms.PrefillDialog` function component
-  renders the dialog that writes one prefill — the named set of test answers
+  renders the dialog that writes one prefill - the named set of test answers
   a form is filled with while it is being built
   (`FormFlow.Data.Templates.Form.Prefill`).
 
   Two fields, because a prefill is two things: the **name** an admin picks it
-  by, and the **answers**, as the JSON object they are stored as — question
+  by, and the **answers**, as the JSON object they are stored as - question
   names to values, wrapped in nothing, the shape a filled-in form has
   (`{"full_name": "Alex Doe"}`, never `{"data": {…}}`: the stored entry's
   `"data"` key is `FormFlow.Data.Templates.Form.Prefill`'s, and the field
@@ -14,13 +14,13 @@ defmodule FormFlow.Web.Components.Forms.PrefillDialog do
   filled in through the form itself, which is the plainest thing that works
   while the form being built is the one on the page; a prefill editor that
   renders the definition is its own page, and this dialog is not it. Capture
-  is the shortcut around the typing — it fills the field from the form on
+  is the shortcut around the typing - it fills the field from the form on
   screen, and what lands there is the same JSON.
 
   The caller owns the flow around it: opening, the `save_prefill` event the
   form submits to `target` with `name` and `data`, the `cancel_prefill`
-  event Cancel sends, and the error it hands back when a write is refused —
-  a name already taken, JSON that does not parse — so the dialog stays open
+  event Cancel sends, and the error it hands back when a write is refused -
+  a name already taken, JSON that does not parse - so the dialog stays open
   over what was typed rather than closing on it.
 
   `action` is `:create` or `:update`, and decides only what the dialog says:

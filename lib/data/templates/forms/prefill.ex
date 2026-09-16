@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   `FormFlow.Data.Templates.Form.Prefill` is one named set of answers an admin
   saved against a form, to fill it with while trying it out.
 
-  `data` is the answers, keyed by the definition's question names — the same
+  `data` is the answers, keyed by the definition's question names - the same
   map as `FormFlow.Data.Instances.Form`'s `data`, so what a prefill holds is
   what `DynamicForm.form/1` renders with, on the template side's preview and
   on a form instance's page alike. Nothing here is ever a user's answers: a
@@ -18,7 +18,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   applied to a newer definition lands softly: `DynamicForm` casts only the
   names the definition declares, so answers to questions that went away are
   dropped and questions that arrived come up blank. The blanks are the
-  reason to look — they are what a user will see when the definition moves
+  reason to look - they are what a user will see when the definition moves
   under them.
 
   ## The stored entry
@@ -39,7 +39,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   The name is the key, so names are unique per form and renaming moves the
   entry. The answers sit under `"data"` rather than being the entry itself,
   which is what leaves room beside them for what is worth saying about a
-  prefill — who saved it, when, what it is for — without a reader ever
+  prefill - who saved it, when, what it is for - without a reader ever
   having to tell a set of answers from an entry holding one.
 
   `from_entry/2`, `to_entry/1`, and `entry?/1` are the only places that know
@@ -75,7 +75,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   @doc """
   Builds a changeset for one prefill.
 
-  The name is required and trimmed — it is the key the set is stored under,
+  The name is required and trimmed - it is the key the set is stored under,
   and the word an admin says to pick it. The timestamps are not castable:
   `FormFlow.Data.Templates.Forms` stamps them as it writes.
   """
@@ -100,7 +100,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   end
 
   @doc """
-  The entry to store, without the name — the key it goes under. Keys with
+  The entry to store, without the name - the key it goes under. Keys with
   nothing in them are left out, so an entry says only what was set.
   """
   def to_entry(%__MODULE__{} = prefill) do

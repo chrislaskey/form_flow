@@ -1,9 +1,9 @@
 defmodule FormFlow.Data.Instances.Form do
   @moduledoc """
-  `FormFlow.Data.Instances.Form` Ecto Schema for one form instance — one user's completion of a form.
+  `FormFlow.Data.Instances.Form` Ecto Schema for one form instance - one user's completion of a form.
 
   The load-bearing column is the pin: `template_form_version_id` names the
-  exact definition this instance renders against — never "latest", never the
+  exact definition this instance renders against - never "latest", never the
   live template (hard rule 1 in `archive/form-versioning.md`). Publishing a
   new version moves pins only through explicit publish-time policies
   (`FormFlow.Data.Templates.Forms.update_status/3`), each move recorded as an
@@ -13,12 +13,12 @@ defmodule FormFlow.Data.Instances.Form do
   pin: the lineage is derived through the pinned version, so it can never
   desync, and the rare admin queries that want it join for free.
 
-  `data` holds the answers, keyed by field name, and holds *only* answers —
+  `data` holds the answers, keyed by field name, and holds *only* answers -
   progress, section state, and system markers never live inside it (hard
   rule 5). What each question's label *said* at completion time is always
-  recoverable through the pin — the pinned definition is immutable.
-  (Denormalizing labels onto the instance at completion — a labels
-  snapshot — is a deliberately deferred optimization; see
+  recoverable through the pin - the pinned definition is immutable.
+  (Denormalizing labels onto the instance at completion - a labels
+  snapshot - is a deliberately deferred optimization; see
   `archive/plans/instances-next.md`.)
 
   An instance carries two opaque host identities, the same pair as
@@ -26,18 +26,18 @@ defmodule FormFlow.Data.Instances.Form do
   `tenant_id`, the host tenant it belongs to, `nil` for a host with no
   tenants. Both are stamped at creation and immutable afterwards.
 
-  `metadata` is an opaque host-app map: whatever the host wants to attach —
+  `metadata` is an opaque host-app map: whatever the host wants to attach -
   including who a form instance concerns, until about-ness earns a named column.
   FormFlow never interprets it.
 
-  A form instance filled inside a whole root flow instance — a journey —
+  A form instance filled inside a whole root flow instance - a journey -
   rather than on its own carries its visit identity: `instance_flow_id` and
   `path`, the chain of node ids from the root flow
   through each embedding subflow node down to the form node itself. Both are
   present or both absent (a standalone fill), and `path` is a snapshot
   stamped at creation through `visit_changeset/4`, never castable, never
   updated; there is deliberately no node FK beside it (a derivable copy of
-  `last(path)` that no FK action would survive — editor saves replace all
+  `last(path)` that no FK action would survive - editor saves replace all
   nodes). Stranded is not a column state: `FormFlow.Data.Instances.FlowProgress` derives it when a
   path matches no position in the current tree. `superseded_at` is stamped
   by strand reconciliation on a replaced instance; derivation skips
@@ -80,7 +80,7 @@ defmodule FormFlow.Data.Instances.Form do
   @doc """
   Builds a changeset for an instance form.
 
-  `status` and `completed_at` are not castable — they are stamped by
+  `status` and `completed_at` are not castable - they are stamped by
   completion machinery, never supplied by callers (the same discipline as
   `FormFlow.Data.Instances.Flow`). `user_id` and `tenant_id` are castable
   at creation and immutable afterwards. Updates go through the optimistic
@@ -103,7 +103,7 @@ defmodule FormFlow.Data.Instances.Form do
   @doc """
   Builds a changeset for an in-journey form instance: `changeset/2` plus
   the stamped visit identity. `path` is never castable from external
-  input — the runner supplies it here, at creation, and it is immutable
+  input - the runner supplies it here, at creation, and it is immutable
   afterwards.
   """
   def visit_changeset(instance, attrs, instance_flow_id, path) when is_list(path) do

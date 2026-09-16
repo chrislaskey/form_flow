@@ -1,6 +1,6 @@
 defmodule FormFlow.Web.Components.Flows.Types.Default do
   @moduledoc """
-  `FormFlow.Config.Flows.Type`'s defaults — what every flow type inherits for
+  `FormFlow.Config.Flows.Type`'s defaults - what every flow type inherits for
   the callbacks it doesn't override. Together they are the in-order wizard:
   a flow's forms are for the viewer when its perspectives say so, a form can
   be edited where the flow allows work (its predecessors done, or itself

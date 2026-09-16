@@ -1,13 +1,13 @@
 defmodule FormFlow.Web.CoreComponents do
   @moduledoc """
-  FormFlow's built-in UI components — the fallback `FormFlow.Web.ComponentResolver`
+  FormFlow's built-in UI components - the fallback `FormFlow.Web.ComponentResolver`
   renders through whenever a host's own `components` module doesn't define a
   given function.
 
   Ported from a Phoenix 1.8-generated `CoreComponents`, styled with Tailwind
   CSS and daisyUI. A host application is expected to point FormFlow at its
   own generated `CoreComponents` (or any module exporting the same
-  functions) via the `components` attr on `FormFlow.Web.router/1` — see
+  functions) via the `components` attr on `FormFlow.Web.router/1` - see
   `FormFlow.Web.ComponentResolver` for the override contract.
   """
   use Phoenix.Component
@@ -171,7 +171,7 @@ defmodule FormFlow.Web.CoreComponents do
 
   # Declared rather than global so the label can show the mark: DynamicForm
   # passes both beside an explicit `rest`, where a global would be dropped
-  # (see button/1). The mark follows DynamicForm's own convention — "*" unless
+  # (see button/1). The mark follows DynamicForm's own convention - "*" unless
   # the definition sets another, or blanks it while staying required.
   attr(:required, :boolean, default: false)
 
@@ -318,7 +318,7 @@ defmodule FormFlow.Web.CoreComponents do
   end
 
   @doc """
-  Renders a field's label, for the controls a page draws itself — a
+  Renders a field's label, for the controls a page draws itself - a
   `DynamicForm` `<:field>` with a body, whose label the library still owns.
 
   Named for the same reason as `input_radio_group/1`: the fallback's label
@@ -342,7 +342,7 @@ defmodule FormFlow.Web.CoreComponents do
   end
 
   @doc """
-  Renders a labeled group of radio buttons — DynamicForm's `radiogroup` and
+  Renders a labeled group of radio buttons - DynamicForm's `radiogroup` and
   `rating` questions.
 
   Not part of the Phoenix-generated `CoreComponents` set, so
@@ -406,7 +406,7 @@ defmodule FormFlow.Web.CoreComponents do
   end
 
   @doc """
-  Renders a labeled group of checkboxes bound to an array-valued field —
+  Renders a labeled group of checkboxes bound to an array-valued field -
   DynamicForm's multi-select questions.
 
   Named for the same reason as `input_radio_group/1`. The selected values are
@@ -487,8 +487,8 @@ defmodule FormFlow.Web.CoreComponents do
   @doc """
   Renders a form error message.
 
-  Public — unlike Phoenix 1.8's own generated `CoreComponents`, which keeps
-  this private — so a host's `components` module can override it and
+  Public - unlike Phoenix 1.8's own generated `CoreComponents`, which keeps
+  this private - so a host's `components` module can override it and
   `FormFlow.Web.ComponentResolver` has something to dispatch to.
   """
   slot(:inner_block, required: true)
@@ -506,8 +506,8 @@ defmodule FormFlow.Web.CoreComponents do
   Renders a status message: what a page says about the state of what it is
   showing, rather than about a field the user is filling in.
 
-  Not part of the Phoenix-generated `CoreComponents` set — see
-  `FormFlow.Web.ComponentResolver` — but resolved the same way, so a host
+  Not part of the Phoenix-generated `CoreComponents` set - see
+  `FormFlow.Web.ComponentResolver` - but resolved the same way, so a host
   that wants FormFlow's messages to look like its own can define `alert/1`
   too.
 
@@ -518,7 +518,7 @@ defmodule FormFlow.Web.CoreComponents do
   the same names.
 
   The body is a slot rather than a message attr because most of these
-  messages carry a way onward — a link back to the flow, a Reopen button —
+  messages carry a way onward - a link back to the flow, a Reopen button -
   and daisyUI lays those out beside the text on its own.
 
   ## Examples
@@ -557,10 +557,10 @@ defmodule FormFlow.Web.CoreComponents do
   Renders a badge: one word or two about the state of the thing it sits
   beside, in that state's color.
 
-  Not part of the Phoenix-generated `CoreComponents` set — see
-  `FormFlow.Web.ComponentResolver` — but resolved the same way.
+  Not part of the Phoenix-generated `CoreComponents` set - see
+  `FormFlow.Web.ComponentResolver` - but resolved the same way.
 
-  `kind` picks the palette; `variant` its weight — soft by default, `"solid"`
+  `kind` picks the palette; `variant` its weight - soft by default, `"solid"`
   where the badge is the one thing that must read at a glance, as `button`'s
   `"primary"` is; `class` takes the daisyUI size and style modifiers
   (`badge-lg`, `badge-outline`) a caller wants on top.
@@ -718,7 +718,7 @@ defmodule FormFlow.Web.CoreComponents do
   @doc """
   Renders a [Heroicon](https://heroicons.com).
 
-  Heroicons come in three styles – outline, solid, and mini.
+  Heroicons come in three styles - outline, solid, and mini.
   By default, the outline style is used, but solid and mini may
   be applied by using the `-solid` and `-mini` suffix.
 
@@ -726,7 +726,7 @@ defmodule FormFlow.Web.CoreComponents do
   width, height, and background color classes.
 
   A host application bundles the icon font/CSS itself (e.g. the Tailwind
-  heroicons plugin generated `hero-*` classes) — FormFlow only emits the
+  heroicons plugin generated `hero-*` classes) - FormFlow only emits the
   class name.
 
   ## Examples

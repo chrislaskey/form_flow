@@ -17,7 +17,7 @@ defmodule FormFlow.Web.Downloads.Token do
   ## What is in it, and what is not
 
   Everything the request is: who, what, and which of Download and Print.
-  Nothing rides beside it — the endpoint reads the token and ignores the
+  Nothing rides beside it - the endpoint reads the token and ignores the
   rest of the query string, so swapping a `path` param for another form's
   cannot widen what a token was minted for.
 
@@ -26,7 +26,7 @@ defmodule FormFlow.Web.Downloads.Token do
 
   ## What it does not defend against
 
-  Anyone holding the URL can redeem it until it expires — the token is a
+  Anyone holding the URL can redeem it until it expires - the token is a
   capability, and FormFlow cannot bind it to a session without knowing the
   host's current user, which is the thing tokens exist here to avoid. Two
   things keep that small: the route sits inside the host's own pipeline, so
@@ -47,8 +47,8 @@ defmodule FormFlow.Web.Downloads.Token do
   prints as readily as a fresh one.
   """
 
-  # A purpose of its own, so that a second kind of FormFlow token — whenever
-  # there is one — can never be redeemed as a download
+  # A purpose of its own, so that a second kind of FormFlow token - whenever
+  # there is one - can never be redeemed as a download
   @salt "form_flow:download:v1"
 
   @default_max_age 60
@@ -70,7 +70,7 @@ defmodule FormFlow.Web.Downloads.Token do
   @doc """
   Mints a token for one download.
 
-  `context` is anything `Phoenix.Token` reads a `secret_key_base` from — a
+  `context` is anything `Phoenix.Token` reads a `secret_key_base` from - a
   `Plug.Conn`, a LiveView socket, an endpoint module, or the secret itself.
   """
   @spec encode(term(), payload()) :: String.t()
@@ -85,8 +85,8 @@ defmodule FormFlow.Web.Downloads.Token do
   one this application did not mint, was minted for another purpose, or that
   has been tampered with.
 
-  Public because a host serving downloads from its own endpoint — see
-  `FormFlow.Web.router/1`'s `download_path` attr — still receives FormFlow's
+  Public because a host serving downloads from its own endpoint - see
+  `FormFlow.Web.router/1`'s `download_path` attr - still receives FormFlow's
   token and needs to know what it says. `FormFlow.decode_token/3` is the
   stable name for it.
   """

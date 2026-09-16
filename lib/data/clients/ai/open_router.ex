@@ -10,7 +10,7 @@ defmodule FormFlow.Data.Clients.AI.OpenRouter do
 
   One request, no streaming, no retry: an admin pressing Build waits once and
   reads an error if it fails. A host that wants retries, a proxy, a spend cap,
-  or a provider's own API writes its own module — that is what
+  or a provider's own API writes its own module - that is what
   `FormFlow.Config.AI`'s behaviour is for.
   """
 
@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Clients.AI.OpenRouter do
   system instruction is its own message rather than a top-level field, which
   is the one place this differs from Anthropic's API.
 
-  No `temperature`, no `response_format`, no provider routing preferences —
+  No `temperature`, no `response_format`, no provider routing preferences -
   each is a parameter some model behind OpenRouter rejects, and none of them
   buys anything here.
   """
@@ -72,7 +72,7 @@ defmodule FormFlow.Data.Clients.AI.OpenRouter do
   What `Req.post/2` came back with, as the answer's text or a sentence.
 
   An error can arrive as a 200 with an `error` object as easily as with a
-  status, because OpenRouter is relaying somebody else's failure — so the
+  status, because OpenRouter is relaying somebody else's failure - so the
   body is read before the status is trusted. `finish_reason` is read next:
   "length" means the answer is cut off mid-JSON and would otherwise fail to
   decode with a message that blamed the wrong thing.

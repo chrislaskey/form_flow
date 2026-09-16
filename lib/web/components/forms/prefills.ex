@@ -5,10 +5,10 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
   it opens with, what a capture fills it from, what its submission writes, and
   whether that write moves the selection.
 
-  It sits beside the three components it serves —
+  It sits beside the three components it serves -
   `FormFlow.Web.Components.Forms.PrefillPicker`,
   `FormFlow.Web.Components.Forms.PrefillMenu`, and
-  `FormFlow.Web.Components.Forms.PrefillDialog` — and here rather than under
+  `FormFlow.Web.Components.Forms.PrefillDialog` - and here rather than under
   either page family for the same reason they are: the two template pages and
   the instance's Edit page all write prefills, and each of them would
   otherwise keep its own copy of this.
@@ -18,7 +18,7 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
   and when the menu is drawn at all. Those differ per page, and pretending
   they do not is what would make this module the wrong shape.
 
-  The store itself is `FormFlow.Data.Templates.Forms` — `list_prefills/1`,
+  The store itself is `FormFlow.Data.Templates.Forms` - `list_prefills/1`,
   `get_prefill/2`, and the three writers behind `save/4`.
   """
 
@@ -46,7 +46,7 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
 
   @doc """
   What a Capture opens the same dialog with: the answers off the form on
-  screen, and the name of the prefill in use — so capturing with one selected
+  screen, and the name of the prefill in use - so capturing with one selected
   writes over it, and capturing with none writes a new one. Capture is not a
   third way to save a prefill; it is New or Edit with the answers already
   there.
@@ -54,7 +54,7 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
   `params` is the form serialised by the browser
   (`FormFlow.Web.Components.Forms.PrefillMenu`), so it is decoded the way
   Phoenix decodes any form body, and the answers are lifted out of
-  `DynamicForm`'s namespace — a prefill holds question names to values, with
+  `DynamicForm`'s namespace - a prefill holds question names to values, with
   nothing wrapped around them.
   """
   def captured_dialog(prefill, params) do
@@ -72,8 +72,8 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
   end
 
   @doc """
-  Writes what a prefill dialog submitted: `attrs` is its two fields —
-  `:name`, and `:answers` as the JSON typed into them — plus the `:user_id`
+  Writes what a prefill dialog submitted: `attrs` is its two fields -
+  `:name`, and `:answers` as the JSON typed into them - plus the `:user_id`
   saving it. `prefill` is the one being updated, and is ignored when
   creating.
 

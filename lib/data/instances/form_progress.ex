@@ -1,6 +1,6 @@
 defmodule FormFlow.Data.Instances.FormProgress do
   @moduledoc """
-  One form's place and state within a whole root flow instance — a journey:
+  One form's place and state within a whole root flow instance - a journey:
   where the form is, what it is called, how far along it is, and which
   "forms" flow it belongs to.
 
@@ -12,7 +12,7 @@ defmodule FormFlow.Data.Instances.FormProgress do
 
     * `:path` - the position, as `FormFlow.Data.Instances.Form`'s `path`
       records it: the node ids from the root flow down to this form node
-    * `:node` - the form node itself — the step, whose `slug` is the handle
+    * `:node` - the form node itself - the step, whose `slug` is the handle
       a host names it by (`FormFlow.Data.Templates.Flow.Node`). Set for
       every form `FormFlow.Data.Instances.FlowProgress.forms/2` returns;
       `nil` only in a struct built by hand

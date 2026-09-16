@@ -3,14 +3,14 @@ defmodule FormFlow.Web.Templates.Components.Health do
   `FormFlow.Web.Templates.Components.Health` function component draws one
   root flow's health as a badge that links to its health page
   (`FormFlow.Web.Templates.Flows.Health`): a bordered icon button with a
-  mark on its shoulder — the count of open **errors and warnings** in the
+  mark on its shoulder - the count of open **errors and warnings** in the
   colour of the worst, a check when there are none, and a grey dash for a
   flow never checked. The check is green when nothing at all is open, and in
-  the info colour when only `:info` entries are — a draft with unpublished
+  the info colour when only `:info` entries are - a draft with unpublished
   changes is the normal state of a form being worked on, and a flow with
   nothing wrong should read as healthy while that work goes on; the tooltip
   says "healthy · 2 to review", and the page lists them. The stethoscope is
-  `FormFlow.Web.Components.Core.icon/1`'s own clause — Heroicons has none,
+  `FormFlow.Web.Components.Core.icon/1`'s own clause - Heroicons has none,
   so it is drawn inline rather than asked of the host, and a host needs no
   icon set for it.
 
@@ -24,7 +24,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
 
       <Health.health base={@base} flow={@root || @flow} components={@components} />
 
-  With `target` — the flow edit page's own `@myself` — the badge pushes the
+  With `target` - the flow edit page's own `@myself` - the badge pushes the
   `"navigate"` event with `phx-value-to` instead of linking directly, the
   same way that page's crumbs and buttons do, so an unsaved edit still
   prompts before the badge leaves the page.
@@ -98,7 +98,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
 
   # The shoulder: a dash for a flow never checked, a check for one with
   # nothing wrong, else the count of what is
-  defp mark(nil), do: "–"
+  defp mark(nil), do: "-"
   defp mark(status), do: if(Health.healthy?(status), do: "✓", else: Health.wrong(status))
 
   # The badges' colours, solid, in the worst open level's; grey for none
@@ -109,7 +109,7 @@ defmodule FormFlow.Web.Templates.Components.Health do
   defp colors(%{level: :info}), do: "bg-info text-info-content"
 
   # For the button's label, since the icon says nothing on its own
-  defp words(nil), do: "not checked yet — open to check"
+  defp words(nil), do: "not checked yet - open to check"
   defp words(%{level: :ok}), do: "healthy"
   defp words(%{level: :info, counts: counts}), do: "healthy · #{counts.info} to review"
   defp words(status), do: "#{Health.wrong(status)} to look at"

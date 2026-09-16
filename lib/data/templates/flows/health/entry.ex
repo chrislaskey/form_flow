@@ -1,45 +1,45 @@
 defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   @moduledoc """
   One entry in a `FormFlow.Data.Templates.Flows.Health` report: something a
-  check found about a root flow. An entry, not a problem — a check judges a
+  check found about a root flow. An entry, not a problem - a check judges a
   flow from its shape and can be wrong about what is fine on purpose, which
   is why an admin can ignore one (`FormFlow.Data.Templates.Flows.Health.ignore/3`).
 
   ## Fields
 
-    * `:level` — how much it matters, one of `@levels`, worst first.
-      `:error` means a user cannot work the flow as it stands — Start does
+    * `:level` - how much it matters, one of `@levels`, worst first.
+      `:error` means a user cannot work the flow as it stands - Start does
       not reach End, a step's form has no published version. `:warning`
-      means the flow works but something in it does not take part — a step
+      means the flow works but something in it does not take part - a step
       no Start reaches, a step nothing follows. `:info` is something an
-      admin may want to act on that changes nothing for users — a draft
+      admin may want to act on that changes nothing for users - a draft
       with unpublished changes. The three names are the ones the pages'
       alerts and badges already use for their `kind`.
-    * `:code` — a stable atom naming the check that failed, for a caller
+    * `:code` - a stable atom naming the check that failed, for a caller
       that acts on one kind of entry (`:end_unreachable`,
       `:form_not_published`, …). The full list is in
       `FormFlow.Data.Templates.Flows.Health`'s moduledoc.
-    * `:message` — one sentence for an admin, complete on its own: it
+    * `:message` - one sentence for an admin, complete on its own: it
       names the step or flow, qualified by the subflows on the way down
       the way the user-facing pages do ("Review / Check pet details").
-    * `:subject` — the step or flow the entry is about, as `:message`
+    * `:subject` - the step or flow the entry is about, as `:message`
       names it: the qualified step label, or, for an entry with a subflow
       itself, the subflows on the way down. `nil` for an entry with the
       root flow itself, which whatever lists the report already names.
-    * `:explanation` — a short paragraph on why the check matters: what a
+    * `:explanation` - a short paragraph on why the check matters: what a
       user meets when the flow is left this way. One per code
       (`explanation/1`), so a host drawing its own page has it.
-    * `:fix` — one sentence on what to do about it. One per code (`fix/1`).
-    * `:flow_id` — the flow the entry is in: the root, or the owned
+    * `:fix` - one sentence on what to do about it. One per code (`fix/1`).
+    * `:flow_id` - the flow the entry is in: the root, or the owned
       subflow the step sits in.
-    * `:node_id` — the node the entry is about, or `nil` for an entry
+    * `:node_id` - the node the entry is about, or `nil` for an entry
       with the flow itself (no End, Start does not reach End).
-    * `:path` — where in the tree: the node ids from the root flow down,
+    * `:path` - where in the tree: the node ids from the root flow down,
       the same path `FormFlow.Data.Instances.FormProgress` addresses a
       position by. For a flow-level entry it is the path of the subflow
-      node embedding that flow — `[]` for the root. `:code` and `:path`
+      node embedding that flow - `[]` for the root. `:code` and `:path`
       together are what identifies an entry from one check to the next.
-    * `:ignored` — `nil`, or who set this entry aside and when
+    * `:ignored` - `nil`, or who set this entry aside and when
       (`FormFlow.Data.Templates.Flows.Health.ignore/3`): `%{user_id:,
       ignored_at:}`. An ignored entry is listed but not counted.
   """
@@ -102,7 +102,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   def rank(level), do: Enum.find_index(@levels, &(&1 == level))
 
   @doc """
-  Every code a check can produce — the list `explanation/1` and `fix/1` have
+  Every code a check can produce - the list `explanation/1` and `fix/1` have
   words for, and the list the tests hold them to. A code added to the checks
   goes here too.
   """
@@ -111,7 +111,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   @doc """
   Why an entry with `code` matters: what a user meets when the flow is left
-  this way. Written for an admin reading one entry, without the subject —
+  this way. Written for an admin reading one entry, without the subject -
   `:message` names that. A code without words of its own gets a general
   sentence rather than an error: the check runs inside every save, and a
   missing paragraph must not refuse one.
@@ -155,7 +155,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   def explanation(:related_form_missing) do
     "The property names a form by its position in the flow, and no user can reach that " <>
-      "position — the step was removed, moved into another subflow, or is not connected from " <>
+      "position - the step was removed, moved into another subflow, or is not connected from " <>
       "Start. The related form is looked up among the steps a user can reach, so whatever " <>
       "reads its answers would find none."
   end
@@ -185,7 +185,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   end
 
   def explanation(:unknown_type) do
-    "The stored type is not in the host's list — it was renamed or removed after this " <>
+    "The stored type is not in the host's list - it was renamed or removed after this " <>
       "template chose it. The pages fall back to the default type, so the behaviour the " <>
       "type gave this template is gone."
   end
@@ -228,13 +228,13 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   def fix(:related_form_shared),
     do:
-      "Give this flow its own copy of the form — the Copy form choice on the step's form " <>
-        "page — or clear the choice on the form's own page."
+      "Give this flow its own copy of the form - the Copy form choice on the step's form " <>
+        "page - or clear the choice on the form's own page."
 
   def fix(:unconnected),
     do: "Connect a step that Start reaches to this one, or delete it if it is not needed."
 
-  def fix(:dead_end), do: "Connect this step onward — to the next step, or to End."
+  def fix(:dead_end), do: "Connect this step onward - to the next step, or to End."
   def fix(:no_steps), do: "Add a step between Start and End."
 
   def fix(:unknown_type),

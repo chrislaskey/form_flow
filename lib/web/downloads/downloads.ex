@@ -5,8 +5,8 @@ defmodule FormFlow.Web.Downloads do
   `FormFlow.Web.Downloads.Renderer` turns that into bytes, and this module
   joins the two.
 
-  `FormFlow.Web.Controllers.Downloads` is the other half — the request and
-  the response — and it is the only caller today. Keeping them apart is what
+  `FormFlow.Web.Controllers.Downloads` is the other half - the request and
+  the response - and it is the only caller today. Keeping them apart is what
   lets a download be produced without one: a scheduled job that files
   submitted forms somewhere calls `render/4` with the same context a request
   would have built.
@@ -22,7 +22,7 @@ defmodule FormFlow.Web.Downloads do
   @default_renderer FormFlow.Web.Downloads.Renderer.PDF
 
   @doc """
-  The renderer used when a mount names none —
+  The renderer used when a mount names none -
   `FormFlow.Web.Downloads.Renderer.PDF`.
   """
   @spec default_renderer() :: module()
@@ -30,7 +30,7 @@ defmodule FormFlow.Web.Downloads do
 
   @doc """
   Renders a document, returning the bytes, the content type to send them as,
-  and the filename to offer — the document's own `:filename` with the
+  and the filename to offer - the document's own `:filename` with the
   renderer's extension.
 
   `{:error, message}` is whatever the renderer refused with, passed through

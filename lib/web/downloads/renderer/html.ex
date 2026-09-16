@@ -4,7 +4,7 @@ defmodule FormFlow.Web.Downloads.Renderer.HTML do
   than a PDF: one self-contained file, its styles inline, with a `@page` rule
   so a browser's own Print gives sensible margins.
 
-  It is not the default — `FormFlow.Web.Downloads.Renderer.PDF` is — but it is
+  It is not the default - `FormFlow.Web.Downloads.Renderer.PDF` is - but it is
   the renderer to mount when the host would rather print through the
   browser than through the library, and it is the worked example of the
   behaviour having more than one implementation:
@@ -119,11 +119,11 @@ defmodule FormFlow.Web.Downloads.Renderer.HTML do
     ~s(<div class="group">#{heading}) <> Enum.map_join(entries, "\n", &entry/1) <> "</div>"
   end
 
-  defp blank(value) when value in ["", nil], do: "—"
+  defp blank(value) when value in ["", nil], do: "-"
   defp blank(value), do: value
 
   # The document's strings are user answers and admin-authored labels, so
-  # every one of them is escaped on the way out — a printable page is still
+  # every one of them is escaped on the way out - a printable page is still
   # a page a browser will run
   defp escape(value) do
     value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()

@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Templates.Flows.History do
   `FormFlow.Web.Templates.Flows.History` LiveComponent lists what has
   happened to a root flow, newest first, at `/flows/:id/history`: its
   append-only log (`FormFlow.Data.Templates.Flow.Event`), one line per
-  event — what happened, who did it, when.
+  event - what happened, who did it, when.
 
   `created` reads "Created"; `status_changed` reads as the two statuses
   with an arrow between them ("Draft → Open"), in the words the status
@@ -12,15 +12,15 @@ defmodule FormFlow.Web.Templates.Flows.History do
   it was ("Ignored health check: form not published at Intake"), in the
   words the health page lists it (`FormFlow.Web.Templates.Shared.check_name/1`);
   `pre_release_instances_deleted` says how many.
-  The author is the host's `user_id` as it was given — an opaque identity
+  The author is the host's `user_id` as it was given - an opaque identity
   FormFlow does not resolve to a name, the way the health page's "Ignored
-  by" shows it — and an event with none says so. The time is relative
+  by" shows it - and an event with none says so. The time is relative
   ("3 hours ago") with the absolute on hover, as the health page's
   "Checked" is.
 
   Roots only: an owned subflow's history is its root's, as its health is,
   so an owned flow's id lands on the root's page. Nothing on the page
-  decides anything — the log is audit, not state (`Flow.Event`), and this
+  decides anything - the log is audit, not state (`Flow.Event`), and this
   page only reads it. Reached from the flows index's ⋮ menu and the show
   page; a lesser page than Overview and Health, here for auditing, and the
   place other historical data about a flow would go.

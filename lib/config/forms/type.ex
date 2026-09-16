@@ -3,16 +3,16 @@ defmodule FormFlow.Config.Forms.Type do
   Form type definition: one way a form behaves for the user filling it out.
 
   A host passes a list of these as the `form_types` attr of
-  `FormFlow.Web.router/1` and the LiveComponents — the same list on the
+  `FormFlow.Web.router/1` and the LiveComponents - the same list on the
   admin pages, where a type is chosen, and on every instance page, where it
-  acts — usually from one function of its own that starts from `defaults/0`.
-  The struct is what the host describes, and its `:module` — `use`ing this
-  behaviour — is what the type does. `:id` is the value stored in the form's
+  acts - usually from one function of its own that starts from `defaults/0`.
+  The struct is what the host describes, and its `:module` - `use`ing this
+  behaviour - is what the type does. `:id` is the value stored in the form's
   `properties["form_type"]`.
 
   Every callback takes the `FormFlow.Context` of one form in one flow
-  instance — `:form` and `:form_version` are the template, `:form_instance`
-  the user's answers so far — plus `callback_data`, the host's own map from
+  instance - `:form` and `:form_version` are the template, `:form_instance`
+  the user's answers so far - plus `callback_data`, the host's own map from
   the attr of that name, or the assigns of the page drawing the form. The defaults, `FormFlow.Config.Forms.Type.Default`,
   render the stored answers and nothing more, on the edit page and the Show
   page alike, record nothing when the form is submitted, and react to
@@ -43,8 +43,8 @@ defmodule FormFlow.Config.Forms.Type do
         }
 
   @doc """
-  The library's form types, in display order: the default first — the form
-  as designed, and the fallback for a form that never chose — then the
+  The library's form types, in display order: the default first - the form
+  as designed, and the fallback for a form that never chose - then the
   review type. What the `form_types` attr defaults to, and what a host's own
   list starts from:
 
@@ -73,7 +73,7 @@ defmodule FormFlow.Config.Forms.Type do
 
   @doc """
   What an admin entered for the form's type's `:properties`, keyed by
-  property key — stored on the form under
+  property key - stored on the form under
   `properties["form_type_property_values"]`. Empty when the type declares
   none or nothing was entered.
   """
@@ -86,7 +86,7 @@ defmodule FormFlow.Config.Forms.Type do
 
   @doc """
   The first `:related_form` property the form's type declares among `types`,
-  or `nil` — what ties a form to one flow. A related form's value is a step
+  or `nil` - what ties a form to one flow. A related form's value is a step
   path in the flow the form was set up in, so a form of such a type cannot
   be shared by reference across flows
   (`FormFlow.Data.Templates.Flows.reuse_form/3`): it resolves in one of them
@@ -104,7 +104,7 @@ defmodule FormFlow.Config.Forms.Type do
   end
 
   @doc """
-  The data the form renders with — keys are the definition's question names.
+  The data the form renders with - keys are the definition's question names.
   Called when the edit page mounts, on the first start and on every later
   visit alike, so the default returns the user's stored answers and a type
   that prefills merges its values around them. Keep it deterministic for a
@@ -114,9 +114,9 @@ defmodule FormFlow.Config.Forms.Type do
   @callback initial_data(Context.t(), map()) :: map()
 
   @doc """
-  The edit page's form, drawn. `assigns` are `DynamicForm.form/1`'s — `:id`,
+  The edit page's form, drawn. `assigns` are `DynamicForm.form/1`'s - `:id`,
   `:instance` (the parsed definition), `:data` (from `initial_data/2`),
-  `:on_success` — plus `:context`, `:callback_data`, and `:components` (the
+  `:on_success` - plus `:context`, `:callback_data`, and `:components` (the
   page's own, for a type that draws its own UI through
   `FormFlow.Web.ComponentResolver`). The default renders the form and nothing
   else; a type that draws more around it renders the form itself by calling
@@ -134,7 +134,7 @@ defmodule FormFlow.Config.Forms.Type do
 
   @doc """
   What to record on the form's completion event, in its `snapshot`,
-  when the user submits — free-form, `%{}` for nothing. A type that needs to
+  when the user submits - free-form, `%{}` for nothing. A type that needs to
   remember what it saw at submit time records it here; the Review type
   records the form it reviewed. The context is the edit page's: `:form_instance`
   is the row being completed, `:flow_instance_progress` the flow instance as
@@ -144,7 +144,7 @@ defmodule FormFlow.Config.Forms.Type do
   @callback snapshot(Context.t(), map()) :: map()
 
   @doc """
-  Called after the user submits the form and the instance is completed — the
+  Called after the user submits the form and the instance is completed - the
   context is derived fresh, so the form counts as done and `:form_instance`
   is the completed row. The moment a host reacts at: notify someone, write
   answers out to its own tables, enqueue a job. The return value is ignored;
@@ -191,8 +191,8 @@ defmodule FormFlow.Config.Forms.Type do
 
   @doc """
   The form a `:related_form` property of the form's type points at, as it
-  stands in this flow instance — the `FormProgress` whose path the property
-  value names — or `nil` when the property is unset or the flow no longer has
+  stands in this flow instance - the `FormProgress` whose path the property
+  value names - or `nil` when the property is unset or the flow no longer has
   that position.
   """
   @spec related_form(Context.t(), String.t()) :: FormProgress.t() | nil

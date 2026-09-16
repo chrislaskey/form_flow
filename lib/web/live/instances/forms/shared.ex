@@ -8,7 +8,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   are each addressed by a flow instance plus a `path`, and both need the same
   answers before they can render anything: which form the path names, which
   `FormFlow.Config.Flows.Type` governs its flow, whether that type lets the
-  user edit there, and which live instance — if any — holds the answers.
+  user edit there, and which live instance - if any - holds the answers.
   Only what they *do* with those answers differs, so the resolving lives here
   rather than in either of them, where two copies of one gate could drift
   apart.
@@ -37,7 +37,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       this form
     * `:visible?` - whether the type says this form's flow is for the viewer
       at all (`visible?/2`, the perspectives test by default)
-    * `:editable?` - whether the type allows editing here — never when the
+    * `:editable?` - whether the type allows editing here - never when the
       form is not visible
     * `:start_error` - why `start/1` could not start the form, or nil
     * `:mount_error` / `:navigate_to` - the host's `on_mount` answer when it
@@ -48,9 +48,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
   Then each page asks whether it may render (`on_mount/2`): first whether
-  the instance is of a flow the page's `flows` attr names — a page about
-  Dog License does not show a Cat License instance — and then the host's
-  `on_mount`. Edit — only Edit, and only when the host said yes —
+  the instance is of a flow the page's `flows` attr names - a page about
+  Dog License does not show a Cat License instance - and then the host's
+  `on_mount`. Edit - only Edit, and only when the host said yes -
   makes the one write in here, `start/1`: a form with no instance yet is
   started when the flow's type allows it, which creates the instance and is
   the moment the form version is pinned. The order is the point: a refused
@@ -66,7 +66,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
 
-  # What a flow is governed by when its context has no types at all — a
+  # What a flow is governed by when its context has no types at all - a
   # "forms" flow always has the page's flow types, so this is reached only by
   # a host passing [] or a stranded position answered for by a "subflows"
   # root.
@@ -75,7 +75,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     name: "Default"
   }
 
-  # What a form is governed by when the page has no form types at all — a
+  # What a form is governed by when the page has no form types at all - a
   # host passing [].
   @default_form_type %FormFlow.Config.Forms.Type{
     module: FormFlow.Config.Forms.Type.Default,
@@ -86,7 +86,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     %{context: context, tree: tree, version: version, form_instance: form_instance} =
       resolve(socket.assigns)
 
-    # The page's pre-release users, resolved now that the context exists —
+    # The page's pre-release users, resolved now that the context exists -
     # `continue_allowed?/2` below is the first to ask
     socket =
       socket
@@ -151,7 +151,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   Whether this page offers to fill the form in from one of the form's
   prefills: while the flow is a `draft` or in `pre_release`, the statuses
   that mean it is being tried out rather than used. Nothing is stored by
-  applying one — the answers are what the form renders with until the user
+  applying one - the answers are what the form renders with until the user
   saves or submits them.
 
   Not a permission: the pages draw the picker where this says so, and
@@ -171,7 +171,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   `:flow_instance`, `:path`, `:user_id`, `:tenant_id`, `:perspectives`, and
   `:flow_types`.
 
-  Returns `%{tree: …, forms: …, form_instance: …, version: …, context: …}` —
+  Returns `%{tree: …, forms: …, form_instance: …, version: …, context: …}` -
   the resolved template tree, the whole journey's progress, the live
   instance at the position (`nil` until it is started), the version it is
   pinned to, and the `FormFlow.Context` the two form pages and every
@@ -187,7 +187,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
     forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
 
-    # An instance already at the position is simply used — including a
+    # An instance already at the position is simply used - including a
     # stranded one, whose position the tree no longer has
     form_instance = Instances.Forms.get_at(flow_instance, path)
 
@@ -237,7 +237,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The `FormFlow.Config.Flows.Perspective` structs the context's `:subflow` is
-  for — its stored ids resolved through the `:perspectives` its flow type
+  for - its stored ids resolved through the `:perspectives` its flow type
   declares (`flow_type/2`, so an unset type resolves as everywhere else).
   `[]` for a flow that names none, or names only ids the type no longer has.
   """
@@ -247,14 +247,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   Whether the flow type says the form at the context's `:form_progress` is
-  for this viewer — `visible?/2`, the perspectives test by default. The
+  for this viewer - `visible?/2`, the perspectives test by default. The
   pages hide, skip, and refuse a form that is not.
   """
   def visible?(type, context, assigns), do: type.module.visible?(context, assigns.callback_data)
 
   @doc """
   The first form of the whole flow instance the viewer can work next, in
-  flow order: actionable, and visible to them. `nil` when nothing is — the
+  flow order: actionable, and visible to them. `nil` when nothing is - the
   viewer's part is done, or blocked on someone else's.
   """
   def next_visible_form(%Context{flow_instance_progress: forms} = context, assigns) do
@@ -284,8 +284,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   `:subflow`: its stored `properties["form_flow_type"]` looked up among the
   page's `flow_types` (`FormFlow.Web.Templates.Shared.flow_types_for/2`, so a
   "subflows" flow has none). An unset or unrecognized value resolves to the
-  first type — the defaults list the in-order wizard first, so it stays the
-  baseline — and a context with no types to the library's default, so a form
+  first type - the defaults list the in-order wizard first, so it stays the
+  baseline - and a context with no types to the library's default, so a form
   always has a type to ask.
   """
   def flow_type(%Context{subflow: flow} = context, assigns) do
@@ -298,7 +298,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   @doc """
   The `FormFlow.Config.Forms.Type` governing the form at the context's
   `:form`: its stored `properties["form_type"]` looked up among the page's
-  `form_types`, with the same fallbacks as `flow_type/2` — the first type,
+  `form_types`, with the same fallbacks as `flow_type/2` - the first type,
   then the library's default.
   """
   def form_type(%Context{form: form}, assigns) do
@@ -312,7 +312,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   Whether the page may render. First the library's own check: an instance
   page whose `flows` attr names flows in particular renders only an
   instance of one of them (`resolve_flows/2`), and refuses the rest with
-  `:mount_error` — the counterpart of the listing refusing to start a flow it
+  `:mount_error` - the counterpart of the listing refusing to start a flow it
   did not offer. A host naming no flows accepts every instance, and the
   listing has no instance in scope.
 
@@ -358,8 +358,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   # refused on every instance page, whoever is looking; the edit page asks
   # for `:continue` as well (`opts[:allows]`), so a read-only flow refuses it
   # with the sentence that says why. The listing has no instance and passes.
-  # The root flow is already in the page's context — `resolve/1` loaded it
-  # with the tree — so nothing is read again; a page without one (the
+  # The root flow is already in the page's context - `resolve/1` loaded it
+  # with the tree - so nothing is read again; a page without one (the
   # instance's flow is gone) is refused by the pages' own not-found state.
   defp instance_flow(%{flow_instance: %{}, context: %Context{flow: %Templates.Flow{} = flow}}),
     do: flow
@@ -379,8 +379,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   @doc """
   The page's `flows` attr resolved to `FormFlow.Data.Templates.Flow` structs:
   structs pass through, slugs are looked up in the tenant, `nil` entries and
-  flows of another tenant are dropped. `nil` — the host named none in
-  particular — is every root flow of the tenant. These are
+  flows of another tenant are dropped. `nil` - the host named none in
+  particular - is every root flow of the tenant. These are
   the flows the page is about: what the listing offers to start, and the only
   flows whose instances the instance pages render.
   """
@@ -429,8 +429,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   Edit's mode: a position with no instance yet is started when the flow's
-  type allows editing there — the instance is created, which pins the form
-  version — and the page's assigns are derived again, since the first
+  type allows editing there - the instance is created, which pins the form
+  version - and the page's assigns are derived again, since the first
   derivation ran before the start and still called this form available rather
   than in progress. A position with an instance, or one the type keeps
   closed, is left as it is; a start that fails leaves `:start_error`.
@@ -455,14 +455,14 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
         {:ok, form_instance}
 
       {:error, :no_published_version} ->
-        {:error, "That form has no published version yet — ask an administrator to publish it."}
+        {:error, "That form has no published version yet - ask an administrator to publish it."}
 
       {:error, _reason} ->
-        {:error, "Could not start this form. The flow may have changed — reload."}
+        {:error, "Could not start this form. The flow may have changed - reload."}
     end
   end
 
-  # A definition is admin-authored input — a malformed one becomes an inline
+  # A definition is admin-authored input - a malformed one becomes an inline
   # error, never a crash loop (the same posture as the preview).
   defp parse(socket, nil), do: assign(socket, parsed: nil, parse_error: nil)
 
@@ -475,7 +475,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     error -> assign(socket, parsed: nil, parse_error: Exception.message(error))
   end
 
-  # Whether the form is for this viewer, and whether they may edit it now — a
+  # Whether the form is for this viewer, and whether they may edit it now - a
   # position the tree no longer has is neither, and one that is not visible
   # is never editable
   defp access(_type, %Context{form_progress: nil}, _assigns), do: {false, false}
@@ -487,8 +487,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
      visible? and continue_allowed?(context, assigns) and editable?(type, context, assigns)}
   end
 
-  # Whether the flow's status lets this viewer continue — start, edit,
-  # reopen, submit — at any position
+  # Whether the flow's status lets this viewer continue - start, edit,
+  # reopen, submit - at any position
   # (`FormFlow.Web.Instances.Shared.status_allows?/3`); a flow the tree no
   # longer resolves lets nobody
   defp continue_allowed?(%Context{flow: %Templates.Flow{} = flow}, assigns),
@@ -499,7 +499,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   defp editable?(type, context, assigns),
     do: type.module.editable?(context, assigns.callback_data)
 
-  # The sibling forms the user may jump to — asked of the type one form at a
+  # The sibling forms the user may jump to - asked of the type one form at a
   # time, through form_context/2, so the type is asked about the sibling with
   # every field of the context aimed at it, `form_node` included. Navigating
   # to the one this page addresses would do nothing, so it is never among

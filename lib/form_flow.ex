@@ -9,7 +9,7 @@ defmodule FormFlow do
   def app_config(key), do: Application.get_env(:form_flow, key)
 
   @doc """
-  Reads back a download token FormFlow minted — what a host's own download
+  Reads back a download token FormFlow minted - what a host's own download
   endpoint calls to find out who asked for what.
 
   The stable name for `FormFlow.Web.Downloads.Token.decode/3`; see there for

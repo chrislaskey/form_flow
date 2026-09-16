@@ -1,13 +1,13 @@
 defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   @moduledoc """
-  Turns one form instance — a user's answers at one position of a flow
-  instance — into a `FormFlow.Web.Downloads.Document`.
+  Turns one form instance - a user's answers at one position of a flow
+  instance - into a `FormFlow.Web.Downloads.Document`.
 
   This is the first of the download parsers, and the shape the ones after it
   follow: it knows one resource, produces the shared document, and knows
   nothing about PDFs. It sits among the components that draw a form because
-  it reads the same thing they do — the pinned definition and the answers
-  against it — only onto paper rather than onto a page. It reads the same
+  it reads the same thing they do - the pinned definition and the answers
+  against it - only onto paper rather than onto a page. It reads the same
   `FormFlow.Context` the user-facing Show page renders from
   (`FormFlow.Web.Instances.Forms.Shared.resolve/1` builds it), so a download
   and the page it was started from can never disagree about what the answers
@@ -22,14 +22,14 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
       outside any panel land in the untitled section before the first one
     * a repeating question (`paneldynamic`) becomes a section holding one
       group per entry the user added, each group the template answered for
-      that entry and headed the way the page heads it — the template's
+      that entry and headed the way the page heads it - the template's
       `templateTitle` with `{panelIndex}` filled in, and no heading where the
       template sets none
     * nesting is followed all the way down: a panel inside a template is a
-      group inside the entry's group, and a repeating question inside one —
-      users, each with their email addresses — is a group of groups
+      group inside the entry's group, and a repeating question inside one -
+      users, each with their email addresses - is a group of groups
     * a static content element becomes a line of prose, its markup stripped
-      — a definition's headings and notes are part of what the form said
+      - a definition's headings and notes are part of what the form said
     * every other question becomes a field: its title, and its answer
       rendered through `render_value/2`
 
@@ -39,7 +39,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   record says what was left blank as much as what was filled in.
 
   A label prints what `DynamicForm` draws, and nothing it does not: a
-  placeholder it leaves alone — `{panel.field}` in a heading, say — is
+  placeholder it leaves alone - `{panel.field}` in a heading, say - is
   printed as written, and an entry it heads with nothing is headed with
   nothing here. Teaching the printout to say more would make the paper
   disagree with the screen, which is the one thing this parser is for.
@@ -59,14 +59,14 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   alias FormFlow.Web.Downloads.Document
   alias FormFlow.Web.Downloads.Document.Section
 
-  # The placeholder a `templateTitle` puts the entry's 1-based number in —
+  # The placeholder a `templateTitle` puts the entry's 1-based number in -
   # SurveyJS's, and what `DynamicForm` substitutes when it draws the heading
   @panel_index "{panelIndex}"
 
   @doc """
   The document for the form instance the context is aimed at.
 
-  `{:error, :not_started}` when the context has no `:form_instance` — the
+  `{:error, :not_started}` when the context has no `:form_instance` - the
   position exists but nobody has opened it, so there is nothing to print;
   the caller answers that rather than sending an empty file.
   `{:error, :no_definition}` when the pinned version cannot be parsed, which
@@ -99,7 +99,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   A stored answer as the words a reader should see: `nil` and `""` are
   nothing at all, booleans are Yes and No, a value the question offers as a
   choice is that choice's text, a list is its members joined with commas,
-  and a map — an answer to a question the definition no longer has — is
+  and a map - an answer to a question the definition no longer has - is
   compact JSON. `question` may be `nil`, which is what an answer with no
   question left to explain it gets.
   """
@@ -188,7 +188,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   # template holds becomes entries: a titled panel is a nested group, a
   # repeating question is a nested group of groups, and the rest is fields
   # and prose. `data` is what answers are read from and `seen` is what
-  # visibility is judged against — the same two the browser's renderer keeps
+  # visibility is judged against - the same two the browser's renderer keeps
   # apart, and equal everywhere except inside an entry.
   defp entries(elements, data, seen) do
     elements
@@ -225,7 +225,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
 
   # One group per entry the user added, each the template answered for that
   # entry. A form that nests a repeating question inside a repeating question
-  # — users, each with their email addresses — nests here the same way: a
+  # - users, each with their email addresses - nests here the same way: a
   # printout is only useful if it has the shape the answers do.
   defp panel_groups(question, data, seen) do
     data
@@ -262,7 +262,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
 
   # The per-entry heading, the way `DynamicForm` draws it: the template's
   # `templateTitle` with `{panelIndex}` filled in, and no heading at all when
-  # the template sets none. The entry is still its own group either way —
+  # the template sets none. The entry is still its own group either way -
   # what separates two untitled entries on the page is the card drawn around
   # each, not a heading.
   defp entry_title(%Instance.Question{templateTitle: title}, index) do
@@ -283,7 +283,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
 
   # A definition's static content is authored as HTML. A printed document has
   # no markup, so the tags come out and the entities that survive them are
-  # decoded — enough to read, which is all this content is for.
+  # decoded - enough to read, which is all this content is for.
   defp strip_markup(html) do
     html
     |> String.replace(~r/<(script|style)\b[^>]*>.*?<\/\1>/is, " ")

@@ -1,13 +1,13 @@
 defmodule FormFlow.Data.Instances.Flows do
   @moduledoc """
   `FormFlow.Data.Instances.Flows` context module for whole-root-flow
-  instances — journeys: a `FormFlow.Data.Instances.Flow` row plus every form
+  instances - journeys: a `FormFlow.Data.Instances.Flow` row plus every form
   instance filled at a position inside it (see `FormFlow.Data.Instances` for
   the term).
 
   Deliberately minimal until the runner lands: creation (with its `created`
   event), the completion stamp, the derived-progress helpers, stranded
-  listing, and the one operation that must exist concretely from day one —
+  listing, and the one operation that must exist concretely from day one -
   explicit deletion, because nothing on the instance side ever cascades.
   """
 
@@ -26,8 +26,8 @@ defmodule FormFlow.Data.Instances.Flows do
   Journeys, newest first, with `:template_flow` preloaded. `opts[:user_id]` narrows
   to one creator, `opts[:tenant_id]` to one tenant, `opts[:flow]` to
   instances of one or more flow templates (see `narrow_flow/2`), and
-  `opts[:status]` to journeys in one status — `"in_progress"` or
-  `"completed"`, the journey's own stamp (`complete/2`), not the flow's —
+  `opts[:status]` to journeys in one status - `"in_progress"` or
+  `"completed"`, the journey's own stamp (`complete/2`), not the flow's -
   query conveniences for "my journeys" listings, not access control: the
   library never enforces visibility.
   """
@@ -43,12 +43,12 @@ defmodule FormFlow.Data.Instances.Flows do
   `limit`/`offset`, `Repo.aggregate(:count)`, and their own preloads on top.
 
   `opts[:user_id]`, `opts[:tenant_id]`, `opts[:flow]`, and `opts[:status]`
-  narrow exactly as in `list/1` — and with the same caveat: listing
+  narrow exactly as in `list/1` - and with the same caveat: listing
   conveniences, not access control. This is the building block for the
   `instances` attr of `FormFlow.Web.router/1`: the listing page's own
   default is `list_query(user_id: user_id)`, narrowed to the flows the page
   offers when it offers some in particular. `status: "completed"` is how a
-  host that stamps journeys asks for a user's finished ones — last year's
+  host that stamps journeys asks for a user's finished ones - last year's
   filing, for a form that prefills from it.
   """
   def list_query(opts \\ []) do
@@ -60,13 +60,13 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  `query` — one over `FormFlow.Data.Instances.Flow` — narrowed to instances
+  `query` - one over `FormFlow.Data.Instances.Flow` - narrowed to instances
   of one or more flow templates: a `FormFlow.Data.Templates.Flow`, an id, or
   a slug, or a list mixing them (`nil` entries dropped). `nil` leaves the
   query as it is; `[]` matches nothing.
 
   Slugs are unique per tenant, not globally, so a slug alone matches the
-  flow of that slug in every tenant — pair it with `tenant_id:` when that
+  flow of that slug in every tenant - pair it with `tenant_id:` when that
   matters, as the listing page does.
   """
   def narrow_flow(query, nil), do: query
@@ -83,19 +83,19 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   # Node and flow ids are UUIDs and slugs never are, so one string can only
-  # be one of the two — the same distinction the router draws in a URL
+  # be one of the two - the same distinction the router draws in a URL
   defp uuid?(value), do: match?({:ok, _uuid}, Ecto.UUID.cast(value))
 
   @doc """
-  `query` — one over `FormFlow.Data.Instances.Flow`, such as a host's
-  `instances` attr — narrowed to one tenant.
+  `query` - one over `FormFlow.Data.Instances.Flow`, such as a host's
+  `instances` attr - narrowed to one tenant.
   `nil` leaves it as it is, the whole table being the scope of a host with
   no tenants.
   """
   def narrow_tenant(query, tenant_id), do: narrow(query, :tenant_id, tenant_id)
 
   @doc """
-  `query` — one over `FormFlow.Data.Instances.Flow` — narrowed to instances
+  `query` - one over `FormFlow.Data.Instances.Flow` - narrowed to instances
   of flows whose status allows `action` (`:start`, `:continue`, or `:see`;
   `FormFlow.Data.Templates.Flow.allows?/2`). The listing page applies
   `:see` on top of whatever it lists, the host's query included, the way it
@@ -110,7 +110,7 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  `query` — one over `FormFlow.Data.Instances.Flow` — without the instances
+  `query` - one over `FormFlow.Data.Instances.Flow` - without the instances
   of flows in `status`. The listing page drops pre-release flows this way
   for a user the page does not name among its pre-release users.
   """
@@ -132,15 +132,15 @@ defmodule FormFlow.Data.Instances.Flows do
 
   The flow's status is not consulted: whether a user may start this flow
   is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`, asked by
-  the listing at the click), so that a host's own route — an appeal taken
-  after the deadline, a support tool repairing a record — can do what it is
+  the listing at the click), so that a host's own route - an appeal taken
+  after the deadline, a support tool repairing a record - can do what it is
   asked. A route of its own that should honour the status asks `allows?/2`
   first, as the pages do.
 
   One thing about the status is recorded: a journey started while the flow
   is `pre_release` gets `"form_flow" => %{"pre_release" => true}` in its
   `metadata`, so the pre-release run can be told from the real one once the
-  flow opens — by `FormFlow.Data.Instances.Flow.pre_release?/1` on a row, or
+  flow opens - by `FormFlow.Data.Instances.Flow.pre_release?/1` on a row, or
   `list_pre_release/1` for a flow's; the marker is inside the map, so there
   is no `where` for it to hand a listing query. `metadata` is otherwise
   the host's map; `"form_flow"` is the one key FormFlow claims in it.
@@ -179,9 +179,9 @@ defmodule FormFlow.Data.Instances.Flows do
   @doc """
   Stamps `status: "completed"` and `completed_at`, writing a
   `status_changed` event. The stamp is a fact at a moment, never recomputed
-  — it may legitimately diverge from `complete?/1` after a later template
-  edit. Who calls it — runner-automatic on End reached, host-triggered, or
-  End-node custom logic (planned) — is deliberately not decided here.
+  - it may legitimately diverge from `complete?/1` after a later template
+  edit. Who calls it - runner-automatic on End reached, host-triggered, or
+  End-node custom logic (planned) - is deliberately not decided here.
   Completing a completed journey is a no-op. The flow's status is not
   consulted: this is an administrative stamp on the journey, not a user
   continuing it, and a host closing out a read-only year may well call it.
@@ -204,7 +204,7 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  Derived traversal state for a journey — `%{path => status}` from the live
+  Derived traversal state for a journey - `%{path => status}` from the live
   tree and the journey's form instances. Never persisted; see
   `FormFlow.Data.Instances.FlowProgress`.
   """
@@ -216,7 +216,7 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  The derivation-side completion answer — distinct from the stamped
+  The derivation-side completion answer - distinct from the stamped
   `status`, which is a fact at a moment. The two may diverge after a
   template edit; hosts should ask the question they mean.
   """
@@ -228,8 +228,8 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  The position a user should go to next — the first available (or already
-  in-progress) form position in flow order, descending into subflows — or
+  The position a user should go to next - the first available (or already
+  in-progress) form position in flow order, descending into subflows - or
   nil when nothing is actionable. This is the after-submit redirect.
   """
   def next_path_position(%Instances.Flow{} = instance) do
@@ -242,7 +242,7 @@ defmodule FormFlow.Data.Instances.Flows do
   @doc """
   The journey's stranded form instances: active (not superseded) instances
   whose `path` matches no position in the current tree. Accepts a
-  `Templates.Flow` to sweep every journey of that root at once — one edit
+  `Templates.Flow` to sweep every journey of that root at once - one edit
   to a subflow strands instances across every journey of the root
   simultaneously, and batch reconciliation builds on this.
   """
@@ -273,8 +273,8 @@ defmodule FormFlow.Data.Instances.Flows do
   Deletes a journey, its event trail, and its attached form instances,
   deliberately and in order: journey events first, then each form instance
   through `FormFlow.Data.Instances.Forms.delete_instance/2` (its events
-  first — the `restrict` FKs forbid any other order), then the journey row.
-  This is the only deletion path — there is no cascade.
+  first - the `restrict` FKs forbid any other order), then the journey row.
+  This is the only deletion path - there is no cascade.
 
   The copies a review's events hold of another instance's answers are not
   redacted along the way (`redact: false`): every copy a journey's instances
@@ -297,7 +297,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
   @doc """
   The journeys of a root flow started while it was `pre_release`
-  (`FormFlow.Data.Instances.Flow.pre_release?/1`), oldest first — the trial
+  (`FormFlow.Data.Instances.Flow.pre_release?/1`), oldest first - the trial
   run the status dialog offers to delete when the flow moves on. The marker
   sits inside the `metadata` map, so the journeys of the flow are read and
   filtered here rather than in a JSON query the two databases would spell
@@ -318,7 +318,7 @@ defmodule FormFlow.Data.Instances.Flows do
   (`list_pre_release/1`), each through `delete_instance/2`, and writes one
   `pre_release_instances_deleted` event on the flow's own log
   (`FormFlow.Data.Templates.Flow.Event`) with the `"count"` and
-  `opts[:user_id]`, all in one transaction — so the trial run an admin
+  `opts[:user_id]`, all in one transaction - so the trial run an admin
   cleared away is a recorded decision, not rows that went missing. Returns
   `{:ok, count}`; with nothing to delete, `{:ok, 0}` and no event. The
   flow's status is not consulted: this is the admin's call, made from the

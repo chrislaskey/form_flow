@@ -5,18 +5,18 @@ defmodule FormFlow.Web.Templates.Flows.New do
   A flow's flavor is declared up front and is immutable after, so this page is
   the chooser: a name and the forms-or-subflows decision. Creating seeds the
   flow with `FormFlow.Data.Templates.Flows.starter_nodes/0` (a pinned Start and End)
-  and lands on the edit page — the canvas lives there, not here.
+  and lands on the edit page - the canvas lives there, not here.
 
       <.live_component module={FormFlow.Web.Templates.Flows.New} id="flows-new" />
 
   The page is three decisions wide rather than a column of them: Name and
   Slug share a row (`DynamicForm`'s horizontal group), and the kind is a row
-  of choice cards — the same `FormFlow.Web.Templates.Components.ChoiceCard`
+  of choice cards - the same `FormFlow.Web.Templates.Components.ChoiceCard`
   the form editor picks its editor with, for the same reason: the kind
   decides what the flow can hold ever after, and a card has the second line
   that consequence needs. **Create flow** sits in the header beside Cancel,
   reaching the form below by an HTML `form=` reference, so the primary action
-  is where every other page keeps it. Cancel asks first — there is no draft
+  is where every other page keeps it. Cancel asks first - there is no draft
   here to come back to, so leaving loses whatever was typed.
 
   DynamicForm's default success message targets a LiveView's `handle_info/2`;
@@ -25,7 +25,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
   does the side effect.
 
   `base` is the path prefix the flows pages are mounted under, used to build
-  navigation targets — with the default `""`, creating navigates to
+  navigation targets - with the default `""`, creating navigates to
   `/flows/:id/edit`.
   """
 
@@ -71,8 +71,8 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
     case Flows.create(attrs, user_id: socket.assigns.user_id) do
       {:ok, flow} ->
-        # The one save a new flow has had: its badge reads what it is —
-        # Start and End, unwired — rather than "not checked"
+        # The one save a new flow has had: its badge reads what it is -
+        # Start and End, unwired - rather than "not checked"
         FormFlow.Data.Templates.Flows.Health.refresh(flow,
           flow_types: socket.assigns.flow_types,
           form_types: socket.assigns.form_types
@@ -110,7 +110,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
     {:noreply, push_navigate(socket, to: to)}
   end
 
-  # The kind, drawn as cards rather than a row of radios — still the form's
+  # The kind, drawn as cards rather than a row of radios - still the form's
   # own radio group, with the `<:field>` body taking over the control while
   # DynamicForm keeps the label, the errors, and the changeset
   attr(:field, :any, required: true)
@@ -143,7 +143,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
       <Header.header base={@base} section="flows" name="New flow" components={@components}>
         <:actions>
           <%!-- Nothing has been written yet, so leaving is not a discard of
-                something saved — but it is the loss of what was typed, and
+                something saved - but it is the loss of what was typed, and
                 the page asks the way a delete does --%>
           <Core.button
             components={@components}

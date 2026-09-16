@@ -8,7 +8,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.Canvas do
   flow are looked at on the same kind of surface.
 
   A definition holding no elements gets the `:empty` slot in place of the
-  card — such a definition renders as a form whose only control is Submit,
+  card - such a definition renders as a form whose only control is Submit,
   which reads as broken rather than unstarted. The definition arrives either
   as the JSON string an editor holds or as the map a saved version carries.
   One that cannot be parsed is not empty: it goes to the preview, which says

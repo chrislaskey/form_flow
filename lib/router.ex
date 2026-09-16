@@ -11,7 +11,7 @@ defmodule FormFlow.Router do
   @doc """
   Declares the route FormFlow's editor bundle is served from.
 
-  Add it to your router, outside any pipeline — the asset needs no session,
+  Add it to your router, outside any pipeline - the asset needs no session,
   and it skips CSRF protection:
 
       # lib/my_app_web/router.ex
@@ -51,7 +51,7 @@ defmodule FormFlow.Router do
   Declares the route a user's downloads and printable documents are served
   from.
 
-  Add it to your router inside a pipeline that authenticates — the route
+  Add it to your router inside a pipeline that authenticates - the route
   sends a form's answers, and FormFlow does not yet authorize it itself
   (see `FormFlow.Web.Controllers.Downloads`):
 
@@ -66,7 +66,7 @@ defmodule FormFlow.Router do
 
   One route answers both Download and Print: which of the two is a query
   param, as is the resource, so the path itself carries nothing. Mount it
-  wherever you like, however deeply nested — and tell the pages where it is
+  wherever you like, however deeply nested - and tell the pages where it is
   with `FormFlow.Web.router/1`'s `download_path` attr, or with the config
   below, which both the route and the links fall back to.
 

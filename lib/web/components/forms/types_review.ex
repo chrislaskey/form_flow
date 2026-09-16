@@ -1,16 +1,16 @@
 defmodule FormFlow.Web.Components.Forms.Types.Review do
   @moduledoc """
   Form type `"review"`: a form for checking an earlier form's answers. Both
-  pages show that form read-only on the left — the same rendering the
-  user-facing Show page gives submitted answers — and this form on the
+  pages show that form read-only on the left - the same rendering the
+  user-facing Show page gives submitted answers - and this form on the
   right: as designed and editable on the edit page, read-only on Show.
 
   Which earlier form is the type's one property, `"source"`, a
   `:related_form` an admin picks on the form edit page from the forms before
   this one in the flow. At render it resolves through
   `FormFlow.Config.Forms.Type.related_form/2` to that form as it stands in
-  this flow instance. A source that doesn't resolve — unset, blank, or a path
-  the flow no longer has, however it came about — is one error with one fix,
+  this flow instance. A source that doesn't resolve - unset, blank, or a path
+  the flow no longer has, however it came about - is one error with one fix,
   an administrator choosing again, and is said so in its place; a source the
   user hasn't reached yet is not an error and says that instead. The review
   form itself stays editable either way.
@@ -20,8 +20,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   Submitting the review records what it reviewed on its own completion event
   (`snapshot/2`): the source's id, its pinned version id, its
   `completed_at`, and its answers as they were rendered, under `"reviewed"`
-  in the event's `snapshot`. Structure by reference — the version is
-  immutable — and answers by copy, because the source can be resubmitted,
+  in the event's `snapshot`. Structure by reference - the version is
+  immutable - and answers by copy, because the source can be resubmitted,
   reconciled, or deleted, and a review that carries its own record is
   stronger evidence than one reconstructed from other tables. The library
   blanks the copy when the source is deleted
@@ -30,7 +30,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   review type to store identifiers only.
 
   A source that did not resolve, or had no instance, at review time records
-  `%{"path" => …, "instance_id" => nil}` — that nothing was reviewed is
+  `%{"path" => …, "instance_id" => nil}` - that nothing was reviewed is
   itself worth recording.
 
   ## Staleness
@@ -38,8 +38,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   At render, the type reads that record and the source instance's event
   trail (`FormFlow.Data.Instances.Forms.list_events/2`) and calls the review
   stale when the source has any event newer than the review's completion.
-  The headline is the latest thing that happened to the source — submitted
-  again, reopened, moved to a new version, replaced, deleted — and a diff of
+  The headline is the latest thing that happened to the source - submitted
+  again, reopened, moved to a new version, replaced, deleted - and a diff of
   the recorded answers against the source's current ones follows where one
   makes sense. A structure change since the review rides along as a caveat on
   the diff rather than outranking a change to the answers. Staleness is
@@ -67,12 +67,12 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   @typedoc """
   What has happened to the reviewed form since the review:
 
-    * `:never_reviewed` — the review has no completion on record
-    * `:current` — nothing has happened to the source since, or nothing was
+    * `:never_reviewed` - the review has no completion on record
+    * `:current` - nothing has happened to the source since, or nothing was
       reviewed (the source had not been started)
-    * `:redacted` — the review stands, but the record of what it reviewed
+    * `:redacted` - the review stands, but the record of what it reviewed
       was erased when the source was deleted out of the journey
-    * `{:stale, cause, structure_changed?: boolean()}` — the source moved on;
+    * `{:stale, cause, structure_changed?: boolean()}` - the source moved on;
       `cause` is the latest thing that happened to it, and
       `structure_changed?` says whether its pinned version differs from the
       one reviewed
@@ -104,7 +104,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   @impl true
   def edit_component(assigns) do
-    # A plain map from the edit page, not a component's assigns — merged, not
+    # A plain map from the edit page, not a component's assigns - merged, not
     # assign/2'd, and rendered without change tracking
     assigns = Map.merge(assigns, review_assigns(assigns))
 
@@ -158,7 +158,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   4. The source has no instance now → `{:stale, :deleted, …}`.
   5. The source's instance is not the one recorded → `{:stale, :replaced, …}`.
   6. The source events strictly newer than the completion decide: none →
-     `:current`; otherwise the latest gives the cause — `status_changed` is
+     `:current`; otherwise the latest gives the cause - `status_changed` is
      `:resubmitted`; `reopened` is `:reopened` when a user did it and
      `:migrated` when a publish policy did (`to_version_id` set), as is
      `migrated` itself.
@@ -215,8 +215,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   @doc """
   The answers that differ between what was reviewed and what the source holds
   now, one `t:change/0` per key from the union of both maps, in the order the
-  definitions ask the questions. Titles come from the definitions — the
-  reviewed version's for the old side, the current one's for the new — and
+  definitions ask the questions. Titles come from the definitions - the
+  reviewed version's for the old side, the current one's for the new - and
   fall back to the key; either definition may be nil. Values render through
   one rule: lists joined with commas, maps as compact JSON, booleans as
   Yes/No, nothing as an empty string, everything else `to_string/1`.
@@ -287,7 +287,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   # Everything both pages draw around the review form: the source and its
   # parsed definition, and what has happened to it since the review. Two
-  # queries — the review's completion and the source's trail — in a render
+  # queries - the review's completion and the source's trail - in a render
   # path, on top of the version load; accepted for now.
   defp review_assigns(%{context: context}) do
     source = Type.related_form(context, "source")
@@ -338,7 +338,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
           Reviewing{if @source, do: ": #{FlowProgress.qualified_label(@source)}"}
         </h3>
         <Core.error :if={is_nil(@source)} components={@components}>
-          The form to review is missing — an administrator needs to choose it on this form's settings.
+          The form to review is missing - an administrator needs to choose it on this form's settings.
         </Core.error>
         <p :if={@source && is_nil(@source.instance)} class="text-sm text-zinc-500">
           {FlowProgress.qualified_label(@source)} hasn't been started yet, so there is nothing to review.
@@ -408,7 +408,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
           <% :resubmitted -> %>
             {@label} was submitted again on {stamp(@latest.inserted_at)}, after this review.
           <% :reopened -> %>
-            {@label} is being edited — reopened on {stamp(@latest.inserted_at)}, not yet resubmitted.
+            {@label} is being edited - reopened on {stamp(@latest.inserted_at)}, not yet resubmitted.
           <% :migrated -> %>
             {@label}'s form changed after this review (a new version was published).
           <% :replaced -> %>
@@ -491,7 +491,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   # The diff between the recorded answers and the source's current ones. The
   # current pinned definition titles both sides unless the structure moved,
-  # when the reviewed version is loaded for the old side — the rare path.
+  # when the reviewed version is loaded for the old side - the rare path.
   defp changed_answers(
          %{snapshot: snapshot, source: source, source_parsed: parsed},
          structure_changed?
@@ -504,7 +504,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   defp stamp(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M") <> " UTC"
 
-  # The source's pinned definition, parsed — nil with no instance to show,
+  # The source's pinned definition, parsed - nil with no instance to show,
   # and nil rather than a crash for a malformed definition (the same posture
   # as the form pages)
   defp parse(%{instance: %{template_form_version_id: version_id}}),

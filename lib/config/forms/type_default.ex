@@ -1,6 +1,6 @@
 defmodule FormFlow.Config.Forms.Type.Default do
   @moduledoc """
-  The public face of `FormFlow.Config.Forms.Type`'s defaults — the stored
+  The public face of `FormFlow.Config.Forms.Type`'s defaults - the stored
   answers and nothing more, for a custom type to reach when it prefills
   around them:
 

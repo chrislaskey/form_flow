@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Components.Overview do
   The canvas is the same React bundle as `FormFlow.Web.Components.Editor`'s
   (served by `FormFlow.Web.Assets`), mounted through its `mountOverview`
   export instead of `mount`, so a page showing both downloads it once. What
-  it draws is a *tree* — `FormFlow.Web.Helpers.ReactFlow.to_tree_data/1` —
+  it draws is a *tree* - `FormFlow.Web.Helpers.ReactFlow.to_tree_data/1` -
   with every subflow node expanded into a group holding its inner flow. The
   bundle lays it out; nothing here has a position.
 
@@ -16,7 +16,7 @@ defmodule FormFlow.Web.Components.Overview do
   LiveComponent passed as `target`: `"form_flow:overview_mounted"` once the
   bundle has loaded, `"form_flow:open_subflow"` with `%{"node_id" => ...}`
   from a group's Open button, and `"form_flow:open_form"` likewise from a
-  form node's. Nothing goes the other way — unlike
+  form node's. Nothing goes the other way - unlike
   `FormFlow.Web.Components.Editor`, which pushes a saved flow back with
   `form_flow:set_flow` so editor-temporary node ids become real ones, this
   page never saves, so the tree it mounts with is the tree it draws until a

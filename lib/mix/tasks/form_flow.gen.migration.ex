@@ -11,7 +11,7 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
   pinned, so it keeps doing what it did when it was written. Upgrading FormFlow
   means running this task again: it finds the version your existing migration
   pinned and generates a second migration that applies only the versions in
-  between — and whose rollback returns to the old version rather than removing
+  between - and whose rollback returns to the old version rather than removing
   FormFlow entirely.
 
   ## Options
@@ -48,7 +48,7 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
     cond do
       pinned >= version ->
         Mix.shell().info("""
-        A migration in #{path} already pins FormFlow version #{pinned} — nothing to generate.
+        A migration in #{path} already pins FormFlow version #{pinned} - nothing to generate.
         """)
 
       pinned == 0 ->
@@ -100,7 +100,7 @@ defmodule Mix.Tasks.FormFlow.Gen.Migration do
   end
 
   # The version an earlier run of this task pinned, or 0 when there is none.
-  # Read from the migration files themselves — the database may not exist yet.
+  # Read from the migration files themselves - the database may not exist yet.
   defp highest_pinned_version(path) do
     path
     |> Path.join("*.exs")

@@ -6,30 +6,30 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   editor (see `FormFlow.Web.Components.Editor`), tracks edits as the editor
   reports them, and on save replaces the flow's contents with
   `FormFlow.Data.Templates.Flows.update/2`. Saving a subflows flow also
-  creates the children of any freshly added subflow nodes — see
+  creates the children of any freshly added subflow nodes - see
   `FormFlow.Data.Templates.Flows`.
 
   Edit mode is sticky: saving stays here rather than bouncing to the show
-  page — flow editing is a workspace loop, often across several levels. After
+  page - flow editing is a workspace loop, often across several levels. After
   a save the persisted flow is pushed back into the canvas
   (`form_flow:set_flow`), so editor-temporary node ids become the real UUIDs
-  — which is what makes Open work on a just-saved subflow node.
+  - which is what makes Open work on a just-saved subflow node.
 
   Stickiness ends at a form node's Open, on purpose: it lands on the form's
   *show* page, same as it does from the read-only canvas
   (`FormFlow.Web.Templates.Flows.Show`). A canvas and a form are different
-  workspaces with different save models — the canvas edits in place with its
+  workspaces with different save models - the canvas edits in place with its
   own Save, a form's answer is a new draft version with its own publish
-  lifecycle — so crossing into one from the other is the ordinary boundary,
+  lifecycle - so crossing into one from the other is the ordinary boundary,
   not a continuation of it. Reaching a form's *edit* page from here is a
-  second, deliberate click, same as it would be from anywhere else — except
+  second, deliberate click, same as it would be from anywhere else - except
   for a form nobody has ever published, which has nothing on Show worth
   seeing yet; Open lands straight on its draft's editor (`form_node_path/2`).
 
   Two addressing modes, matching the router:
 
-    * `flow_id` — a flow edited directly, `/flows/:id/edit`
-    * `root_id` + `node_id` — a subflow reached by drill-in,
+    * `flow_id` - a flow edited directly, `/flows/:id/edit`
+    * `root_id` + `node_id` - a subflow reached by drill-in,
       `/flows/:root_id/nodes/:node_id/edit`; the node's `subflow_id` is the
       flow edited here
 
@@ -37,13 +37,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   (`current` differs from the last-persisted `data`): the header's Show
   button, a subflow's Open button, and the breadcrumbs all push a generic
   `"navigate"` event with their destination rather than a bare `<.link
-  navigate>`, precisely so that event can check first — if the canvas is
+  navigate>`, precisely so that event can check first - if the canvas is
   dirty, navigation pauses for a prompt to save first or keep editing instead
   of silently discarding the edit. Open additionally treats a node
   `FormFlow.Data.Templates.Flows.get_node/1` can't find yet (just added,
   never saved) as unsaved, since there's nothing to navigate to until it
-  exists. Either way declining leaves the canvas exactly as it was — nothing
-  is discarded — and confirming resolves a pending node's editor-temporary id
+  exists. Either way declining leaves the canvas exactly as it was - nothing
+  is discarded - and confirming resolves a pending node's editor-temporary id
   to whatever it was actually saved as (see
   `FormFlow.Web.Helpers.ReactFlow.to_flow_attrs/1`'s `id_map`), so Open still
   lands on the right subflow even when it was never saved before this click.
@@ -52,9 +52,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   `"navigate"` event above can't reach, because neither one goes through a
   click this page controls:
 
-    * Closing the tab, refreshing, or typing a new URL — a `beforeunload`
+    * Closing the tab, refreshing, or typing a new URL - a `beforeunload`
       prompt, reading the flag at the moment it fires.
-    * The browser's Back/Forward buttons — LiveView intercepts these itself
+    * The browser's Back/Forward buttons - LiveView intercepts these itself
       and performs a live navigation over the existing socket, the same way
       `push_navigate/2` does, so the document never unloads and
       `beforeunload` never sees it. LiveView 1.2.8 added exactly the escape
@@ -62,27 +62,27 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       before acting on *any* live navigation, click or popstate alike. The
       hook cancels it and reports the attempted destination through the very
       same `"navigate"` event as everything else, producing the same
-      save-first prompt — cancelling this way is native to LiveView, so
+      save-first prompt - cancelling this way is native to LiveView, so
       unlike a hand-rolled history trap it doesn't touch `history` itself or
       disturb the forward/back stack. `phx:before-navigate` doesn't exist
       before LiveView 1.2.8, but form_flow's own dependency floor stays at
       1.1.0 rather than forcing every consumer onto it: an app on an older
       LiveView simply never receives the event, so the listener never fires
-      — the Back/Forward guard is silently absent there, while `beforeunload`
+      - the Back/Forward guard is silently absent there, while `beforeunload`
       above still works regardless of version.
 
   This needs its own tiny hook rather than piggybacking on
   `FormFlow.Web.Components.Editor`'s: that hook's container is
   `phx-update="ignore"`, so a data attribute on it would never see a new
   value. This hook's div renders normally, so `data-unsaved` is simply read
-  at the moment each browser event fires — nothing is mirrored into JS
+  at the moment each browser event fires - nothing is mirrored into JS
   state.
 
   Discard changes is the deliberate opposite: shown only while the canvas is
   dirty, it throws the edit away rather than protecting it, so it asks for
   confirmation first rather than checking for one. Confirming reloads this
-  same edit page via `push_navigate/2` — a full remount, refetching the flow
-  from scratch — rather than trying to reset in-memory state by hand. That's
+  same edit page via `push_navigate/2` - a full remount, refetching the flow
+  from scratch - rather than trying to reset in-memory state by hand. That's
   deliberately the blunt option: as the canvas grows more state (open panels,
   selections, whatever comes later), reproducing "as freshly loaded" by
   resetting each field by hand only gets more places to miss one, where a
@@ -118,7 +118,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # DynamicForm's on_change routed back through send_update: the flow form's
-  # values are tracked like canvas edits — nothing persists until Save, and
+  # values are tracked like canvas edits - nothing persists until Save, and
   # they count as unsaved changes for the navigation guard.
   @impl true
   def update(%{event: "change", payload: payload}, socket) do
@@ -175,7 +175,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # The form values the last save wrote, which the identity form edits
-  # against — nil across the board for a flow that does not exist
+  # against - nil across the board for a flow that does not exist
   defp pending(flow, node) do
     %{
       pending_name: flow && step_name(flow, node),
@@ -187,8 +187,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     }
   end
 
-  # The perspectives the admin has checked, among those the pending type —
-  # or, unset, the type it amounts to — declares: a type that declares none
+  # The perspectives the admin has checked, among those the pending type -
+  # or, unset, the type it amounts to - declares: a type that declares none
   # has no field and its flows are for everyone, and switching types keeps
   # only the ids both types share.
   defp pending_perspectives(payload, pending_type, assigns) do
@@ -229,12 +229,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # The identity form's data: the saved values, with the saved type's property
   # values under their field names. Switching the type dropdown re-renders
   # the property fields, and DynamicForm rebuilds a form whose fields changed
-  # from its data — so at that moment the data becomes the pending values
+  # from its data - so at that moment the data becomes the pending values
   # (reset_form_data_on_switch/2), and the name the admin was typing survives.
   # Otherwise it holds still, which is what keeps in-progress input alive.
   # The type shown is the one the flow amounts to: a flow that never chose
   # shows the first type, which is what it behaves as everywhere else, while
-  # its stored value stays unset — "the default" — until the admin picks.
+  # its stored value stays unset - "the default" - until the admin picks.
   defp form_data(nil, _node, _types), do: nil
 
   defp form_data(flow, node, types) do
@@ -332,7 +332,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # The raw param, not the applied changeset data: picking the prompt again
   # ("") must clear the pending type, and Ecto's cast treats "" as a missing
-  # param rather than a change to nil — payload.data would keep the old value
+  # param rather than a change to nil - payload.data would keep the old value
   defp pending_type(%{changeset: %{params: %{"form_flow_type" => value}}}, _current) do
     presence(value)
   end
@@ -371,7 +371,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
-  # A form node's Open: same save-first guard as subflows — and a node saved
+  # A form node's Open: same save-first guard as subflows - and a node saved
   # for the first time only *gets* its form at save, so the pending path
   # resolves after "Save & Continue" through the id_map like subflow opens do
   @impl true
@@ -440,7 +440,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     {:noreply, push_navigate(socket, to: current_path(socket.assigns))}
   end
 
-  # Whether the page has edits the last save doesn't reflect yet — `current`
+  # Whether the page has edits the last save doesn't reflect yet - `current`
   # tracks every reported `flow_changed` against what `Flows.update/2` last
   # persisted, and the pending form values against the flow's saved ones.
   defp unsaved_changes?(assigns) do
@@ -464,7 +464,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # Unlike a subflow's Open, this is not sticky: a form node's answer is
   # someone else's workspace, with its own edit page reached by its own
-  # click — landing here is the same as landing here from the read-only
+  # click - landing here is the same as landing here from the read-only
   # canvas (`FormFlow.Web.Templates.Flows.Show`). `mode=edit` is the one
   # thing that does cross the boundary: it tells the form pages' own
   # header (`FormFlow.Web.Templates.Components.Header`) that Root
@@ -472,7 +472,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # since that's where this click came from.
   #
   # One exception: a form nobody has ever published has nothing for Show to
-  # show — no history, no content a draft might overwrite — so Open lands
+  # show - no history, no content a draft might overwrite - so Open lands
   # straight on its (sole) draft's editor, same as it always has for a form
   # node fresh off "Save & Continue". `ever_published?/1` is what already
   # answers this same question for Show's own publish dialog
@@ -507,8 +507,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # Shared by "save" and "save_and_continue": persists the canvas and re-syncs
-  # it with what was written — temporary editor ids became real UUIDs, and
-  # fresh subflow nodes gained their subflow_id — so Open works without a
+  # it with what was written - temporary editor ids became real UUIDs, and
+  # fresh subflow nodes gained their subflow_id - so Open works without a
   # reload. Returns the id_map too: "save_and_continue" needs it to resolve a
   # pending node's editor-temporary id to what it was actually saved as.
   defp persist_current(socket) do
@@ -535,7 +535,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
              socket.assigns.pending_name,
              socket.assigns.pending_slug
            ) do
-      # One save, one recomputation — after everything the save wrote; the
+      # One save, one recomputation - after everything the save wrote; the
       # root is read again for the status it now carries
       FormFlow.Data.Templates.Flows.Health.refresh(flow, socket.assigns.host_types)
       flow = Flows.get(flow.id)
@@ -578,10 +578,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   end
 
   # The flow's stored `properties` map with the form's pending values applied
-  # — an unset type removes the key and the property values with it, so "no
+  # - an unset type removes the key and the property values with it, so "no
   # choice" stays "use the configured default" rather than pinning whatever
   # the default happened to be at save time. A type's property values are
-  # replaced whole, so switching types leaves nothing of the old one behind —
+  # replaced whole, so switching types leaves nothing of the old one behind -
   # and a type with nothing entered stores no values key at all.
   defp pending_template_properties(assigns) do
     case {assigns.pending_type, assigns.pending_property_values} do
@@ -667,10 +667,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       >
         <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
         <:actions>
-          <%!-- The root's health, cached, from any depth — through the
+          <%!-- The root's health, cached, from any depth - through the
                 "navigate" event, as below --%>
           <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
-          <%!-- The whole flow at once, read-only — through the "navigate"
+          <%!-- The whole flow at once, read-only - through the "navigate"
                 event like every other way off this page, so unsaved
                 changes prompt first --%>
           <Core.button
@@ -736,19 +736,19 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
       <%!-- The flow's own fields, below the canvas. Edits here are pending
             like canvas edits: nothing persists until the header's Save, which
-            writes both — on_change reports values back through send_update,
+            writes both - on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
             *saved* values; pending ones live in this component's assigns.
             The type dropdown exists only when the page's flow_types apply
-            to this flow — how the forms are presented belongs to the flow
+            to this flow - how the forms are presented belongs to the flow
             of forms itself, so that is "forms" flows only.
 
             Three columns, in two groups: who the flow is (name, slug,
             status), then what it is (type, perspectives, and the type's
             properties, wrapping three to a row). The groups are laid out
-            from here, by the attribute DynamicForm stamps on each — a grid
+            from here, by the attribute DynamicForm stamps on each - a grid
             in place of the library's content-sized flex row, so every
-            member takes exactly a column — and stack to one column below
+            member takes exactly a column - and stack to one column below
             md. The status summary sits between them at the page's width;
             it is what splits them, so an owned subflow, which has no
             status, has one group and its fields fill each row in turn
@@ -781,7 +781,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             description={slug_description(assigns)}
           />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
-                status table), on a root flow only — an owned subflow's is
+                status table), on a root flow only - an owned subflow's is
                 its root's. The summary under the row redraws for the
                 pending choice, the way the form edit page explains its type,
                 and says how many instances the choice reaches. --%>
@@ -807,7 +807,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             options={type_select_options(@flow_types)}
           />
           <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective):
-                the shown type's, like its properties below — a type that
+                the shown type's, like its properties below - a type that
                 declares none has no field --%>
           <:field
             :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []}
@@ -922,7 +922,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp flow_name(flow, nil, pending_name), do: pending_name || flow.name
   defp flow_name(_flow, _node, pending_name), do: pending_name
 
-  # What the Slug field edits: through a node, the step's slug — an owned
+  # What the Slug field edits: through a node, the step's slug - an owned
   # subflow has none of its own; at the root, the flow's
   defp step_slug(flow, nil), do: flow.slug
   defp step_slug(_flow, node), do: node.slug
@@ -934,7 +934,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
 
   # The status is saved with everything else but written by its own function,
-  # so the change has its event — with the admin at this page as its author —
+  # so the change has its event - with the admin at this page as its author -
   # and an unchanged status writes none (`update_status/3` is a no-op then).
   # Only a root flow has one to move.
   defp update_status(%{owner_flow_id: nil} = flow, %{pending_status: status, user_id: user_id})
@@ -958,12 +958,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   defp slug_description(%{node_id: nil}),
     do:
-      "A stable name for looking this flow up in code — lowercase letters, numbers, _ and -. " <>
+      "A stable name for looking this flow up in code - lowercase letters, numbers, _ and -. " <>
         "It does not follow a rename."
 
   defp slug_description(_assigns),
     do:
-      "A stable name for looking this step up in code — lowercase letters, numbers, _ and -. " <>
+      "A stable name for looking this step up in code - lowercase letters, numbers, _ and -. " <>
         "It does not follow a rename."
 
   defp status_callout(%{status: nil} = assigns), do: ~H""

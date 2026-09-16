@@ -22,7 +22,7 @@ defmodule FormFlow.Web.Router do
 
   | Path                                | LiveComponent |
   |-------------------------------------|---------------|
-  | `/`                                 | a landing linking the Flows and Forms indexes — the mount root is generic, not owned by either section |
+  | `/`                                 | a landing linking the Flows and Forms indexes - the mount root is generic, not owned by either section |
   | `/flows`                            | `FormFlow.Web.Templates.Flows.Index` |
   | `/flows/new`                        | `FormFlow.Web.Templates.Flows.New` |
   | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
@@ -37,7 +37,7 @@ defmodule FormFlow.Web.Router do
   | `/forms/:id`                        | `FormFlow.Web.Templates.Forms.Show` (latest published, else newest draft) |
   | `/forms/:id/versions/:version_id`   | `FormFlow.Web.Templates.Forms.Show` (a specific version or draft) |
   | `/forms/:id/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` (drafts only) |
-  | `/forms/:id/edit`                   | `FormFlow.Web.Templates.Forms.Details` (name, slug, description, type — every version's) |
+  | `/forms/:id/edit`                   | `FormFlow.Web.Templates.Forms.Details` (name, slug, description, type - every version's) |
   | `/flows/:root/nodes/:node_id/form`  | `FormFlow.Web.Templates.Forms.Show` (the node's form, with breadcrumb) |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id` | `FormFlow.Web.Templates.Forms.Show` |
   | `/flows/:root/nodes/:node_id/form/versions/:version_id/edit` | `FormFlow.Web.Templates.Forms.Edit` |
@@ -51,7 +51,7 @@ defmodule FormFlow.Web.Router do
   | `/`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
   | `/:id`                     | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
   | `/:id/forms/*path`         | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
-  | `/:id/forms/*path/edit`    | `FormFlow.Web.Instances.Forms.Edit` (the editable form — the page that opens the position) |
+  | `/:id/forms/*path/edit`    | `FormFlow.Web.Instances.Forms.Edit` (the editable form - the page that opens the position) |
 
   The user-facing side has no landing page and no `/flows` segment: it has
   one section, so the mount root is its index. `live "/users/*path", ...`
@@ -63,47 +63,47 @@ defmodule FormFlow.Web.Router do
   `flow_types`, `form_types`, `callback_data`, `on_mount`, `instances`,
   `flows`, `pre_release_user_ids`, `download_path`, `uri`, `params`, and
   `components`, whether or not
-  it reads them today — a host calling the components directly should pass the same, so a
+  it reads them today - a host calling the components directly should pass the same, so a
   later feature that needs one never means rewiring.
 
   `components` reaches every LiveComponent on both sides, including the
-  template pages that skip `flow_types`/`form_types`/`callback_data` — the
-  New pages and the forms index — since a styling override belongs
+  template pages that skip `flow_types`/`form_types`/`callback_data` - the
+  New pages and the forms index - since a styling override belongs
   everywhere a page draws markup, not only where a type callback runs. See
   `FormFlow.Web.ComponentResolver`. Every template page takes `user_id`
-  too — the admin at the page, stamped on the flow's log
+  too - the admin at the page, stamped on the flow's log
   (`FormFlow.Data.Templates.Flow.Event`) and on a health ignore
   (`FormFlow.Data.Templates.Flows.Health`); the forms pages carry it for
-  the events they will write — and the flows New page takes the two type
+  the events they will write - and the flows New page takes the two type
   lists, to cache the new flow's health with the host's types.
 
   `build_with_ai` goes to the form editor alone
   (`FormFlow.Web.Templates.Forms.Edit`), because it configures one card on
-  that page rather than a behaviour the pages share — which is the difference
+  that page rather than a behaviour the pages share - which is the difference
   between it and the two type lists, and the reason it is not passed
   everywhere.
 
   Nothing here reaches back into a host module by convention: every way a
   host shapes a page is a value it passes. The two type lists are the one
   thing that must be the *same* value on the admin pages and on every
-  instance page, since a type chosen on one side acts on the other — a host
+  instance page, since a type chosen on one side acts on the other - a host
   keeps them in one function of its own and passes it everywhere.
 
   The two sides use the same nouns on purpose: the mount root already says
   which world you are in, so `/admin/flows/:id` is a flow *template* and
-  `/users/:id` is a flow *instance* — the names
+  `/users/:id` is a flow *instance* - the names
   `FormFlow.Data.Templates.Flow` and `FormFlow.Data.Instances.Flow` already
   give themselves.
 
-  Drill-in URLs carry the *node* id, not the child flow's or form's id — a
+  Drill-in URLs carry the *node* id, not the child flow's or form's id - a
   catalog form used at two steps of one root is two nodes, so two
   unambiguous URLs. Versions get an explicit id suffix because several drafts
   may coexist and nothing else disambiguates them.
 
   On the instances side a form is addressed by its **position** rather than by
   its instance row: `*path` is the chain of node ids from the root flow down
-  to the form node — the same `path` a `FormFlow.Data.Instances.Form` stamps
-  at creation — so a form two subflows deep has three segments. The template
+  to the form node - the same `path` a `FormFlow.Data.Instances.Form` stamps
+  at creation - so a form two subflows deep has three segments. The template
   side needs no such chain, because every path to a shared subflow reaches
   the same template; two paths through an *instance* are two different sets
   of answers. Addressing the position also means the URL exists before the
@@ -113,7 +113,7 @@ defmodule FormFlow.Web.Router do
   builds all of them.
 
   `base` is the path prefix the catch-all is mounted under, so the components
-  build working navigation links — `live "/admin/*path", ...` needs
+  build working navigation links - `live "/admin/*path", ...` needs
   `base="/admin"`; the default suits a root-level catch-all.
 
   The usage guide (`guides/usage.md`) walks through the user-facing mount
@@ -129,7 +129,7 @@ defmodule FormFlow.Web.Router do
   attr(:user_id, :string,
     required: true,
     doc:
-      "opaque host identity of the current user — stamped as the creator " <>
+      "opaque host identity of the current user - stamped as the creator " <>
         "of flow instances started here and as the acting user on instance " <>
         "events. Never interpreted by the library; auth stays the host's job"
   )
@@ -137,7 +137,7 @@ defmodule FormFlow.Web.Router do
   attr(:tenant_id, :string,
     default: nil,
     doc:
-      "opaque host identity of the current user's tenant — stamped on the " <>
+      "opaque host identity of the current user's tenant - stamped on the " <>
         "flow and form templates created here, on flow instances started " <>
         "here, and on form instances started inside them; the index pages " <>
         "list only that tenant's. Only multitenant hosts set it; the default " <>
@@ -147,7 +147,7 @@ defmodule FormFlow.Web.Router do
   attr(:perspectives, :any,
     default: [],
     doc:
-      "the kinds of user the current user is here as — one or more " <>
+      "the kinds of user the current user is here as - one or more " <>
         "`FormFlow.Config.Flows.Perspective` ids, a string or a list. The " <>
         "instance pages show, offer, and open only the flows for those " <>
         "perspectives; the default, none, sees everything. Ignored by the " <>
@@ -158,7 +158,7 @@ defmodule FormFlow.Web.Router do
     default: FormFlow.Config.Flows.Type.defaults(),
     doc:
       "the `FormFlow.Config.Flows.Type` structs a \"forms\" flow may be given, " <>
-        "in display order — the admin pages offer them, the instance pages act " <>
+        "in display order - the admin pages offer them, the instance pages act " <>
         "on them, so pass the same list to both. Defaults to the library's " <>
         "wizards (`FormFlow.Config.Flows.Type.defaults/0`); a host's list " <>
         "usually starts from those"
@@ -168,7 +168,7 @@ defmodule FormFlow.Web.Router do
     default: FormFlow.Config.Forms.Type.defaults(),
     doc:
       "the `FormFlow.Config.Forms.Type` structs a form may be given, in display " <>
-        "order — the same on both sides, like `flow_types`. Defaults to the " <>
+        "order - the same on both sides, like `flow_types`. Defaults to the " <>
         "library's default and review types (`FormFlow.Config.Forms.Type.defaults/0`)"
   )
 
@@ -176,7 +176,7 @@ defmodule FormFlow.Web.Router do
     default: %{},
     doc:
       "the host's own data, passed unmodified as the second argument of every " <>
-        "callback FormFlow calls — the types' and `on_mount` — beside the " <>
+        "callback FormFlow calls - the types' and `on_mount` - beside the " <>
         "`FormFlow.Context`. Whatever the page knows that a type may need: a " <>
         "reviewer's region, a prefill source"
   )
@@ -184,7 +184,7 @@ defmodule FormFlow.Web.Router do
   attr(:build_with_ai, :any,
     default: nil,
     doc:
-      "a `FormFlow.Config.AI` struct — which module answers a Build with AI " <>
+      "a `FormFlow.Config.AI` struct - which module answers a Build with AI " <>
         "prompt on the form editor, and the models, key, and timeout it " <>
         "answers with. `nil`, the default, leaves the card on the page and " <>
         "the panel saying the feature is not set up here. The one attr that " <>
@@ -195,8 +195,8 @@ defmodule FormFlow.Web.Router do
   attr(:components, :atom,
     default: nil,
     doc:
-      "a module overriding FormFlow's own UI components — typically the " <>
-        "host's Phoenix-generated `CoreComponents` — dispatched per function " <>
+      "a module overriding FormFlow's own UI components - typically the " <>
+        "host's Phoenix-generated `CoreComponents` - dispatched per function " <>
         "with `FormFlow.Web.CoreComponents` filling in whatever the module " <>
         "doesn't define. Reaches every LiveComponent on both sides. `nil` " <>
         "renders everything with the built-ins. See `FormFlow.Web.ComponentResolver`"
@@ -218,7 +218,7 @@ defmodule FormFlow.Web.Router do
     default: nil,
     doc:
       "the flow instances the listing shows, as a composable query over " <>
-        "`FormFlow.Data.Instances.Flow` — `FormFlow.Data.Instances.Flows.list_query/1` " <>
+        "`FormFlow.Data.Instances.Flow` - `FormFlow.Data.Instances.Flows.list_query/1` " <>
         "is the building block; `nil` lists the current user's own, of the " <>
         "flows named by `flows` when it names some. The router's `tenant_id` " <>
         "is applied on top. A listing convenience, not access control: gate " <>
@@ -228,12 +228,12 @@ defmodule FormFlow.Web.Router do
   attr(:pre_release_user_ids, :any,
     default: [],
     doc:
-      "the host's user ids for whom a `pre_release` flow is open — offered, " <>
-        "continued, seen — as if it were `open`; to everyone else it is a draft. " <>
+      "the host's user ids for whom a `pre_release` flow is open - offered, " <>
+        "continued, seen - as if it were `open`; to everyone else it is a draft. " <>
         "A list, or a function of the page's `FormFlow.Context` and `callback_data` " <>
         "returning one, for a host whose pre-release users are a role or a team " <>
         "(return `[context.user_id]` when the viewer qualifies); it is called once per page, " <>
-        "with the page's context — the user, tenant, and perspectives, no flow — so the " <>
+        "with the page's context - the user, tenant, and perspectives, no flow - so the " <>
         "rule is per page, not per flow. " <>
         "The pages are the gate: the data layer takes a pre-release start from " <>
         "anyone and marks the journey's `metadata` (`\"form_flow\" => %{\"pre_release\" => true}`). " <>
@@ -244,7 +244,7 @@ defmodule FormFlow.Web.Router do
   attr(:flows, :any,
     default: nil,
     doc:
-      "the flow templates the listing is about, in display order — " <>
+      "the flow templates the listing is about, in display order - " <>
         "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped. " <>
         "The page offers them to start and refuses to start any other, its " <>
         "instance pages refuse an instance of any other, and when `instances` " <>
@@ -258,12 +258,12 @@ defmodule FormFlow.Web.Router do
     doc:
       "the path the Download PDF and Print links point at. The resource and " <>
         "which of the two was clicked ride in the query string, so this can " <>
-        "be any path, however deeply nested — including an endpoint of the " <>
+        "be any path, however deeply nested - including an endpoint of the " <>
         "host's own, which is how an application generates the document " <>
         "itself instead of using FormFlow's renderer. `nil`, the default, " <>
         "falls back to `config :form_flow, download_path:` " <>
         "(`FormFlow.Web.Controllers.Downloads.path/0`), and where that is " <>
-        "unset too the pages draw no download links at all — offering them " <>
+        "unset too the pages draw no download links at all - offering them " <>
         "is something an application opts into. Ignored by the template pages"
   )
 
@@ -285,7 +285,7 @@ defmodule FormFlow.Web.Router do
     ~H"""
     <div>
       <%= if @type == "templates" do %>
-        <%!-- The mount root is generic — it belongs to neither section, it
+        <%!-- The mount root is generic - it belongs to neither section, it
               links to both. `live "/admin/*path", ...` with base="/admin"
               makes /admin this landing, /admin/flows and /admin/forms the
               indexes. --%>
@@ -637,7 +637,7 @@ defmodule FormFlow.Web.Router do
     end
   end
 
-  # Everything after `/forms/` is the position — a chain of node ids — with an
+  # Everything after `/forms/` is the position - a chain of node ids - with an
   # optional `edit` suffix. Node ids are UUIDs, so "edit" can never be one of
   # them.
   defp form_route(id, rest) do
