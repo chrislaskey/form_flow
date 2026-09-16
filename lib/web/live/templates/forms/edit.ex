@@ -157,6 +157,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Note
   alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
@@ -1738,9 +1739,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         mode={@params["mode"]}
         components={@components}
       >
-        <:metadata>draft</:metadata>
         <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
+          <span class="text-zinc-400">/</span>
+          <.link navigate={version_show_path(assigns, @version)} class="hover:underline">
+            Versions
+          </.link>
+          <span class="text-zinc-400">/</span>
+          Edit
         </:crumb>
         <:actions :if={@root}>
           <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
@@ -1873,9 +1879,14 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         mode={@params["mode"]}
         components={@components}
       >
-        <:metadata>draft</:metadata>
         <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
+          <span class="text-zinc-400">/</span>
+          <.link navigate={version_show_path(assigns, @version)} class="hover:underline">
+            Versions
+          </.link>
+          <span class="text-zinc-400">/</span>
+          Edit
         </:crumb>
         <%!-- Reached through a flow: that flow's health, which the save
               below refreshes --%>
@@ -2001,9 +2012,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               published version the moment it is saved, so they move to
               their own page, and the note above the form says where. --%>
         <:field :if={@edit_details?} type="html" name="form_details_heading">
-          <Shared.section_heading title="Form details">
-            What every version of this form shares: its name, slug, description, and type.
-          </Shared.section_heading>
+          <SectionHeading.section_heading
+            title="Form details"
+            description="What every version of this form shares: its name, slug, description, and type."
+          />
         </:field>
         <:group :if={@edit_details?} name="name_and_slug" type="horizontal" title={false} />
         <:field
@@ -2059,7 +2071,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
         <:group name="version" type="vertical" title={false} />
         <:field group="version" type="html" name="form_version_heading">
-          <Shared.section_heading title="Form draft">
+          <SectionHeading.section_heading title="Form draft">
             <span :if={@based_on}>
               Current draft is based on
               <.link
@@ -2085,7 +2097,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               </.link>.
             </span>
             Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_stamp(@version)}. Edit using:
-          </Shared.section_heading>
+          </SectionHeading.section_heading>
         </:field>
         <%!-- Three ways to edit one definition, under one radio. Each hides
               with visible_if - hidden, it keeps its content and stops being
@@ -2132,9 +2144,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="json_heading"
           visible_if="{definition_editor} = 'json'"
         >
-          <Shared.section_heading title="JSON" class="mt-6">
-            Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax.
-          </Shared.section_heading>
+          <SectionHeading.section_heading
+            title="JSON"
+            description="Edit the form definition directly using DynamicForm's SurveyJS-compatible JSON syntax."
+            class="mt-6"
+          />
         </:field>
         <:field
           group="version"
@@ -2156,11 +2170,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="copy_heading"
           visible_if="{definition_editor} = 'copy'"
         >
-          <Shared.section_heading title="Copy existing form" class="mt-6">
-            Replace this draft's definition with another form's - a reusable form from the
-            catalog, or a step's form from a flow. The name, slug, description, and form type
-            stay as they are.
-          </Shared.section_heading>
+          <SectionHeading.section_heading
+            title="Copy existing form"
+            description="Replace this draft's definition with another form's - a reusable form from the catalog, or a step's form from a flow. The name, slug, description, and form type stay as they are."
+            class="mt-6"
+          />
         </:field>
         <:field
           :if={@copy_sources != []}
@@ -2200,9 +2214,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           name="build_with_ai_heading"
           visible_if="{definition_editor} = 'ai'"
         >
-          <Shared.section_heading title="Build with AI" class="mt-6">
-            Use AI to build new form elements or edit existing ones.
-          </Shared.section_heading>
+          <SectionHeading.section_heading
+            title="Build with AI"
+            description="Use AI to build new form elements or edit existing ones."
+            class="mt-6"
+          />
         </:field>
         <%!-- Nothing configured: the card stays - the product has the
               feature - and the panel says whose decision the absence is.
@@ -2432,8 +2448,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
               }
             }
           </script>
-          <Shared.section_heading title="Preview" class="mb-4">
-            The form as a user will see it, following the definition as you edit.
+          <SectionHeading.section_heading
+            title="Preview"
+            description="The form as a user will see it, following the definition as you edit."
+            class="mb-4"
+          >
             <:actions>
               <%!-- Width, not fullscreen: the preview drops the column beside
                     it and runs the page's width, with the form underneath.
@@ -2492,7 +2511,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                 Refresh
               </Core.button>
             </:actions>
-          </Shared.section_heading>
+          </SectionHeading.section_heading>
           <%!-- Prefills sit between the heading and the preview, because
                 they are about what the preview shows rather than about how
                 it is shown - the heading's own actions are the layout ones.

@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.27.0
+
+### The page header: breadcrumb first, then the name, and nothing after it
+
+`FormFlow.Web.Templates.Components.Header` puts the breadcrumb on top,
+small, and the page's name under it, larger: a drill-in reads
+"Applicant *in Dog License*" and a root flow reads its own name. The dotted
+metadata that used to trail the title - "Simple flow · Wizard (in order) ·
+For: Applicant", a form's "v1 · published · Review · Form to review: ..." -
+is gone from the header. It said the same things the fact sheet under the
+canvas already said, so the sheet is now the one place they read.
+
+**Breaking:** the header's `metadata` slot is removed. Pass what a page
+has to say about its subject to its fact sheet instead.
+
+### The flow's fact sheet, boxed, headed, and complete
+
+`FormFlow.Web.Templates.Flows.Show` heads the facts under the canvas
+**Flow details** - *"What every step of this flow shares: its name, slug,
+status, and kind."* - with **Edit flow details** on the heading's line
+leading to the editor, and draws them in a border four to a row, the way
+the form page draws its own. **Flow kind** (Simple flow or Complex flow)
+joins the sheet; it was only in the header before. `Flows.Edit` carries the
+same heading and border around its fields, with Flow kind read-only among
+them - a flow's kind is fixed when it is created.
+
+`FormFlow.Web.Templates.Shared.kind_label/1` is the one place the two
+words come from. A form page's Preview heading now names the version it
+shows ("Preview · v1 · published"), since the title no longer does.
+
+### `SectionHeading` is a shared component
+
+`FormFlow.Web.Templates.Components.SectionHeading.section_heading/1`
+replaces `Forms.Shared.section_heading/1`, so flow pages and form pages
+head their sections the same way. It takes a plain-string `description`
+that sits under the title on the left, sharing the row with the heading's
+actions; the inner block, now optional, keeps the full line under both for
+richer content.
+
 ## v0.26.0
 
 ### A fourth way to edit a definition: Build with AI

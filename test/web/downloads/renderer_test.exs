@@ -237,7 +237,7 @@ defmodule FormFlow.Web.Downloads.RendererTest do
       {:ok, html, _type} = Renderer.HTML.render(document, %Context{}, %{})
 
       assert html =~ "Middle name"
-      assert html =~ "—"
+      assert html =~ ~s(<div class="value blank">-</div>)
     end
   end
 end

@@ -285,31 +285,6 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
     end
   end
 
-  # A part of the page: its title and one line saying what belongs there,
-  # styled like DynamicForm's own nested-form heading so a page's sections
-  # read as one family with its Elements. Actions ride on the title's line
-  # and the description takes the line under both - sharing a row with the
-  # controls would leave it a narrow column, wrapping a sentence that reads
-  # across.
-  attr(:title, :string, required: true)
-  attr(:class, :any, default: nil)
-  slot(:actions)
-  slot(:inner_block, required: true)
-
-  def section_heading(assigns) do
-    ~H"""
-    <div class={["min-w-0", @class]}>
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="text-lg font-bold">{@title}</h3>
-        <div :if={@actions != []} class="flex shrink-0 items-center gap-2">
-          {render_slot(@actions)}
-        </div>
-      </div>
-      <div class="text-gray-500">{render_slot(@inner_block)}</div>
-    </div>
-    """
-  end
-
   defp put_form_name(attrs, %{owner_flow_id: nil}, %{} = _node, _name), do: attrs
   defp put_form_name(attrs, _form, _node, name), do: Map.put(attrs, :name, name)
 

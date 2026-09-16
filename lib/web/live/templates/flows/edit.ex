@@ -103,6 +103,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 
@@ -665,7 +666,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         target={@myself}
         components={@components}
       >
-        <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
         <:actions>
           <%!-- The root's health, cached, from any depth - through the
                 "navigate" event, as below --%>
@@ -743,9 +743,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             to this flow - how the forms are presented belongs to the flow
             of forms itself, so that is "forms" flows only.
 
-            Three columns, in two groups: who the flow is (name, slug,
-            status), then what it is (type, perspectives, and the type's
-            properties, wrapping three to a row). The groups are laid out
+            Under the show page's heading and inside its border, so the
+            two pages read as one sheet. Three columns, in two groups: who
+            the flow is (name, slug, status), then what it is (kind, read
+            only - it is fixed at creation - then type, perspectives, and
+            the type's properties, wrapping three to a row). The groups are laid out
             from here, by the attribute DynamicForm stamps on each - a grid
             in place of the library's content-sized flex row, so every
             member takes exactly a column - and stack to one column below
@@ -753,8 +755,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             it is what splits them, so an owned subflow, which has no
             status, has one group and its fields fill each row in turn
             (kind_group/1). --%>
+      <SectionHeading.section_heading
+        title="Flow details"
+        description={details_description(assigns)}
+        class="mt-6 mb-3"
+      />
       <div class={[
-        "mt-3",
+        "p-6 border border-zinc-300 rounded-lg",
         "[&_[data-dynamic-form-group]>div]:grid [&_[data-dynamic-form-group]>div]:grid-cols-1",
         "md:[&_[data-dynamic-form-group]>div]:grid-cols-3",
         "[&_[data-dynamic-form-group]>div]:items-start [&_[data-dynamic-form-group]>div>*]:min-w-0"
@@ -798,6 +805,12 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             <.status_callout status={@pending_status} counts={@instance_counts} />
           </:field>
           <:group :if={is_nil(@flow.owner_flow_id)} name="kind" type="horizontal" title={false} />
+          <:field group={kind_group(assigns)} type="html" name="flow_kind">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-zinc-500">Flow kind</p>
+              <p class="mt-0.5 text-sm">{Shared.kind_label(@flow)}</p>
+            </div>
+          </:field>
           <:field
             :if={@flow_types != []}
             group={kind_group(assigns)}
@@ -949,6 +962,14 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # subflow, which has no status to split the fields around
   defp kind_group(%{flow: %{owner_flow_id: nil}}), do: "kind"
   defp kind_group(_assigns), do: "identity"
+
+  # What the sheet holds, said once above it - the show page's words, so
+  # the two pages read as one
+  defp details_description(%{flow: %{owner_flow_id: nil}}),
+    do: "What every step of this flow shares: its name, slug, status, and kind."
+
+  defp details_description(_assigns),
+    do: "What every step of this subflow shares: its name, slug, and kind."
 
   defp name_label(%{node_id: nil}), do: "Name"
   defp name_label(_assigns), do: "Step name"

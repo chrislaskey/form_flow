@@ -247,7 +247,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
           </span>
         </.fact>
         <.fact label="Kind">
-          {if @health.summary.label == "subflows", do: "Complex flow", else: "Simple flow"}
+          {Shared.kind_label(@health.summary)}
         </.fact>
         <.fact label="Steps">{@health.summary.steps}</.fact>
         <.fact label="Subflows">{@health.summary.subflows}</.fact>

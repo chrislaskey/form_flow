@@ -174,8 +174,7 @@ defmodule DemoWeb.PersonaTest do
         |> LazyHTML.query("h1, h2")
         |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
 
-      assert [title, refusal] = headings
-      assert title == "Admin pages"
+      assert [refusal] = headings
       assert refusal =~ "Not authorized"
     end
   end

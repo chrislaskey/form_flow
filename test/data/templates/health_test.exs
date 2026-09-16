@@ -180,7 +180,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     health = Health.check(tree(nodes ++ [aside], edges ++ [edge(start, aside)]))
 
-    assert [%Entry{code: :dead_end, message: "“Aside” leads nowhere — nothing follows it"}] =
+    assert [%Entry{code: :dead_end, message: "“Aside” leads nowhere - nothing follows it"}] =
              health.entries
   end
 
@@ -197,7 +197,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              %Entry{
                level: :error,
                code: :form_not_published,
-               message: "“Name” has no published version — users cannot start it"
+               message: "“Name” has no published version - users cannot start it"
              }
            ] = health.entries
   end
@@ -454,7 +454,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [%Entry{code: :form_not_published, message: message, flow_id: flow_id, path: path}] =
              health.entries
 
-    assert message == "“Review / Check” has no published version — users cannot start it"
+    assert message == "“Review / Check” has no published version - users cannot start it"
     assert flow_id == inner.flow.id
     assert path == [step.id, Enum.at(inner.nodes, 1).id]
   end

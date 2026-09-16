@@ -28,7 +28,6 @@ defmodule Demo.FormFlowFormsCrudTest do
   test "the admin root is a generic landing linking both indexes", %{conn: conn} do
     {:ok, view, html} = live(conn, "/admin")
 
-    assert html =~ "Templates"
     assert has_element?(view, "h2", "Form Flow")
     assert has_element?(view, ~s(a[href="/admin/flows"]), "Flows")
     assert has_element?(view, ~s(a[href="/admin/forms"]), "Reusable forms")
@@ -1111,12 +1110,14 @@ defmodule Demo.FormFlowFormsCrudTest do
              "slug" => "typed"
            }
 
-    # Show mode renders the stored type as its name, with its property values
-    # — a choice by its label
-    {:ok, _view, html} = live(conn, "/admin/forms/#{form.id}")
+    # Show mode's fact sheet renders the stored type as its name, with its
+    # property values — a choice by its label
+    {:ok, view, html} = live(conn, "/admin/forms/#{form.id}")
     assert html =~ "Demo prefill"
-    assert html =~ "Name to prefill: Ada"
-    assert html =~ "Salutation: Dr."
+    assert has_element?(view, "dt", "Name to prefill")
+    assert has_element?(view, "dd", "Ada")
+    assert has_element?(view, "dt", "Salutation")
+    assert has_element?(view, "dd", "Dr.")
 
     # The type is required: a blank is refused, and picking the first type
     # again saves it explicitly, its property values gone with the old type
@@ -1293,7 +1294,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       # it to one flow; a form nobody could start yet says so
       html = render(view)
       assert html =~ "Owner contact (#{owner.slug})"
-      assert html =~ "License options (#{unpublished.slug}) — draft, never published"
+      assert html =~ "License options (#{unpublished.slug}) - draft, never published"
       refute html =~ "Check owner"
       refute html =~ "Private form"
 
@@ -1316,8 +1317,9 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       # Which now resolves the catalog form — published, so no chooser
       {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{node.id}/form")
-      assert html =~ "Catalog form"
-      assert html =~ "used in Dog License"
+      assert html =~ "reusable form"
+      assert html =~ "This reusable form is used in the following flows:"
+      assert html =~ "<li>Dog License</li>"
     end
 
     test "the badge names every flow using the form and how to stop; the catalog says where it is used",
@@ -1327,11 +1329,13 @@ defmodule Demo.FormFlowFormsCrudTest do
       {_cat, _cat_node} = flow_with_catalog_form_node("Cat License", owner)
 
       {:ok, _view, html} = live(conn, "/admin/flows/#{dog.id}/nodes/#{dog_node.id}/form")
-      assert html =~ "Catalog form"
-      assert html =~ "used in Dog License, Cat License"
+      assert html =~ "reusable form"
+      assert html =~ "This reusable form is used in the following flows:"
+      assert html =~ "<li>Dog License</li>"
+      assert html =~ "<li>Cat License</li>"
 
       # And how a step leaves it
-      assert html =~ "remove this step from the canvas and add it again"
+      assert html =~ "remove the step from the canvas and add it again"
 
       # The edit page wears it too, before the first keystroke
       [v1] = Forms.list_versions(owner.id)
@@ -1340,7 +1344,8 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, _view, html} =
         live(conn, "/admin/flows/#{dog.id}/nodes/#{dog_node.id}/form/versions/#{draft.id}/edit")
 
-      assert html =~ "used in Dog License, Cat License"
+      assert html =~ "<li>Dog License</li>"
+      assert html =~ "<li>Cat License</li>"
 
       # The catalog knows too, before anyone opens the form to edit it
       {:ok, _view, html} = live(conn, "/admin/forms")
@@ -1348,7 +1353,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       {:ok, _view, html} = live(conn, "/admin/forms/#{owner.id}")
       assert html =~ "Used in Dog License, Cat License"
-      refute html =~ "Catalog form"
+      refute html =~ "reusable form"
     end
 
     test "the publish dialog attributes instances to the flows they are in", %{conn: conn} do
@@ -1404,7 +1409,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       {:ok, view, _html} = live(conn, "#{form_page}/versions/#{draft.id}")
       # Reached through a flow, the form page carries the flow's badge
-      assert has_element?(view, ~s(a[href="/admin/flows/#{root.id}/health"] span), "–")
+      assert has_element?(view, ~s(a[href="/admin/flows/#{root.id}/health"] span), "-")
       view |> element("button", "Publish") |> render_click()
       assert_redirect(view, "#{form_page}/versions/#{draft.id}")
       assert %{level: :ok, counts: %{error: 0, info: 0}, checked_at: published_at} = status.()
@@ -2005,9 +2010,10 @@ defmodule Demo.FormFlowFormsCrudTest do
              "source" => intake.id
            }
 
-    # Show renders it as the form's label
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
-    assert html =~ "Copy name from: Intake"
+    # Show's fact sheet renders it as the form's label
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
+    assert has_element?(view, "dt", "Copy name from")
+    assert has_element?(view, "dd", "Intake")
   end
 
   test "a related-form value the flow no longer has is flagged, not hidden", %{conn: conn} do
@@ -2031,8 +2037,9 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     assert html =~ "The saved choice is no longer in this flow"
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
-    assert html =~ "Form to review: Missing — no longer in this flow"
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{review.id}/form")
+    assert has_element?(view, "dt", "Form to review")
+    assert has_element?(view, "dd", "Missing - no longer in this flow")
   end
 
   test "the edit page identifies its draft inline, linking back for the rest",

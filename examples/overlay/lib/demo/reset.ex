@@ -51,9 +51,15 @@ defmodule Demo.Reset do
         # copied from one built after it, and then it is not.
         Repo.query!("PRAGMA defer_foreign_keys = ON", [], log: false)
 
+        # Forms go before flows: a form's owner_flow_id nilifies when its
+        # flow is deleted, which turns an owned form into a catalog form
+        # for the rest of the statement - and catalog forms are unique by
+        # name, so two owned "Details" forms collide. Deferring foreign
+        # keys does not defer that unique check.
         deleted =
           tables()
           |> Enum.reject(&(&1 == @schema_version_table))
+          |> Enum.sort_by(&(&1 != "form_flow_template_forms"))
           |> Enum.map(&Repo.query!("DELETE FROM #{&1}", [], log: false).num_rows)
           |> Enum.sum()
 

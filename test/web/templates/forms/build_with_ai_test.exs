@@ -10,7 +10,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAITest do
       types = for {_label, type} <- Builder.type_options(), do: type
 
       for type <- types do
-        assert BuildWithAI.instructions() =~ "* #{type} — "
+        assert BuildWithAI.instructions() =~ "* #{type} - "
       end
     end
 

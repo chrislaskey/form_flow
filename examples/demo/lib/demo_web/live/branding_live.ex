@@ -179,6 +179,13 @@ defmodule DemoWeb.BrandingLive do
             Trying <code>Layouts.logo_mark</code>
             as an actual logo — solid vs. gradient strokes, on light and dark.
           </p>
+          <p class="text-sm">
+            See also
+            <.link navigate="/branding/template-layout" class="text-indigo-600 hover:underline">
+              Template page layouts
+            </.link>
+            — header and fact-sheet directions for the flow and form pages.
+          </p>
         </header>
 
         <svg width="0" height="0" style="position: absolute" aria-hidden="true">

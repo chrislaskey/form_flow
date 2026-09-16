@@ -73,9 +73,9 @@ defmodule FormFlow.Web.Templates.Flows.History do
         section="flows"
         root={@flow}
         name="History"
+        description="What has happened to this flow, newest first"
         components={@components}
       >
-        <:metadata>What has happened to this flow, newest first</:metadata>
         <:crumb>History</:crumb>
         <:actions>
           <Health.health base={@base} flow={@flow} components={@components} />

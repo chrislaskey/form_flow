@@ -72,6 +72,13 @@ defmodule FormFlow.Web.Components.Forms.PrefillDialog do
         <p class="mb-3 text-zinc-500">
           Prefills are shared for all users. Be thoughtful about what data is stored in them. 
         </p>
+        <%!-- Captured answers are what the browser would submit, which is
+              not quite what is on screen - said here, before the write --%>
+        <p :if={@captured} class="mb-3 text-sm text-zinc-500">
+          These answers are the preview as it stands - what the browser would submit. An
+          unchecked box or a disabled field is missing from them, and a question hidden by a
+          condition is in them. Review before saving.
+        </p>
         <form phx-submit="save_prefill" phx-target={@target} class="space-y-3">
           <Core.input
             components={@components}

@@ -36,8 +36,6 @@ defmodule DemoWeb.FormFlowLive.Admin do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.h1>Admin pages</.h1>
-
         <.persona_gate current_user={@current_user} roles={[:admin]} page="the admin pages">
           <div id="admin-pages">
             <FormFlow.Web.router

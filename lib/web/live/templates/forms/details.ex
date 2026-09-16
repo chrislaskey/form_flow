@@ -33,6 +33,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Note
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Shared
@@ -234,9 +235,10 @@ defmodule FormFlow.Web.Templates.Forms.Details do
         mode={@params["mode"]}
         components={@components}
       >
-        <:metadata>Form details</:metadata>
         <:crumb>
           <.link navigate={show_path(assigns)} class="hover:underline">{@form.name}</.link>
+          <span class="text-zinc-400">/</span>
+          Edit
         </:crumb>
         <:actions :if={@root}>
           <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
@@ -299,9 +301,10 @@ defmodule FormFlow.Web.Templates.Forms.Details do
           components={@components || CoreComponents}
         >
           <:field type="html" name="form_details_heading">
-            <Shared.section_heading title="Form details">
-              What every version of this form shares: its name, slug, description, and type.
-            </Shared.section_heading>
+            <SectionHeading.section_heading
+              title="Form details"
+              description="What every version of this form shares: its name, slug, description, and type."
+            />
           </:field>
           <:group name="name_and_slug" type="horizontal" title={false} />
           <:field

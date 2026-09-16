@@ -361,6 +361,14 @@ defmodule FormFlow.Web.Templates.Shared do
     status |> String.replace("_", " ") |> String.capitalize()
   end
 
+  @doc """
+  A flow's kind as the pages say it, from its `label`: a flow of forms is
+  a "Simple flow", a flow of subflows a "Complex flow". Takes anything with
+  a `label` - the flow, or a health summary standing in for it.
+  """
+  def kind_label(%{label: "subflows"}), do: "Complex flow"
+  def kind_label(%{label: _forms}), do: "Simple flow"
+
   @doc "The status dropdown's options, in `FormFlow.Data.Templates.Flow.statuses/0` order."
   def status_options, do: Enum.map(Templates.Flow.statuses(), &{status_label(&1), &1})
 

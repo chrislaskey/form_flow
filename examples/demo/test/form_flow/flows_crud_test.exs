@@ -137,7 +137,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Never checked: the index runs no check, so the badge says so
     {:ok, view, _html} = live(conn, "/admin/flows")
-    assert has_element?(view, "#{badge} span", "–")
+    assert has_element?(view, "#{badge} span", "-")
 
     # Start and End, unwired: Start reaches nothing (an error, with the flow
     # itself), End is not connected (a warning). The page names the flow,
@@ -493,9 +493,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert Flows.get(node.subflow_id).properties["perspectives"] == ["reviewer"]
 
-    # Show mode names them
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
-    assert html =~ "For: Reviewer"
+    # Show mode names them, in the fact sheet
+    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert has_element?(view, "dt", "Perspectives")
+    assert has_element?(view, "dd", "Reviewer")
 
     # The parent canvas names them on the subflow node: the ids ride in the
     # node's data, the names in the editor's options

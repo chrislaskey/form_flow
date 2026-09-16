@@ -1275,7 +1275,7 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, _reopened} = Instances.Forms.update_status(instance, [intake.id], :in_progress)
 
       {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
-      assert html =~ "Intake is being edited — reopened on"
+      assert html =~ "Intake is being edited - reopened on"
       refute html =~ "submitted again"
     end
 

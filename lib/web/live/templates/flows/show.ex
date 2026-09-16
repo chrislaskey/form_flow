@@ -45,6 +45,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Flows.Components.StatusDialog
@@ -309,16 +310,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         name={@flow.name || "Untitled"}
         components={@components}
       >
-        <:metadata>{if @flow.label == "subflows", do: "Complex flow", else: "Simple flow"}</:metadata>
-        <%!-- Show mode renders the stored type as plain text; the Edit
-              page is where it becomes a dropdown --%>
-        <:metadata :if={type_label(assigns)}>{type_label(assigns)}</:metadata>
-        <:metadata :for={{property, value} <- type_property_values(assigns)}>
-          {property.name}: {Shared.display_value(property, value)}
-        </:metadata>
-        <:metadata :if={perspective_names(assigns) != []}>
-          For: {Enum.join(perspective_names(assigns), ", ")}
-        </:metadata>
         <:actions>
           <%!-- The root's health, cached, from any depth --%>
           <Health.health base={@base} flow={@root || @flow} components={@components} />
@@ -431,32 +422,55 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         perspective_options={@embedded_perspective_options}
       />
 
-      <%!-- The flow's own fields, below the canvas, as the edit page lays
-            them out - three to a row, who the flow is and then what it is -
-            read here rather than edited. A step's name and slug through a
-            node, the flow's own at the root. --%>
-      <dl class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <.detail label={name_label(assigns)}>{step_name(@flow, @node)}</.detail>
-        <.detail label={slug_label(assigns)}>
-          <.detail_value value={step_slug(@flow, @node)} code />
-        </.detail>
-        <.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
-          {Shared.status_label(@flow.status)}
-          <span class="block text-xs text-zinc-500">{Shared.status_summary(@flow.status)}</span>
-        </.detail>
-        <.detail :if={@flow_types != []} label="Form flow type">
-          <.detail_value value={type_label(assigns)} />
-        </.detail>
-        <.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
-          <.detail_value value={Enum.join(perspective_names(assigns), ", ")} />
-        </.detail>
-        <.detail :for={property <- Shared.properties(@flow_types, shown_type(assigns))} label={property.name}>
-          <.detail_value value={property_display(assigns, property)} />
-        </.detail>
-      </dl>
+      <%!-- The flow's own fields, below the canvas, as a fact sheet - who
+            the flow is and then what it is, read here rather than edited;
+            the heading's Edit flow details leads to the editor, where the
+            same sheet takes input. A step's name and slug through a node,
+            the flow's own at the root. --%>
+      <SectionHeading.section_heading
+        title="Flow details"
+        description={details_description(assigns)}
+        class="mt-6 mb-3"
+      >
+        <:actions>
+          <Core.button components={@components} navigate={edit_path(assigns)} class="btn">
+            Edit flow details
+          </Core.button>
+        </:actions>
+      </SectionHeading.section_heading>
+      <div class="p-6 border border-zinc-300 rounded-lg">
+        <dl class="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <.detail label={name_label(assigns)}>{step_name(@flow, @node)}</.detail>
+          <.detail label={slug_label(assigns)}>
+            <.detail_value value={step_slug(@flow, @node)} code />
+          </.detail>
+          <.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
+            {Shared.status_label(@flow.status)}
+            <span class="block text-xs text-zinc-500">{Shared.status_summary(@flow.status)}</span>
+          </.detail>
+          <.detail label="Flow kind">{Shared.kind_label(@flow)}</.detail>
+          <.detail :if={@flow_types != []} label="Form flow type">
+            <.detail_value value={type_label(assigns)} />
+          </.detail>
+          <.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
+            <.detail_value value={Enum.join(perspective_names(assigns), ", ")} />
+          </.detail>
+          <.detail :for={property <- Shared.properties(@flow_types, shown_type(assigns))} label={property.name}>
+            <.detail_value value={property_display(assigns, property)} />
+          </.detail>
+        </dl>
+      </div>
     </div>
     """
   end
+
+  # What the fact sheet holds, said once above it: a root flow has a
+  # status, an owned subflow's is its root's
+  defp details_description(%{flow: %{owner_flow_id: nil}}),
+    do: "What every step of this flow shares: its name, slug, status, and kind."
+
+  defp details_description(_assigns),
+    do: "What every step of this subflow shares: its name, slug, and kind."
 
   # One cell of the fact sheet: the label a field would carry, the value
   # under it
@@ -539,16 +553,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     assigns.flow
     |> FormFlow.Config.Flows.Perspective.for_flow(declared)
     |> Enum.map(& &1.name)
-  end
-
-  # The stored type's property values, paired with the properties that
-  # declare them, for the header - only those with a value
-  defp type_property_values(assigns) do
-    values = FormFlow.Config.Flows.Type.property_values(assigns.flow)
-
-    for property <- Shared.properties(assigns.flow_types, shown_type(assigns)),
-        value = values[property.id],
-        do: {property, value}
   end
 
   defp resolve_flow(%{node_id: nil} = assigns, _node), do: Flows.get(assigns.flow_id)

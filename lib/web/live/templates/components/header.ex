@@ -4,13 +4,16 @@ defmodule FormFlow.Web.Templates.Components.Header do
   header every templates page puts above its own content: what the page is
   about on the left, its actions on the right.
 
-  The left side is two lines. The **title** names the thing on the page -
-  the root flow, then, lighter, the subflow or form reached inside it, then
-  whatever the page has to say about it as `metadata` (its kind, its type,
-  its version), each of those after a middle dot. Under it, smaller, the
-  **breadcrumb**: Form Flow / Flows|Forms / Root / Parent / this page, the
-  trail back out. The right side is the page's `actions` - buttons, in the
-  order the page lists them.
+  The left side is two lines. On top, small, the **breadcrumb**: Form Flow
+  / Flows|Forms / Root / Parent / this page, the trail back out. Under it
+  the **title** names the thing on the page - the subflow or form reached
+  inside a root flow, with "in <root>" lighter after it, or the root flow
+  itself. What the page has to say about the thing - its kind, its type,
+  its version, its status - is not here: it is the fact sheet under the
+  canvas or the form, where it reads once. A page that is a view of the
+  thing rather than the thing itself - its history, its overview - says
+  what it shows in one line under the title, `description`. The right side
+  is the page's `actions` - buttons, in the order the page lists them.
 
   Side by side only where there is room for both: a page can carry half a
   dozen actions, and below `xl` they take the width the title needs. So the
@@ -18,8 +21,6 @@ defmodule FormFlow.Web.Templates.Components.Header do
   one line from `xl` up.
 
       <Header.header base={@base} section="flows" root={@root} name={@flow.name}>
-        <:metadata>Simple flow</:metadata>
-        <:metadata :if={@type}>{@type.name}</:metadata>
         <:actions>
           <Core.button navigate={...}>Overview</Core.button>
         </:actions>
@@ -31,8 +32,10 @@ defmodule FormFlow.Web.Templates.Components.Header do
   page is the templates landing - the root the first crumb, "⧉ Form Flow",
   always leads back to - so the title reads "Form Flow" and the trail is
   that one crumb. A `crumb` slot replaces the trailing crumb when the page
-  wants more than the plain name - the form edit page links its name back
-  to the show page.
+  wants more than the plain name - the form pages link their name back to
+  the show page and carry the trail on past it, so the definition editor
+  ends "<form name> / Versions / Edit" and the details page ends
+  "<form name> / Edit".
 
   A drill-in (`root` given) always walks through "Flows", whichever kind of
   page sits at the end of it - reaching a form or a subflow both mean
@@ -97,6 +100,11 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   attr(:mode, :string, default: nil, doc: ~s(\"edit\" routes Root/Parent to their edit pages))
 
+  attr(:description, :string,
+    default: nil,
+    doc: "one line under the title saying what the page shows - the history and overview pages'"
+  )
+
   attr(:target, :any,
     default: nil,
     doc: "set to guard every crumb through the \"navigate\" event instead of linking directly"
@@ -104,31 +112,14 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   attr(:components, :atom, default: nil)
 
-  slot(:metadata,
-    doc: "what the page says about the thing - its kind, type, version - one per slot"
-  )
-
   slot(:crumb, doc: "the trailing crumb, when it is more than the plain name")
   slot(:actions, doc: "the page's buttons, right-aligned")
 
   def header(assigns) do
     ~H"""
-    <div class="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-      <div class="min-w-0 mb-1">
-        <h2 class="flex flex-wrap items-baseline gap-x-2 text-xl font-semibold leading-tight">
-          <span>{title(assigns)}</span>
-          <%= if @root && @name do %>
-            <span class="font-normal text-zinc-500">{@name}</span>
-          <% end %>
-          <%= for metadata <- @metadata do %>
-            <span class="text-zinc-300">·</span>
-            <span class="text-sm font-normal text-zinc-500">{render_slot(metadata)}</span>
-          <% end %>
-        </h2>
-        <nav
-          aria-label="Breadcrumb"
-          class={["mt-1 text-sm text-zinc-500", @target && "flex flex-wrap items-center gap-x-1.5"]}
-        >
+    <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div class="min-w-0">
+        <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-500">
           <%= if @section do %>
             <.crumb to={templates_path(@base)} target={@target} components={@components}>
               <span aria-hidden="true">⧉</span> Form Flow
@@ -171,6 +162,13 @@ defmodule FormFlow.Web.Templates.Components.Header do
             <% true -> %>
           <% end %>
         </nav>
+        <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-tight">
+          <span>{title(assigns)}</span>
+          <%= if @root && @name do %>
+            <span class="text-base font-normal text-zinc-400">in {@root.name || "Untitled"}</span>
+          <% end %>
+        </h2>
+        <p :if={@description} class="mt-0.5 text-sm text-zinc-500">{@description}</p>
       </div>
       <div :if={@actions != []} class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:flex-nowrap">
         {render_slot(@actions)}
@@ -179,10 +177,11 @@ defmodule FormFlow.Web.Templates.Components.Header do
     """
   end
 
-  # The root flow's name leads a drill-in; otherwise the page's own name,
-  # the section's on an index, or the root's on the landing
-  defp title(%{root: %{} = root}), do: root.name || "Untitled"
+  # The page's own name - the subflow's or form's on a drill-in, the root
+  # flow's on its own page - the section's on an index, or the root's on
+  # the landing
   defp title(%{name: name}) when is_binary(name), do: name
+  defp title(%{root: %{} = root}), do: root.name || "Untitled"
   defp title(%{section: section}) when is_binary(section), do: section_title(section)
   defp title(_landing), do: "Form Flow"
 

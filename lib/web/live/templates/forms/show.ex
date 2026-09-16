@@ -28,7 +28,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   version is the next thing to do, and is primary.
 
   The form's details - name, slug, description, type - are listed as a fact
-  sheet under the header, and **Edit form details** leads to
+  sheet under the header, and its heading's **Edit form details** leads to
   `FormFlow.Web.Templates.Forms.Details`, where they change for every
   version at once.
 
@@ -57,6 +57,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
+  alias FormFlow.Web.Templates.Components.SectionHeading
   alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Forms.PrefillDialog
@@ -173,7 +174,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   # The stored type's property values, paired with the properties that
-  # declare them, for the header - only those with a value
+  # declare them, for the fact sheet - only those with a value
   defp type_property_values(assigns) do
     values = FormFlow.Config.Forms.Type.property_values(assigns.form)
 
@@ -415,16 +416,90 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         mode={@params["mode"]}
         components={@components}
       >
-        <:metadata :if={@version}>{version_badge(@version)}</:metadata>
-        <:metadata :if={form_type_label(assigns)}>{form_type_label(assigns)}</:metadata>
-        <:metadata :for={{property, value} <- type_property_values(assigns)}>
-          {property.name}: {Templates.Shared.display_value(property, value)}
-        </:metadata>
         <%!-- Reached through a flow: that flow's health, which a publish
               here is the usual way to mend --%>
         <:actions :if={@root}>
           <FormFlow.Web.Templates.Components.Health.health base={@base} flow={@root} components={@components} />
         </:actions>
+        <:actions :if={@version && @form.owner_flow_id == nil && @node == nil}>
+          <Core.button
+            components={@components}
+            phx-click="delete"
+            phx-target={@myself}
+            data-confirm="Delete this form and all of its versions?"
+            class="btn btn-error btn-ghost"
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Core.icon components={@components} name="hero-trash" class="size-5" />
+          </Core.button>
+        </:actions>
+      </Header.header>
+
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <%!-- Sharing, made visible: from a step, the badge; on the catalog's
+            own page, where the form is used, so the admin knows what an
+            edit reaches before making it --%>
+      <CatalogBadge.catalog_badge
+        :if={Shared.reusing?(@node, @form)}
+        form={@form}
+        usages={@usages}
+        components={@components}
+        class="mb-3"
+      />
+
+      <SectionHeading.section_heading
+        title="Form details"
+        description="Details that are shared by all instances of this form. Updates here take immediate effect."
+        class="mb-3"
+      >
+        <:actions>
+          <Core.button components={@components} navigate={details_path(assigns)} class="btn">
+            Edit form details
+          </Core.button>
+        </:actions>
+      </SectionHeading.section_heading>
+      <p :if={@node == nil and @form.owner_flow_id == nil} class="mb-3 text-xs text-zinc-500">
+        <span :if={@usages == []}>Not used in any flow yet.</span>
+        <span :if={@usages != []}>
+          Used in {Enum.join(Templates.Shared.usage_labels(@usages), ", ")} - edits and publishes reach every one of them.
+        </span>
+      </p>
+
+      <%!-- The details every version shares, as a fact sheet; the heading's
+            Edit form details is where they change. Through a step the name
+            and slug are the step's, the way the fields that edit them are. --%>
+      <div class="p-6 border border-zinc-300 rounded-lg mb-6">
+        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-sm [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
+          <div class="min-w-0">
+            <dt>{Shared.name_label(@node)}</dt>
+            <dd>{Shared.step_name(@form, @node)}</dd>
+          </div>
+          <div class="min-w-0">
+            <dt>{Shared.slug_label(@node)}</dt>
+            <dd><.detail_value value={Shared.step_slug(@form, @node)} code /></dd>
+          </div>
+          <div class="min-w-0">
+            <dt>Description</dt>
+            <dd><.detail_value value={@form.description} /></dd>
+          </div>
+          <div :if={@form_types != []} class="min-w-0">
+            <dt>Form type</dt>
+            <dd><.detail_value value={form_type_label(assigns)} /></dd>
+          </div>
+          <div :for={{property, value} <- type_property_values(assigns)} class="min-w-0">
+            <dt>{property.name}</dt>
+            <dd>{Templates.Shared.display_value(property, value)}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <SectionHeading.section_heading
+        title="Form versions"
+        description="Versions of the current form. Change the form details using drafts. Save progress as you build. Publish when its ready for users to use."
+        class="mb-6"
+      >
         <:actions :if={@version}>
           <Core.button
             :if={@version.status == "draft" && length(@versions) > 1}
@@ -482,71 +557,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
           >
             Archive version
           </Core.button>
-          <Core.button components={@components} navigate={details_path(assigns)} class="btn">
-            Edit form details
-          </Core.button>
-          <Core.button
-            :if={@form.owner_flow_id == nil and @node == nil}
-            components={@components}
-            phx-click="delete"
-            phx-target={@myself}
-            data-confirm="Delete this form and all of its versions?"
-            class="btn btn-error btn-ghost"
-            aria-label="Delete"
-            title="Delete"
-          >
-            <Core.icon components={@components} name="hero-trash" class="size-5" />
-          </Core.button>
         </:actions>
-      </Header.header>
-
-      <Core.error :if={@error} components={@components}>{@error}</Core.error>
-
-      <%!-- Sharing, made visible: from a step, the badge; on the catalog's
-            own page, where the form is used, so the admin knows what an
-            edit reaches before making it --%>
-      <CatalogBadge.catalog_badge
-        :if={Shared.reusing?(@node, @form)}
-        form={@form}
-        usages={@usages}
-        components={@components}
-        class="mb-3"
-      />
-      <p :if={@node == nil and @form.owner_flow_id == nil} class="mb-3 text-xs text-zinc-500">
-        <span :if={@usages == []}>Not used in any flow yet.</span>
-        <span :if={@usages != []}>
-          Used in {Enum.join(Templates.Shared.usage_labels(@usages), ", ")} - edits and publishes reach every one of them.
-        </span>
-      </p>
-
-      <%!-- The details every version shares, as a fact sheet; the header's
-            Edit form details is where they change. Through a step the name
-            and slug are the step's, the way the fields that edit them are. --%>
-      <div class="mb-6">
-        <h3 class="mb-1 text-sm font-medium text-zinc-500">Form details</h3>
-        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-sm [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
-          <div class="min-w-0">
-            <dt>{Shared.name_label(@node)}</dt>
-            <dd>{Shared.step_name(@form, @node)}</dd>
-          </div>
-          <div class="min-w-0">
-            <dt>{Shared.slug_label(@node)}</dt>
-            <dd><.detail_value value={Shared.step_slug(@form, @node)} code /></dd>
-          </div>
-          <div class="min-w-0">
-            <dt>Description</dt>
-            <dd><.detail_value value={@form.description} /></dd>
-          </div>
-          <div :if={@form_types != []} class="min-w-0">
-            <dt>Form type</dt>
-            <dd><.detail_value value={form_type_label(assigns)} /></dd>
-          </div>
-          <div :for={{property, value} <- type_property_values(assigns)} class="min-w-0">
-            <dt>{property.name}</dt>
-            <dd>{Templates.Shared.display_value(property, value)}</dd>
-          </div>
-        </dl>
-      </div>
+      </SectionHeading.section_heading>
 
       <Core.alert
         :if={@version && @version.status == "draft" && Forms.stale_draft?(@version)}
@@ -559,7 +571,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
       <div class="flex flex-wrap gap-6">
         <div class="w-64 shrink-0">
-          <h3 class="mb-1 text-sm font-medium text-zinc-500">Versions</h3>
+          <h3 class="mb-1 text-sm font-medium text-zinc-500">Version history</h3>
           <ul class="space-y-1 text-sm">
             <li :for={version <- @versions}>
               <.link
@@ -579,7 +591,9 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         </div>
 
         <div :if={@version} class="min-w-0 flex-1">
-          <h3 class="mb-1 text-sm font-medium text-zinc-500">Preview</h3>
+          <h3 class="mb-1 text-sm font-medium text-zinc-500">
+            Preview <span class="text-zinc-300">·</span> {version_badge(@version)}
+          </h3>
           <PrefillPicker.prefill_picker
             id={"#{@id}-prefill-select"}
             prefills={@prefills}
