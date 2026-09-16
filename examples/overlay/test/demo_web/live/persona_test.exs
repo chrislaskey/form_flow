@@ -6,16 +6,55 @@ defmodule DemoWeb.PersonaTest do
   alias DemoWeb.Experiences
 
   describe "the Demo Experience menu" do
+    test "its label is a link to the page that describes the experiences", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      label =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("header nav div.group > a")
+
+      assert LazyHTML.attribute(label, "href") == ["/demo"]
+      assert label |> LazyHTML.text() |> String.trim() =~ "Demo app"
+    end
+
+    test "opens on hover and on focus, rather than on click", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      classes =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("header nav div.group > div")
+        |> LazyHTML.attribute("class")
+        |> hd()
+
+      assert classes =~ "group-hover:visible"
+      assert classes =~ "group-focus-within:visible"
+      refute html =~ ~s(<details id="experience-menu")
+    end
+
     test "offers every experience, linked", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
       menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
 
-      assert LazyHTML.attribute(menu, "href") == Enum.map(Experiences.all(), & &1.path)
+      assert LazyHTML.attribute(menu, "href") == Enum.map(Experiences.menu(), & &1.path)
 
-      for experience <- Experiences.all() do
+      for experience <- Experiences.menu() do
         assert html =~ experience.title
       end
+    end
+
+    test "the overview leads it, before the three sides of the demo", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      titles =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#experience-menu a span:first-child")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      assert titles == ["Overview" | Enum.map(Experiences.all(), & &1.title)]
     end
 
     test "replaced the Admin and Users links", %{conn: conn} do
@@ -160,11 +199,60 @@ defmodule DemoWeb.PersonaTest do
       switchers =
         html
         |> LazyHTML.from_fragment()
-        |> LazyHTML.query("details.dropdown")
+        |> LazyHTML.query("[id$='user-switcher']")
         |> LazyHTML.attribute("id")
 
-      assert switchers == ["experience-menu", "header-user-switcher"]
+      assert switchers == ["header-user-switcher"]
       refute has_element?(view, "#perspective")
+    end
+  end
+
+  describe "the mobile nav" do
+    test "lists every page flat, with no menu inside it", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      links =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#mobile-nav a")
+
+      assert LazyHTML.attribute(links, "href") ==
+               ["/", "/docs"] ++ Enum.map(Experiences.menu(), & &1.path)
+
+      assert links |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim())) ==
+               ["Home", "Docs"] ++ Enum.map(Experiences.menu(), & &1.title)
+
+      # Nothing to open inside it: the desktop's hover menu is flattened here
+      nested = LazyHTML.query(LazyHTML.from_fragment(html), "#mobile-nav details")
+
+      assert Enum.empty?(nested)
+    end
+
+    test "marks the page being read", %{conn: conn} do
+      for {path, title} <- [{"/", "Home"}, {"/docs", "Docs"}, {"/demo", "Overview"}] do
+        {:ok, _view, html} = live(conn, path)
+
+        current =
+          html
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.query("#mobile-nav a[aria-current='page']")
+
+        assert current |> LazyHTML.text() |> String.trim() == title
+      end
+    end
+
+    test "is the nav on a narrow screen, and the header's is on a wide one", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      document = LazyHTML.from_fragment(html)
+
+      assert document |> LazyHTML.query("header nav[aria-label='Menu']") |> LazyHTML.attribute("class") ==
+               ["sm:hidden"]
+
+      assert document
+             |> LazyHTML.query("header nav:not([aria-label])")
+             |> LazyHTML.attribute("class")
+             |> hd() =~ "hidden"
     end
   end
 

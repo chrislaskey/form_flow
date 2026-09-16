@@ -1,7 +1,10 @@
 defmodule DemoWeb.HomeLive do
   @moduledoc """
   `/` — what FormFlow is and why it exists, which user the demo is being
-  viewed as, and the version it was compiled against.
+  viewed as, the version it was compiled against, and — for the admin — the
+  control that puts the demo's data back. The last two are
+  `DemoWeb.DemoDataComponents`' and `DemoWeb.PersonaComponents`', shared with
+  `/demo`, which offers the same pair.
 
   The prose is `DemoWeb.IntroductionComponents`', the README's introduction,
   shared with `/docs/introduction` so the two openings cannot drift apart.
@@ -11,6 +14,7 @@ defmodule DemoWeb.HomeLive do
 
   use DemoWeb, :live_view
 
+  import DemoWeb.DemoDataComponents
   import DemoWeb.IntroductionComponents
   import DemoWeb.PageComponents
   import DemoWeb.PersonaComponents
@@ -22,6 +26,11 @@ defmodule DemoWeb.HomeLive do
      |> assign(:page_title, "FormFlow demo")
      |> assign(:current_nav, :home)
      |> assign(:version, to_string(Application.spec(:form_flow, :vsn)))}
+  end
+
+  @impl true
+  def handle_event("reset_demo", _params, socket) do
+    {:noreply, handle_reset(socket)}
   end
 
   @impl true
@@ -66,6 +75,8 @@ defmodule DemoWeb.HomeLive do
         </section>
 
         <.pick_perspective current_user={@current_user} />
+
+        <.reset_demo_data current_user={@current_user} />
 
         <section>
           <p class="text-sm text-base-content/70">

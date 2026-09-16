@@ -38,7 +38,7 @@ defmodule DemoWeb.Layouts do
     default: nil,
     doc:
       "which primary nav item is active: :home, :install_check, :docs, " <>
-        ":admin, :users, or :reviewers — the last three light the Demo app menu"
+        ":demo, :admin, :users, or :reviewers — the last four light the Demo app menu"
 
   attr :current_user, :map,
     default: nil,
@@ -73,8 +73,9 @@ defmodule DemoWeb.Layouts do
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
-              <.experience_menu current={@current_nav in [:admin, :users, :reviewers]} />
+              <.experience_menu current={@current_nav in Experiences.navs()} />
             </nav>
+            <.mobile_nav current_nav={@current_nav} />
             <div :if={@current_user} class="flex items-center sm:border-l sm:border-gray-200 sm:pl-4">
               <UserSwitcher.user_switcher id="header-user-switcher" current_user={@current_user} />
             </div>
@@ -146,28 +147,33 @@ defmodule DemoWeb.Layouts do
   end
 
   @doc """
-  The header's Demo Experience menu: the three sides of the demo, from
-  `DemoWeb.Experiences`.
+  The header's Demo Experience menu: the overview and the three sides of the
+  demo, from `DemoWeb.Experiences.menu/0`.
 
-  A `<details>` rather than a hover menu, for the same reason the user
-  switcher is one — it opens on click, closes on click-away, and needs no
-  JavaScript of its own.
+  The label is a link to `/demo` and the menu opens on hover, so the two ways
+  in do different things — hovering offers the three pages, clicking goes to
+  the page that describes them. Hover is CSS (`group-hover`), with
+  `group-focus-within` beside it so the menu opens for a keyboard too: focus
+  lands on the label first, which is inside the group.
+
+  The menu hangs from a wrapper that carries its own top padding rather than a
+  margin, so the pointer crosses no gap on the way down to it.
   """
   attr :current, :boolean, default: false, doc: "whether one of its pages is being read"
 
   def experience_menu(assigns) do
-    assigns = assign(assigns, :experiences, Experiences.all())
+    assigns = assign(assigns, :experiences, Experiences.menu())
 
     ~H"""
-    <details
-      id="experience-menu"
-      class="dropdown dropdown-end"
-      phx-click-away={JS.remove_attribute("open")}
-    >
-      <summary class={[
-        "flex cursor-pointer list-none items-center gap-1 rounded-lg px-3 py-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden",
-        @current && "bg-gray-100 font-semibold text-indigo-600"
-      ]}>
+    <div class="group relative">
+      <.link
+        navigate={~p"/demo"}
+        aria-haspopup="true"
+        class={[
+          "flex cursor-pointer items-center gap-1 rounded-lg px-3 py-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900",
+          @current && "bg-gray-100 font-semibold text-indigo-600"
+        ]}
+      >
         Demo app
         <svg
           viewBox="0 0 16 16"
@@ -181,20 +187,117 @@ defmodule DemoWeb.Layouts do
         >
           <path d="M4 6.5l4 4 4-4" />
         </svg>
-      </summary>
+      </.link>
 
-      <ul class="dropdown-content z-30 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
-        <li :for={experience <- @experiences}>
-          <.link
-            navigate={experience.path}
-            class="block rounded-lg px-2.5 py-2 transition-colors hover:bg-gray-100"
+      <div class="invisible absolute right-0 z-30 pt-2 group-focus-within:visible group-hover:visible">
+        <ul
+          id="experience-menu"
+          class="w-64 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg"
+        >
+          <li :for={experience <- @experiences}>
+            <.link
+              navigate={experience.path}
+              class="block rounded-lg px-2.5 py-2 transition-colors hover:bg-gray-100"
+            >
+              <span class="block text-sm font-medium text-gray-900">{experience.title}</span>
+              <span class="block truncate text-xs text-gray-500">{experience.blurb}</span>
+            </.link>
+          </li>
+        </ul>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  The nav for a screen too narrow for the header's: every page the demo has,
+  in one list behind a hamburger.
+
+  Flat, where the desktop nav nests the demo's pages behind a hover menu —
+  hover is not a gesture a touch screen has, and a menu inside a menu is worse
+  on a small screen than the four extra rows it saves. The demo's pages keep
+  their caption, so the list still reads as two groups.
+
+  A `<details>` rather than the desktop's CSS hover, for the same reason the
+  user switcher is one: it opens on tap and closes on tap-away.
+  """
+  attr :current_nav, :atom, default: nil
+
+  def mobile_nav(assigns) do
+    assigns = assign(assigns, :experiences, Experiences.menu())
+
+    ~H"""
+    <nav aria-label="Menu" class="sm:hidden">
+      <details
+        id="mobile-nav"
+        class="dropdown dropdown-end"
+        phx-click-away={JS.remove_attribute("open")}
+      >
+        <summary
+          aria-label="Menu"
+          class="flex cursor-pointer list-none items-center rounded-lg p-2 text-gray-600 transition-colors select-none hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            class="size-5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
           >
-            <span class="block text-sm font-medium text-gray-900">{experience.title}</span>
-            <span class="block truncate text-xs text-gray-500">{experience.blurb}</span>
-          </.link>
-        </li>
-      </ul>
-    </details>
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </summary>
+
+        <div class="dropdown-content z-30 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+          <ul>
+            <li>
+              <.mobile_nav_link navigate="/" current={@current_nav == :home}>Home</.mobile_nav_link>
+            </li>
+            <li>
+              <.mobile_nav_link navigate="/docs" current={@current_nav == :docs}>
+                Docs
+              </.mobile_nav_link>
+            </li>
+          </ul>
+
+          <p class="mt-1 border-t border-gray-100 px-2.5 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">
+            Demo app
+          </p>
+
+          <ul>
+            <li :for={experience <- @experiences}>
+              <.mobile_nav_link
+                navigate={experience.path}
+                current={@current_nav == experience.nav}
+              >
+                {experience.title}
+              </.mobile_nav_link>
+            </li>
+          </ul>
+        </div>
+      </details>
+    </nav>
+    """
+  end
+
+  attr :navigate, :string, required: true
+  attr :current, :boolean, default: false
+  slot :inner_block, required: true
+
+  defp mobile_nav_link(assigns) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      aria-current={@current && "page"}
+      class={[
+        "block rounded-lg px-2.5 py-2 text-sm font-medium transition-colors hover:bg-gray-100",
+        (@current && "bg-gray-100 text-indigo-600") || "text-gray-900"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
     """
   end
 

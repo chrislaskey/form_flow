@@ -4,8 +4,10 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
   freshly generated demo starts with the pet licensing flows and forms that
   were built by hand in the admin UI.
 
-  The SQL is written by `examples/snapshot.sh`: one `INSERT` per line, in
-  parent-first table order. Rebuild it after editing the flows, then commit.
+  The SQL is written by `examples/snapshot.sh` and read through
+  `Demo.Snapshot`, which `Demo.Reset` replays too — loading the demo's data
+  into an empty database and putting a running demo back to it are the same
+  statements. Rebuild the file after editing the flows, then commit.
 
   Two cases load nothing:
 
@@ -15,14 +17,15 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
       collide on primary keys. `mix ecto.reset` is the way to reload.
 
   Rolling back leaves the rows in place: the snapshot is the demo's data, not
-  a schema change, and deleting it is `mix ecto.reset`'s job.
+  a schema change, and deleting it is `mix ecto.reset`'s job — or `Demo.Reset`,
+  on a deployed demo where dropping the database is not on offer.
   """
 
   use Ecto.Migration
 
   require Logger
 
-  @snapshot Path.expand("../form_flow_snapshot.sql", __DIR__)
+  alias Demo.Snapshot
 
   def up do
     cond do
@@ -33,7 +36,7 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
         Logger.info("Skipping the FormFlow snapshot: the database already has flows")
 
       true ->
-        statements = read_statements()
+        statements = Snapshot.statements()
         Logger.info("Loading #{length(statements)} FormFlow rows from the snapshot")
 
         # Parent-first order makes this a formality, but a flow can be copied
@@ -53,12 +56,5 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
   defp flows_exist? do
     %{rows: [[count]]} = repo().query!("SELECT count(*) FROM form_flow_template_flows")
     count > 0
-  end
-
-  defp read_statements do
-    @snapshot
-    |> File.read!()
-    |> String.split("\n", trim: true)
-    |> Enum.filter(&String.starts_with?(&1, "INSERT INTO "))
   end
 end
