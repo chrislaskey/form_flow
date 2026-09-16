@@ -24,6 +24,7 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
     %{id: "why-form-flow", title: "Why FormFlow?"},
     %{id: "how-easy-is-it-to-customize", title: "How easy is it to customize?"},
     %{id: "how-do-i-use-it", title: "How do I use it?"},
+    %{id: "how-is-form-flow-built", title: "How is FormFlow built?"},
     %{id: "licensing", title: "Licensing"}
   ]
 
@@ -66,6 +67,10 @@ defmodule DemoWeb.DocsLive.IntroductionLive do
             picks up where this page leaves off: the tables the flows are stored
             in, and the three ways they can be queried.
           </.p>
+        </.docs_section>
+
+        <.docs_section {section("how-is-form-flow-built")}>
+          <.how_is_form_flow_built />
         </.docs_section>
 
         <.docs_section {section("licensing")}>

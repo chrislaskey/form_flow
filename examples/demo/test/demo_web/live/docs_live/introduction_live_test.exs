@@ -53,7 +53,11 @@ defmodule DemoWeb.DocsLive.IntroductionLiveTest do
     {:ok, _view, docs} = live(conn, ~p"/docs/introduction")
     {:ok, _view, index} = live(conn, ~p"/")
 
-    for line <- ["Batteries included library", "FormFlow solves this problem"] do
+    for line <- [
+          "Batteries included library",
+          "FormFlow solves this problem",
+          "human firmly in the loop"
+        ] do
       assert docs =~ line
       assert index =~ line
     end

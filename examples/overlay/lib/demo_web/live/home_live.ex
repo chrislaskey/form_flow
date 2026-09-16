@@ -68,6 +68,12 @@ defmodule DemoWeb.HomeLive do
           </.p>
         </section>
 
+        <section id="how-is-form-flow-built" class="space-y-3">
+          <.h2 class="mb-0">How is FormFlow built?</.h2>
+
+          <.how_is_form_flow_built />
+        </section>
+
         <section id="licensing" class="space-y-3">
           <.h2 class="mb-0">Licensing</.h2>
 

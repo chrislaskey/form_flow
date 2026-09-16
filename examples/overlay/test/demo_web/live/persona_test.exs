@@ -217,15 +217,30 @@ defmodule DemoWeb.PersonaTest do
         |> LazyHTML.query("#mobile-nav a")
 
       assert LazyHTML.attribute(links, "href") ==
-               ["/", "/docs"] ++ Enum.map(Experiences.menu(), & &1.path)
+               ["/", "/docs"] ++
+                 Enum.map(Experiences.menu(), & &1.path) ++
+                 ["https://github.com/chrislaskey/form_flow"]
 
       assert links |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim())) ==
-               ["Home", "Docs"] ++ Enum.map(Experiences.menu(), & &1.title)
+               ["Home", "Docs"] ++ Enum.map(Experiences.menu(), & &1.title) ++ ["GitHub"]
 
       # Nothing to open inside it: the desktop's hover menu is flattened here
       nested = LazyHTML.query(LazyHTML.from_fragment(html), "#mobile-nav details")
 
       assert Enum.empty?(nested)
+    end
+
+    test "carries the source link, which the header only shows on a wide screen", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      document = LazyHTML.from_fragment(html)
+
+      source = LazyHTML.query(document, "#mobile-nav a[href^='https://github.com']")
+      assert source |> LazyHTML.text() |> String.trim() == "GitHub"
+
+      # The same destination, as a mark, for the width the mobile nav is not on
+      mark = LazyHTML.query(document, "header > div > div > a[href^='https://github.com']")
+      assert mark |> LazyHTML.attribute("class") |> hd() =~ "hidden sm:block"
     end
 
     test "marks the page being read", %{conn: conn} do
@@ -246,7 +261,9 @@ defmodule DemoWeb.PersonaTest do
 
       document = LazyHTML.from_fragment(html)
 
-      assert document |> LazyHTML.query("header nav[aria-label='Menu']") |> LazyHTML.attribute("class") ==
+      assert document
+             |> LazyHTML.query("header nav[aria-label='Menu']")
+             |> LazyHTML.attribute("class") ==
                ["sm:hidden"]
 
       assert document

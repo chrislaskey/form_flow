@@ -1,8 +1,8 @@
 defmodule DemoWeb.IntroductionComponents do
   @moduledoc """
   The README's introduction, as components: the tagline, why FormFlow models
-  forms as data, how far an app can customize it, what it takes to use it, and
-  where its licensing stands.
+  forms as data, how far an app can customize it, what it takes to use it, how
+  it is being built, and where its licensing stands.
 
   Two pages open with this prose — the demo index at `/` and
   `/docs/introduction` — so it is written once here and headed by each of
@@ -162,6 +162,31 @@ defmodule DemoWeb.IntroductionComponents do
     <.p>
       If you don't use Phoenix for your main app, don't worry! FormFlow can be
       deployed as a standalone app by wrapping it in Phoenix.
+    </.p>
+    """
+  end
+
+  @doc "How the library is being written, and what the LLM tools are used for."
+  def how_is_form_flow_built(assigns) do
+    ~H"""
+    <.p>
+      Modern software engineering is undergoing an evolution. At the time of writing,
+      as an industry we're all exploring the best ways to use and not use LLMs. This
+      library is one exploration of those ideas - <strong>human firmly in the loop accelerated by the LLM tools</strong>, ensuring
+      code is properly architected but not handwriting every line.
+    </.p>
+
+    <.p>
+      The goal is to speed up classic software engineering lifecycle, not to replace
+      it. More than just a "human (somewhere) in the loop", I am in proverbial
+      driver's seat, acting as both the software architect and product designer,
+      making important decisions and deciding the right path forward.
+    </.p>
+
+    <.p>
+      I then use LLMs to assist in completing the work and as well as helping
+      identify gaps in our plans. Documentation meant for humans is always hand
+      written by me, a fellow human.
     </.p>
     """
   end

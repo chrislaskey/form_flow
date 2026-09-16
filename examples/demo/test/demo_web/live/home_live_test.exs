@@ -26,6 +26,7 @@ defmodule DemoWeb.HomeLiveTest do
     assert html =~ "Why FormFlow?"
     assert html =~ "forms as data"
     assert has_element?(view, "#how-do-i-use-it")
+    assert has_element?(view, "#how-is-form-flow-built")
   end
 
   describe "resetting the demo data" do

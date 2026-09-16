@@ -71,6 +71,22 @@ library as a mix.exs dependency and fits into the existing application.
 If you don't use Phoenix for your main app, don't worry! FormFlow can be
 deployed as a standalone app by wrapping it in Phoenix.
 
+## How is FormFlow built?
+
+Modern software engineering is undergoing an evolution. At the time of writing,
+as an industry we're all exploring the best ways to use and not use LLMs. This library
+is one exploration of those ideas - **human firmly in the loop accelerated by
+the LLM tools**, ensuring code is properly architected but not handwriting every line.
+
+The goal is to speed up classic software engineering lifecycle, not
+to replace it. More than just a "human (somewhere) in the loop", I am in
+proverbial driver's seat, acting as both the software architect and product
+designer, making important decisions and deciding the right path forward.
+
+I then use LLMs to assist in completing the work and as well as helping
+identify gaps in our plans. Documentation meant for humans is always hand
+written by me, a fellow human.
+
 ## Licensing
 
 Licensing is still to be determined, as the library is actively being built.

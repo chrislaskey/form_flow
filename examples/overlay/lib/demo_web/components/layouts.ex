@@ -69,7 +69,7 @@ defmodule DemoWeb.Layouts do
           </.link>
 
           <div class="flex items-center gap-4">
-            <.github_link />
+            <.github_link wrapper_class="hidden sm:block" />
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
@@ -92,19 +92,32 @@ defmodule DemoWeb.Layouts do
     """
   end
 
+  # Where the library's source lives. The header links it as a mark, the
+  # mobile nav as a row, and neither writes the URL down itself.
+  @github_url "https://github.com/chrislaskey/form_flow"
+
   @doc """
   Links back to FormFlow's source, as the GitHub mark alone — the header
   already names the project beside it, so a label would say it twice.
+
+  The mark is for the header the mobile nav collapses into a row, so it is
+  hidden at the width that nav takes over.
   """
   attr :class, :string, default: "size-5"
+  attr :wrapper_class, :string, default: nil, doc: "on the link, for hiding it by width"
 
   def github_link(assigns) do
+    assigns = assign(assigns, :github_url, @github_url)
+
     ~H"""
     <a
-      href="https://github.com/chrislaskey/form_flow"
+      href={@github_url}
       target="_blank"
       rel="noopener"
-      class="rounded-lg p-2 -mr-3 text-gray-400 transition-colors hover:text-gray-900"
+      class={[
+        "rounded-lg p-2 -mr-3 text-gray-400 transition-colors hover:text-gray-900",
+        @wrapper_class
+      ]}
       aria-label="FormFlow on GitHub"
     >
       <svg viewBox="0 0 16 16" fill="currentColor" class={@class} aria-hidden="true">
@@ -218,13 +231,20 @@ defmodule DemoWeb.Layouts do
   on a small screen than the four extra rows it saves. The demo's pages keep
   their caption, so the list still reads as two groups.
 
+  The link to the source is here as its last row rather than beside the logo:
+  at this width the header has room for the switcher and this menu, and a mark
+  with no label competes with both.
+
   A `<details>` rather than the desktop's CSS hover, for the same reason the
   user switcher is one: it opens on tap and closes on tap-away.
   """
   attr :current_nav, :atom, default: nil
 
   def mobile_nav(assigns) do
-    assigns = assign(assigns, :experiences, Experiences.menu())
+    assigns =
+      assigns
+      |> assign(:experiences, Experiences.menu())
+      |> assign(:github_url, @github_url)
 
     ~H"""
     <nav aria-label="Menu" class="sm:hidden">
@@ -274,6 +294,19 @@ defmodule DemoWeb.Layouts do
               >
                 {experience.title}
               </.mobile_nav_link>
+            </li>
+          </ul>
+
+          <ul class="mt-1 border-t border-gray-100 pt-1">
+            <li>
+              <a
+                href={@github_url}
+                target="_blank"
+                rel="noopener"
+                class="block rounded-lg px-2.5 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100"
+              >
+                GitHub
+              </a>
             </li>
           </ul>
         </div>
