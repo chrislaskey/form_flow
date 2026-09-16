@@ -92,8 +92,8 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
           >
             Cancel
           </Core.button>
-          <DynamicForm.submit_button form={@id}>
-            Save Profile
+          <DynamicForm.submit_button form={"#{@id}-form"}>
+            Publish
           </DynamicForm.submit_button>
         </div>
       </div>
