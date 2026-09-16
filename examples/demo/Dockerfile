@@ -98,11 +98,14 @@ ENV MIX_ENV="prod"
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/demo ./
 
-USER nobody
+# No USER here: bin/docker-entrypoint starts as root so it can hand the mounted
+# volume to nobody, and drops to nobody itself before exec'ing the command.
 
 # If using an environment that doesn't automatically reap zombie processes, it is
 # advised to add an init process such as tini via `apt-get install`
 # above and adding an entrypoint. See https://github.com/krallin/tini for details
 # ENTRYPOINT ["/tini", "--"]
+
+ENTRYPOINT ["/app/bin/docker-entrypoint"]
 
 CMD ["/app/bin/server"]

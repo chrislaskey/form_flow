@@ -9,13 +9,19 @@ kill_signal = 'SIGTERM'
 
 [build]
 [env]
-  DATABASE_PATH = '/mnt/name/name.db'
+  # On the volume mounted below, so the flows built in the demo survive a
+  # deploy. SQLite writes demo.db-wal and demo.db-shm beside it.
+  DATABASE_PATH = '/data/demo.db'
   PHX_HOST = 'form-flow.fly.dev'
   PORT = '8080'
 
+# The database's disk. `fly deploy` creates this volume the first time it runs
+# against an app that has none, at initial_size; after that it is left alone.
+# One volume attaches to one Machine, which is why this app stays at one.
 [[mounts]]
-  source = 'name'
-  destination = '/mnt/name'
+  source = 'form_flow_data'
+  destination = '/data'
+  initial_size = '1gb'
   auto_extend_size_threshold = 80
   auto_extend_size_increment = '1GB'
   auto_extend_size_limit = '10GB'

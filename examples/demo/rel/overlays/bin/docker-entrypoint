@@ -1,0 +1,26 @@
+#!/bin/sh
+# The image's entrypoint, and the only thing in it that runs as root.
+#
+# A Fly volume arrives owned by root, while the release runs as nobody, so the
+# directory holding DATABASE_PATH is handed over here before anything opens the
+# database. Then privileges are dropped and the command the image was given
+# runs as nobody — `bin/server` in production.
+#
+# Anything else that touches the database wants the same treatment, so that it
+# leaves the files owned by the user the server runs as:
+#
+#     fly ssh console -C "/app/bin/docker-entrypoint /app/bin/migrate"
+set -eu
+
+if [ -n "${DATABASE_PATH:-}" ]; then
+  database_dir=$(dirname "$DATABASE_PATH")
+
+  mkdir -p "$database_dir"
+  chown nobody:root "$database_dir"
+fi
+
+if [ "$(id -u)" = "0" ]; then
+  exec setpriv --reuid=nobody --regid=root --clear-groups "$@"
+fi
+
+exec "$@"
