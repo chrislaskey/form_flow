@@ -3,10 +3,16 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   `FormFlow.Web.Templates.Flows.Index` LiveComponent lists flows.
 
   A `Slab.table` over `FormFlow.Data.Templates.Flows.roots_query/0` - the
-  name with its slug beneath it, the id, status
-  (`FormFlow.Data.Templates.Flow`'s table, as a badge whose title says what
-  it means), summary counts and timestamps, with Overview, Show, and Edit
-  actions per row and a link to create a new flow. The editor itself lives
+  name with its slug beneath it, status (`FormFlow.Data.Templates.Flow`'s
+  table, as a badge whose title says what it means), kind, summary counts,
+  health, and creation time, with Overview, Show, and Edit actions per row
+  and a link to create a new flow. A Columns tab adds what is off by
+  default - the id, a simple flow's form flow type and perspectives, the
+  update time - and reorders the rest; like the sort and the filters, the
+  choice lives in the URL (`columns[]`).
+
+  Slab tints its tabs gray and has no attr to say otherwise, so the table
+  sits in a wrapper whose Tailwind variant repaints those elements white. The editor itself lives
   on those pages, so this one never loads the ReactFlow bundle. Slab runs in
   query mode against the host app's repo, so sorting, filtering, and
   pagination come from the URL: pass the current `uri` and `params` from
@@ -362,15 +368,19 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <% end %>
       </p>
 
-      <Slab.table
-        :if={not @empty? and not @all_hidden?}
-        id="flows-table"
-        query={@query}
-        repo={Repo.repo()}
-        uri={@uri}
-        params={@table_params}
-      >
+      <%!-- Slab tints its tab labels and tab contents gray, with no attr
+            to say otherwise; the wrapper's variant repaints every such
+            element white so the tabs sit on the page like the rest of it --%>
+      <div :if={not @empty? and not @all_hidden?} class="[&_.bg-gray-50]:bg-white">
+        <Slab.table
+          id="flows-table"
+          query={@query}
+          repo={Repo.repo()}
+          uri={@uri}
+          params={@table_params}
+        >
         <:tab name="filters" />
+        <:tab name="columns" />
         <:filter
           field={:status}
           label="Status"
@@ -388,7 +398,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
           </.link>
           <code :if={flow.slug} class="block text-xs text-zinc-600">{flow.slug}</code>
         </:column>
-        <:column :let={flow} field={:id} label="ID">
+        <:column :let={flow} field={:id} label="ID" optional>
           <span class="font-mono text-[10px] text-zinc-400">{flow.id}</span>
         </:column>
         <:column :let={flow} field={:status} label="Status">
@@ -405,6 +415,19 @@ defmodule FormFlow.Web.Templates.Flows.Index do
             {if flow.label == "subflows", do: "Complex", else: "Simple"}
           </span>
         </:column>
+        <%!-- How the forms are presented, and who they are for: a simple
+              flow's type and perspectives; a complex flow has neither --%>
+        <:column :let={flow} :if={@flow_types != []} label="Form flow type" optional>
+          <span class="text-xs text-zinc-500">{type_name(flow, @flow_types) || "-"}</span>
+        </:column>
+        <:column :let={flow} :if={@flow_types != []} label="Perspectives" optional>
+          <span class="text-xs text-zinc-500">
+            {case perspective_names(flow, @flow_types) do
+              [] -> "-"
+              names -> Enum.join(names, ", ")
+            end}
+          </span>
+        </:column>
         <:column field={:nodes_count} label="Steps" />
         <:column field={:relationships_count} label="Connections" />
         <:column :let={flow} label="Health">
@@ -413,6 +436,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         <:column :let={flow} field={:inserted_at} label="Created" sortable>
           <span class="text-xs text-zinc-500">
             {Calendar.strftime(flow.inserted_at, "%Y-%m-%d %H:%M")}
+          </span>
+        </:column>
+        <:column :let={flow} field={:updated_at} label="Updated" sortable optional>
+          <span class="text-xs text-zinc-500">
+            {Calendar.strftime(flow.updated_at, "%Y-%m-%d %H:%M")}
           </span>
         </:column>
         <:column :let={flow} label="Actions">
@@ -486,8 +514,36 @@ defmodule FormFlow.Web.Templates.Flows.Index do
           </div>
         </:column>
         <:pagination per_page={10} />
-      </Slab.table>
+        </Slab.table>
+      </div>
     </div>
     """
+  end
+
+  # A simple flow's type, by name - the stored id resolved through the
+  # host's types, the id itself when they no longer declare it; a complex
+  # flow presents nothing, so nil
+  defp type_name(%{label: "subflows"}, _types), do: nil
+
+  defp type_name(flow, types) do
+    with id when is_binary(id) <- Shared.effective_type(types, flow.properties["form_flow_type"]) do
+      case Shared.type(types, id) do
+        %{name: name} -> name
+        nil -> id
+      end
+    end
+  end
+
+  # The perspectives a simple flow is for, by name - the stored ids resolved
+  # through its type's; an id the type no longer declares is not shown
+  defp perspective_names(%{label: "subflows"}, _types), do: []
+
+  defp perspective_names(flow, types) do
+    type = Shared.effective_type(types, flow.properties["form_flow_type"])
+    declared = Shared.perspectives(types, type)
+
+    flow
+    |> FormFlow.Config.Flows.Perspective.for_flow(declared)
+    |> Enum.map(& &1.name)
   end
 end

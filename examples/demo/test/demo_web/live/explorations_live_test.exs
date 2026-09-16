@@ -1,12 +1,24 @@
-defmodule DemoWeb.BrandingLiveTest do
+defmodule DemoWeb.ExplorationsLiveTest do
   use DemoWeb.ConnCase
 
   import Phoenix.LiveViewTest
 
-  alias DemoWeb.BrandingLive.UserSwitchers
+  alias DemoWeb.ExplorationsLive
+  alias DemoWeb.ExplorationsLive.UserSwitchers
+
+  test "the index links to every exploration, and each one renders", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/explorations")
+
+    for %{path: path, title: title} <- ExplorationsLive.explorations() do
+      assert has_element?(view, "a[href='#{path}']", title)
+
+      assert {:ok, _view, html} = live(conn, path)
+      assert html =~ "← Explorations"
+    end
+  end
 
   test "renders every user switcher direction in the header and in content", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/branding")
+    {:ok, view, _html} = live(conn, ~p"/explorations/user-switchers")
 
     for %{id: id} <- UserSwitchers.directions() do
       assert has_element?(view, "##{id}-header"), "missing #{id} in the header"
@@ -15,7 +27,7 @@ defmodule DemoWeb.BrandingLiveTest do
   end
 
   test "selecting a user updates both renderings of that direction only", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/branding")
+    {:ok, view, _html} = live(conn, ~p"/explorations/user-switchers")
 
     view
     |> element("#avatar_pill-header button", "Cat Owner")
@@ -27,7 +39,7 @@ defmodule DemoWeb.BrandingLiveTest do
   end
 
   test "?menus=open renders the header dropdowns open", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/branding?menus=open")
+    {:ok, view, _html} = live(conn, ~p"/explorations/user-switchers?menus=open")
 
     assert has_element?(view, "details#avatar_pill-header[open]")
     refute has_element?(view, "details#avatar_pill-content[open]")

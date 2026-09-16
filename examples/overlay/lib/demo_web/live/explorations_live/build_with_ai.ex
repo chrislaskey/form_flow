@@ -1,4 +1,4 @@
-defmodule DemoWeb.BrandingLive.BuildWithAI do
+defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   @moduledoc """
   Scratch directions for the form editor's **Build with AI** panel while a
   model is answering.
@@ -34,9 +34,13 @@ defmodule DemoWeb.BrandingLive.BuildWithAI do
       percentage, no token count, no step the model reports. A direction that
       looks like a progress bar is making a promise the request cannot keep,
       and that is a cost, not a bug to fix.
+
+  Mounted on `live "/explorations/build-with-ai", ExplorationsLive.BuildWithAI`.
   """
 
-  use DemoWeb, :html
+  use DemoWeb, :live_view
+
+  alias DemoWeb.ExplorationsLive.Shared
 
   @prompt "Let's create a form with fields for the dog's name, breed, date of birth, and whether it is microchipped."
 
@@ -150,6 +154,108 @@ defmodule DemoWeb.BrandingLive.BuildWithAI do
 
   @doc "The prompt every mock shows, so the directions differ only in their waiting state."
   def prompt, do: @prompt
+
+  # -- Page ------------------------------------------------------------------
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     socket
+     |> assign(:page_title, "Build with AI")
+     |> assign(:directions, directions())
+     |> assign(:steps_variations, steps_variations())}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash} current_user={@current_user}>
+      <div class="space-y-10">
+        <header class="space-y-2">
+          <Shared.back_link />
+          <h1 class="text-2xl font-semibold">Build with AI — waiting states</h1>
+          <p class="text-base-content/70">
+            The form editor's fourth panel in the twenty to sixty seconds between
+            pressing Build and a form appearing. Every direction shows the same
+            hardcoded prompt, so they differ only in how the wait is drawn.
+            Nothing here is wired up, and nothing here knows how far along the
+            request is — there is no percentage to report.
+          </p>
+        </header>
+
+        <.styles />
+
+        <div class="space-y-3">
+          <h2 class="text-xl font-semibold text-gray-900">The two settled states</h2>
+          <div class="grid gap-6 lg:grid-cols-2">
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">
+                Ready, with the model select a host offering several models gets
+              </p>
+              <.reference variant={:idle} />
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">Not configured — no prompt, no button</p>
+              <.reference variant={:not_configured} />
+            </div>
+          </div>
+        </div>
+
+        <%!-- Two columns that pack rather than a grid that leaves a row
+              as tall as its tallest cell: these panels differ in height by
+              a factor of three. The two full-width directions follow
+              underneath, where a column cannot hold them. --%>
+        <div class="columns-1 gap-8 lg:columns-2">
+          <div
+            :for={d <- Enum.reject(@directions, &Map.get(&1, :wide))}
+            class="mb-8 space-y-3 break-inside-avoid"
+          >
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 class="font-semibold text-gray-900">{d.title}</h2>
+              <p class="text-sm text-gray-500">{d.note}</p>
+            </div>
+            <.panel direction={d.id} />
+          </div>
+        </div>
+
+        <div class="space-y-8">
+          <div :for={d <- Enum.filter(@directions, &Map.get(&1, :wide))} class="space-y-3">
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 class="font-semibold text-gray-900">{d.title}</h2>
+              <p class="text-sm text-gray-500">{d.note}</p>
+            </div>
+            <.panel direction={d.id} />
+          </div>
+        </div>
+
+        <section class="space-y-6 border-t border-gray-200 pt-8">
+          <header class="space-y-2">
+            <h2 class="text-xl font-semibold">Second pass: the steps, varied</h2>
+            <p class="text-base-content/70">
+              Direction 6 on an ordinary white panel, with direction 12's moving
+              border around the steps rather than around the whole thing — the
+              panel is not what is working, the steps are. 6f is the pick: each
+              step carries its own clock, which is why there is no total in the
+              corner, and Cancel is the only thing under the box. Then the same
+              shape varied, including the two states the wait ends in, which the
+              directions above never showed.
+            </p>
+          </header>
+
+          <div class="columns-1 gap-8 lg:columns-2">
+            <div :for={v <- @steps_variations} class="mb-8 space-y-3 break-inside-avoid">
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 class="font-semibold text-gray-900">{v.title}</h3>
+                <p class="text-sm text-gray-500">{v.note}</p>
+              </div>
+              <.steps_panel variant={v.id} />
+            </div>
+          </div>
+        </section>
+      </div>
+    </Layouts.app>
+    """
+  end
 
   # -- Reference states ------------------------------------------------------
 

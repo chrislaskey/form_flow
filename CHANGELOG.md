@@ -30,6 +30,15 @@ them - a flow's kind is fixed when it is created.
 words come from. A form page's Preview heading now names the version it
 shows ("Preview · v1 · published"), since the title no longer does.
 
+### The flows index: a Columns tab, white tabs
+
+`FormFlow.Web.Templates.Flows.Index` has a **Columns** tab beside Filters.
+The id column starts hidden, and three columns are new and hidden too:
+**Form flow type** and **Perspectives** (a simple flow's; a complex flow
+shows a dash) and **Updated**, sortable. The tab's choice lives in the URL
+as `columns[]`, like the sort and the filters. Slab's gray tab tint is
+painted over white, so the tabs sit on the page like everything else.
+
 ### `SectionHeading` is a shared component
 
 `FormFlow.Web.Templates.Components.SectionHeading.section_heading/1`

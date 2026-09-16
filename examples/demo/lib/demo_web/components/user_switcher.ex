@@ -8,7 +8,8 @@ defmodule DemoWeb.UserSwitcher do
   `DemoWeb.UserSwitchController`, so choosing a user reloads the page as them.
   The current row's avatar carries a check badge instead of the chevron.
 
-  The design was chosen on `/branding` (direction 16 with check badges).
+  The design was chosen on `/explorations/user-switchers` (direction 16
+  with check badges).
   """
 
   use DemoWeb, :html

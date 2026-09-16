@@ -1,4 +1,4 @@
-defmodule DemoWeb.BrandingLive.TemplateLayout do
+defmodule DemoWeb.ExplorationsLive.TemplateLayout do
   @moduledoc """
   Scratch page for the templates pages' chrome: the header a flow or form
   page puts above its canvas (title, breadcrumb, metadata, actions), and
@@ -10,10 +10,12 @@ defmodule DemoWeb.BrandingLive.TemplateLayout do
   page; each fact-sheet direction is a `details/1` clause rendered under a
   drawn canvas. Nothing here is wired to the real components.
 
-  Mounted on `live "/branding/template-layout", BrandingLive.TemplateLayout`.
+  Mounted on `live "/explorations/template-layout", ExplorationsLive.TemplateLayout`.
   """
 
   use DemoWeb, :live_view
+
+  alias DemoWeb.ExplorationsLive.Shared
 
   # -- Data ------------------------------------------------------------------
 
@@ -290,9 +292,7 @@ defmodule DemoWeb.BrandingLive.TemplateLayout do
     <Layouts.app flash={@flash} current_user={@current_user}>
       <div class="space-y-6">
         <header class="space-y-2">
-          <p class="text-sm">
-            <.link navigate="/branding" class="text-indigo-600 hover:underline">← Branding</.link>
-          </p>
+          <Shared.back_link />
           <h1 class="text-2xl font-semibold">Template page layouts</h1>
           <p class="text-base-content/70">
             The chrome around a flow's or form's canvas: the header above it and

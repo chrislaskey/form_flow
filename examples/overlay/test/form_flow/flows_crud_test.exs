@@ -80,6 +80,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
     assert has_element?(view, ~s(a[href="/admin/flows/#{id}/overview"]), "Overview")
     assert has_element?(view, "code", Flows.get(id).slug)
+
+    # The id column is off until the Columns tab turns it on
+    refute has_element?(view, "td", id)
+    {:ok, view, _html} = live(conn, "/admin/flows?columns[]=name&columns[]=id")
     assert has_element?(view, "td", id)
   end
 

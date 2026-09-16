@@ -1,16 +1,20 @@
-defmodule DemoWeb.BrandingLive.UserSwitchers do
+defmodule DemoWeb.ExplorationsLive.UserSwitchers do
   @moduledoc """
   Scratch directions for the demo's user switcher: the control that picks
   which hardcoded perspective (reviewer, dog owner, cat owner, docs reader)
   the demo is viewed from.
 
-  Each direction is a `switcher/1` clause. The branding page renders every
-  one twice, in a mock header and again in page content, since the real
-  component will live in both places. Selecting a user here only updates
-  the mock; the real control will set a session cookie and reload.
+  Each direction is a `switcher/1` clause, rendered twice — in a mock header
+  and again in page content — since the real component lives in both places.
+  Selecting a user here only updates the mock; the real control sets a
+  session cookie and reloads.
+
+  Mounted on `live "/explorations/user-switchers", ExplorationsLive.UserSwitchers`.
   """
 
-  use DemoWeb, :html
+  use DemoWeb, :live_view
+
+  alias DemoWeb.ExplorationsLive.Shared
 
   @users [
     %{
@@ -181,6 +185,149 @@ defmodule DemoWeb.BrandingLive.UserSwitchers do
   def users, do: @users
   def user(id), do: Enum.find(@users, &(&1.id == id))
   def directions, do: @directions
+
+  # -- Page ------------------------------------------------------------------
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     socket
+     |> assign(:page_title, "User switchers")
+     |> assign(:directions, @directions)
+     |> assign(:selected, %{})
+     |> assign(:menus_open, false)}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply, assign(socket, :menus_open, params["menus"] == "open")}
+  end
+
+  @impl true
+  def handle_event("toggle_menus", _params, socket) do
+    {:noreply, update(socket, :menus_open, &(!&1))}
+  end
+
+  @impl true
+  def handle_event("select", %{"direction" => direction, "user" => user}, socket) do
+    {:noreply, update(socket, :selected, &Map.put(&1, direction, user))}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash} current_user={@current_user}>
+      <div class="space-y-8">
+        <header class="space-y-2">
+          <Shared.back_link />
+          <h1 class="text-2xl font-semibold">User switchers</h1>
+          <p class="text-base-content/70">
+            The control that picks which hardcoded perspective the demo is viewed
+            from. Each direction is shown in a mock header and again in page
+            content. Selecting only updates the mock; the real one sets a session
+            cookie and reloads.
+          </p>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm checkbox-primary"
+              checked={@menus_open}
+              phx-click="toggle_menus"
+            /> Show the header menus open
+          </label>
+        </header>
+
+        <Shared.gradients />
+
+        <div :for={d <- @directions} class={["space-y-3", @menus_open && "pb-72"]}>
+          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 class="font-semibold text-gray-900">{d.title}</h2>
+            <p class="text-sm text-gray-500">{d.note}</p>
+          </div>
+
+          <.mock_header>
+            <:right :if={d.id != :banner_strip}>
+              <.switcher
+                direction={d.id}
+                id={"#{d.id}-header"}
+                current={current(@selected, d.id, @current_user)}
+                open={@menus_open}
+              />
+            </:right>
+            <:strip :if={d.id == :banner_strip}>
+              <.switcher
+                direction={d.id}
+                id={"#{d.id}-header"}
+                current={current(@selected, d.id, @current_user)}
+                open={@menus_open}
+              />
+            </:strip>
+          </.mock_header>
+
+          <div class="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 px-6 py-5">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="font-semibold text-gray-900">Pet licenses</h3>
+                <p class="text-sm text-gray-500">
+                  In page content, the same component next to what it changes.
+                </p>
+              </div>
+              <.switcher
+                direction={d.id}
+                id={"#{d.id}-content"}
+                current={current(@selected, d.id, @current_user)}
+                align={:end}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layouts.app>
+    """
+  end
+
+  # Direction 20 is the real component, so it shows the real current user.
+  defp current(_selected, :built, current_user), do: current_user
+
+  defp current(selected, direction, _current_user) do
+    user(Map.get(selected, to_string(direction), "dog_owner"))
+  end
+
+  # The real header from `Layouts.app`, with a `:right` slot after the nav
+  # and a `:strip` slot for a full-width row beneath it.
+  slot :right
+  slot :strip
+
+  defp mock_header(assigns) do
+    ~H"""
+    <div class="overflow-visible rounded-xl border border-gray-200 bg-gray-100 p-4">
+      <header class="w-full rounded-lg bg-white shadow-sm">
+        <div class="h-1 w-full rounded-t-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 opacity-50" />
+        <div class="flex items-center justify-between gap-6 p-6 px-8">
+          <span class="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <Layouts.logo_mark class="size-8" box1="#111827" box2="url(#grad-brand)" front={:box1} />
+            FormFlow
+          </span>
+          <div class="flex items-center gap-4">
+            <nav class="flex items-center gap-1 text-sm font-medium">
+              <span class="rounded-lg bg-gray-100 px-3 py-2 font-semibold text-indigo-600">Home</span>
+              <span class="rounded-lg px-3 py-2 text-gray-600">Install Check</span>
+              <span class="rounded-lg px-3 py-2 text-gray-600">Admin</span>
+              <span class="rounded-lg px-3 py-2 text-gray-600">Users</span>
+            </nav>
+            <div :if={@right != []} class="flex items-center border-l border-gray-200 pl-4">
+              {render_slot(@right)}
+            </div>
+          </div>
+        </div>
+        {render_slot(@strip)}
+        <div class="h-3 rounded-b-lg" />
+      </header>
+    </div>
+    """
+  end
+
+  # -- Directions ------------------------------------------------------------
 
   @doc """
   Renders one user-switcher direction.

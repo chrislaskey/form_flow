@@ -35,8 +35,12 @@ defmodule DemoWeb.Router do
 
     live_session :default, on_mount: DemoWeb.UserHook do
       live "/install-check", InstallCheckLive
-      live "/branding", BrandingLive
-      live "/branding/template-layout", BrandingLive.TemplateLayout
+      live "/explorations", ExplorationsLive
+      live "/explorations/logo", ExplorationsLive.Logo
+      live "/explorations/user-switchers", ExplorationsLive.UserSwitchers
+      live "/explorations/health-checks", ExplorationsLive.HealthChecks
+      live "/explorations/build-with-ai", ExplorationsLive.BuildWithAI
+      live "/explorations/template-layout", ExplorationsLive.TemplateLayout
       live "/docs", DocsLive.Index
       live "/docs/introduction", DocsLive.IntroductionLive
       live "/docs/data-modeling", DocsLive.DataModelingLive
