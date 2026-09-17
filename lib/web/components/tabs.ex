@@ -39,11 +39,11 @@ defmodule FormFlow.Web.Components.Tabs do
 
   def tabs(assigns) do
     ~H"""
-    <nav class={["inline-flex rounded-lg bg-zinc-100 p-0.5 text-sm", @class]} aria-label={@label}>
+    <nav class={["inline-flex rounded-lg bg-zinc-100 p-1 text-sm", @class]} aria-label={@label}>
       <%= for {key, label, to} <- @items do %>
         <span
           :if={key == @active}
-          class="rounded-md bg-white px-3 py-1 font-semibold shadow-sm"
+          class="rounded-md bg-white px-3 py-1.5 font-semibold text-primary shadow-sm"
           aria-current="page"
         >
           {label}
@@ -51,7 +51,7 @@ defmodule FormFlow.Web.Components.Tabs do
         <.link
           :if={key != @active and is_nil(@target)}
           navigate={to}
-          class="rounded-md px-3 py-1 text-zinc-500 hover:text-zinc-900"
+          class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
         >
           {label}
         </.link>
@@ -61,7 +61,7 @@ defmodule FormFlow.Web.Components.Tabs do
           phx-click="navigate"
           phx-value-to={to}
           phx-target={@target}
-          class="rounded-md px-3 py-1 text-zinc-500 hover:text-zinc-900"
+          class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
         >
           {label}
         </button>

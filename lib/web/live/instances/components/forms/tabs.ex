@@ -33,9 +33,9 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
 
     assigns =
       assign(assigns, :items, [
-        {:edit, "Edit", Paths.form_edit_path(base, id, path)},
         {:show, "View", Paths.form_path(base, id, path)},
-        {:history, "History", Paths.form_history_path(base, id, path)}
+        {:history, "History", Paths.form_history_path(base, id, path)},
+        {:edit, "Edit", Paths.form_edit_path(base, id, path)}
       ])
 
     ~H"""

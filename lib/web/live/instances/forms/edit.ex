@@ -644,14 +644,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         <Status.badge form_instance={@form_instance} events={@events} components={@components} />
       </:status>
       <:actions :if={@tabs}>
+        {render_slot(@inner_block)}
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}
           path={@path}
           active={:edit}
-          class="mr-2"
+          class="ml-2"
         />
-        {render_slot(@inner_block)}
       </:actions>
     </Header.header>
     """

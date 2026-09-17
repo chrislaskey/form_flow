@@ -53,10 +53,10 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
 
     assigns =
       assign(assigns, :items, [
-        {:edit, "Edit", level_path(assigns) <> "/edit"},
-        {:show, "View", level_path(assigns)},
         {:overview, "Overview", "#{assigns.base}/flows/#{root_id}/overview"},
-        {:history, "History", "#{assigns.base}/flows/#{root_id}/history"}
+        {:show, "View", level_path(assigns)},
+        {:history, "History", "#{assigns.base}/flows/#{root_id}/history"},
+        {:edit, "Edit", level_path(assigns) <> "/edit"}
       ])
 
     ~H"""

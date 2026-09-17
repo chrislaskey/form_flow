@@ -672,19 +672,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           <%!-- The root's health, cached, from any depth - through the
                 "navigate" event, as above --%>
           <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
-          <%!-- The four views of the flow, this one chosen - through the
-                "navigate" event like every other way off this page, so
-                unsaved changes prompt first. Not links: a link would leave
-                before the prompt --%>
-          <Tabs.tabs
-            base={@base}
-            flow={@flow}
-            root_id={@root_id}
-            node_id={@node_id}
-            active={:edit}
-            target={@myself}
-            class="mx-2"
-          />
           <Core.button
             :if={unsaved_changes?(assigns)}
             components={@components}
@@ -702,6 +689,19 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           >
             Save
           </Core.button>
+          <%!-- The four views of the flow, this one chosen - through the
+                "navigate" event like every other way off this page, so
+                unsaved changes prompt first. Not links: a link would leave
+                before the prompt --%>
+          <Tabs.tabs
+            base={@base}
+            flow={@flow}
+            root_id={@root_id}
+            node_id={@node_id}
+            active={:edit}
+            target={@myself}
+            class="mx-2"
+          />
         </:actions>
       </Header.header>
 
