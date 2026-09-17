@@ -41,6 +41,9 @@ defmodule DemoWeb.Router do
       live "/explorations/health-checks", ExplorationsLive.HealthChecks
       live "/explorations/build-with-ai", ExplorationsLive.BuildWithAI
       live "/explorations/template-layout", ExplorationsLive.TemplateLayout
+      live "/explorations/form-instance", ExplorationsLive.FormInstance
+      live "/explorations/form-instance-continued", ExplorationsLive.FormInstanceContinued
+      live "/explorations/form-instance-review", ExplorationsLive.FormInstanceReview
       live "/docs", DocsLive.Index
       live "/docs/introduction", DocsLive.IntroductionLive
       live "/docs/data-modeling", DocsLive.DataModelingLive

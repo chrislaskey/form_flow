@@ -157,7 +157,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Components.SectionHeading
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Note
   alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms

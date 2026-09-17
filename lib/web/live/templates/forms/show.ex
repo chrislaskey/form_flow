@@ -55,9 +55,10 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.FactSheet
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Components.SectionHeading
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Forms.Shared
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Forms.PrefillDialog
@@ -470,30 +471,21 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       <%!-- The details every version shares, as a fact sheet; the heading's
             Edit form details is where they change. Through a step the name
             and slug are the step's, the way the fields that edit them are. --%>
-      <div class="p-6 border border-zinc-300 rounded-lg mb-6">
-        <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-4 [&_dt]:text-sm [&_dt]:font-medium [&_dt]:text-zinc-500 [&_dd]:mt-0.5">
-          <div class="min-w-0">
-            <dt>{Shared.name_label(@node)}</dt>
-            <dd>{Shared.step_name(@form, @node)}</dd>
-          </div>
-          <div class="min-w-0">
-            <dt>{Shared.slug_label(@node)}</dt>
-            <dd><.detail_value value={Shared.step_slug(@form, @node)} code /></dd>
-          </div>
-          <div class="min-w-0">
-            <dt>Description</dt>
-            <dd><.detail_value value={@form.description} /></dd>
-          </div>
-          <div :if={@form_types != []} class="min-w-0">
-            <dt>Form type</dt>
-            <dd><.detail_value value={form_type_label(assigns)} /></dd>
-          </div>
-          <div :for={{property, value} <- type_property_values(assigns)} class="min-w-0">
-            <dt>{property.name}</dt>
-            <dd>{Templates.Shared.display_value(property, value)}</dd>
-          </div>
-        </dl>
-      </div>
+      <FactSheet.fact_sheet class="mb-6">
+        <FactSheet.detail label={Shared.name_label(@node)}>{Shared.step_name(@form, @node)}</FactSheet.detail>
+        <FactSheet.detail label={Shared.slug_label(@node)}>
+          <FactSheet.detail_value value={Shared.step_slug(@form, @node)} code />
+        </FactSheet.detail>
+        <FactSheet.detail label="Description">
+          <FactSheet.detail_value value={@form.description} />
+        </FactSheet.detail>
+        <FactSheet.detail :if={@form_types != []} label="Form type">
+          <FactSheet.detail_value value={form_type_label(assigns)} />
+        </FactSheet.detail>
+        <FactSheet.detail :for={{property, value} <- type_property_values(assigns)} label={property.name}>
+          {Templates.Shared.display_value(property, value)}
+        </FactSheet.detail>
+      </FactSheet.fact_sheet>
 
       <SectionHeading.section_heading
         title="Form versions"
@@ -651,28 +643,6 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         components={@components}
       />
     </div>
-    """
-  end
-
-  # One value of the fact sheet: a dash for none, monospace for a slug
-  attr(:value, :any, default: nil)
-  attr(:code, :boolean, default: false)
-
-  defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
-    ~H"""
-    <span class="text-zinc-400">-</span>
-    """
-  end
-
-  defp detail_value(%{code: true} = assigns) do
-    ~H"""
-    <code class="text-xs">{@value}</code>
-    """
-  end
-
-  defp detail_value(assigns) do
-    ~H"""
-    {@value}
     """
   end
 

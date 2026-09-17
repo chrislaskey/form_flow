@@ -1,9 +1,10 @@
-defmodule FormFlow.Web.Templates.Components.SectionHeading do
+defmodule FormFlow.Web.Components.SectionHeading do
   @moduledoc """
-  `FormFlow.Web.Templates.Components.SectionHeading` function component
-  heads a part of a templates page: its title and one line saying what
-  belongs there, styled like DynamicForm's own nested-form heading so a
-  page's sections read as one family with its Elements.
+  `FormFlow.Web.Components.SectionHeading` function component
+  heads a part of a page - a templates page or an instance page alike: its
+  title and one line saying what belongs there, styled like DynamicForm's
+  own nested-form heading so a page's sections read as one family with its
+  Elements.
 
   Actions ride on the right of the title's line. A plain-string
   `description` sits under the title on the left, sharing the row with the

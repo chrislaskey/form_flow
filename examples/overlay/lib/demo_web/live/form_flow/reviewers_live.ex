@@ -15,7 +15,6 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PageComponents
   import DemoWeb.PersonaComponents
 
   @impl true
@@ -40,8 +39,6 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.h1>Reviewer pages</.h1>
-
         <.persona_gate
           current_user={@current_user}
           roles={[:reviewer]}

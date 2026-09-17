@@ -43,9 +43,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
+  alias FormFlow.Web.Components.FactSheet
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Components.SectionHeading
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Flows.Components.StatusDialog
@@ -438,28 +439,26 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           </Core.button>
         </:actions>
       </SectionHeading.section_heading>
-      <div class="p-6 border border-zinc-300 rounded-lg">
-        <dl class="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <.detail label={name_label(assigns)}>{step_name(@flow, @node)}</.detail>
-          <.detail label={slug_label(assigns)}>
-            <.detail_value value={step_slug(@flow, @node)} code />
-          </.detail>
-          <.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
+      <FactSheet.fact_sheet>
+          <FactSheet.detail label={name_label(assigns)}>{step_name(@flow, @node)}</FactSheet.detail>
+          <FactSheet.detail label={slug_label(assigns)}>
+            <FactSheet.detail_value value={step_slug(@flow, @node)} code />
+          </FactSheet.detail>
+          <FactSheet.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
             {Shared.status_label(@flow.status)}
             <span class="block text-xs text-zinc-500">{Shared.status_summary(@flow.status)}</span>
-          </.detail>
-          <.detail label="Flow kind">{Shared.kind_label(@flow)}</.detail>
-          <.detail :if={@flow_types != []} label="Form flow type">
-            <.detail_value value={type_label(assigns)} />
-          </.detail>
-          <.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
-            <.detail_value value={Enum.join(perspective_names(assigns), ", ")} />
-          </.detail>
-          <.detail :for={property <- Shared.properties(@flow_types, shown_type(assigns))} label={property.name}>
-            <.detail_value value={property_display(assigns, property)} />
-          </.detail>
-        </dl>
-      </div>
+          </FactSheet.detail>
+          <FactSheet.detail label="Flow kind">{Shared.kind_label(@flow)}</FactSheet.detail>
+          <FactSheet.detail :if={@flow_types != []} label="Form flow type">
+            <FactSheet.detail_value value={type_label(assigns)} />
+          </FactSheet.detail>
+          <FactSheet.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
+            <FactSheet.detail_value value={Enum.join(perspective_names(assigns), ", ")} />
+          </FactSheet.detail>
+          <FactSheet.detail :for={property <- Shared.properties(@flow_types, shown_type(assigns))} label={property.name}>
+            <FactSheet.detail_value value={property_display(assigns, property)} />
+          </FactSheet.detail>
+      </FactSheet.fact_sheet>
     </div>
     """
   end
@@ -471,42 +470,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
 
   defp details_description(_assigns),
     do: "What every step of this subflow shares: its name, slug, and kind."
-
-  # One cell of the fact sheet: the label a field would carry, the value
-  # under it
-  attr(:label, :string, required: true)
-  slot(:inner_block, required: true)
-
-  defp detail(assigns) do
-    ~H"""
-    <div class="min-w-0">
-      <dt class="text-sm font-medium text-zinc-500">{@label}</dt>
-      <dd class="mt-0.5 text-sm">{render_slot(@inner_block)}</dd>
-    </div>
-    """
-  end
-
-  # A value of the fact sheet: a dash for none, monospace for a slug
-  attr(:value, :any, default: nil)
-  attr(:code, :boolean, default: false)
-
-  defp detail_value(%{value: empty} = assigns) when empty in [nil, ""] do
-    ~H"""
-    <span class="text-zinc-400">-</span>
-    """
-  end
-
-  defp detail_value(%{code: true} = assigns) do
-    ~H"""
-    <code class="text-xs">{@value}</code>
-    """
-  end
-
-  defp detail_value(assigns) do
-    ~H"""
-    {@value}
-    """
-  end
 
   # A property's stored value, shown as its name; nil when unset
   defp property_display(assigns, property) do

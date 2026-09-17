@@ -74,6 +74,8 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.SectionHeading
+  alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -258,9 +260,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <div class="mb-4 flex min-h-12 items-center text-base font-semibold">
-        Flows
-      </div>
+      <Header.header base={@base} />
 
       <Core.alert components={@components}>{@mount_error}</Core.alert>
     </div>
@@ -273,67 +273,81 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <div class="mb-4 flex min-h-12 items-center text-base font-semibold">
-        Flows
-      </div>
+      <Header.header base={@base} />
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-      <Core.alert :if={@empty?} components={@components} class="mb-4">
+      <Core.alert :if={@empty?} components={@components}>
         Nothing started yet - start a flow below.
       </Core.alert>
 
-      <Slab.table
-        :if={!@empty?}
-        id="flow-instances-table"
-        query={@query}
-        repo={Repo.repo()}
-        preload={[:template_flow]}
-        uri={@uri}
-        params={@table_params}
-      >
-        <:column :let={flow_instance} label="Flow">
-          <.link
-            navigate={Paths.flow_path(@base, flow_instance.id)}
-            class="hover:underline"
-          >
-            {flow_instance.template_flow.name || "Untitled flow"}
-          </.link>
-        </:column>
-        <:column :let={flow_instance} field={:status} sortable>
-          <% {text, kind} = status_badge(flow_instance.status) %>
-          <Core.badge components={@components} kind={kind}>{text}</Core.badge>
-        </:column>
-        <:column :let={flow_instance} field={:inserted_at} label="Started" sortable>
-          <span class="text-base-content/60">
-            {Calendar.strftime(flow_instance.inserted_at, "%Y-%m-%d %H:%M")}
-          </span>
-        </:column>
-        <:column :let={flow_instance} label="Actions">
-          <Core.button
-            components={@components}
-            navigate={Paths.flow_path(@base, flow_instance.id)}
-            variant="primary"
-          >
-            {if flow_instance.status == "completed" or
-                  not Templates.Flow.allows?(flow_instance.template_flow, :continue),
-                do: "View",
-                else: "Continue"}
-          </Core.button>
-        </:column>
-        <:pagination per_page={10} />
-      </Slab.table>
+      <%!-- Slab tints its tab labels and tab contents gray, with no attr
+            to say otherwise; the wrapper's variant repaints every such
+            element white so the table sits on the page like the rest of it --%>
+      <div :if={!@empty?} class="[&_.bg-gray-50]:bg-white">
+        <Slab.table
+          id="flow-instances-table"
+          query={@query}
+          repo={Repo.repo()}
+          preload={[:template_flow]}
+          uri={@uri}
+          params={@table_params}
+        >
+          <:column :let={flow_instance} label="Flow">
+            <.link
+              navigate={Paths.flow_path(@base, flow_instance.id)}
+              class="hover:underline"
+            >
+              {flow_instance.template_flow.name || "Untitled flow"}
+            </.link>
+          </:column>
+          <:column :let={flow_instance} field={:status} sortable>
+            <% {text, kind} = status_badge(flow_instance.status) %>
+            <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+          </:column>
+          <:column :let={flow_instance} field={:inserted_at} label="Started" sortable>
+            <span class="text-xs text-zinc-500">
+              {Calendar.strftime(flow_instance.inserted_at, "%Y-%m-%d %H:%M")}
+            </span>
+          </:column>
+          <:column :let={flow_instance} field={:updated_at} label="Updated" sortable>
+            <span class="text-xs text-zinc-500">
+              {Calendar.strftime(flow_instance.updated_at, "%Y-%m-%d %H:%M")}
+            </span>
+          </:column>
+          <:column :let={flow_instance} label="Actions">
+            <.link
+              navigate={Paths.flow_path(@base, flow_instance.id)}
+              class="text-cyan-600 hover:underline"
+            >
+              {if flow_instance.status == "completed" or
+                    not Templates.Flow.allows?(flow_instance.template_flow, :continue),
+                  do: "View",
+                  else: "Continue"}
+            </.link>
+          </:column>
+          <:pagination per_page={10} />
+        </Slab.table>
+      </div>
 
-      <h3 class="mb-2 mt-8 text-base font-semibold">Start a new flow</h3>
+      <SectionHeading.section_heading
+        title="Start a new flow"
+        description="The flows open to start here. Starting one adds it to the list above."
+        class="mt-8 mb-3"
+      />
       <Core.alert :if={@offered_flows == [] and @winding_down_flows == []} components={@components}>
         No flows are open.
       </Core.alert>
-      <ul class="divide-y divide-base-300 text-base">
-        <li
+      <div
+        :if={@offered_flows != [] or @winding_down_flows != []}
+        id="flow-instances-start"
+        class="border border-zinc-300 rounded-lg divide-y divide-zinc-200"
+      >
+        <div
           :for={flow <- @offered_flows}
-          class="flex flex-wrap items-center justify-between gap-3 py-3"
+          class="flex flex-wrap items-center justify-between gap-3 px-6 py-4"
         >
-          <span>{flow.name || "Untitled flow"}</span>
+          <span class="font-medium">{flow.name || "Untitled flow"}</span>
           <Core.button
             components={@components}
             phx-click="start"
@@ -343,17 +357,17 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           >
             Start
           </Core.button>
-        </li>
+        </div>
         <%!-- A flow the page is about that stopped taking starts: named, so
               a user looking for it learns why there is no Start --%>
-        <li
+        <div
           :for={flow <- @winding_down_flows}
-          class="flex flex-wrap items-center justify-between gap-3 py-3 text-zinc-500"
+          class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-zinc-500"
         >
-          <span>{flow.name || "Untitled flow"}</span>
+          <span class="font-medium">{flow.name || "Untitled flow"}</span>
           <span class="text-sm">No longer taking new starts.</span>
-        </li>
-      </ul>
+        </div>
+      </div>
     </div>
     """
   end

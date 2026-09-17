@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.28.0
+
+### The instance pages wear the templates pages' chrome
+
+The four user-facing pages - `FormFlow.Web.Instances.Flows.Index`,
+`Flows.Show`, `Forms.Show`, and `Forms.Edit` - now put the same header
+above their content as the templates pages do:
+`FormFlow.Web.Instances.Components.Header`, the breadcrumb on top, small
+("Flows / Dog License / Owner Information", ending in the page itself,
+unlinked), and the page's name under it, larger - a form reads "Owner
+Information *in Dog License*". Every state a page can be in draws it,
+refused and unstarted included, so a page with nothing to show is still
+recognisably the page. The one-line `text-base` heading that doubled as
+breadcrumb and title is gone, and with it
+`FormFlow.Web.Instances.Components.FormPage`.
+
+The listing's table sits on white like the templates index, its timestamps
+are the same small grey, its row action is a link (Continue / View) rather
+than a button, and it gained an Updated column. **Start a new flow** is a
+section heading with a line saying what the list under it is, and the
+flows offered sit in a bordered box, one to a row.
+
+The flow instance's page heads its forms **Forms** and draws them in a
+bordered box; a complex flow's rows are grouped under the subflow they
+belong to - Applicant, then Reviewer - the way the flow reads on the admin
+canvas. Under them, **Details** is a fact sheet: the flow, the instance's
+status, when it was started and last updated. The Completed badge that sat
+in the header line lives in the sheet's Status cell now, since the header
+carries no metadata on either side of the library.
+
+A form's Download PDF and Print buttons moved into the header's actions,
+where the templates pages keep theirs.
+
+Wording is unchanged throughout: every sentence a page said before, it
+says now.
+
+### Two components shared by both sides
+
+`FormFlow.Web.Components.FactSheet` is the bordered box of labelled facts
+- `fact_sheet/1`, `detail/1`, `detail_value/1` - that `Templates.Flows.Show`
+and `Templates.Forms.Show` each had a private copy of and the instance page
+now draws too. `FormFlow.Web.Components.SectionHeading` is the same
+component it was, moved out of `FormFlow.Web.Templates.Components` because
+the instance pages head their sections with it as well.
+
+**Breaking:** `FormFlow.Web.Templates.Components.SectionHeading` is now
+`FormFlow.Web.Components.SectionHeading`; `FormFlow.Web.Instances.Components.FormPage`
+is removed. A host rendering the components directly updates the alias and
+draws the header with `FormFlow.Web.Instances.Components.Header`.
+
+### The demo's user and reviewer pages
+
+`/users` and `/reviewers` no longer draw an "H1" of their own above
+FormFlow's component - like `/admin`, FormFlow's header is the page title.
+
+
 ## v0.27.0
 
 ### The page header: breadcrumb first, then the name, and nothing after it
@@ -41,7 +97,7 @@ painted over white, so the tabs sit on the page like everything else.
 
 ### `SectionHeading` is a shared component
 
-`FormFlow.Web.Templates.Components.SectionHeading.section_heading/1`
+`FormFlow.Web.Components.SectionHeading.section_heading/1`
 replaces `Forms.Shared.section_heading/1`, so flow pages and form pages
 head their sections the same way. It takes a plain-string `description`
 that sits under the title on the left, sharing the row with the heading's

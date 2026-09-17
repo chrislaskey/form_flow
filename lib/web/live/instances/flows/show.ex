@@ -64,7 +64,10 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.FactSheet
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -156,7 +159,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
     case Instances.Flows.get(flow_instance_id) do
       nil ->
-        assign(socket, flow_instance: nil, rows: [], stranded: [], flow_name: nil)
+        assign(socket, flow_instance: nil, rows: [], groups: [], stranded: [], flow_name: nil)
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
@@ -189,6 +192,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           assign(socket,
             flow_instance: flow_instance,
             rows: rows,
+            groups: groups(rows),
             continue_allowed?: continue_allowed?(flow, socket.assigns),
             part_done?: part_done?(rows, flow_instance),
             stranded: Instances.Flows.list_stranded(flow_instance),
@@ -239,11 +243,32 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       Enum.all?(rows, &(&1.form.status == :completed))
   end
 
+  # The rows in the order the flow walks them, cut where one "forms" flow
+  # ends and the next begins. A simple flow is one group; a complex one is
+  # a group per subflow the viewer can see, headed by that subflow's name.
+  defp groups(rows) do
+    rows
+    |> Enum.chunk_by(& &1.form.flow.id)
+    |> Enum.map(fn [first | _] = group -> {first.form.flow, group} end)
+  end
+
+  # The instance's status as `{text, kind}` - the same two words and palette
+  # the listing uses for the same column
+  defp status_badge("completed"), do: {"Completed", :success}
+  defp status_badge(_in_progress), do: {"In progress", :warning}
+
+  defp timestamp(datetime), do: Calendar.strftime(datetime, "%Y-%m-%d %H:%M") <> " UTC"
+
   @impl true
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <div>
-      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+      <Core.alert components={@components}>
+        <span>This flow no longer exists.</span>
+        <.link navigate={Paths.flows_path(@base)} class="link link-primary">
+          Back to flows
+        </.link>
+      </Core.alert>
     </div>
     """
   end
@@ -259,11 +284,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <div class="mb-4 flex min-h-12 flex-wrap items-center gap-2 text-base font-semibold">
-        <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
-        <span class="text-base-content/40">/</span>
-        {@flow_name}
-      </div>
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} />
 
       <Core.alert components={@components}>
         <span>{@mount_error}</span>
@@ -281,18 +302,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <div class="mb-4 flex min-h-12 flex-wrap items-center gap-2 text-base font-semibold">
-        <.link navigate={Paths.flows_path(@base)} class="hover:underline">Flows</.link>
-        <span class="text-base-content/40">/</span>
-        {@flow_name}
-        <Core.badge
-          :if={@flow_instance.status == "completed"}
-          components={@components}
-          kind={:success}
-        >
-          Completed
-        </Core.badge>
-      </div>
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} />
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
@@ -304,57 +314,98 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         Your part is done. The rest of this flow is being worked on by others.
       </Core.alert>
 
-      <ul class="divide-y divide-base-300 text-base">
-        <li :for={row <- @rows} class="flex flex-wrap items-center gap-3 py-3">
-          <% {text, kind} = Components.Flows.Progress.badge(row.form.status) %>
-          <Core.badge components={@components} kind={kind}>{text}</Core.badge>
-          <span>{FlowProgress.qualified_label(row.form)}</span>
-          <span class="ml-auto flex items-center gap-2">
-            <%!-- Start is the offer to begin work here - an any-order wizard
-                  makes it on forms an in-order one keeps closed. A form
-                  already started continues instead; both land on the same
-                  page, which is the one that starts the form. --%>
-            <Core.button
-              :if={row.editable? && is_nil(row.form.instance)}
-              components={@components}
-              navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-              variant="primary"
-            >
-              Start
-            </Core.button>
-            <Core.button
-              :if={row.form.status == :in_progress && row.form.instance && @continue_allowed?}
-              components={@components}
-              navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-            >
-              Continue
-            </Core.button>
-            <Core.button
-              :if={row.form.status == :completed && row.form.instance}
-              components={@components}
-              navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
-              class="btn"
-            >
-              View
-            </Core.button>
-            <Core.button
-              :if={row.form.status == :completed && row.form.instance && @continue_allowed?}
-              components={@components}
-              phx-click="reopen"
-              phx-value-path={Enum.join(row.form.path, ",")}
-              phx-target={@myself}
-              class="btn btn-soft"
-            >
-              Reopen
-            </Core.button>
-          </span>
-        </li>
-      </ul>
+      <SectionHeading.section_heading
+        :if={@rows != []}
+        title="Forms"
+        description="Each form in this flow and where it stands."
+        class="mb-3"
+      />
+      <div :if={@rows != []} id={"#{@id}-forms"} class="border border-zinc-300 rounded-lg">
+        <%= for {{flow, rows}, index} <- Enum.with_index(@groups) do %>
+          <%!-- A complex flow's forms are headed by the subflow they belong
+                to; a simple flow's need no heading, there is one group --%>
+          <div
+            :if={length(@groups) > 1}
+            class={[
+              "px-6 py-2 bg-zinc-50 text-sm font-semibold text-zinc-700",
+              index == 0 && "rounded-t-lg",
+              index > 0 && "border-t border-zinc-300"
+            ]}
+          >
+            {flow.name || "Untitled"}
+          </div>
+          <div class="divide-y divide-zinc-200">
+            <div :for={row <- rows} class="flex flex-wrap items-center gap-3 px-6 py-4">
+              <% {text, kind} = Components.Flows.Progress.badge(row.form.status) %>
+              <span class="font-medium">{FlowProgress.qualified_label(row.form)}</span>
+              <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+              <span class="ml-auto flex items-center gap-3">
+                <%!-- Start is the offer to begin work here - an any-order wizard
+                      makes it on forms an in-order one keeps closed. A form
+                      already started continues instead; both land on the same
+                      page, which is the one that starts the form. --%>
+                <Core.button
+                  :if={row.editable? && is_nil(row.form.instance)}
+                  components={@components}
+                  navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
+                  variant="primary"
+                >
+                  Start
+                </Core.button>
+                <Core.button
+                  :if={row.form.status == :in_progress && row.form.instance && @continue_allowed?}
+                  components={@components}
+                  navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
+                  class="btn"
+                >
+                  Continue
+                </Core.button>
+                <.link
+                  :if={row.form.status == :completed && row.form.instance}
+                  navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
+                  class="text-cyan-600 hover:underline"
+                >
+                  View
+                </.link>
+                <Core.button
+                  :if={row.form.status == :completed && row.form.instance && @continue_allowed?}
+                  components={@components}
+                  phx-click="reopen"
+                  phx-value-path={Enum.join(row.form.path, ",")}
+                  phx-target={@myself}
+                  class="text-cyan-600 hover:underline"
+                >
+                  Reopen
+                </Core.button>
+              </span>
+            </div>
+          </div>
+        <% end %>
+      </div>
 
       <Core.alert :if={@stranded != []} kind={:warning} components={@components} class="mt-6">
         {length(@stranded)} answer set(s) were filled at positions this flow no longer has.
         An administrator can resolve them.
       </Core.alert>
+
+      <%!-- The instance's own facts, under the forms, read rather than
+            edited: where it stands as a whole and when --%>
+      <SectionHeading.section_heading
+        title="Details"
+        description="Where this flow stands as a whole, and when it was started."
+        class="mt-8 mb-3"
+      />
+      <FactSheet.fact_sheet>
+        <FactSheet.detail label="Flow">{@flow_name}</FactSheet.detail>
+        <FactSheet.detail label="Status">
+          <% {text, kind} = status_badge(@flow_instance.status) %>
+          <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+        </FactSheet.detail>
+        <FactSheet.detail label="Started">{timestamp(@flow_instance.inserted_at)}</FactSheet.detail>
+        <FactSheet.detail label="Last updated">
+          {timestamp(@flow_instance.updated_at)}
+        </FactSheet.detail>
+      </FactSheet.fact_sheet>
     </div>
     """
   end

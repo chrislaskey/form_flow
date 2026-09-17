@@ -103,7 +103,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates.Components.SectionHeading
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 

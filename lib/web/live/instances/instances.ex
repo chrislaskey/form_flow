@@ -14,8 +14,10 @@ defmodule FormFlow.Web.Instances do
     * `FormFlow.Web.Instances.Forms.Show` - one form of an instance, rendered
       with `DynamicForm`, read-only or fillable
 
-  plus `FormFlow.Web.Instances.Components.Flows.Progress` (a flow's forms and
-  their state, drawn) and `FormFlow.Web.Instances.Paths` (every URL these
+  plus `FormFlow.Web.Instances.Components.Header` (the breadcrumb and title
+  every one of them puts above its content, the same shape as the templates
+  side's), `FormFlow.Web.Instances.Components.Flows.Progress` (a flow's forms
+  and their state, drawn) and `FormFlow.Web.Instances.Paths` (every URL these
   pages link to).
 
   Which forms a user may navigate to, and where submitting takes them, is

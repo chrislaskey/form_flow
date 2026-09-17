@@ -54,6 +54,32 @@ defmodule DemoWeb.ExplorationsLive do
       The chrome around a flow's or form's canvas: the header above it and
       the fact sheet below.
       """
+    },
+    %{
+      path: "/explorations/form-instance",
+      title: "Form instance page",
+      note: """
+      The page a user fills a form on: the header without the subflow's
+      name, a flow badge with percent complete, side rails as a full
+      column, actions top right that stay in reach, and the save state.
+      """
+    },
+    %{
+      path: "/explorations/form-instance-continued",
+      title: "Form instance page, continued",
+      note: """
+      Round three: the F1 card and F3 rectangle with a way to see the
+      steps, Edit / View / History as tabs, status, the History view, R2
+      with those folded in, and the combinations.
+      """
+    },
+    %{
+      path: "/explorations/form-instance-review",
+      title: "Review form page",
+      note: """
+      The reviewer's form beside, over, or among the applicant's answers it
+      reviews - one of them a card on the form editor's dotted canvas.
+      """
     }
   ]
 

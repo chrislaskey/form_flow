@@ -116,7 +116,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Web.Components.Forms.PrefillMenu
   alias FormFlow.Web.Components.Forms.PrefillPicker
   alias FormFlow.Web.Components.Forms.Prefills
-  alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -407,7 +407,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <div>
-      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+      <Core.alert components={@components}>
+        <span>This flow no longer exists.</span>
+        <.link navigate={Paths.flows_path(@base)} class="link link-primary">
+          Back to flows
+        </.link>
+      </Core.alert>
     </div>
     """
   end
@@ -423,12 +428,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>{@mount_error}</span>
@@ -445,12 +445,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>This form is not part of your work here.</span>
@@ -467,12 +462,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>{blocked_message(assigns)}</span>
@@ -487,6 +477,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
     <div>
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+
       <Core.alert kind={:warning} components={@components}>
         <div>
           <p class="font-medium">This form can't be rendered.</p>
@@ -502,12 +494,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :completed} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>This form has already been submitted.</span>
@@ -528,12 +515,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       {@type.module.progress_component(%{
         id: "#{@id}-flow-progress",

@@ -62,7 +62,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Controllers.Downloads
   alias FormFlow.Web.Downloads.Token
-  alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -175,7 +175,12 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :flow_not_found} = assigns) do
     ~H"""
     <div>
-      <Core.alert components={@components}>This flow no longer exists.</Core.alert>
+      <Core.alert components={@components}>
+        <span>This flow no longer exists.</span>
+        <.link navigate={Paths.flows_path(@base)} class="link link-primary">
+          Back to flows
+        </.link>
+      </Core.alert>
     </div>
     """
   end
@@ -191,12 +196,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>{@mount_error}</span>
@@ -213,12 +213,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>This form is not part of your work here.</span>
@@ -235,12 +230,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
 
       <Core.alert components={@components}>
         <span>{unstarted_message(assigns)}</span>
@@ -262,6 +252,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
     <div>
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+
       <Core.alert kind={:warning} components={@components}>
         <div>
           <p class="font-medium">This form can't be rendered.</p>
@@ -278,12 +270,30 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: state} = assigns) when state in [:ready, :completed] do
     ~H"""
     <div>
-      <Components.FormPage.breadcrumb
-        base={@base}
-        flow_instance={@flow_instance}
-        flow_name={@flow_name}
-        label={@form_label}
-      />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label}>
+        <:actions>
+          <%!-- A LiveView holds a websocket, not a response, so taking the
+                answers away is a request of its own, authorized by a token
+                this page mints on the click. Minting then, rather than when
+                the page was drawn, is what lets a tab left open for days
+                still print: the token is always seconds old, whatever the
+                page is. --%>
+          <div
+            :if={@download_path}
+            id={"#{@id}-downloads"}
+            phx-hook=".Downloads"
+            phx-target={@myself}
+            class="flex flex-wrap items-center gap-2"
+          >
+            <Core.button components={@components} type="button" data-disposition="download" class="btn btn-ghost">
+              Download PDF
+            </Core.button>
+            <Core.button components={@components} type="button" data-disposition="print" class="btn btn-ghost">
+              Print
+            </Core.button>
+          </div>
+        </:actions>
+      </Header.header>
 
       {@type.module.progress_component(%{
         id: "#{@id}-flow-progress",
@@ -298,26 +308,6 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       })}
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
-
-      <%!-- A LiveView holds a websocket, not a response, so taking the answers
-            away is a request of its own, authorized by a token this page
-            mints on the click. Minting then, rather than when the page was
-            drawn, is what lets a tab left open for days still print: the
-            token is always seconds old, whatever the page is. --%>
-      <div
-        :if={@download_path}
-        id={"#{@id}-downloads"}
-        phx-hook=".Downloads"
-        phx-target={@myself}
-        class="mb-4 flex flex-wrap items-center gap-3"
-      >
-        <Core.button components={@components} type="button" data-disposition="download" class="btn">
-          Download PDF
-        </Core.button>
-        <Core.button components={@components} type="button" data-disposition="print" class="btn">
-          Print
-        </Core.button>
-      </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".Downloads">
         export default {
