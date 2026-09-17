@@ -536,7 +536,12 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
 
-      view |> element("button", "Reopen") |> render_click()
+      # Selected by phx-click, not text: the modal's confirm button also
+      # reads "Reopen", the trigger's own label
+      view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      assert render(view) =~ "Reopen this form?"
+
+      view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
 
       assert {path, _flash} = assert_redirect(view)
       assert path == edit_path(instance, [name.id])
@@ -560,10 +565,12 @@ defmodule Demo.FormFlowInstancesTest do
       # The year closes; both clicks arrive after
       {:ok, _} = Flows.update_status(flow, "read_only", [])
 
-      html = form_view |> element("button", "Reopen") |> render_click()
+      form_view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      html = form_view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
       assert html =~ "This flow is read-only now."
 
-      html = flow_view |> element("button", "Reopen") |> render_click()
+      flow_view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      html = flow_view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
       assert html =~ "This flow is read-only now."
 
       assert %{status: "completed"} = instance_at(instance, [only.id])
@@ -597,7 +604,8 @@ defmodule Demo.FormFlowInstancesTest do
       # when clicked is the thing the page's state is there to prevent
       assert has_element?(view, "button", "Download PDF")
 
-      view |> element("button", "Reopen") |> render_click()
+      view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
       assert %{status: "in_progress"} = instance_at(instance, [address.id])
     end
 

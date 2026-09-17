@@ -31,8 +31,10 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
-  and it belongs beside the answers it reopens. It lands on Edit, where those
-  answers can then be changed.
+  and it belongs beside the answers it reopens. It asks for confirmation
+  first (`FormFlow.Web.Instances.Components.ReopenDialog`), since it puts
+  the form back in front of everyone who can see it. It lands on Edit,
+  where those answers can then be changed.
 
   ## The states it draws
 
@@ -67,6 +69,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   alias FormFlow.Web.Instances.Components.Forms.Status
   alias FormFlow.Web.Instances.Components.Forms.Tabs
   alias FormFlow.Web.Instances.Components.Header
+  alias FormFlow.Web.Instances.Components.ReopenDialog
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -91,6 +94,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
       |> assign_new(:error, fn -> nil end)
+      |> assign_new(:confirming_reopen?, fn -> false end)
 
     {:ok, socket |> load() |> assign_page_state()}
   end
@@ -126,8 +130,23 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   def handle_event("form_flow:download", _params, socket), do: {:noreply, socket}
 
-  def handle_event("reopen", _params, socket)
+  def handle_event("request_reopen", _params, socket)
       when socket.assigns.page_state in [:ready, :completed] do
+    {:noreply, assign(socket, :confirming_reopen?, true)}
+  end
+
+  # A refused event is silent: the client was not driving a rendered
+  # control, and a message would describe the gate to whoever was probing
+  # it. An *unknown* event still raises - there is no blanket clause.
+  def handle_event("request_reopen", _params, socket), do: {:noreply, socket}
+
+  def handle_event("cancel_reopen", _params, socket) do
+    {:noreply, assign(socket, :confirming_reopen?, false)}
+  end
+
+  def handle_event("confirm_reopen", _params, socket)
+      when socket.assigns.page_state in [:ready, :completed] do
+    socket = assign(socket, :confirming_reopen?, false)
     %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
     # The status is the pages' rule, asked again at the click from the flow
@@ -153,10 +172,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     end
   end
 
-  # A refused event is silent: the client was not driving a rendered
-  # control, and a message would describe the gate to whoever was probing
-  # it. An *unknown* event still raises - there is no blanket clause.
-  def handle_event("reopen", _params, socket), do: {:noreply, socket}
+  def handle_event("confirm_reopen", _params, socket), do: {:noreply, socket}
 
   defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
     case Instances.Flows.get(flow_instance_id) do
@@ -356,13 +372,19 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         <Core.button
           :if={@continue_allowed?}
           components={@components}
-          phx-click="reopen"
+          phx-click="request_reopen"
           phx-target={@myself}
           class="btn btn-sm btn-success btn-soft"
         >
           Reopen
         </Core.button>
       </Core.alert>
+
+      <ReopenDialog.reopen_dialog
+        :if={@confirming_reopen?}
+        target={@myself}
+        components={@components}
+      />
 
       <p :if={@form_instance.status != "completed" and @continue_allowed?} class="mb-4">
         <.link

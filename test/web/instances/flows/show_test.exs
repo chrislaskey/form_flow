@@ -43,19 +43,80 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
     }
   end
 
-  describe "reopen" do
+  describe "request_reopen" do
     test "refuses when the gate refused the page" do
       socket = socket(%{page_state: :refused})
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{"path" => "done"}, socket)
+      assert {:noreply, ^socket} =
+               Show.handle_event("request_reopen", %{"path" => "done"}, socket)
     end
 
     test "refuses in every state but the page drawing its rows" do
       for state <- [:flow_not_found, :redirecting, :refused] do
         socket = socket(%{page_state: state})
 
-        assert {:noreply, ^socket} = Show.handle_event("reopen", %{"path" => "done"}, socket)
+        assert {:noreply, ^socket} =
+                 Show.handle_event("request_reopen", %{"path" => "done"}, socket)
       end
+    end
+
+    test "refuses when the page has no state at all" do
+      # The guard is positive, so a missing assign fails it and falls to the
+      # refusal rather than opening the confirmation
+      socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
+
+      assert {:noreply, ^socket} =
+               Show.handle_event("request_reopen", %{"path" => "done"}, socket)
+    end
+
+    test "refuses a position the page never drew" do
+      # The hole this closes: unguarded, confirming it would carry a path to
+      # `confirm_reopen` that could create an instance at whatever position
+      # the client names, pinned to whatever form version that node points at
+      # — anyone's
+      socket = socket(%{})
+
+      assert {:noreply, ^socket} =
+               Show.handle_event("request_reopen", %{"path" => "somebody-elses-node"}, socket)
+    end
+
+    test "refuses a row it drew that has no instance — starting is not reopening" do
+      socket = socket(%{rows: [row("available", :available, nil)]})
+
+      assert {:noreply, ^socket} =
+               Show.handle_event("request_reopen", %{"path" => "available"}, socket)
+    end
+
+    test "refuses a row it drew that is not completed" do
+      instance = %Instances.Form{id: "form-1", path: ["open"]}
+      socket = socket(%{rows: [row("open", :in_progress, instance)]})
+
+      assert {:noreply, ^socket} =
+               Show.handle_event("request_reopen", %{"path" => "open"}, socket)
+    end
+
+    test "a completed row the page drew opens the confirmation, touching nothing yet" do
+      socket = socket(%{})
+
+      assert {:noreply, socket} = Show.handle_event("request_reopen", %{"path" => "done"}, socket)
+      assert socket.assigns.confirming_reopen_path == ["done"]
+    end
+  end
+
+  describe "cancel_reopen" do
+    test "closes the confirmation" do
+      socket = socket(%{confirming_reopen_path: ["done"]})
+
+      assert {:noreply, socket} = Show.handle_event("cancel_reopen", %{}, socket)
+      assert socket.assigns.confirming_reopen_path == nil
+    end
+  end
+
+  describe "confirm_reopen" do
+    test "refuses when the gate refused the page" do
+      socket = socket(%{page_state: :refused, confirming_reopen_path: ["done"]})
+
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
     test "refuses when the page has no state at all" do
@@ -63,38 +124,32 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
       # refusal rather than reaching the write
       socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{"path" => "done"}, socket)
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
-    test "refuses a position the page never drew" do
-      # The hole this closes: unguarded, the write creates an instance at
-      # whatever position the client names, pinned to whatever form version
-      # that node points at — anyone's
-      socket = socket(%{})
+    test "refuses when nothing is pending confirmation" do
+      socket = socket(%{confirming_reopen_path: nil})
 
-      assert {:noreply, ^socket} =
-               Show.handle_event("reopen", %{"path" => "somebody-elses-node"}, socket)
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
-    test "refuses a row it drew that has no instance — starting is not reopening" do
-      socket = socket(%{rows: [row("available", :available, nil)]})
+    test "asks the rules again, in case the row changed underneath the open dialog" do
+      # A row that no longer matches (completed, with an instance) is refused
+      # even though `request_reopen` was the one that put it here
+      socket = socket(%{rows: [row("open", :in_progress, nil)], confirming_reopen_path: ["open"]})
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{"path" => "available"}, socket)
+      assert {:noreply, socket} = Show.handle_event("confirm_reopen", %{}, socket)
+      assert socket.assigns.confirming_reopen_path == nil
     end
 
-    test "refuses a row it drew that is not completed" do
-      instance = %Instances.Form{id: "form-1", path: ["open"]}
-      socket = socket(%{rows: [row("open", :in_progress, instance)]})
+    test "a completed row still pending confirmation is what gets as far as the write" do
+      # The one path that passes both rules: it now reaches the repo — the
+      # click's re-read of the flow's status — which is absent here. That the
+      # two differ is the rules working.
+      socket = socket(%{confirming_reopen_path: ["done"]})
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{"path" => "open"}, socket)
-    end
-
-    test "a completed row the page drew is what gets as far as the write" do
-      # Same event, the one row that passes both rules: it now reaches the
-      # repo — the click's re-read of the flow's status — which is absent
-      # here. That the two differ is the rules working.
       assert_raise UndefinedFunctionError, fn ->
-        Show.handle_event("reopen", %{"path" => "done"}, socket(%{}))
+        Show.handle_event("confirm_reopen", %{}, socket)
       end
     end
   end

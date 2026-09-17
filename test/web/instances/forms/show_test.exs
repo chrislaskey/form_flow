@@ -28,11 +28,43 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
     }
   end
 
-  describe "reopen" do
+  describe "request_reopen" do
     test "does nothing when the gate refused the page" do
       socket = socket(%{page_state: :refused})
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
+      assert {:noreply, ^socket} = Show.handle_event("request_reopen", %{}, socket)
+    end
+
+    test "does nothing when the page has no state at all" do
+      # The guard is positive, so a missing assign fails it and falls to the
+      # refusal rather than opening the dialog
+      socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
+
+      assert {:noreply, ^socket} = Show.handle_event("request_reopen", %{}, socket)
+    end
+
+    test "opens the confirmation, touching nothing yet" do
+      socket = socket(%{page_state: :completed, confirming_reopen?: false})
+
+      assert {:noreply, socket} = Show.handle_event("request_reopen", %{}, socket)
+      assert socket.assigns.confirming_reopen? == true
+    end
+  end
+
+  describe "cancel_reopen" do
+    test "closes the confirmation" do
+      socket = socket(%{page_state: :completed, confirming_reopen?: true})
+
+      assert {:noreply, socket} = Show.handle_event("cancel_reopen", %{}, socket)
+      assert socket.assigns.confirming_reopen? == false
+    end
+  end
+
+  describe "confirm_reopen" do
+    test "does nothing when the gate refused the page" do
+      socket = socket(%{page_state: :refused})
+
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
     test "does nothing when the page has no state at all" do
@@ -40,7 +72,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
       # refusal rather than reaching the write
       socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
     test "is refused before it reads a thing, so a refused page cannot reach the data" do
@@ -56,7 +88,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
           base: ""
         })
 
-      assert {:noreply, ^socket} = Show.handle_event("reopen", %{}, socket)
+      assert {:noreply, ^socket} = Show.handle_event("confirm_reopen", %{}, socket)
     end
 
     test "the state is what decides it, not the assigns the write would use" do
@@ -73,7 +105,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
       }
 
       assert_raise UndefinedFunctionError, fn ->
-        Show.handle_event("reopen", %{}, socket(assigns))
+        Show.handle_event("confirm_reopen", %{}, socket(assigns))
       end
     end
   end

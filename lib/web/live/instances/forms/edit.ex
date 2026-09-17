@@ -21,8 +21,11 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   either gate can't be started by typing its URL.
 
   An already-submitted position renders no form at all: its answers live at
-  Show, which is also where Reopen is, so there is exactly one place that
-  renders answers read-only and exactly one that reopens them.
+  Show, linked from here, and reopening is offered from both pages -
+  confirmed first (`FormFlow.Web.Instances.Components.ReopenDialog`), since
+  it puts the form back in front of everyone who can see it. Reopening here
+  reloads this page in place, the state it was always going to land on;
+  reopening from Show carries the visitor on to it instead.
 
   Submitting asks the form's type what to record (`snapshot/2`),
   writes the answers and marks the instance completed with that record on
@@ -81,8 +84,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     * `:not_visible` - "This form is not part of your work here."
     * `:not_started` - why it could not be started, and the way back
     * `:broken_definition` - the parse error, inline
-    * `:completed` - "This form has already been submitted.", and the link
-      to its answers
+    * `:completed` - "This form has already been submitted.", a link to its
+      answers, and Reopen
     * `:ready` - the form
 
   The submit guards on `:ready` alone. It arrives through `update/2` rather
@@ -119,6 +122,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Web.Instances.Components.Forms.Status
   alias FormFlow.Web.Instances.Components.Forms.Tabs
   alias FormFlow.Web.Instances.Components.Header
+  alias FormFlow.Web.Instances.Components.ReopenDialog
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -191,6 +195,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:error, fn -> nil end)
       |> assign_new(:prefill_dialog, fn -> nil end)
       |> assign_new(:prefill_error, fn -> nil end)
+      |> assign_new(:confirming_reopen?, fn -> false end)
 
     {:ok, socket |> load() |> assign_page_state()}
   end
@@ -301,6 +306,44 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def handle_event("cancel_prefill", _params, socket) do
     {:noreply, assign(socket, prefill_dialog: nil, prefill_error: nil)}
   end
+
+  @impl true
+  def handle_event("request_reopen", _params, socket)
+      when socket.assigns.page_state == :completed do
+    {:noreply, assign(socket, :confirming_reopen?, true)}
+  end
+
+  def handle_event("request_reopen", _params, socket), do: {:noreply, socket}
+
+  def handle_event("cancel_reopen", _params, socket) do
+    {:noreply, assign(socket, :confirming_reopen?, false)}
+  end
+
+  # Reopening here, unlike on Show, lands back on this same page: the
+  # answers it makes editable again are the ones this page was already
+  # addressing, so there is nothing to navigate to.
+  def handle_event("confirm_reopen", _params, socket)
+      when socket.assigns.page_state == :completed do
+    socket = assign(socket, :confirming_reopen?, false)
+    %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
+
+    flow = Templates.Flows.get_row(flow_instance.template_flow_id)
+
+    if match?(%Templates.Flow{}, flow) and
+         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, socket.assigns) do
+      case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
+             user_id: socket.assigns.user_id,
+             tenant_id: socket.assigns.tenant_id
+           ) do
+        {:ok, _reopened} -> {:noreply, reload(socket)}
+        {:error, _changeset} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
+      end
+    else
+      {:noreply, assign(socket, :error, "This flow is read-only now.")}
+    end
+  end
+
+  def handle_event("confirm_reopen", _params, socket), do: {:noreply, socket}
 
   defp open_prefill_dialog(socket, dialog),
     do: assign(socket, prefill_dialog: dialog, prefill_error: nil)
@@ -504,9 +547,25 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
           navigate={Paths.form_path(@base, @flow_instance.id, @path)}
           class="link link-primary"
         >
-          View or reopen your answers
+          View the answers.
         </.link>
+        <span>Or</span>
+        <Core.button
+          components={@components}
+          type="button"
+          phx-click="request_reopen"
+          phx-target={@myself}
+          class="link link-primary"
+        >
+          reopen the form to edit.
+        </Core.button>
       </Core.alert>
+
+      <ReopenDialog.reopen_dialog
+        :if={@confirming_reopen?}
+        target={@myself}
+        components={@components}
+      />
     </div>
     """
   end

@@ -50,7 +50,11 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   page itself (see `FormFlow.Web.Instances.Forms.Show`). Start, Continue and
   View are links wearing a button's clothes for that reason. Reopen is the
   exception: it changes state, so it posts an event, and it lives beside the
-  answers it reopens.
+  answers it reopens. It asks for confirmation first
+  (`FormFlow.Web.Instances.Components.ReopenDialog`), the row it is for held
+  in `confirming_reopen_path` rather than resent by the confirming click, so
+  a stray or forged click cannot supply a path this page never drew a
+  button for.
 
   ## The states it draws
 
@@ -98,12 +102,17 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   alias FormFlow.Web.Instances.Components.Flows.Tabs
   alias FormFlow.Web.Instances.Components.Forms.Status, as: FormStatus
   alias FormFlow.Web.Instances.Components.Header
+  alias FormFlow.Web.Instances.Components.ReopenDialog
   alias FormFlow.Web.Instances.Flows.Shared
   alias FormFlow.Web.Instances.Paths
 
   @impl true
   def update(assigns, socket) do
-    socket = socket |> assign(assigns) |> Shared.defaults()
+    socket =
+      socket
+      |> assign(assigns)
+      |> Shared.defaults()
+      |> assign_new(:confirming_reopen_path, fn -> nil end)
 
     {:ok, socket |> Shared.load() |> assign_page_state()}
   end
@@ -121,23 +130,46 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   # viewer, completed, and holding an instance - the same three things the
   # Reopen button is drawn for.
   @impl true
-  def handle_event("reopen", %{"path" => joined}, socket)
+  def handle_event("request_reopen", %{"path" => joined}, socket)
       when socket.assigns.page_state == :ready do
     path = String.split(joined, ",")
 
     case Enum.find(socket.assigns.rows, &(&1.form.path == path)) do
-      %{form: %{status: :completed, instance: %Instances.Form{}}} -> reopen(socket, path)
-      _other -> {:noreply, socket}
+      %{form: %{status: :completed, instance: %Instances.Form{}}} ->
+        {:noreply, assign(socket, :confirming_reopen_path, path)}
+
+      _other ->
+        {:noreply, socket}
     end
   end
 
   # A refused event is silent: the client was not driving a rendered
   # control, and a message would describe the gate to whoever was probing
   # it. Only a well-formed one, though - the params are matched here too, so
-  # a "reopen" carrying no position is as much a `FunctionClauseError` as an
-  # event name nothing answers to. Silence is for a refusal, not for a
+  # a "request_reopen" carrying no position is as much a `FunctionClauseError`
+  # as an event name nothing answers to. Silence is for a refusal, not for a
   # message this page does not understand.
-  def handle_event("reopen", %{"path" => _path}, socket), do: {:noreply, socket}
+  def handle_event("request_reopen", %{"path" => _path}, socket), do: {:noreply, socket}
+
+  def handle_event("cancel_reopen", _params, socket) do
+    {:noreply, assign(socket, :confirming_reopen_path, nil)}
+  end
+
+  # The row it is for is read back from `confirming_reopen_path`, not the
+  # click - the same rule `request_reopen` applies, asked again in case the
+  # row changed underneath the open dialog.
+  def handle_event("confirm_reopen", _params, socket)
+      when socket.assigns.page_state == :ready do
+    path = socket.assigns.confirming_reopen_path
+    socket = assign(socket, :confirming_reopen_path, nil)
+
+    case path && Enum.find(socket.assigns.rows, &(&1.form.path == path)) do
+      %{form: %{status: :completed, instance: %Instances.Form{}}} -> reopen(socket, path)
+      _other -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("confirm_reopen", _params, socket), do: {:noreply, socket}
 
   # The status is the pages' rule, asked again at the click from the flow
   # as it now is: the page drew Reopen while the flow allowed continuing,
@@ -219,7 +251,6 @@ defmodule FormFlow.Web.Instances.Flows.Show do
           <Status.badge standing={@standing} components={@components} />
         </:status>
         <:actions>
-          <Tabs.tabs base={@base} flow_instance_id={@flow_instance.id} active={:show} class="mr-2" />
           <%!-- One PDF of every completed form in flow order does not exist
                 yet; each form's page downloads its own. Drawn only where
                 downloads are on at all, and disabled, so the host sees the
@@ -232,10 +263,17 @@ defmodule FormFlow.Web.Instances.Flows.Show do
               Download all
             </Core.button>
           </span>
+          <Tabs.tabs base={@base} flow_instance_id={@flow_instance.id} active={:show} class="ml-2" />
         </:actions>
       </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <ReopenDialog.reopen_dialog
+        :if={@confirming_reopen_path}
+        target={@myself}
+        components={@components}
+      />
 
       <Core.alert :if={@rows == []} components={@components} class="mb-4">
         Nothing in this flow is for you to fill out.
@@ -424,7 +462,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         <Core.button
           :if={@row.form.status == :completed && @row.form.instance && @continue_allowed?}
           components={@components}
-          phx-click="reopen"
+          phx-click="request_reopen"
           phx-value-path={Enum.join(@row.form.path, ",")}
           phx-target={@myself}
           class="text-cyan-600 hover:underline"
