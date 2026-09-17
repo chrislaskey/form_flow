@@ -73,9 +73,12 @@ defmodule DemoWeb.Layouts do
             <nav class="hidden items-center gap-1 text-sm font-medium sm:flex">
               <.nav_link navigate="/" current={@current_nav == :home}>Home</.nav_link>
               <.nav_link navigate="/docs" current={@current_nav == :docs}>Docs</.nav_link>
-              <.experience_menu current={@current_nav in Experiences.navs()} />
+              <.experience_menu
+                current={@current_nav in Experiences.navs()}
+                current_user={@current_user}
+              />
             </nav>
-            <.mobile_nav current_nav={@current_nav} />
+            <.mobile_nav current_nav={@current_nav} current_user={@current_user} />
             <div :if={@current_user} class="flex items-center sm:border-l sm:border-gray-200 sm:pl-4">
               <UserSwitcher.user_switcher id="header-user-switcher" current_user={@current_user} />
             </div>
@@ -160,8 +163,11 @@ defmodule DemoWeb.Layouts do
   end
 
   @doc """
-  The header's Demo Experience menu: the overview and the three sides of the
-  demo, from `DemoWeb.Experiences.menu/0`.
+  The header's Demo Experience menu: the overview and the sides of the demo
+  the current user is admitted to, from `DemoWeb.Experiences.menu_for/1`. A
+  pet owner sees the overview and the pet license applications; the admin
+  sees all three.
+  The overview page itself still lists every side.
 
   The label is a link to `/demo` and the menu opens on hover, so the two ways
   in do different things — hovering offers the three pages, clicking goes to
@@ -173,9 +179,10 @@ defmodule DemoWeb.Layouts do
   margin, so the pointer crosses no gap on the way down to it.
   """
   attr :current, :boolean, default: false, doc: "whether one of its pages is being read"
+  attr :current_user, :map, default: nil, doc: "who the menu is for; nil lists everything"
 
   def experience_menu(assigns) do
-    assigns = assign(assigns, :experiences, Experiences.menu())
+    assigns = assign(assigns, :experiences, Experiences.menu_for(assigns.current_user))
 
     ~H"""
     <div class="group relative">
@@ -229,7 +236,8 @@ defmodule DemoWeb.Layouts do
   Flat, where the desktop nav nests the demo's pages behind a hover menu —
   hover is not a gesture a touch screen has, and a menu inside a menu is worse
   on a small screen than the four extra rows it saves. The demo's pages keep
-  their caption, so the list still reads as two groups.
+  their caption, so the list still reads as two groups. Like the desktop
+  menu, it lists only the demo pages the current user is admitted to.
 
   The link to the source is here as its last row rather than beside the logo:
   at this width the header has room for the switcher and this menu, and a mark
@@ -239,11 +247,12 @@ defmodule DemoWeb.Layouts do
   user switcher is one: it opens on tap and closes on tap-away.
   """
   attr :current_nav, :atom, default: nil
+  attr :current_user, :map, default: nil, doc: "who the nav is for; nil lists everything"
 
   def mobile_nav(assigns) do
     assigns =
       assigns
-      |> assign(:experiences, Experiences.menu())
+      |> assign(:experiences, Experiences.menu_for(assigns.current_user))
       |> assign(:github_url, @github_url)
 
     ~H"""

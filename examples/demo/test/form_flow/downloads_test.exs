@@ -14,7 +14,7 @@ defmodule Demo.FormFlowDownloadsTest do
 
   use DemoWeb.ConnCase, async: false
 
-  # /users is the user experience
+  # /demo/pet-licenses/applications is the user experience
   @moduletag user: "dog_owner"
 
   import Phoenix.LiveViewTest
@@ -126,7 +126,8 @@ defmodule Demo.FormFlowDownloadsTest do
     test "offers neither button, since there is no document to make", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
 
-      {:ok, view, _html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+      {:ok, view, _html} =
+        live(conn, "/demo/pet-licenses/applications/#{instance.id}/forms/#{form.id}")
 
       refute has_element?(view, "button[data-disposition]")
     end
@@ -137,7 +138,8 @@ defmodule Demo.FormFlowDownloadsTest do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      {:ok, view, _html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+      {:ok, view, _html} =
+        live(conn, "/demo/pet-licenses/applications/#{instance.id}/forms/#{form.id}")
 
       assert has_element?(view, "button[data-disposition='download']", "Download PDF")
       assert has_element?(view, "button[data-disposition='print']", "Print")
@@ -150,7 +152,8 @@ defmodule Demo.FormFlowDownloadsTest do
       %{instance: instance, form: form} = flow_of_one()
       complete(instance, [form.id], %{"name" => "Ada Lovelace"})
 
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+      {:ok, _view, html} =
+        live(conn, "/demo/pet-licenses/applications/#{instance.id}/forms/#{form.id}")
 
       refute html =~ Downloads.path() <> "?token="
     end
@@ -163,7 +166,8 @@ defmodule Demo.FormFlowDownloadsTest do
       Application.delete_env(:form_flow, :download_path)
       on_exit(fn -> Application.put_env(:form_flow, :download_path, configured) end)
 
-      {:ok, view, html} = live(conn, "/users/#{instance.id}/forms/#{form.id}")
+      {:ok, view, html} =
+        live(conn, "/demo/pet-licenses/applications/#{instance.id}/forms/#{form.id}")
 
       assert html =~ "Ada Lovelace"
       refute has_element?(view, "button[data-disposition]")

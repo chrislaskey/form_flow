@@ -1,10 +1,10 @@
 defmodule Demo.FormFlowFlowsCrudTest do
   @moduledoc """
   Drives the flows CRUD pages end-to-end through the dedicated
-  `live "/admin/*path", FormFlowLive.Admin` route (mounted with `base="/admin"`):
-  `/admin/flows/new` chooses a flavor and creates a seeded flow,
-  `/admin/flows/:id/edit` is the canvas, `/admin/flows/:id` shows it
-  read-only, subflows drill in at `/admin/flows/:root/nodes/:node_id`, and
+  `live "/demo/admin/*path", FormFlowLive.Admin` route (mounted with `base="/demo/admin"`):
+  `/demo/admin/flows/new` chooses a flavor and creates a seeded flow,
+  `/demo/admin/flows/:id/edit` is the canvas, `/demo/admin/flows/:id` shows it
+  read-only, subflows drill in at `/demo/admin/flows/:root/nodes/:node_id`, and
   delete removes everything a flow owns.
 
   The editor's React side can't run here — LiveViewTest has no JavaScript
@@ -13,7 +13,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
   use DemoWeb.ConnCase
 
-  # /admin is the admin experience
+  # /demo/admin is the admin experience
   @moduletag user: "admin"
 
   import Phoenix.LiveViewTest
@@ -22,7 +22,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   alias FormFlow.Data.Templates.Forms
 
   test "every flows path renders on the dedicated page", %{conn: conn} do
-    for path <- ["/admin/flows", "/admin/flows/new"] do
+    for path <- ["/demo/admin/flows", "/demo/admin/flows/new"] do
       {:ok, view, html} = live(conn, path)
 
       assert html =~ "Flows"
@@ -31,7 +31,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   end
 
   test "the new page asks the flavor up front and creates a seeded flow", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/admin/flows/new")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/new")
 
     assert html =~ "New flow"
     assert html =~ "A single flow with one or more forms"
@@ -50,7 +50,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_submit(%{"dynamic_form" => %{"name" => "Enrollment", "label" => "forms"}})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> rest = path
+    assert "/demo/admin/flows/" <> rest = path
     assert [id, "edit"] = String.split(rest, "/")
 
     flow = Flows.get(id)
@@ -66,24 +66,24 @@ defmodule Demo.FormFlowFlowsCrudTest do
   end
 
   test "the index starts empty and lists flows with names, kinds, and actions", %{conn: conn} do
-    {:ok, _view, html} = live(conn, "/admin/flows")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows")
     assert html =~ "No flows yet"
 
     id = create_flow(conn, "Enrollment", "subflows")
 
-    {:ok, view, html} = live(conn, "/admin/flows")
+    {:ok, view, html} = live(conn, "/demo/admin/flows")
 
     assert html =~ "Enrollment"
     assert html =~ "Complex"
     assert has_element?(view, "a", "New flow")
-    assert has_element?(view, ~s(a[href="/admin/flows/#{id}"]), "Show")
-    assert has_element?(view, ~s(a[href="/admin/flows/#{id}/edit"]), "Edit")
-    assert has_element?(view, ~s(a[href="/admin/flows/#{id}/overview"]), "Overview")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{id}"]), "Show")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{id}/edit"]), "Edit")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{id}/overview"]), "Overview")
     assert has_element?(view, "code", Flows.get(id).slug)
 
     # The id column is off until the Columns tab turns it on
     refute has_element?(view, "td", id)
-    {:ok, view, _html} = live(conn, "/admin/flows?columns[]=name&columns[]=id")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows?columns[]=name&columns[]=id")
     assert has_element?(view, "td", id)
   end
 
@@ -93,15 +93,15 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, _renewal} = Flows.create(%{name: "Renewal", slug: "renewal"})
 
-    {:ok, _view, html} = live(conn, "/admin/flows?filter[name]=Renew")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows?filter[name]=Renew")
     assert html =~ "Renewal"
     refute html =~ "Enrollment"
 
-    {:ok, _view, html} = live(conn, "/admin/flows?filter[slug]=enroll")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows?filter[slug]=enroll")
     assert html =~ "Enrollment"
     refute html =~ "Renewal"
 
-    {:ok, _view, html} = live(conn, "/admin/flows?filter[status]=open")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows?filter[status]=open")
     assert html =~ "Enrollment"
     refute html =~ "Renewal"
   end
@@ -113,13 +113,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     filters = "#flows-table-tabs-content-0"
 
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows")
     html = view |> element(filters) |> render()
     assert html =~ "Status"
     assert html =~ "Draft"
     refute html =~ "Archived"
 
-    {:ok, view, _html} = live(conn, "/admin/flows?archived=true")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows?archived=true")
     assert view |> element(filters) |> render() =~ "Archived"
   end
 
@@ -133,14 +133,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
       })
 
     flow = Flows.get(flow.id)
-    page = "/admin/flows/#{flow.id}/health"
+    page = "/demo/admin/flows/#{flow.id}/health"
     badge = ~s(a[href="#{page}"])
     entries = "#flows-health-entries"
     detail = "#flows-health-detail"
     standing = "#flows-health-standing"
 
     # Never checked: the index runs no check, so the badge says so
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(view, "#{badge} span", "-")
 
     # Start and End, unwired: Start reaches nothing (an error, with the flow
@@ -152,15 +152,20 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "h2", "Health check")
     assert has_element?(view, "dt", "Checked")
     assert has_element?(view, "#flows-health-checked", "just now")
-    assert has_element?(view, ~s(nav a[href="/admin/flows/#{flow.id}"]), "Enrollment")
+    assert has_element?(view, ~s(nav a[href="/demo/admin/flows/#{flow.id}"]), "Enrollment")
     assert has_element?(view, "nav", "Health")
-    refute has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/edit"]), "Edit")
+    refute has_element?(view, ~s(a[href="/demo/admin/flows/#{flow.id}/edit"]), "Edit")
     assert has_element?(view, "dt", "Perspectives")
     assert has_element?(view, "dd", "Simple flow")
     assert has_element?(view, standing, "1 error")
     assert has_element?(view, standing, "1 warning")
     assert has_element?(view, standing, "checks passing")
-    assert has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/overview"]), "Flow Overview")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{flow.id}/overview"]),
+             "Flow Overview"
+           )
 
     # Every entry as a row — where it is — the first open one selected, and
     # its detail: the message, why, the check, what to do, where Open goes
@@ -174,12 +179,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert has_element?(
              view,
-             ~s(#{detail} a[href="/admin/flows/#{flow.id}/edit"]),
+             ~s(#{detail} a[href="/demo/admin/flows/#{flow.id}/edit"]),
              "Open Enrollment"
            )
 
     # The visit wrote the cache: the badge now counts what is open
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "2")
 
     # Selecting the warning rides in the URL, and the detail follows
@@ -191,7 +196,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert_patch(view, "#{page}?entry=#{key}")
     assert has_element?(view, "#{detail} h3", "“End” is not connected from Start")
     assert has_element?(view, "#{detail} .badge", "warning")
-    assert has_element?(view, ~s(#{detail} a[href="/admin/flows/#{flow.id}/edit"]), "Open End")
+
+    assert has_element?(
+             view,
+             ~s(#{detail} a[href="/demo/admin/flows/#{flow.id}/edit"]),
+             "Open End"
+           )
 
     # Ignoring it: the switch turns on, it leaves the count, stays listed with
     # who and when, and is recorded on the flow for the next visit
@@ -214,7 +224,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
              "status" => %{"level" => "error", "counts" => %{"ignored" => 1}}
            } = Flows.get(flow.id).properties["_health_metadata"]
 
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "1")
 
     # The URL brings the selection back; stop ignoring
@@ -226,7 +236,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "#{switch}[aria-checked=false]", "Ignore")
     refute Map.has_key?(Flows.get(flow.id).properties["_health_metadata"], "ignored_entries")
 
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "2")
   end
 
@@ -234,7 +244,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, flow} =
       Flows.create(%{name: "Gone", nodes: Flows.starter_nodes(), relationships: []})
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/health")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}/health")
     assert has_element?(view, "#flows-health-ignore")
 
     {:ok, _flow} = Flows.delete(Flows.get(flow.id))
@@ -247,7 +257,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "saves through the pages refresh the badge; the health page catches up a lagging one",
        %{conn: conn} do
     id = create_flow(conn, "Enrollment")
-    page = "/admin/flows/#{id}/health"
+    page = "/demo/admin/flows/#{id}/health"
     badge = ~s(a[href="#{page}"])
 
     # Wired through a form step from the edit page: the save creates the
@@ -258,7 +268,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     stop = Enum.find(flow.nodes, &("End" in &1.labels))
 
     # The New page cached the flow's first status: Start and End, unwired
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert has_element?(view, ~s(button[phx-value-to="#{page}"] span), "2")
 
     view
@@ -295,7 +305,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert render(view) =~ "Saved."
     assert has_element?(view, ~s(button[phx-value-to="#{page}"] span), "1")
 
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "1")
 
     # The badge leaves the edit page through the navigate event, like Overview
@@ -306,13 +316,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # badge — the root's, from a drill-in — says so
     node = Enum.find(Flows.get(id).nodes, & &1.form_id)
     [draft] = Forms.list_versions(node.form_id)
-    form_page = "/admin/flows/#{id}/nodes/#{node.id}/form/versions/#{draft.id}"
+    form_page = "/demo/admin/flows/#{id}/nodes/#{node.id}/form/versions/#{draft.id}"
 
     {:ok, view, _html} = live(conn, form_page)
     view |> element("button", "Publish") |> render_click()
     assert_redirect(view, form_page)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
     assert has_element?(view, "#{badge} span", "✓")
 
     {:ok, view, _html} = live(conn, page)
@@ -329,20 +339,20 @@ defmodule Demo.FormFlowFlowsCrudTest do
         relationships: []
       })
 
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "✓")
 
     {:ok, view, _html} = live(conn, page)
     assert has_element?(view, "#flows-health-standing", "1 error")
 
-    {:ok, index, _html} = live(conn, "/admin/flows")
+    {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "3")
   end
 
   test "editing a flow replaces its contents", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert html =~ "Simple flow"
 
     view
@@ -380,7 +390,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   end
 
   test "the new page generates a slug, or keeps the one typed", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/admin/flows/new")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/new")
 
     view
     |> element("form")
@@ -389,11 +399,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> rest = path
+    assert "/demo/admin/flows/" <> rest = path
     [id, "edit"] = String.split(rest, "/")
     assert Flows.get(id).slug == "dla2026"
 
-    {:ok, view, _html} = live(conn, "/admin/flows/new")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/new")
 
     view
     |> element("form")
@@ -402,7 +412,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     })
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> rest = path
+    assert "/demo/admin/flows/" <> rest = path
     [id, "edit"] = String.split(rest, "/")
     assert Flows.get(id).slug == "chosen"
   end
@@ -411,7 +421,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     id = create_flow(conn, "Dog License Application 2026")
     assert Flows.get(id).slug == "dla2026"
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert html =~ "dla2026"
 
     view
@@ -431,7 +441,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, _other} = Flows.create(%{name: "Other", slug: "taken"})
     id = create_flow(conn, "Mine")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view
     |> element("#flows-edit-flow-form-form")
@@ -451,7 +461,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert node.slug == "licensing_subflow-1"
     assert Flows.get(node.subflow_id).slug == nil
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Step slug"
     assert html =~ "licensing_subflow-1"
 
@@ -478,7 +488,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # The field belongs to the type the subflow amounts to — a fresh one
     # never chose, so the first type's, shown as selected
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Perspectives"
     assert html =~ "Reviewer"
     assert Flows.get(node.subflow_id).properties["form_flow_type"] == nil
@@ -498,13 +508,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(node.subflow_id).properties["perspectives"] == ["reviewer"]
 
     # Show mode names them, in the fact sheet
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
     assert has_element?(view, "dt", "Perspectives")
     assert has_element?(view, "dd", "Reviewer")
 
     # The parent canvas names them on the subflow node: the ids ride in the
     # node's data, the names in the editor's options
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
     canvas = view |> element("#flows-show-editor") |> render()
     assert canvas =~ ~s(perspectives&quot;:[&quot;reviewer&quot;])
     assert canvas =~ "Reviewer"
@@ -519,7 +529,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
       Flows.update(Flows.get(node.subflow_id), %{properties: %{"perspectives" => ["reviewer"]}})
 
     # The editor reports the node back with the projection still in its data
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -552,12 +562,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
 
     assert html =~
              ~r/<option[^>]*selected[^>]*value="wizard_in_order"|<option[^>]*value="wizard_in_order"[^>]*selected/
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
     assert html =~ "Wizard (in order)"
 
     # Shown, not stored: the subflow still behaves as the default until the
@@ -568,7 +578,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "a complex flow has no perspectives of its own — its subflows do", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     refute html =~ "Perspectives"
   end
@@ -576,7 +586,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "renaming from the edit header persists", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view
     |> element("#flows-edit-flow-form-form")
@@ -596,7 +606,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "picking a form_flow_type persists it into the flow's properties", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     # The dropdown carries the FormFlow.Config defaults plus the option the
     # demo's types add — proof the router's flow_types attr reaches the
@@ -625,11 +635,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute has_element?(view, "button", "Discard changes")
 
     # Show mode renders the stored type as a string, not a dropdown
-    {:ok, _view, html} = live(conn, "/admin/flows/#{id}")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{id}")
     assert html =~ "Wizard (any order)"
 
     # Picking "default" again removes the key rather than pinning a value
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view
     |> element("#flows-edit-flow-form-form")
@@ -644,7 +654,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     id = create_flow(conn, "Application", "forms")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     # Who the flow is, then what it is — each a DynamicForm group the page
     # lays out three to a row
@@ -676,7 +686,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # The show page reads the same fields back under the canvas, labelled
     # as the edit page labels them
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}")
 
     assert has_element?(view, "dt", "Name")
     assert has_element?(view, "dd", "Application")
@@ -695,7 +705,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
 
     assert has_element?(
              view,
@@ -714,7 +724,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "a complex flow has no type dropdown of its own", %{conn: conn} do
     id = create_flow(conn, "Onboarding", "subflows")
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     refute html =~ "Form flow type"
   end
@@ -724,7 +734,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_form_node(conn, id)
     [node] = Flows.get(id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -745,13 +755,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Loading projects the stored type back into the node's data, so the
     # canvas dropdown (and show mode's label) reflect it
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
     assert view |> element("#flows-show-editor") |> render() =~ "review"
 
     # The canvas offers the configured form types, the library's and the
     # demo's — and a node reported without a type clears it, which is what an
     # unset type is resolved from anyway
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert html =~ "Demo prefill"
 
     view
@@ -770,7 +780,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -791,15 +801,15 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Loading projects the stored type back into the node's data, so the
     # canvas dropdown (and show mode's string) reflect it
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
     assert view |> element("#flows-show-editor") |> render() =~ "wizard_any_order"
 
     # ...and the embedded flow's own pages read the same value
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
     assert html =~ "Wizard (any order)"
 
     # Picking "default" on the canvas clears the child's property
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -819,7 +829,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     [node] = Flows.get(root_id).nodes
     assert Flows.get(node.subflow_id).name == "Subflow 1"
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -835,7 +845,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # pages edit — and loading projects it back into the node's title
     assert Flows.get(node.subflow_id).name == "Collect documents"
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
     assert html =~ "Collect documents"
   end
 
@@ -844,7 +854,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Step name"
 
     view
@@ -860,21 +870,21 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # Reloading the parent's canvas shows the step's own label — nothing is
     # projected over it from the subflow
-    {:ok, _view, html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
     assert html =~ "Application"
   end
 
   test "the root flow's own edit page still edits its name", %{conn: conn} do
     id = create_flow(conn, "Dog License")
 
-    {:ok, _view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     refute html =~ "Step name"
   end
 
   test "renaming a form step on the canvas renames its form", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     # First save creates the owned form, named from the canvas label
     edit_step(view)
@@ -908,17 +918,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "the show canvas is read-only; the edit canvas is not", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
     assert view |> element("#flows-show-editor") |> render() =~ ~s(data-editable="false")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert view |> element("#flows-edit-editor") |> render() =~ ~s(data-editable="true")
   end
 
   test "saving a complex flow creates subflow children; drill-in shows them", %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -944,18 +954,18 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert child.owner_flow_id == root_id
 
     # Drill-in show: breadcrumb back to the root, read-only child canvas
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
 
     assert html =~ "Onboarding"
     assert html =~ "Collect address"
-    assert has_element?(view, ~s(a[href="/admin/flows/#{root_id}"]), "Onboarding")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{root_id}"]), "Onboarding")
     assert view |> element("#flows-show-editor") |> render() =~ ~s(data-editable="false")
 
     # Drill-in edit works on the same node URL, with a breadcrumb that stays
     # in edit mode — backing out lands on the parent's editor. Edit-page
     # breadcrumbs are buttons, not plain links, so unsaved changes can gate
     # them the same way Open is gated.
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Collect address"
     assert has_element?(view, "button", "Onboarding")
     assert has_element?(view, "button", "Flows")
@@ -965,7 +975,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     root_id = create_flow(conn, "Onboarding", "subflows")
     save_subflow_node(conn, root_id)
 
-    {:ok, view, html} = live(conn, "/admin/flows")
+    {:ok, view, html} = live(conn, "/demo/admin/flows")
 
     assert html =~ "Onboarding"
     refute html =~ "Subflow 1"
@@ -975,9 +985,11 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "the index name links to the show page", %{conn: conn} do
     id = create_flow(conn, "Enrollment")
 
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows")
 
-    assert view |> element(~s(td a[href="/admin/flows/#{id}"]), "Enrollment") |> has_element?()
+    assert view
+           |> element(~s(td a[href="/demo/admin/flows/#{id}"]), "Enrollment")
+           |> has_element?()
   end
 
   test "deleting from a drill-in page removes the step and returns to the parent's editor", %{
@@ -987,10 +999,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
 
     view |> element(~s(button[aria-label="Delete"])) |> render_click()
-    assert_redirect(view, "/admin/flows/#{root_id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/edit")
 
     assert Flows.get(root_id).nodes == []
     assert Flows.get(node.subflow_id) == nil
@@ -1032,10 +1044,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     # The page shows Leaf; deleting removes node y from Middle, so the
     # destination is Middle's editor — addressed by the node embedding Middle
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root.id}/nodes/#{y.id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root.id}/nodes/#{y.id}")
 
     view |> element(~s(button[aria-label="Delete"])) |> render_click()
-    assert_redirect(view, "/admin/flows/#{root.id}/nodes/#{x.id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{root.id}/nodes/#{x.id}/edit")
 
     assert Flows.get(y.subflow_id) == nil
     assert Flows.get(middle.id) != nil
@@ -1047,7 +1059,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     [node] = Flows.get(root_id).nodes
 
     # Visiting the owned child directly and trying to delete it
-    {:ok, view, _html} = live(conn, "/admin/flows/#{node.subflow_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{node.subflow_id}")
 
     view |> element(~s(button[aria-label="Delete"])) |> render_click()
 
@@ -1061,20 +1073,20 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
 
     view
     |> element("#flows-show-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
   end
 
   test "opening a subflow node the canvas never reported prompts instead of crashing",
        %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -1087,7 +1099,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     root_id = create_flow(conn, "Onboarding", "subflows")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     # Added but never saved — Flows.get_node/1 can't find it under its
     # editor-temporary id yet
@@ -1118,7 +1130,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert node.subflow_id != nil
 
     # Not just "back to the root" — the specific node the temp id resolved to
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
   end
 
   test "opening a subflow from the edit canvas navigates directly when nothing changed since save",
@@ -1127,13 +1139,13 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
   end
 
   test "opening a subflow from the edit canvas with unsaved changes prompts instead of navigating",
@@ -1142,7 +1154,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     move_subflow_node(view, node.id)
 
@@ -1160,7 +1172,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     move_subflow_node(view, node.id)
 
@@ -1170,7 +1182,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save & Continue") |> render_click()
 
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
 
     [saved_node] = Flows.get(root_id).nodes
     assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
@@ -1182,7 +1194,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     move_subflow_node(view, node.id)
 
@@ -1210,17 +1222,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view |> element("button", "View") |> render_click()
 
-    assert_redirect(view, "/admin/flows/#{id}")
+    assert_redirect(view, "/demo/admin/flows/#{id}")
   end
 
   test "View with unsaved changes prompts to save before leaving", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     edit_step(view)
 
@@ -1231,7 +1243,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save & Continue") |> render_click()
 
-    assert_redirect(view, "/admin/flows/#{id}")
+    assert_redirect(view, "/demo/admin/flows/#{id}")
 
     assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
@@ -1241,7 +1253,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert html =~ ~s(id="flows-edit-unsaved-guard")
     assert has_element?(view, ~s(#flows-edit-unsaved-guard[data-unsaved="false"]))
 
@@ -1257,7 +1269,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "discard changes is hidden when the canvas is clean", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     refute has_element?(view, "button", "Discard changes")
   end
@@ -1265,7 +1277,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "discarding changes reloads the edit page and drops the unsaved edit", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     edit_step(view)
 
@@ -1279,7 +1291,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element(~s(button[phx-click="confirm_discard"])) |> render_click()
 
-    assert_redirect(view, "/admin/flows/#{id}/edit")
+    assert_redirect(view, "/demo/admin/flows/#{id}/edit")
 
     # Nothing was persisted — the edit never went through save
     assert length(Flows.get(id).nodes) == 2
@@ -1288,7 +1300,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "cancelling the discard prompt keeps the unsaved edit live", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     edit_step(view)
 
@@ -1308,17 +1320,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "a breadcrumb navigates directly when nothing changed since save", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view |> element("button", "Flows") |> render_click()
 
-    assert_redirect(view, "/admin/flows")
+    assert_redirect(view, "/demo/admin/flows")
   end
 
   test "a breadcrumb with unsaved changes prompts to save before leaving", %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     edit_step(view)
 
@@ -1329,7 +1341,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save & Continue") |> render_click()
 
-    assert_redirect(view, "/admin/flows")
+    assert_redirect(view, "/demo/admin/flows")
 
     assert [node] = Flows.get(id).nodes
     assert node.properties["data"]["label"] == "Renamed step"
@@ -1339,7 +1351,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
        %{conn: conn} do
     id = create_flow(conn)
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     edit_step(view)
 
@@ -1364,10 +1376,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
 
     view |> element(~s(button[aria-label="Delete"])) |> render_click()
-    assert_redirect(view, "/admin/flows")
+    assert_redirect(view, "/demo/admin/flows")
 
     assert Flows.get(root_id) == nil
     assert Flows.get(node.subflow_id) == nil
@@ -1378,7 +1390,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_form_node(conn, id)
     [source_step] = Flows.get(id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
 
     # The dialog prefills what a copy would get by default
     html = view |> element("button", "Duplicate Flow") |> render_click()
@@ -1391,7 +1403,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_submit(%{"name" => "Dog License 2027", "slug" => ""})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> copy_id = path
+    assert "/demo/admin/flows/" <> copy_id = path
     copy = Flows.get(copy_id)
     assert copy.name == "Dog License 2027"
     # Left blank, the slug is the default the dialog showed
@@ -1406,7 +1418,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert FormFlow.Data.Templates.Flows.Health.status(copy) != nil
 
     # The index lists both, by their own names
-    {:ok, _view, html} = live(conn, "/admin/flows")
+    {:ok, _view, html} = live(conn, "/demo/admin/flows")
     assert html =~ "Dog License 2027"
     assert html =~ "Dog License"
   end
@@ -1415,7 +1427,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     id = create_flow(conn, "Dog License", "forms")
     before = length(Flows.list())
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
     view |> element("button", "Duplicate Flow") |> render_click()
 
     html =
@@ -1440,7 +1452,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_form_node(conn, id)
     menu = "#flow-#{id}-actions"
 
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows")
 
     # The dialog prefills for that row's flow
     html = view |> element("#{menu} button", "Duplicate Flow") |> render_click()
@@ -1454,7 +1466,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> render_submit(%{"name" => "", "slug" => "dl-copy"})
 
     {path, _flash} = assert_redirect(view)
-    assert "/admin/flows/" <> copy_id = path
+    assert "/demo/admin/flows/" <> copy_id = path
     copy = Flows.get(copy_id)
     assert copy.name == "Dog License (copy)"
     assert copy.slug == "dl-copy"
@@ -1462,7 +1474,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert FormFlow.Data.Templates.Flows.Health.status(copy) != nil
 
     # Cancel closes the dialog without a copy
-    {:ok, view, _html} = live(conn, "/admin/flows")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows")
     before = length(Flows.list())
     view |> element("#{menu} button", "Duplicate Flow") |> render_click()
     refute view |> element("button", "Cancel") |> render_click() =~ "Duplicate this flow?"
@@ -1472,10 +1484,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
   test "the edit page has no Duplicate Flow: a copy is of what is saved", %{conn: conn} do
     id = create_flow(conn, "Dog License", "forms")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
     refute has_element?(view, "button", "Duplicate Flow")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
     assert has_element?(view, "button", "Duplicate Flow")
   end
 
@@ -1488,14 +1500,14 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # Drilled in, or addressed by the owned flow's own id: the guard is
     # ownership, not the route
     for path <- [
-          "/admin/flows/#{root_id}/nodes/#{node.id}",
-          "/admin/flows/#{node.subflow_id}"
+          "/demo/admin/flows/#{root_id}/nodes/#{node.id}",
+          "/demo/admin/flows/#{node.subflow_id}"
         ] do
       {:ok, view, _html} = live(conn, path)
       refute has_element?(view, "button", "Duplicate Flow")
     end
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
     assert has_element?(view, "button", "Duplicate Flow")
   end
 
@@ -1505,7 +1517,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_form_node(conn, id)
     [source] = Flows.get(id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     # The pasted node as the canvas reports it: the source's snapshot — its
     # stale form_id copy included — under a temp id, with the marker in data
@@ -1560,10 +1572,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
   test "show, edit, and the overview handle a flow that does not exist", %{conn: conn} do
     for path <- [
-          "/admin/flows/#{Ecto.UUID.generate()}",
-          "/admin/flows/not-a-uuid/edit",
-          "/admin/flows/#{Ecto.UUID.generate()}/nodes/#{Ecto.UUID.generate()}",
-          "/admin/flows/#{Ecto.UUID.generate()}/overview"
+          "/demo/admin/flows/#{Ecto.UUID.generate()}",
+          "/demo/admin/flows/not-a-uuid/edit",
+          "/demo/admin/flows/#{Ecto.UUID.generate()}/nodes/#{Ecto.UUID.generate()}",
+          "/demo/admin/flows/#{Ecto.UUID.generate()}/overview"
         ] do
       {:ok, _view, html} = live(conn, path)
 
@@ -1575,7 +1587,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     root_id = create_flow(conn, "Licensing", "subflows")
 
     # Start → Application → End, plus a subflow node nothing points at
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -1607,7 +1619,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     application = flow_node(root_id, "Application")
 
     # Inside it: Start → Intake → End, plus a form step nothing points at
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{application.id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -1626,7 +1638,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Save") |> render_click()
 
-    {:ok, view, html} = live(conn, "/admin/flows/#{root_id}/overview")
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     assert html =~ "Licensing"
 
@@ -1645,10 +1657,10 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute html =~ "Abandoned idea"
     refute html =~ "Draft form"
 
-    {:ok, _view, root_html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, _view, root_html} = live(conn, "/demo/admin/flows/#{root_id}")
     assert root_html =~ "Abandoned idea"
 
-    {:ok, _view, inner_html} = live(conn, "/admin/flows/#{root_id}/nodes/#{application.id}")
+    {:ok, _view, inner_html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}")
     assert inner_html =~ "Draft form"
   end
 
@@ -1657,21 +1669,21 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/overview")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
     |> element("#flows-overview-overview")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/overview")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
     |> element("#flows-overview-overview")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
-    assert_redirect(view, "/admin/flows/#{root_id}/nodes/#{node.id}/form")
+    assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/form")
   end
 
   test "show and edit link to the overview, from any depth, for the root", %{conn: conn} do
@@ -1679,17 +1691,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    overview = "/admin/flows/#{root_id}/overview"
+    overview = "/demo/admin/flows/#{root_id}/overview"
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
     assert has_element?(view, ~s(a[href="#{overview}"]), "Overview")
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
     assert has_element?(view, ~s(a[href="#{overview}"]), "Overview")
 
     # The edit page leaves through its own "navigate" event, so unsaved
     # changes prompt first — a button carrying the destination, not a link
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert has_element?(view, ~s(button[phx-value-to="#{overview}"]), "Overview")
 
     view |> element(~s(button[phx-value-to="#{overview}"])) |> render_click()
@@ -1701,47 +1713,47 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    health = "/admin/flows/#{root_id}/health"
+    health = "/demo/admin/flows/#{root_id}/health"
 
     # The edit page's save refreshed the root; every page reads that one status
     %{counts: counts} = FormFlow.Data.Templates.Flows.Health.status(Flows.get(root_id))
     count = to_string(counts.error + counts.warning + counts.info)
 
     for path <- [
-          "/admin/flows/#{root_id}",
-          "/admin/flows/#{root_id}/nodes/#{node.id}",
-          "/admin/flows/#{root_id}/overview"
+          "/demo/admin/flows/#{root_id}",
+          "/demo/admin/flows/#{root_id}/nodes/#{node.id}",
+          "/demo/admin/flows/#{root_id}/overview"
         ] do
       {:ok, view, _html} = live(conn, path)
       assert has_element?(view, ~s(a[href="#{health}"][title^="Health:"] span), count)
     end
 
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/nodes/#{node.id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert has_element?(view, ~s(button[phx-value-to="#{health}"] span), count)
 
     # A subflow's own health page reports its root
-    {:ok, view, _html} = live(conn, "/admin/flows/#{node.subflow_id}/health")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{node.subflow_id}/health")
     assert has_element?(view, "h2", "Licensing")
     assert has_element?(view, "#flows-health-entries button", "Licensing")
   end
 
   # Creates a flow the way a user would: through the new page's chooser
   defp create_flow(conn, name \\ "Untitled flow", label \\ "forms") do
-    {:ok, view, _html} = live(conn, "/admin/flows/new")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/new")
 
     view
     |> element("form")
     |> render_submit(%{"dynamic_form" => %{"name" => name, "label" => label}})
 
     {path, _flash} = assert_redirect(view)
-    ["", "admin", "flows", id, "edit"] = String.split(path, "/")
+    ["", "demo", "admin", "flows", id, "edit"] = String.split(path, "/")
 
     id
   end
 
   # Adds one subflow node to a complex flow and saves, creating its child
   defp save_subflow_node(conn, root_id) do
-    {:ok, view, _html} = live(conn, "/admin/flows/#{root_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
     view
     |> element("#flows-edit-editor")
@@ -1765,7 +1777,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   # merged over the defaults — e.g. a picked form_flow_type
   # Adds one form step to a forms flow and saves, creating its form
   defp save_form_node(conn, flow_id) do
-    {:ok, view, _html} = live(conn, "/admin/flows/#{flow_id}/edit")
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow_id}/edit")
 
     view
     |> element("#flows-edit-editor")

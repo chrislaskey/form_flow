@@ -15,7 +15,7 @@ defmodule Demo.FormFlowInstancesTest do
 
   use DemoWeb.ConnCase, async: false
 
-  # /users is the user experience
+  # /demo/pet-licenses/applications is the user experience
   @moduletag user: "dog_owner"
 
   import ExUnit.CaptureLog
@@ -94,7 +94,7 @@ defmodule Demo.FormFlowInstancesTest do
       do: {:error, "You may not see this flow."}
 
     def on_mount(%Context{flow: %{name: "Elsewhere"}}, _callback_data),
-      do: {:redirect, "/users"}
+      do: {:redirect, "/demo/pet-licenses/applications"}
 
     def on_mount(%Context{flow: %{name: "Decorated"}}, _callback_data),
       do: {:ok, %{flow_name: "Renamed by the host"}}
@@ -103,7 +103,7 @@ defmodule Demo.FormFlowInstancesTest do
       do: {:error, "No listing for you."}
 
     def on_mount(%Context{flow: nil}, %{"listing" => "elsewhere"}),
-      do: {:redirect, "/users"}
+      do: {:redirect, "/demo/pet-licenses/applications"}
 
     def on_mount(_context, _callback_data), do: {:ok, %{}}
   end
@@ -124,7 +124,7 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok,
        Phoenix.Component.assign(socket,
          path: path,
-         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         uri: "http://localhost/demo/pet-licenses/applications/#{Enum.join(path, "/")}",
          params: %{},
          tenant_id: Map.get(session, "tenant_id"),
          perspectives: Map.get(session, "perspectives", []),
@@ -150,7 +150,7 @@ defmodule Demo.FormFlowInstancesTest do
         uri={@uri}
         params={@params}
         path={@path}
-        base="/users"
+        base="/demo/pet-licenses/applications"
         flow_types={TestTypes.flow_types()}
         form_types={TestTypes.form_types()}
         callback_data={@callback_data}
@@ -1101,7 +1101,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert html =~ "You may not see this flow."
       refute has_element?(view, "li")
-      assert has_element?(view, "a[href='/users']")
+      assert has_element?(view, "a[href='/demo/pet-licenses/applications']")
     end
 
     test "a redirect renders nothing, navigates, and starts nothing", %{conn: conn} do
@@ -1112,11 +1112,11 @@ defmodule Demo.FormFlowInstancesTest do
       # The first render, before the navigation lands, draws nothing of the page
       refute html =~ "Name"
       refute html =~ "<form"
-      assert {"/users", _flash} = assert_redirect(view)
+      assert {"/demo/pet-licenses/applications", _flash} = assert_redirect(view)
       refute instance_at(instance, [only.id])
 
       {:ok, view, _html} = isolated(conn, [instance.id])
-      assert {"/users", _flash} = assert_redirect(view)
+      assert {"/demo/pet-licenses/applications", _flash} = assert_redirect(view)
     end
 
     test "the listing asks too: a refusal draws the message, a redirect navigates",
@@ -1130,7 +1130,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute has_element?(view, "button", "Start")
 
       {:ok, view, _html} = isolated(conn, [], %{"listing" => "elsewhere"})
-      assert {"/users", _flash} = assert_redirect(view)
+      assert {"/demo/pet-licenses/applications", _flash} = assert_redirect(view)
     end
 
     test "an allowance merges its assigns into the page, after the start", %{conn: conn} do
@@ -1695,7 +1695,7 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
-  defp flow_path(instance), do: "/users/#{instance.id}"
+  defp flow_path(instance), do: "/demo/pet-licenses/applications/#{instance.id}"
 
   defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"
 

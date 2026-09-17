@@ -10,6 +10,10 @@ defmodule DemoWeb.DemoLive do
 
   The experiences come from `DemoWeb.Experiences`, the same list the menu is
   drawn from, so one added there appears here without this module changing.
+  They are named here by kind first — "User pages", "Reviewer pages" — with
+  the name they carry in the pet licensing service beside it, because this
+  page explains the demo to the people trying it rather than posing as the
+  service's own front door.
   """
 
   use DemoWeb, :live_view
@@ -67,7 +71,7 @@ defmodule DemoWeb.DemoLive do
               navigate={experience.path}
               class="block rounded-lg border border-base-300 p-4 hover:border-base-content/30 hover:bg-base-200"
             >
-              <div class="font-semibold">{experience.title}</div>
+              <div class="font-semibold">{Experiences.overview_title(experience)}</div>
               <div class="mt-1 text-base-content/70">{experience.blurb}</div>
             </.link>
           </li>

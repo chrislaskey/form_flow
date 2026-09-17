@@ -16,7 +16,8 @@ defmodule DemoWeb.PersonaComponents do
   not the first thing the demo shows. What an admin sees on another role's
   page is that role's page, unchanged: the `user_id` those pages hand
   `FormFlow.Web.router` is the page's, not the persona's, so an admin reading
-  `/users` reads it as the user and `/reviewers` as the reviewer.
+  the pet license applications reads them as the user and the reviews as the
+  reviewer.
 
   A gate wraps a page's content, not its title — the title stays outside it,
   so someone turned away still sees which page they were turned away from.

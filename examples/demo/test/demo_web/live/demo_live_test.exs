@@ -22,6 +22,22 @@ defmodule DemoWeb.DemoLiveTest do
     end
   end
 
+  test "names each side of the demo by kind, with its service name beside it", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/demo")
+
+    headings =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#demo-experiences a div.font-semibold")
+      |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+    assert headings == [
+             "Admin pages",
+             "User pages - Pet License Applications",
+             "Reviewer pages - Pet License Reviews"
+           ]
+  end
+
   test "carries the perspective picker", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/demo")
 

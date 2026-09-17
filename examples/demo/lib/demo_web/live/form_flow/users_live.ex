@@ -1,24 +1,28 @@
 defmodule DemoWeb.FormFlowLive.Users do
   @moduledoc """
-  The dedicated page for FormFlow's user-facing form instances.
+  The dedicated page for FormFlow's user-facing form instances: the pet
+  license applications.
 
-  Mounted on `live "/users/*path", FormFlowLive.Users`, so `/users` (the
-  listing of the user's flow instances), `/users/:id` (one instance), and
-  `/users/:id/forms/*` (a form inside it) all land here. FormFlow's router
-  dispatches the remaining path to the right LiveComponent — this page just
-  supplies the layout around it. `base="/users"` is what makes every link
-  the components build carry the mount prefix.
+  Mounted on `live "/demo/pet-licenses/applications/*path",
+  FormFlowLive.Users`, so `/demo/pet-licenses/applications` (the listing of
+  the user's flow instances), `.../applications/:id` (one instance), and
+  `.../applications/:id/forms/*` (a form inside it) all land here. FormFlow's
+  router dispatches the remaining path to the right LiveComponent — this page
+  just supplies the layout around it. `base="/demo/pet-licenses/applications"`
+  is what makes every link the components build carry the mount prefix.
   """
 
   use DemoWeb, :live_view
 
   import DemoWeb.PersonaComponents
 
+  alias DemoWeb.Experiences
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:page_title, "Users")
+     |> assign(:page_title, "Pet License Applications")
      |> assign(:current_nav, :users)}
   end
 
@@ -36,14 +40,18 @@ defmodule DemoWeb.FormFlowLive.Users do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate current_user={@current_user} roles={[:owner]} page="the user pages">
+        <.persona_gate
+          current_user={@current_user}
+          roles={Experiences.roles(:user)}
+          page="the pet license applications"
+        >
           <div id="users-pages">
             <FormFlow.Web.router
               user_id="demo-user"
               uri={@uri}
               params={@params}
               path={@path}
-              base="/users"
+              base="/demo/pet-licenses/applications"
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}

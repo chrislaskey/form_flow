@@ -45,6 +45,42 @@ defmodule DemoWeb.PersonaTest do
       end
     end
 
+    @tag user: "dog_owner"
+    test "offers a pet owner only the overview and the pet license applications", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
+
+      assert LazyHTML.attribute(menu, "href") == ["/demo", "/demo/pet-licenses/applications"]
+    end
+
+    @tag user: "reviewer"
+    test "offers the reviewer only the overview and the pet license reviews", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
+
+      assert LazyHTML.attribute(menu, "href") == ["/demo", "/demo/pet-licenses/reviews"]
+    end
+
+    @tag user: "docs_reader"
+    test "offers a reader the overview alone", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
+
+      assert LazyHTML.attribute(menu, "href") == ["/demo"]
+    end
+
+    @tag user: "dog_owner"
+    test "the overview page still lists every side, whoever reads it", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/demo")
+
+      listed = LazyHTML.from_fragment(html) |> LazyHTML.query("#demo-experiences a")
+
+      assert LazyHTML.attribute(listed, "href") == Enum.map(Experiences.all(), & &1.path)
+    end
+
     test "the overview leads it, before the three sides of the demo", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
@@ -70,17 +106,67 @@ defmodule DemoWeb.PersonaTest do
     end
   end
 
+  describe "the demo's pages" do
+    test "sit under /demo, named for the pet licensing service" do
+      assert Enum.map(Experiences.menu(), &{&1.title, &1.path}) == [
+               {"Overview", "/demo"},
+               {"Admin pages", "/demo/admin"},
+               {"Pet License Applications", "/demo/pet-licenses/applications"},
+               {"Pet License Reviews", "/demo/pet-licenses/reviews"}
+             ]
+    end
+
+    test "each path opens its own page, titled as the menu names it", %{conn: conn} do
+      for {path, region, title} <- [
+            {"/demo/admin", "#admin-pages", "Admin"},
+            {"/demo/pet-licenses/applications", "#users-pages", "Pet License Applications"},
+            {"/demo/pet-licenses/reviews", "#reviewers-pages", "Pet License Reviews"}
+          ] do
+        {:ok, view, _html} = live(conn, path)
+
+        assert has_element?(view, region)
+        assert page_title(view) =~ title
+      end
+    end
+
+    test "the overview is still its own page beside them", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/demo")
+
+      assert has_element?(view, "#demo-experiences")
+      refute has_element?(view, "#admin-pages")
+    end
+
+    test "the pages' own links carry the mount prefix", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/demo/admin")
+
+      hrefs =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#admin-pages a[href^='/']")
+        |> LazyHTML.attribute("href")
+
+      assert hrefs != []
+      assert Enum.all?(hrefs, &String.starts_with?(&1, "/demo/admin"))
+    end
+
+    test "the old top-level paths are gone", %{conn: conn} do
+      for path <- ["/admin", "/users", "/reviewers"] do
+        assert get(conn, path).status == 404
+      end
+    end
+  end
+
   describe "the admin experience" do
     @tag user: "admin"
     test "opens for the admin", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin")
+      {:ok, view, _html} = live(conn, ~p"/demo/admin")
 
       assert has_element?(view, "#admin-pages")
     end
 
     @tag user: "dog_owner"
     test "refuses a pet owner, and says who it is for", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/admin")
+      {:ok, view, html} = live(conn, ~p"/demo/admin")
 
       {:ok, owner} = Demo.Users.fetch("dog_owner")
       {:ok, admin} = Demo.Users.fetch("admin")
@@ -92,7 +178,7 @@ defmodule DemoWeb.PersonaTest do
     end
 
     test "opens for the default user, who is the admin", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin")
+      {:ok, view, _html} = live(conn, ~p"/demo/admin")
 
       assert has_element?(view, "#admin-pages")
     end
@@ -101,18 +187,19 @@ defmodule DemoWeb.PersonaTest do
   describe "the user experience" do
     @tag user: "dog_owner"
     test "opens for a pet owner", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/users")
+      {:ok, view, _html} = live(conn, ~p"/demo/pet-licenses/applications")
 
       assert has_element?(view, "#users-pages")
     end
 
     @tag user: "admin"
     test "opens for the admin, as the user sees it", %{conn: conn} do
-      {:ok, view, admin_html} = live(conn, ~p"/users")
+      {:ok, view, admin_html} = live(conn, ~p"/demo/pet-licenses/applications")
 
       assert has_element?(view, "#users-pages")
 
-      {:ok, _view, owner_html} = live(build_conn_as("dog_owner"), ~p"/users")
+      {:ok, _view, owner_html} =
+        live(build_conn_as("dog_owner"), ~p"/demo/pet-licenses/applications")
 
       admin_page = page(admin_html, "#users-pages")
 
@@ -122,7 +209,7 @@ defmodule DemoWeb.PersonaTest do
 
     @tag user: "docs_reader"
     test "refuses a reader, and names the admin among those who can", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/users")
+      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
 
       {:ok, admin} = Demo.Users.fetch("admin")
 
@@ -135,18 +222,19 @@ defmodule DemoWeb.PersonaTest do
   describe "the reviewer experience" do
     @tag user: "reviewer"
     test "opens for the reviewer", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/reviewers")
+      {:ok, view, _html} = live(conn, ~p"/demo/pet-licenses/reviews")
 
       assert has_element?(view, "#reviewers-pages")
     end
 
     @tag user: "admin"
     test "opens for the admin, as the reviewer sees it", %{conn: conn} do
-      {:ok, view, admin_html} = live(conn, ~p"/reviewers")
+      {:ok, view, admin_html} = live(conn, ~p"/demo/pet-licenses/reviews")
 
       assert has_element?(view, "#reviewers-pages")
 
-      {:ok, _view, reviewer_html} = live(build_conn_as("reviewer"), ~p"/reviewers")
+      {:ok, _view, reviewer_html} =
+        live(build_conn_as("reviewer"), ~p"/demo/pet-licenses/reviews")
 
       admin_page = page(admin_html, "#reviewers-pages")
 
@@ -156,7 +244,7 @@ defmodule DemoWeb.PersonaTest do
 
     @tag user: "dog_owner"
     test "refuses a pet owner", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/reviewers")
+      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/reviews")
 
       refute has_element?(view, "#reviewers-pages")
       assert html =~ "Not authorized"
@@ -166,7 +254,7 @@ defmodule DemoWeb.PersonaTest do
   describe "a refused page" do
     @tag user: "dog_owner"
     test "still says which page it was", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/admin")
+      {:ok, _view, html} = live(conn, ~p"/demo/admin")
 
       headings =
         html
@@ -189,7 +277,7 @@ defmodule DemoWeb.PersonaTest do
 
     @tag user: "dog_owner"
     test "is not repeated on a refusal, which points at the header instead", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/admin")
+      {:ok, view, html} = live(conn, ~p"/demo/admin")
 
       assert html =~ "Not authorized"
       assert html =~ "Viewing as"
@@ -227,6 +315,25 @@ defmodule DemoWeb.PersonaTest do
       nested = LazyHTML.query(LazyHTML.from_fragment(html), "#mobile-nav details")
 
       assert Enum.empty?(nested)
+    end
+
+    @tag user: "dog_owner"
+    test "lists only the demo pages the current user can open", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      links =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#mobile-nav a")
+
+      assert LazyHTML.attribute(links, "href") ==
+               [
+                 "/",
+                 "/docs",
+                 "/demo",
+                 "/demo/pet-licenses/applications",
+                 "https://github.com/chrislaskey/form_flow"
+               ]
     end
 
     test "carries the source link, which the header only shows on a wide screen", %{conn: conn} do

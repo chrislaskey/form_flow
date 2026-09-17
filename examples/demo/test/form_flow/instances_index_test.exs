@@ -22,7 +22,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
 
   use DemoWeb.ConnCase, async: false
 
-  # /users is the user experience
+  # /demo/pet-licenses/applications is the user experience
   @moduletag user: "dog_owner"
 
   import Phoenix.LiveViewTest
@@ -34,7 +34,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
     older = start_flow("Older", "demo-user")
     newer = start_flow("Newer", "demo-user")
 
-    {:ok, view, html} = live(conn, "/users")
+    {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
 
     assert has_element?(view, @table)
     assert has_element?(view, row_link(older), "Older")
@@ -45,7 +45,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   test "the flow's name comes from the preloaded template", %{conn: conn} do
     instance = start_flow("Benefits Application", "demo-user")
 
-    {:ok, view, _html} = live(conn, "/users")
+    {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
     # A joined value, rendered per row — so the preload survived Slab's count
     assert has_element?(view, row_link(instance), "Benefits Application")
@@ -55,14 +55,14 @@ defmodule Demo.FormFlowInstancesIndexTest do
     mine = start_flow("Mine", "demo-user")
     theirs = start_flow("Theirs", "someone-else")
 
-    {:ok, _view, html} = live(conn, "/users")
+    {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
 
     assert html =~ mine.id
     refute html =~ theirs.id
   end
 
   test "an empty listing says so instead of drawing a table", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/users")
+    {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
 
     refute has_element?(view, @table)
     assert html =~ "Nothing started yet"
@@ -72,7 +72,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
     older = start_flow("Older", "demo-user")
     newer = start_flow("Newer", "demo-user")
 
-    {:ok, _view, html} = live(conn, "/users?sort=inserted_at&sort_direction=asc")
+    {:ok, _view, html} =
+      live(conn, "/demo/pet-licenses/applications?sort=inserted_at&sort_direction=asc")
 
     assert row_order(html, [older, newer]) == :in_order
   end
@@ -80,8 +81,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
   test "pagination splits the rows instead of rendering them all", %{conn: conn} do
     instances = for i <- 1..11, do: start_flow("Flow #{i}", "demo-user")
 
-    {:ok, _view, page_one} = live(conn, "/users")
-    {:ok, _view, page_two} = live(conn, "/users?page=2")
+    {:ok, _view, page_one} = live(conn, "/demo/pet-licenses/applications")
+    {:ok, _view, page_two} = live(conn, "/demo/pet-licenses/applications?page=2")
 
     assert rows_on_page(page_one, instances) == 10
     assert rows_on_page(page_two, instances) == 1
@@ -90,15 +91,15 @@ defmodule Demo.FormFlowInstancesIndexTest do
   test "the start-a-flow picker is a plain list beside the table", %{conn: conn} do
     {:ok, flow} = Flows.create(%{name: "Startable", status: "open"})
 
-    {:ok, view, _html} = live(conn, "/users")
+    {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
     view |> element("button[phx-value-flow-id='#{flow.id}']") |> render_click()
 
     assert {path, _flash} = assert_redirect(view)
-    assert path =~ ~r|^/users/[0-9a-f-]{36}$|
+    assert path =~ ~r|^/demo/pet-licenses/applications/[0-9a-f-]{36}$|
   end
 
-  defp row_link(instance), do: "a[href='/users/#{instance.id}']"
+  defp row_link(instance), do: "a[href='/demo/pet-licenses/applications/#{instance.id}']"
 
   defp start_flow(name, user_id) do
     {:ok, flow} = Flows.create(%{name: name, status: "open"})

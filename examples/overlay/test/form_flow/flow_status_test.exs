@@ -6,14 +6,14 @@ defmodule Demo.FormFlowFlowStatusTest do
   layer's writes and refusals, and what each status does on the user-facing
   pages and the admin pages.
 
-  `/users` is the demo's page, which names `demo-user` among its pre-release
+  `/demo/pet-licenses/applications` is the demo's page, which names `demo-user` among its pre-release
   users; `UnlistedPage` below is the same router with nobody named, for the
   other side of that rule.
   """
 
   use DemoWeb.ConnCase, async: false
 
-  # /admin is the admin experience
+  # /demo/admin is the admin experience
   @moduletag user: "admin"
 
   defmodule UnlistedPage do
@@ -24,7 +24,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok,
        Phoenix.Component.assign(socket,
          path: path,
-         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         uri: "http://localhost/demo/pet-licenses/applications/#{Enum.join(path, "/")}",
          params: %{},
          flows: Map.get(session, "flows")
        )}
@@ -38,7 +38,7 @@ defmodule Demo.FormFlowFlowStatusTest do
         uri={@uri}
         params={@params}
         path={@path}
-        base="/users"
+        base="/demo/pet-licenses/applications"
         flows={@flows}
       />
       """
@@ -55,7 +55,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok,
        Phoenix.Component.assign(socket,
          path: path,
-         uri: "http://localhost/users/#{Enum.join(path, "/")}",
+         uri: "http://localhost/demo/pet-licenses/applications/#{Enum.join(path, "/")}",
          params: %{},
          pre_release_user_ids: fn context, _callback_data ->
            if staff?, do: [context.user_id], else: []
@@ -71,7 +71,7 @@ defmodule Demo.FormFlowFlowStatusTest do
         uri={@uri}
         params={@params}
         path={@path}
-        base="/users"
+        base="/demo/pet-licenses/applications"
         pre_release_user_ids={@pre_release_user_ids}
       />
       """
@@ -313,11 +313,12 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, winding} = Flows.create(%{name: "Dog License 2025", status: "winding_down"})
       {:ok, _draft} = Flows.create(%{name: "Dog License 2027"})
 
-      {:ok, view, html} = live(conn, "/users")
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
 
       assert has_element?(view, start_button(open))
       refute has_element?(view, start_button(winding))
-      # /users names no flows, so a winding-down one is neither offered nor
+
+      # /demo/pet-licenses/applications names no flows, so a winding-down one is neither offered nor
       # announced; a page that names it gets the line (tested below)
       refute html =~ "Dog License 2025"
       refute html =~ "Dog License 2027"
@@ -329,11 +330,11 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
 
-      # /users names demo-user: offered, listed, and open
-      {:ok, view, html} = live(conn, "/users")
+      # /demo/pet-licenses/applications names demo-user: offered, listed, and open
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
       assert has_element?(view, start_button(flow))
       assert html =~ instance.id
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "Dog License 2027"
 
       # A page naming nobody: nothing offered, nothing listed, the page refused
@@ -393,7 +394,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "with nothing open the listing says so", %{conn: conn} do
       {:ok, _draft} = Flows.create(%{name: "Dog License 2027"})
 
-      {:ok, _view, html} = live(conn, "/users")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
 
       assert html =~ "No flows are open."
     end
@@ -401,7 +402,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "a start is refused at the click once the flow stops taking them", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Cat License", status: "open"})
 
-      {:ok, view, _html} = live(conn, "/users")
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
       assert has_element?(view, start_button(flow))
 
       # The flow winds down after the page drew; the page asks again at the
@@ -420,21 +421,21 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
 
       {:ok, _} = Flows.update_status(flow, "winding_down", [])
-      {:ok, view, html} = live(conn, "/users")
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
       assert html =~ instance.id
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "Dog License 2025"
       refute html =~ "not available"
 
       {:ok, _} = Flows.update_status(flow, "draft", [])
-      {:ok, _view, html} = live(conn, "/users")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
       refute html =~ instance.id
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "This flow is not available right now."
 
       # Reopened, everything is back
       {:ok, _} = Flows.update_status(flow, "open", [])
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "Dog License 2025"
     end
 
@@ -446,21 +447,37 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, _} = Flows.update_status(flow, "read_only", [])
 
       # Listed, as View — there is nothing to continue
-      {:ok, view, html} = live(conn, "/users")
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
       assert html =~ instance.id
-      assert has_element?(view, ~s(a[href="/users/#{instance.id}"]), "View")
-      refute has_element?(view, ~s(a[href="/users/#{instance.id}"]), "Continue")
+
+      assert has_element?(
+               view,
+               ~s(a[href="/demo/pet-licenses/applications/#{instance.id}"]),
+               "View"
+             )
+
+      refute has_element?(
+               view,
+               ~s(a[href="/demo/pet-licenses/applications/#{instance.id}"]),
+               "Continue"
+             )
 
       # The instance page opens; a form's edit page says why it will not
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "Dog License 2024"
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}/forms/#{Ecto.UUID.generate()}/edit")
+
+      {:ok, _view, html} =
+        live(
+          conn,
+          "/demo/pet-licenses/applications/#{instance.id}/forms/#{Ecto.UUID.generate()}/edit"
+        )
+
       assert html =~ "This flow is read-only now; your answers are kept as they are."
 
       {:ok, _} = Flows.update_status(flow, "archived", [])
-      {:ok, _view, html} = live(conn, "/users")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
       refute html =~ instance.id
-      {:ok, _view, html} = live(conn, "/users/#{instance.id}")
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{instance.id}")
       assert html =~ "This flow is not available right now."
     end
   end
@@ -472,14 +489,14 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, draft} = Flows.create(%{name: "Dog License 2027"})
       {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
 
-      {:ok, view, _html} = live(conn, "/admin/flows")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows")
       assert has_element?(view, ".badge", "Draft")
       assert has_element?(view, ".badge", "Open")
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{draft.id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{draft.id}")
       assert has_element?(view, "button[phx-click=request_status]", "Status: Draft")
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{open.id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{open.id}")
       assert has_element?(view, "button[phx-click=request_status]", "Status: Open")
     end
 
@@ -487,7 +504,7 @@ defmodule Demo.FormFlowFlowStatusTest do
          %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License"})
 
-      {:ok, view, html} = live(conn, "/admin/flows/#{flow.id}/edit")
+      {:ok, view, html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
 
       # The saved status, its summary, and who it reaches
       assert has_element?(view, "option[value=draft]", "Draft")
@@ -528,7 +545,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "a status the flow cannot have is ignored by the edit page, not a crash", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License"})
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}/edit")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
 
       view
       |> element("#flows-edit-flow-form-form")
@@ -542,22 +559,22 @@ defmodule Demo.FormFlowFlowStatusTest do
     end
 
     test "a flow made on the New page has its creator; a duplicate has its copier", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/admin/flows/new")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/new")
 
       view
       |> element("form")
       |> render_submit(%{"dynamic_form" => %{"name" => "Dog License", "label" => "forms"}})
 
       {path, _flash} = assert_redirect(view)
-      ["", "admin", "flows", id, "edit"] = String.split(path, "/")
+      ["", "demo", "admin", "flows", id, "edit"] = String.split(path, "/")
 
       assert [%{event: "created", user_id: "demo-admin"}] = events(Flows.get(id))
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}")
       view |> element("button", "Duplicate Flow") |> render_click()
       view |> element("form[phx-submit=copy]") |> render_submit(%{"name" => "", "slug" => ""})
       {path, _flash} = assert_redirect(view)
-      "/admin/flows/" <> copy_id = path
+      "/demo/admin/flows/" <> copy_id = path
 
       assert [%{event: "created", user_id: "demo-admin"}] = events(Flows.get(copy_id))
     end
@@ -568,7 +585,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, done} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "b"})
       {:ok, _} = Instances.Flows.complete(done, [])
 
-      {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/edit")
+      {:ok, _view, html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
 
       assert html =~ "2 instances started, 1 still in progress."
     end
@@ -576,7 +593,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "the show page's badge opens a dialog that changes the status and logs it", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License"})
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
 
       html = view |> element("button[phx-click=request_status]") |> render_click()
       assert html =~ "Change the status of “Dog License”"
@@ -620,7 +637,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
       menu = "#flow-#{flow.id}-actions"
 
-      {:ok, view, _html} = live(conn, "/admin/flows")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows")
 
       html = view |> element("#{menu} button", "Change status") |> render_click()
       assert html =~ "Change the status of “Dog License”"
@@ -631,7 +648,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       |> render_submit(%{"status" => "winding_down"})
 
       {path, _flash} = assert_redirect(view)
-      assert path =~ "/admin/flows"
+      assert path =~ "/demo/admin/flows"
       assert Flows.get(flow.id).status == "winding_down"
 
       assert [%{event: "created"}, %{event: "status_changed", user_id: "demo-admin"}] =
@@ -645,33 +662,33 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, open} = Flows.create(%{name: "Dog License", status: "open"})
       {:ok, archived} = Flows.create(%{name: "Dog License 2024", status: "archived"})
 
-      {:ok, view, html} = live(conn, "/admin/flows")
+      {:ok, view, html} = live(conn, "/demo/admin/flows")
       assert html =~ "Dog License"
       refute html =~ "Dog License 2024"
       assert has_element?(view, "#flows-archived-toggle", "1 archived flow hidden.")
 
       # Show archived patches the URL; the archived row is listed, greyed
       html = view |> element("#flows-archived-toggle a", "Show archived") |> render_click()
-      assert_patch(view, "/admin/flows?archived=true")
+      assert_patch(view, "/demo/admin/flows?archived=true")
       assert html =~ "Dog License 2024"
-      assert has_element?(view, "a.text-zinc-400[href='/admin/flows/#{archived.id}']")
+      assert has_element?(view, "a.text-zinc-400[href='/demo/admin/flows/#{archived.id}']")
       assert has_element?(view, "#flows-archived-toggle a", "Hide archived")
 
       # The URL keeps it, with the sort; Hide archived takes it off and keeps the sort
-      {:ok, view, html} = live(conn, "/admin/flows?archived=true&sort=name")
+      {:ok, view, html} = live(conn, "/demo/admin/flows?archived=true&sort=name")
       assert html =~ "Dog License 2024"
       view |> element("#flows-archived-toggle a", "Hide archived") |> render_click()
-      assert_patch(view, "/admin/flows?sort=name")
+      assert_patch(view, "/demo/admin/flows?sort=name")
       refute render(view) =~ "Dog License 2024"
 
       # Nothing but archived flows: no table, a sentence, and the link
       {:ok, _flow} = Flows.update_status(open, "archived", [])
-      {:ok, view, html} = live(conn, "/admin/flows")
+      {:ok, view, html} = live(conn, "/demo/admin/flows")
       assert html =~ "Every flow here is archived."
       refute html =~ "<table"
       refute has_element?(view, "#flows-archived-toggle")
       html = view |> element("a", "Show archived") |> render_click()
-      assert_patch(view, "/admin/flows?archived=true")
+      assert_patch(view, "/demo/admin/flows?archived=true")
       assert html =~ "<table"
       assert html =~ "Dog License 2024"
     end
@@ -684,7 +701,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, trial_1} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
       {:ok, trial_2} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "b"})
 
-      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
       html = view |> element("button[phx-click=request_status]") |> render_click()
 
       # No offer until another status is picked; picking back withdraws it
@@ -724,7 +741,7 @@ defmodule Demo.FormFlowFlowStatusTest do
                }
              ] = events(flow)
 
-      {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+      {:ok, _view, html} = live(conn, "/demo/admin/flows/#{flow.id}/history")
       assert html =~ "Deleted 2 instances started during pre-release"
     end
 
@@ -734,7 +751,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       menu = "#flow-#{flow.id}-actions"
 
       # From the index's dialog, the offer made and declined
-      {:ok, view, _html} = live(conn, "/admin/flows")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows")
       view |> element("#{menu} button", "Change status") |> render_click()
       form = element(view, "form[phx-submit=save_status]")
 
@@ -749,7 +766,7 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       # An open flow with a marked instance left over: no offer on any move,
       # and a box sent anyway deletes nothing
-      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
       view |> element("button[phx-click=request_status]") |> render_click()
       form = element(view, "form[phx-submit=save_status]")
 
@@ -770,7 +787,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, _root} = Health.ignore(health, unreachable, "demo-admin")
       {:ok, _root} = Health.stop_ignoring(Health.check(flow.id), unreachable, "demo-admin")
 
-      {:ok, _view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+      {:ok, _view, html} = live(conn, "/demo/admin/flows/#{flow.id}/history")
       assert html =~ "Ignored health check: end unreachable"
       assert html =~ "Stopped ignoring health check: end unreachable"
       refute html =~ "end_unreachable"
@@ -782,7 +799,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, flow} = Flows.update_status(flow, "open", user_id: "demo-admin")
       {:ok, _flow} = Flows.update_status(flow, "winding_down", [])
 
-      {:ok, view, html} = live(conn, "/admin/flows/#{flow.id}/history")
+      {:ok, view, html} = live(conn, "/demo/admin/flows/#{flow.id}/history")
 
       assert has_element?(view, "h2", "Dog License")
       assert has_element?(view, "h2", "History")
@@ -804,27 +821,27 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       # An owned subflow's history is its root's
       {:ok, owned} = Flows.create(%{name: "Application", owner_flow_id: flow.id})
-      {:ok, view, _html} = live(conn, "/admin/flows/#{owned.id}/history")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{owned.id}/history")
       assert has_element?(view, "h2", "Dog License")
 
       # A row written past the data layer — a seed, a host — has no log, and
       # the page says so rather than drawing an empty list
       {:ok, seeded} = FormFlowRepo.insert(Flow.changeset(%Flow{}, %{name: "Seeded"}))
-      {:ok, _view, html} = live(conn, "/admin/flows/#{seeded.id}/history")
+      {:ok, _view, html} = live(conn, "/demo/admin/flows/#{seeded.id}/history")
       assert html =~ "Nothing has been recorded for this flow."
 
       # Reached from the show page and the index's menu; a missing flow says so
-      {:ok, view, _html} = live(conn, "/admin/flows/#{flow.id}")
-      assert has_element?(view, ~s(a[href="/admin/flows/#{flow.id}/history"]), "History")
-      {:ok, view, _html} = live(conn, "/admin/flows")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
+      assert has_element?(view, ~s(a[href="/demo/admin/flows/#{flow.id}/history"]), "History")
+      {:ok, view, _html} = live(conn, "/demo/admin/flows")
 
       assert has_element?(
                view,
-               ~s(#flow-#{flow.id}-actions a[href="/admin/flows/#{flow.id}/history"]),
+               ~s(#flow-#{flow.id}-actions a[href="/demo/admin/flows/#{flow.id}/history"]),
                "History"
              )
 
-      {:ok, _view, html} = live(conn, "/admin/flows/#{Ecto.UUID.generate()}/history")
+      {:ok, _view, html} = live(conn, "/demo/admin/flows/#{Ecto.UUID.generate()}/history")
       assert html =~ "Flow not found."
     end
 
@@ -832,7 +849,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, root} = Flows.create(%{name: "Licensing", label: "subflows"})
       {:ok, owned} = Flows.create(%{name: "Application", owner_flow_id: root.id})
 
-      {:ok, view, html} = live(conn, "/admin/flows/#{owned.id}/edit")
+      {:ok, view, html} = live(conn, "/demo/admin/flows/#{owned.id}/edit")
 
       refute has_element?(view, "option[value=draft]")
       refute html =~ "Not offered to users"

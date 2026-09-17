@@ -6,10 +6,10 @@ defmodule DemoWeb.UserSwitchControllerTest do
   test "stores the user in the session and returns to the referring page", %{conn: conn} do
     conn =
       conn
-      |> put_req_header("referer", "http://localhost:4001/users?page=2")
+      |> put_req_header("referer", "http://localhost:4001/demo/pet-licenses/applications?page=2")
       |> post(~p"/switch-user/cat_owner")
 
-    assert redirected_to(conn) == "/users?page=2"
+    assert redirected_to(conn) == "/demo/pet-licenses/applications?page=2"
     assert get_session(conn, Users.session_key()) == "cat_owner"
   end
 

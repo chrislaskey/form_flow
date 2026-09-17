@@ -2,16 +2,19 @@ defmodule DemoWeb.FormFlowLive.Admin do
   @moduledoc """
   The dedicated page for FormFlow's template administration.
 
-  Mounted on `live "/admin/*path", FormFlowLive.Admin`, so `/admin` (a landing linking
-  the two indexes), `/admin/flows/*`, and `/admin/forms/*` all land here.
-  FormFlow's router dispatches the remaining path to the right LiveComponent —
-  this page just supplies the layout around it. `base="/admin"` is what makes
-  every link the components build carry the mount prefix.
+  Mounted on `live "/demo/admin/*path", FormFlowLive.Admin`, so `/demo/admin`
+  (a landing linking the two indexes), `/demo/admin/flows/*`, and
+  `/demo/admin/forms/*` all land here. FormFlow's router dispatches the
+  remaining path to the right LiveComponent — this page just supplies the
+  layout around it. `base="/demo/admin"` is what makes every link the
+  components build carry the mount prefix.
   """
 
   use DemoWeb, :live_view
 
   import DemoWeb.PersonaComponents
+
+  alias DemoWeb.Experiences
 
   @impl true
   def mount(_params, _session, socket) do
@@ -35,7 +38,11 @@ defmodule DemoWeb.FormFlowLive.Admin do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate current_user={@current_user} roles={[:admin]} page="the admin pages">
+        <.persona_gate
+          current_user={@current_user}
+          roles={Experiences.roles(:admin)}
+          page="the admin pages"
+        >
           <div id="admin-pages">
             <FormFlow.Web.router
               type="templates"
@@ -43,7 +50,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
               uri={@uri}
               params={@params}
               path={@path}
-              base="/admin"
+              base="/demo/admin"
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}

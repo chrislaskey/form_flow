@@ -1,13 +1,15 @@
 defmodule DemoWeb.FormFlowLive.Reviewers do
   @moduledoc """
-  The dedicated page for the reviewer's side of FormFlow.
+  The dedicated page for the reviewer's side of FormFlow: the pet license
+  reviews.
 
-  Mounted on `live "/reviewers/*path", FormFlowLive.Reviewers`, the same
-  shape as `DemoWeb.FormFlowLive.Users` — FormFlow's router dispatches the
-  remaining path to the right LiveComponent, and `base="/reviewers"` is what
-  makes every link the components build carry the mount prefix.
+  Mounted on `live "/demo/pet-licenses/reviews/*path", FormFlowLive.Reviewers`,
+  the same shape as `DemoWeb.FormFlowLive.Users` — FormFlow's router dispatches
+  the remaining path to the right LiveComponent, and
+  `base="/demo/pet-licenses/reviews"` is what makes every link the components
+  build carry the mount prefix.
 
-  What separates it from the user pages is who is looking: `user_id` is the
+  What separates it from the applications is who is looking: `user_id` is the
   reviewer's, so the listing is the instances the reviewer owns rather than
   an applicant's. The review flows themselves are still to come — the page
   exists now so the reviewer persona has somewhere of its own to land.
@@ -17,11 +19,13 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
 
   import DemoWeb.PersonaComponents
 
+  alias DemoWeb.Experiences
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:page_title, "Reviewers")
+     |> assign(:page_title, "Pet License Reviews")
      |> assign(:current_nav, :reviewers)}
   end
 
@@ -41,8 +45,8 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
       <div class="space-y-6">
         <.persona_gate
           current_user={@current_user}
-          roles={[:reviewer]}
-          page="the reviewer pages"
+          roles={Experiences.roles(:reviewer)}
+          page="the pet license reviews"
         >
           <div id="reviewers-pages">
             <FormFlow.Web.router
@@ -50,7 +54,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
               uri={@uri}
               params={@params}
               path={@path}
-              base="/reviewers"
+              base="/demo/pet-licenses/reviews"
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}
