@@ -405,7 +405,11 @@ defmodule FormFlow.Web.Templates.Flows.Index do
           <Core.badge
             components={@components}
             kind={Shared.status_kind(flow.status)}
-            title={Shared.status_summary(flow.status)}
+            title={"#{Shared.status_summary(flow.status)} Click to change."}
+            class="cursor-pointer"
+            phx-click="request_status"
+            phx-value-id={flow.id}
+            phx-target={@myself}
           >
             {Shared.status_label(flow.status)}
           </Core.badge>

@@ -166,9 +166,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
 
     ~H"""
     <div>
-      <.page_header {header_assigns(assigns)}>
-        <Status.last_event events={@events} />
-      </.page_header>
+      <.page_header {header_assigns(assigns)} />
 
       <ol id={"#{@id}-events"} class="relative ml-2 mt-6 border-l border-zinc-200 pl-6">
         <li :for={event <- @newest_first} class="relative pb-6 last:pb-0">
@@ -210,7 +208,6 @@ defmodule FormFlow.Web.Instances.Forms.History do
   attr(:events, :list, default: [])
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
-  slot(:inner_block)
 
   defp page_header(assigns) do
     ~H"""
@@ -231,9 +228,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
           flow_instance_id={@flow_instance.id}
           path={@path}
           active={:history}
-          class="mr-2"
         />
-        {render_slot(@inner_block)}
       </:actions>
     </Header.header>
     """

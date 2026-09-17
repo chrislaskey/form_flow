@@ -416,14 +416,14 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         <Status.badge form_instance={@form_instance} events={@events} components={@components} />
       </:status>
       <:actions :if={@tabs}>
+        {render_slot(@inner_block)}
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}
           path={@path}
           active={:show}
-          class="mr-2"
+          class="ml-2"
         />
-        {render_slot(@inner_block)}
       </:actions>
     </Header.header>
     """
