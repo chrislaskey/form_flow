@@ -417,6 +417,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   attr(:flow_name, :string, required: true)
   attr(:label, :string, required: true)
   attr(:title, :string, default: nil)
+  attr(:trail, :list, default: [])
   attr(:path, :list, required: true)
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
@@ -432,6 +433,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       flow_name={@flow_name}
       label={@label}
       title={@title}
+      trail={@trail}
       sticky
     >
       <:status>
@@ -458,6 +460,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       flow_name: assigns.flow_name,
       label: assigns.form_label,
       title: assigns[:form] && assigns.form.label,
+      trail: assigns[:form_trail] || [],
       path: assigns.path,
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],

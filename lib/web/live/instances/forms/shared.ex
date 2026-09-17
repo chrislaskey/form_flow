@@ -48,7 +48,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       refused or redirected, or nil
     * `:clickable` - the sibling forms the type lets the user jump to, for
       `FormFlow.Web.Instances.Components.Flows.Progress`
-    * `:flow_name` / `:form_label` - what the breadcrumb needs
+    * `:flow_name` / `:form_label` / `:form_trail` - what the breadcrumb needs:
+      the flow's name, the full "subflow / subflow / form" text, and the
+      subflow names alone, outermost first, for drawing each as its own link
     * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
 
   Then each page asks whether it may render (`on_mount/2`): first whether
@@ -131,7 +133,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       missing_prefill_name: prefill == nil && presence(socket.assigns.params["prefill"]),
       prefills_offered?: prefills_offered?(context),
       form_label:
-        (context.form_progress && FlowProgress.qualified_label(context.form_progress)) || "Form"
+        (context.form_progress && FlowProgress.qualified_label(context.form_progress)) || "Form",
+      form_trail:
+        (context.form_progress && FlowProgress.ancestor_labels(context.form_progress)) || []
     )
     |> parse(version)
   end

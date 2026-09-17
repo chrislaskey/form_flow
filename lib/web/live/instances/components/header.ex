@@ -6,10 +6,13 @@ defmodule FormFlow.Web.Instances.Components.Header do
   page is about on the left, its actions on the right.
 
   The left side is two lines. On top, small, the **breadcrumb** - Flows /
-  the flow instance / this form - the trail back out, ending in the page
-  itself, unlinked. Under it the **title** names the thing on the page: the
-  form's label with "in <flow>" lighter after it, the flow instance's name,
-  or "Flows" on the listing. What the page has to say about the thing - when
+  the flow instance / the subflows drilled through / this form - the trail
+  back out, every link but the last: a form nested in subflows has nowhere
+  of their own to send a click, so each subflow name lands on the flow
+  instance's own page too, the way its own name does. Under it the
+  **title** names the thing on the page: the form's label with "in <flow>"
+  lighter after it, the flow instance's name, or "Flows" on the listing.
+  What the page has to say about the thing - when
   it was started, which flow - is not here: it is the fact sheet in the
   page's body. The one exception is a form's **status** badge - Draft,
   Submitted, Reopened - which reads with the name, so the `status` slot
@@ -56,6 +59,13 @@ defmodule FormFlow.Web.Instances.Components.Header do
     doc: "the form's label as the trail says it - the page is a form inside the flow instance"
   )
 
+  attr(:trail, :list,
+    default: [],
+    doc:
+      "the subflow names between the flow and the form, outermost first - " <>
+        "each its own link in the breadcrumb, back to the flow instance's page"
+  )
+
   attr(:title, :string,
     default: nil,
     doc:
@@ -91,8 +101,17 @@ defmodule FormFlow.Web.Instances.Components.Header do
               <.link navigate={Paths.flow_path(@base, @flow_instance.id)} class="hover:underline">
                 {@flow_name}
               </.link>
+              <%= for crumb <- @trail do %>
+                <span class="text-zinc-400">/</span>
+                <.link
+                  navigate={Paths.flow_path(@base, @flow_instance.id)}
+                  class="hover:underline"
+                >
+                  {crumb}
+                </.link>
+              <% end %>
               <span class="text-zinc-400">/</span>
-              <span class="text-zinc-700">{@label}</span>
+              <span class="text-zinc-700">{@title || @label}</span>
             <% else %>
               <span class="text-zinc-700">{@flow_name}</span>
             <% end %>

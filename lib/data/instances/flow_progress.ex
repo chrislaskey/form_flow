@@ -141,8 +141,17 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   """
   @spec qualified_label(FormProgress.t()) :: String.t()
   def qualified_label(%FormProgress{} = form) do
-    Enum.join(Enum.map(form.ancestors, &node_label/1) ++ [form.label], " / ")
+    Enum.join(ancestor_labels(form) ++ [form.label], " / ")
   end
+
+  @doc """
+  The names of the subflows drilled through to reach a form, outermost
+  first - the part of `qualified_label/1` before the form's own name, kept
+  as a list rather than joined so a caller (the breadcrumb) can draw each
+  one as its own link. `[]` for a form in the root flow.
+  """
+  @spec ancestor_labels(FormProgress.t()) :: [String.t()]
+  def ancestor_labels(%FormProgress{} = form), do: Enum.map(form.ancestors, &node_label/1)
 
   # One flow scope: build its edge/node lookups and scan it in flow order,
   # starting the queue at its Start nodes.
