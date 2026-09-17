@@ -37,7 +37,7 @@ const EditorContext = createContext({
   onOpenForm: null,
   onNodeDataChange: null,
   editable: true,
-  formFlowTypeOptions: [],
+  flowTypeOptions: [],
   formTypeOptions: [],
   perspectiveOptions: [],
   focusId: null,
@@ -262,7 +262,7 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
 
   // The form_type dropdown, on form steps: how the collected form behaves
   // for the user filling it out. Stored in node.data like a subflow's
-  // form_flow_type, and written through to the form at save the same way.
+  // flow_type, and written through to the form at save the same way.
   // The options are exactly the configured types; an unset type shows the
   // first, which is what the server resolves it to. A type's properties are
   // set on the form's own page, not here.
@@ -317,20 +317,26 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
   );
 }
 
+// The type options for one kind of flow - what a node embedding such a flow
+// offers. An option without a kind is offered to every node.
+function optionsForKind(options, kind) {
+  return options.filter((option) => !option.kind || option.kind === kind);
+}
+
 function SubflowNode({ id, data, selected, isConnectable, deletable }) {
-  const { onOpenSubflow, onNodeDataChange, editable, formFlowTypeOptions } =
+  const { onOpenSubflow, onNodeDataChange, editable, flowTypeOptions } =
     useContext(EditorContext);
   const menuItems = useNodeMenuItems(id, deletable);
 
-  // The form_flow_type dropdown, on form subflows only: how the embedded
-  // flow's steps are presented to the user filling it out. Stored in
-  // node.data, so it rides the ordinary properties round-trip to the server.
-  // The options are exactly the configured types; an unset type shows the
+  // The flow_type dropdown: how the embedded flow is worked - a form subflow's
+  // wizard, a complex subflow's order. Stored in node.data, so it rides the
+  // ordinary properties round-trip to the server. The options are the
+  // configured types of the kind the node embeds; an unset type shows the
   // first, which is what the server resolves it to.
   const isFormSubflow = data.subflow_label !== "subflows";
+  const typeOptions = optionsForKind(flowTypeOptions, isFormSubflow ? "forms" : "subflows");
   const typeLabel =
-    formFlowTypeOptions.find((option) => option.value === data.form_flow_type)?.label ??
-    data.form_flow_type;
+    typeOptions.find((option) => option.value === data.flow_type)?.label ?? data.flow_type;
 
   return (
     <div className={`ff-node ff-node--subflow ${selected ? "is-selected" : ""}`}>
@@ -344,22 +350,22 @@ function SubflowNode({ id, data, selected, isConnectable, deletable }) {
         {data.subflow_label === "subflows" ? "Complex subflow" : "Form subflow"}
         {data.copy_of_node_id && <CopyMark />}
       </div>
-      {isFormSubflow &&
+      {typeOptions.length > 0 &&
         (editable ? (
           // nodrag/nopan: interacting with the select must not move the canvas
           <select
             className="ff-node__type nodrag nopan"
-            value={data.form_flow_type ?? formFlowTypeOptions[0]?.value ?? ""}
-            onChange={(event) => onNodeDataChange?.(id, { form_flow_type: event.target.value })}
+            value={data.flow_type ?? typeOptions[0]?.value ?? ""}
+            onChange={(event) => onNodeDataChange?.(id, { flow_type: event.target.value })}
           >
-            {formFlowTypeOptions.map((option) => (
+            {typeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
         ) : (
-          data.form_flow_type && <div className="ff-node__type-label">{typeLabel}</div>
+          data.flow_type && <div className="ff-node__type-label">{typeLabel}</div>
         ))}
       {isFormSubflow && <NodePerspectives ids={data.perspectives} />}
       <button
@@ -574,7 +580,7 @@ function FlowEditor({
   onChange,
   editable = true,
   flowLabel = "forms",
-  formFlowTypeOptions = [],
+  flowTypeOptions = [],
   formTypeOptions = [],
   perspectiveOptions = [],
   onOpenSubflow,
@@ -762,7 +768,7 @@ function FlowEditor({
         onOpenForm,
         onNodeDataChange,
         editable,
-        formFlowTypeOptions,
+        flowTypeOptions,
         formTypeOptions,
         perspectiveOptions,
         focusId,
@@ -863,12 +869,12 @@ const LANE_GAP = 24;
 // the inner flow needs — and its measured width is the header's natural
 // width, which the layout widens to fit the inner flow.
 function SubflowGroupNode({ id, data, isConnectable }) {
-  const { onOpenSubflow, formFlowTypeOptions } = useContext(EditorContext);
+  const { onOpenSubflow, flowTypeOptions } = useContext(EditorContext);
 
   const isFormSubflow = data.flow_label !== "subflows";
+  const typeOptions = optionsForKind(flowTypeOptions, isFormSubflow ? "forms" : "subflows");
   const typeLabel =
-    formFlowTypeOptions.find((option) => option.value === data.form_flow_type)?.label ??
-    data.form_flow_type;
+    typeOptions.find((option) => option.value === data.flow_type)?.label ?? data.flow_type;
 
   return (
     <div className="ff-group">
@@ -880,7 +886,7 @@ function SubflowGroupNode({ id, data, isConnectable }) {
         </div>
         <div className="ff-group__meta">
           {isFormSubflow ? "Form subflow" : "Complex subflow"}
-          {isFormSubflow && typeLabel ? ` · ${typeLabel}` : ""}
+          {typeLabel ? ` · ${typeLabel}` : ""}
         </div>
         {isFormSubflow && <NodePerspectives ids={data.perspectives} />}
         {data.empty && <div className="ff-group__empty">No connected steps</div>}
@@ -1187,7 +1193,7 @@ function layerNodes(tree) {
 
 function FlowOverview({
   tree,
-  formFlowTypeOptions = [],
+  flowTypeOptions = [],
   formTypeOptions = [],
   perspectiveOptions = [],
   onOpenSubflow,
@@ -1275,7 +1281,7 @@ function FlowOverview({
         onOpenForm,
         onNodeDataChange: null,
         editable: false,
-        formFlowTypeOptions,
+        flowTypeOptions,
         formTypeOptions,
         perspectiveOptions,
         focusId: null,
@@ -1342,8 +1348,9 @@ export function injectStyles(doc = document) {
  * autocreate makes; `onOpenSubflow(nodeId)` is called by a subflow node's
  * Open button, `onOpenForm(nodeId)` by a form step's.
  *
- * `formFlowTypeOptions` ([{label, value}]) are the form_flow_type choices a
- * form subflow node offers: a dropdown when editable, the stored value's
+ * `flowTypeOptions` ([{label, value, kind}]) are the flow_type choices a
+ * subflow node offers - those whose kind ("forms" or "subflows") is the
+ * kind of flow the node embeds: a dropdown when editable, the stored value's
  * label when not. The chosen value lives in the node's data and rides the
  * ordinary onChange round-trip. `formTypeOptions` are the same for a form
  * step's form_type. `perspectiveOptions` ([{label, value}]) name the
@@ -1364,7 +1371,7 @@ export function mount(el, opts = {}) {
           onChange={opts.onChange}
           editable={opts.editable !== false}
           flowLabel={opts.flowLabel}
-          formFlowTypeOptions={opts.formFlowTypeOptions}
+          flowTypeOptions={opts.flowTypeOptions}
           formTypeOptions={opts.formTypeOptions}
           perspectiveOptions={opts.perspectiveOptions}
           onOpenSubflow={opts.onOpenSubflow}
@@ -1400,7 +1407,7 @@ export function mountOverview(el, opts = {}) {
     <ReactFlowProvider>
       <FlowOverview
         tree={opts.tree}
-        formFlowTypeOptions={opts.formFlowTypeOptions}
+        flowTypeOptions={opts.flowTypeOptions}
         formTypeOptions={opts.formTypeOptions}
         perspectiveOptions={opts.perspectiveOptions}
         onOpenSubflow={opts.onOpenSubflow}

@@ -1,8 +1,8 @@
 defmodule FormFlow.Config.Flows.Type.Default do
   @moduledoc """
   The public face of `FormFlow.Config.Flows.Type`'s defaults - the in-order
-  wizard's behavior, for a custom type to reach when its override wants to
-  build on the default rather than replace it.
+  behaviour for both kinds of flow, for a custom type to reach when its
+  override wants to build on the default rather than replace it.
 
   Delegates to the private internal implementation in
   `FormFlow.Web.Components.Flows.Types.Default`,
@@ -14,6 +14,7 @@ defmodule FormFlow.Config.Flows.Type.Default do
 
   defdelegate visible?(context, callback_data), to: Types.Default
   defdelegate editable?(context, callback_data), to: Types.Default
+  defdelegate enterable?(context, callback_data), to: Types.Default
   defdelegate handle_complete(context, callback_data), to: Types.Default
   defdelegate progress_component(assigns), to: Types.Default
 end

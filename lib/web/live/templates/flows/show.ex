@@ -108,9 +108,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
                flow_types(socket.assigns, embedded_flow_context(flow, root))
              )
            ),
-       embedded_flow_type_options:
-         flow &&
-           type_select_options(flow_types(socket.assigns, embedded_flow_context(flow, root))),
+       embedded_flow_type_options: flow && Shared.canvas_type_options(socket.assigns.flow_types),
        embedded_form_type_options: flow && embedded_form_type_options(socket.assigns)
      )}
   end
@@ -399,7 +397,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         target={@myself}
         editable={false}
         flow_label={@flow.label}
-        form_flow_type_options={@embedded_flow_type_options}
+        flow_type_options={@embedded_flow_type_options}
         form_type_options={@embedded_form_type_options}
         perspective_options={@embedded_perspective_options}
       />
@@ -430,7 +428,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             <span class="block text-xs text-zinc-500">{Shared.status_summary(@flow.status)}</span>
           </FactSheet.detail>
           <FactSheet.detail label="Flow kind">{Shared.kind_label(@flow)}</FactSheet.detail>
-          <FactSheet.detail :if={@flow_types != []} label="Form flow type">
+          <FactSheet.detail :if={@flow_types != []} label="Flow type">
             <FactSheet.detail_value value={type_label(assigns)} />
           </FactSheet.detail>
           <FactSheet.detail :if={Shared.perspectives(@flow_types, shown_type(assigns)) != []} label="Perspectives">
@@ -486,7 +484,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   end
 
   defp shown_type(assigns) do
-    Shared.effective_type(assigns.flow_types, assigns.flow.properties["form_flow_type"])
+    Shared.effective_type(assigns.flow_types, assigns.flow.properties["flow_type"])
   end
 
   # The perspectives the flow is for, by name - the stored ids resolved

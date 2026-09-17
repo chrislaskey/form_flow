@@ -64,6 +64,14 @@ defmodule FormFlow.Context do
     * `:flow_instance_progress` - the same for the whole flow instance: every
       form of every flow in it, in order (`FormFlow.Data.Instances.FlowProgress.forms/2`)
       - where a form finds one it relates to (`FormFlow.Config.Forms.Type.related_form/2`)
+    * `:flow_instance_subflows` - every subflow step of the flow instance, in
+      order (`FormFlow.Data.Instances.FlowProgress.subflows/2`) - the doors on
+      the way down to any form, each with its derived status
+    * `:subflow_progress` - when a "subflows" flow's type is
+      asked: the `SubflowProgress` of the step in question - then `:subflow`
+      is the "subflows" flow that step is in and `:subflow_node` the step
+    * `:complex_progress` - the steps of that "subflows" flow, in order
+      (`FlowProgress.subflows_in_flow/2`)
 
   `callback_data` is deliberately not a field here - it is passed to every
   callback as its own second argument. The context is FormFlow's view of the
@@ -88,6 +96,9 @@ defmodule FormFlow.Context do
     :form_progress,
     :flow_progress,
     :flow_instance_progress,
+    :subflow_progress,
+    :complex_progress,
+    :flow_instance_subflows,
     perspectives: [],
     flow_perspectives: []
   ]
@@ -109,6 +120,9 @@ defmodule FormFlow.Context do
           form_instance: FormFlow.Data.Instances.Form.t() | nil,
           form_progress: FormFlow.Data.Instances.FormProgress.t() | nil,
           flow_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil,
-          flow_instance_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil
+          flow_instance_progress: [FormFlow.Data.Instances.FormProgress.t()] | nil,
+          subflow_progress: FormFlow.Data.Instances.SubflowProgress.t() | nil,
+          complex_progress: [FormFlow.Data.Instances.SubflowProgress.t()] | nil,
+          flow_instance_subflows: [FormFlow.Data.Instances.SubflowProgress.t()] | nil
         }
 end

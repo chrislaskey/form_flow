@@ -148,7 +148,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   @metadata_key "_health_metadata"
   @empty_counts %{error: 0, warning: 0, info: 0, ignored: 0}
-  @summary_keys [:label, :steps, :subflows, :forms, :perspectives, :form_flow_types]
+  @summary_keys [
+    :label,
+    :steps,
+    :subflows,
+    :forms,
+    :perspectives,
+    :flow_types,
+    :complex_flow_types
+  ]
 
   defstruct [
     :flow_id,
@@ -168,9 +176,9 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   describes the flow that was checked, whole tree, for a page to say what
   the report is of: its `label`, how many `steps` (form and subflow nodes),
   `subflows`, and distinct `forms` it has, and the `perspectives` and
-  `form_flow_types` (ids; `nil` for a "forms" flow that never chose) its
-  flows name. `checks_run` is how many checks were evaluated, entries
-  included.
+  `flow_types` (ids; `nil` for a "forms" flow that never chose) and
+  `complex_flow_types` (the same for its "subflows" flows) its flows name.
+  `checks_run` is how many checks were evaluated, entries included.
   """
   @type t :: %__MODULE__{
           flow_id: Ecto.UUID.t() | nil,
@@ -194,7 +202,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
           subflows: non_neg_integer(),
           forms: non_neg_integer(),
           perspectives: [String.t()],
-          form_flow_types: [String.t() | nil]
+          flow_types: [String.t() | nil],
+          complex_flow_types: [String.t() | nil]
         }
 
   @typedoc """
@@ -287,8 +296,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       subflows: Enum.count(nodes, &(kind(&1) == :subflow)),
       forms: nodes |> Enum.map(& &1.form_id) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> length(),
       perspectives: flows |> Enum.flat_map(&Perspective.ids/1) |> Enum.uniq(),
-      form_flow_types:
-        for(%{label: "forms"} = flow <- flows, uniq: true, do: flow.properties["form_flow_type"])
+      flow_types:
+        for(%{label: "forms"} = flow <- flows, uniq: true, do: flow.properties["flow_type"]),
+      complex_flow_types:
+        for(%{label: "subflows"} = flow <- flows, uniq: true, do: flow.properties["flow_type"])
     }
   end
 
@@ -796,11 +807,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   # --- the flow's type -------------------------------------------------------
 
-  # Flow types apply to "forms" flows; a "subflows" flow has none
-  defp flow_type_results(%{flow: %{label: "forms"} = flow} = scope, opts) do
+  # Each flow is checked against the host's types of its kind: a "forms"
+  # flow's wizard, with its perspectives; a "subflows" flow's order, which
+  # has no perspectives to check
+  defp flow_type_results(%{flow: %{label: label} = flow} = scope, opts)
+       when label in ["forms", "subflows"] do
     values = FormFlow.Config.Flows.Type.property_values(flow)
+    types = FormFlow.Config.Flows.Type.for_kind(opts.flow_types, label)
 
-    case stored_type(opts.flow_types, flow.properties["form_flow_type"]) do
+    case stored_type(types, flow.properties["flow_type"]) do
       {:unknown, id} ->
         [
           flow_entry(
@@ -815,7 +830,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         [:pass] ++
           property_results(type.properties, values, opts, fn level, code, text ->
             flow_entry(scope, level, code, text)
-          end) ++ perspective_results(scope, type)
+          end) ++ if(label == "forms", do: perspective_results(scope, type), else: [])
     end
   end
 

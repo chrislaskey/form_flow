@@ -49,7 +49,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
        # Every type and perspective the page knows, as name lookups: a group
        # header names its stored type and perspectives, and a form node its
        # type, wherever in the tree it sits
-       form_flow_type_options: Enum.map(socket.assigns.flow_types, &{&1.name, &1.id}),
+       flow_type_options: Shared.canvas_type_options(socket.assigns.flow_types),
        form_type_options: Enum.map(socket.assigns.form_types, &{&1.name, &1.id}),
        perspective_options:
          socket.assigns.flow_types
@@ -115,7 +115,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         id={"#{@id}-overview"}
         tree={@tree}
         target={@myself}
-        form_flow_type_options={@form_flow_type_options}
+        flow_type_options={@flow_type_options}
         form_type_options={@form_type_options}
         perspective_options={@perspective_options}
       />

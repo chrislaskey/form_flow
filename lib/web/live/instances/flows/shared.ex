@@ -99,7 +99,9 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
-        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+        instances = Instances.Flows.form_instances(flow_instance)
+        forms = FlowProgress.forms(tree, instances)
+        steps = FlowProgress.subflows(tree, instances)
         flow = tree && tree.flow
 
         context = %Context{
@@ -110,7 +112,8 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
           subflow: flow,
           flow_type_property_values: FormFlow.Config.Flows.Type.property_values(flow),
           flow_instance: flow_instance,
-          flow_instance_progress: forms
+          flow_instance_progress: forms,
+          flow_instance_subflows: steps
         }
 
         # The context first, and the page's pre-release users with it: the
@@ -121,7 +124,7 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
           |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
 
         trail = Instances.Flows.list_events(flow_instance)
-        rows = rows(forms, tree, flow_instance, trail, socket.assigns)
+        rows = rows(forms, steps, tree, flow_instance, trail, socket.assigns)
         continue_allowed? = continue_allowed?(flow, socket.assigns)
 
         socket =
@@ -153,29 +156,33 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
 
   # Every form the viewer's perspectives are for, with the one question its
   # own flow's type answers here - forms of a flow that is not for the viewer
-  # are not rows at all - and what its trail says of it
-  defp rows(forms, tree, flow_instance, trail, assigns) do
+  # are not rows at all - and what its trail says of it. Editable means the
+  # form's type says so and every step above it is open
+  # (`Forms.Shared.enterable_chain?/2`)
+  defp rows(forms, steps, tree, flow_instance, trail, assigns) do
     by_instance =
       trail
       |> Enum.reject(&is_nil(&1.form_instance))
       |> Enum.group_by(& &1.form_instance.id)
 
     for form <- forms,
-        context = form_context(form, forms, tree, flow_instance, assigns),
+        context = form_context(form, forms, steps, tree, flow_instance, assigns),
         type = Forms.Shared.flow_type(context, assigns),
         Forms.Shared.visible?(type, context, assigns) do
       entries = (form.instance && Map.get(by_instance, form.instance.id, [])) || []
 
       %{
         form: form,
-        editable?: type.module.editable?(context, assigns.callback_data),
+        editable?:
+          Forms.Shared.enterable_chain?(context, assigns) and
+            type.module.editable?(context, assigns.callback_data),
         word: FormStatus.status(form.instance, Enum.map(entries, & &1.event)),
         last: List.last(entries)
       }
     end
   end
 
-  defp form_context(form, forms, tree, flow_instance, assigns) do
+  defp form_context(form, forms, steps, tree, flow_instance, assigns) do
     context = %Context{
       user_id: assigns.user_id,
       tenant_id: assigns.tenant_id,
@@ -188,7 +195,8 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
       flow_instance: flow_instance,
       form_progress: form,
       flow_progress: FlowProgress.forms_in_flow(forms, form.path),
-      flow_instance_progress: forms
+      flow_instance_progress: forms,
+      flow_instance_subflows: steps
     }
 
     %Context{context | flow_perspectives: Forms.Shared.flow_perspectives(context, assigns)}

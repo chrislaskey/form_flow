@@ -36,12 +36,12 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert Flow.changeset(persisted, %{name: "Renamed"}).valid?
   end
 
-  test "casts properties — the flow-level domain data, like form_flow_type" do
+  test "casts properties — the flow-level domain data, like flow_type" do
     changeset =
-      Flow.changeset(%Flow{}, %{properties: %{"form_flow_type" => "wizard_any_order"}})
+      Flow.changeset(%Flow{}, %{properties: %{"flow_type" => "wizard_any_order"}})
 
     assert changeset.valid?
-    assert changeset.changes.properties == %{"form_flow_type" => "wizard_any_order"}
+    assert changeset.changes.properties == %{"flow_type" => "wizard_any_order"}
   end
 
   test "casts owner_flow_id, so owned subflows can be created" do
@@ -56,14 +56,14 @@ defmodule FormFlow.Data.Templates.FlowTest do
     changeset =
       Flow.changeset(%Flow{}, %{
         tenant_id: "acme",
-        properties: %{"form_flow_type" => "wizard_any_order"}
+        properties: %{"flow_type" => "wizard_any_order"}
       })
 
     assert changeset.valid?
     assert changeset.changes.tenant_id == "acme"
 
     assert changeset.changes.properties == %{
-             "form_flow_type" => "wizard_any_order",
+             "flow_type" => "wizard_any_order",
              "tenant_id" => "acme"
            }
 
@@ -83,13 +83,13 @@ defmodule FormFlow.Data.Templates.FlowTest do
     # The editor round-trips properties; a copy it drops or corrupts is restored
     changeset =
       Flow.changeset(persisted, %{
-        properties: %{"form_flow_type" => "wizard_in_order", "tenant_id" => "impostor"}
+        properties: %{"flow_type" => "wizard_in_order", "tenant_id" => "impostor"}
       })
 
     assert changeset.valid?
 
     assert changeset.changes.properties == %{
-             "form_flow_type" => "wizard_in_order",
+             "flow_type" => "wizard_in_order",
              "tenant_id" => "acme"
            }
   end

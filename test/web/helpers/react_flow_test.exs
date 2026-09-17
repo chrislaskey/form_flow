@@ -221,19 +221,19 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert round_tripped.relationships == attrs.relationships
     end
 
-    test "projects the embedded flow's form_flow_type into a subflow node's data" do
+    test "projects the embedded flow's flow_type into a subflow node's data" do
       node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),
         properties: %{"type" => "subflow", "data" => %{"label" => "Collect address"}},
         subflow: %FormFlow.Data.Templates.Flow{
-          properties: %{"form_flow_type" => "wizard_any_order"}
+          properties: %{"flow_type" => "wizard_any_order"}
         }
       }
 
       flow = %FormFlow.Data.Templates.Flow{nodes: [node], relationships: []}
 
       assert [%{"data" => data}] = ReactFlow.to_data(flow).nodes
-      assert data["form_flow_type"] == "wizard_any_order"
+      assert data["flow_type"] == "wizard_any_order"
       assert data["label"] == "Collect address"
     end
 
@@ -331,7 +331,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       flow = %FormFlow.Data.Templates.Flow{nodes: [untyped, unloaded], relationships: []}
 
       for %{"data" => data} <- ReactFlow.to_data(flow).nodes do
-        refute Map.has_key?(data, "form_flow_type")
+        refute Map.has_key?(data, "flow_type")
       end
     end
   end
@@ -342,7 +342,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
         id: Ecto.UUID.generate(),
         name: "Application",
         label: "forms",
-        properties: %{"form_flow_type" => "wizard_any_order"}
+        properties: %{"flow_type" => "wizard_any_order"}
       }
 
       inner_start = %FormFlow.Data.Templates.Flow.Node{

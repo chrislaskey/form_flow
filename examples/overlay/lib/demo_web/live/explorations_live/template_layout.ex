@@ -50,7 +50,7 @@ defmodule DemoWeb.ExplorationsLive.TemplateLayout do
         {"Slug", "dog-license", :code},
         {"Status", "Published", "Users can start it and continue where they left off."},
         {"Flow kind", "Complex flow", nil},
-        {"Form flow type", "Wizard (in order)", nil},
+        {"Flow type", "Wizard (in order)", nil},
         {"Perspectives", "Applicant, Reviewer", nil}
       ]
     },

@@ -34,13 +34,13 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
   }
 
   defp flow(type) do
-    properties = if type, do: %{"form_flow_type" => type}, else: %{}
+    properties = if type, do: %{"flow_type" => type}, else: %{}
 
     %Flow{id: Ecto.UUID.generate(), label: "forms", properties: properties}
   end
 
   describe "flow_type/2" do
-    test "a flow's stored form_flow_type picks its type" do
+    test "a flow's stored flow_type picks its type" do
       assert %{module: Types.WizardInOrder} =
                Shared.flow_type(%Context{subflow: flow("wizard_in_order")}, @defaults)
 
@@ -55,11 +55,30 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
       end
     end
 
-    test "a \"subflows\" flow has no types, so it falls back to the library's default" do
+    test "a \"subflows\" flow resolves among the :subflows types - In order unset, a wizard's id unknown" do
+      for stored <- [nil, "wizard_any_order", "nonsense"] do
+        properties = if stored, do: %{"flow_type" => stored}, else: %{}
+        subflows = %Flow{id: Ecto.UUID.generate(), label: "subflows", properties: properties}
+
+        assert %{id: "in_order", module: Types.InOrder} =
+                 Shared.flow_type(%Context{subflow: subflows}, @defaults)
+      end
+
+      chosen = %Flow{
+        id: Ecto.UUID.generate(),
+        label: "subflows",
+        properties: %{"flow_type" => "any_order"}
+      }
+
+      assert %{id: "any_order"} = Shared.flow_type(%Context{subflow: chosen}, @defaults)
+    end
+
+    test "a context with no types at all falls back to the library's default" do
       subflows = %Flow{id: Ecto.UUID.generate(), label: "subflows"}
+      none = %{@defaults | flow_types: []}
 
       assert %{id: nil, module: FormFlow.Config.Flows.Type.Default} =
-               Shared.flow_type(%Context{subflow: subflows}, @defaults)
+               Shared.flow_type(%Context{subflow: subflows}, none)
     end
 
     test "a host's list resolves its own type and still the defaults" do
@@ -101,9 +120,13 @@ defmodule FormFlow.Web.Instances.Forms.SharedTest do
   end
 
   describe "the library's defaults" do
-    test "flow types: the in-order wizard first, then any order, none with perspectives" do
-      assert [%{id: "wizard_in_order", perspectives: []}, %{id: "wizard_any_order"}] =
-               FormFlow.Config.Flows.Type.defaults()
+    test "flow types: the wizards, in order first, then the orders; none with perspectives" do
+      assert [
+               %{id: "wizard_in_order", kind: :forms, perspectives: []},
+               %{id: "wizard_any_order", kind: :forms, perspectives: []},
+               %{id: "in_order", kind: :subflows, perspectives: []},
+               %{id: "any_order", kind: :subflows, perspectives: []}
+             ] = FormFlow.Config.Flows.Type.defaults()
     end
 
     test "form types: the default first, then review with its properties" do

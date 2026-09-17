@@ -1,8 +1,10 @@
 defmodule FormFlow.Config.Flows.TypesTest do
   use ExUnit.Case, async: true
 
+  alias FormFlow.Config.Flows.Type
   alias FormFlow.Context
   alias FormFlow.Data.Instances.FormProgress
+  alias FormFlow.Data.Instances.SubflowProgress
   alias FormFlow.Web.Components.Flows.Types
 
   # A host's own type: overrides one callback and inherits the rest, the way
@@ -165,12 +167,114 @@ defmodule FormFlow.Config.Flows.TypesTest do
     end
   end
 
+  describe "defaults/0 and for_kind/2" do
+    test "four built-ins, each kind's fallback first" do
+      assert [
+               %Type{id: "wizard_in_order", kind: :forms, module: Types.WizardInOrder},
+               %Type{id: "wizard_any_order", kind: :forms, module: Types.WizardAnyOrder},
+               %Type{id: "in_order", kind: :subflows, module: Types.InOrder},
+               %Type{id: "any_order", kind: :subflows, module: Types.AnyOrder}
+             ] = Type.defaults()
+    end
+
+    test "for_kind/2 is the types for a flow of a label, in order; none for any other" do
+      assert Enum.map(Type.for_kind(Type.defaults(), "forms"), & &1.id) ==
+               ["wizard_in_order", "wizard_any_order"]
+
+      assert Enum.map(Type.for_kind(Type.defaults(), "subflows"), & &1.id) ==
+               ["in_order", "any_order"]
+
+      assert Type.for_kind(Type.defaults(), "other") == []
+      assert Type.for_kind(Type.defaults(), nil) == []
+    end
+
+    test "kind defaults to :forms" do
+      assert %Type{kind: :forms} = %Type{id: "mine", module: Checklist, name: "Mine"}
+    end
+  end
+
+  # The step-level questions, asked of a "subflows" flow's type
+  defp step(name, status), do: %SubflowProgress{path: [name], label: name, status: status}
+
+  defp step_context(steps, current \\ nil) do
+    %Context{
+      complex_progress: steps,
+      subflow_progress: current && Enum.find(steps, &(&1.label == current))
+    }
+  end
+
+  describe "InOrder, the :subflows default" do
+    test "a step can be entered when the steps before it are done - its status says so" do
+      steps = [step("done", :completed), step("next", :available), step("later", :pending)]
+
+      refute Types.InOrder.enterable?(step_context(steps, "done"), %{})
+      assert Types.InOrder.enterable?(step_context(steps, "next"), %{})
+      refute Types.InOrder.enterable?(step_context(steps, "later"), %{})
+
+      assert Types.InOrder.enterable?(step_context([step("open", :in_progress)], "open"), %{})
+      refute Types.InOrder.enterable?(%Context{subflow_progress: nil}, %{})
+    end
+
+    test "handle_complete moves to the first step the flow allows work in" do
+      steps = [step("one", :completed), step("two", :available), step("three", :pending)]
+      assert Types.InOrder.handle_complete(step_context(steps, "one"), %{}).label == "two"
+
+      # A step still open earlier wins over pressing forward
+      steps = [step("one", :in_progress), step("two", :completed), step("three", :available)]
+      assert Types.InOrder.handle_complete(step_context(steps, "two"), %{}).label == "one"
+
+      assert is_nil(
+               Types.InOrder.handle_complete(step_context([step("one", :completed)], "one"), %{})
+             )
+    end
+
+    test "Type.Default answers the step question when the context carries steps" do
+      steps = [step("later", :pending)]
+      refute Type.Default.enterable?(step_context(steps, "later"), %{})
+      assert is_nil(Type.Default.handle_complete(step_context(steps, "later"), %{}))
+
+      # and the form question otherwise - a context with neither answers nil
+      assert is_nil(Type.Default.handle_complete(%Context{}, %{}))
+      refute Type.Default.enterable?(%Context{}, %{})
+    end
+
+    test "a :forms type inherits enterable? too, so any type can be asked" do
+      assert Checklist.enterable?(step_context([step("next", :available)], "next"), %{})
+    end
+  end
+
+  describe "AnyOrder" do
+    test "any unfinished step can be entered" do
+      steps = [step("done", :completed), step("next", :available), step("later", :pending)]
+
+      refute Types.AnyOrder.enterable?(step_context(steps, "done"), %{})
+      assert Types.AnyOrder.enterable?(step_context(steps, "next"), %{})
+      assert Types.AnyOrder.enterable?(step_context(steps, "later"), %{})
+      refute Types.AnyOrder.enterable?(%Context{subflow_progress: nil}, %{})
+    end
+
+    test "handle_complete moves to the next unfinished step after the current one, wrapping" do
+      steps = [step("one", :pending), step("two", :completed), step("three", :pending)]
+      assert Types.AnyOrder.handle_complete(step_context(steps, "two"), %{}).label == "three"
+
+      steps = [step("one", :pending), step("two", :completed), step("three", :completed)]
+      assert Types.AnyOrder.handle_complete(step_context(steps, "three"), %{}).label == "one"
+
+      steps = [step("one", :completed), step("two", :completed)]
+      assert is_nil(Types.AnyOrder.handle_complete(step_context(steps, "two"), %{}))
+
+      # No current step: the first unfinished
+      steps = [step("one", :completed), step("two", :pending)]
+      assert Types.AnyOrder.handle_complete(step_context(steps), %{}).label == "two"
+    end
+  end
+
   describe "FormFlow.Config.Flows.Type.property_values/1" do
     test "reads what an admin entered for the flow's type, under the type's own key" do
       flow = %FormFlow.Data.Templates.Flow{
         properties: %{
-          "form_flow_type" => "typed",
-          "form_flow_type_property_values" => %{"limit" => "3"}
+          "flow_type" => "typed",
+          "flow_type_property_values" => %{"limit" => "3"}
         }
       }
 

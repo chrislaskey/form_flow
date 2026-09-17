@@ -41,10 +41,10 @@ defmodule FormFlow.Web.Components.Overview do
 
   attr(:target, :any, required: true, doc: "the LiveComponent receiving the canvas's events")
 
-  attr(:form_flow_type_options, :list,
+  attr(:flow_type_options, :list,
     default: [],
     doc:
-      "form_flow_type choices as {label, value} tuples, so a form subflow's " <>
+      "flow_type choices as {label, value, kind} tuples, so a subflow's " <>
         "group header can name its stored type"
   )
 
@@ -63,7 +63,7 @@ defmodule FormFlow.Web.Components.Overview do
   def overview(assigns) do
     assigns =
       assign(assigns,
-        form_flow_type_options_json: options_json(assigns.form_flow_type_options),
+        flow_type_options_json: options_json(assigns.flow_type_options),
         form_type_options_json: options_json(assigns.form_type_options),
         perspective_options_json: options_json(assigns.perspective_options)
       )
@@ -78,7 +78,7 @@ defmodule FormFlow.Web.Components.Overview do
       phx-update="ignore"
       phx-target={@target}
       data-src={Assets.editor_path()}
-      data-form-flow-type-options={Phoenix.json_library().encode!(@form_flow_type_options_json)}
+      data-flow-type-options={Phoenix.json_library().encode!(@flow_type_options_json)}
       data-form-type-options={Phoenix.json_library().encode!(@form_type_options_json)}
       data-perspective-options={Phoenix.json_library().encode!(@perspective_options_json)}
       data-tree={ReactFlow.to_json(@tree)}
@@ -98,7 +98,7 @@ defmodule FormFlow.Web.Components.Overview do
 
             this.overview = editor.mountOverview(this.el, {
               tree: JSON.parse(this.el.dataset.tree),
-              formFlowTypeOptions: JSON.parse(this.el.dataset.formFlowTypeOptions),
+              flowTypeOptions: JSON.parse(this.el.dataset.flowTypeOptions),
               formTypeOptions: JSON.parse(this.el.dataset.formTypeOptions),
               perspectiveOptions: JSON.parse(this.el.dataset.perspectiveOptions),
               onOpenSubflow: (nodeId) =>
@@ -125,6 +125,10 @@ defmodule FormFlow.Web.Components.Overview do
     """
   end
 
-  defp options_json(options),
-    do: for({label, value} <- options, do: %{label: label, value: value})
+  defp options_json(options) do
+    Enum.map(options, fn
+      {label, value} -> %{label: label, value: value}
+      {label, value, kind} -> %{label: label, value: value, kind: kind}
+    end)
+  end
 end

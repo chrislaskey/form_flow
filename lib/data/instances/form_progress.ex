@@ -26,7 +26,7 @@ defmodule FormFlow.Data.Instances.FormProgress do
     * `:instance` - the position's live (not superseded)
       `FormFlow.Data.Instances.Form`, or `nil` until it is first started
     * `:flow` - the "forms" flow this form lives in, whose
-      `properties["form_flow_type"]` names its `FormFlow.Config.Flows.Type`
+      `properties["flow_type"]` names its `FormFlow.Config.Flows.Type`
   """
 
   defstruct [:path, :node, :label, :ancestors, :status, :instance, :flow]

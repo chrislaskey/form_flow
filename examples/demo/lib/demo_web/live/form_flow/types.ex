@@ -13,15 +13,16 @@ defmodule DemoWeb.FormFlowLive.Types do
   types beside the built-in ones rather than instead of them.
   """
 
-  # The checklist joins the built-in wizards. Every type, the wizards
-  # included, is for the demo's two kinds of user: a type's `perspectives`
-  # are the host's to set, and setting them on the library's structs is how
-  # the wizards learn the host's roles.
+  # The checklist joins the built-in wizards and orders. Every "forms" type,
+  # the wizards included, is for the demo's two kinds of user: a type's
+  # `perspectives` are the host's to set, and setting them on the library's
+  # structs is how the wizards learn the host's roles. A "subflows" type has
+  # none - perspective is a "forms" flow's alone.
   def flow_types do
-    Enum.map(
-      FormFlow.Config.Flows.Type.defaults() ++ [checklist()],
-      &%{&1 | perspectives: perspectives()}
-    )
+    Enum.map(FormFlow.Config.Flows.Type.defaults() ++ [checklist()], fn
+      %{kind: :forms} = type -> %{type | perspectives: perspectives()}
+      type -> type
+    end)
   end
 
   # The prefill and renewal types join the library's Default and Review.

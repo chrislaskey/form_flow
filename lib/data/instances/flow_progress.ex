@@ -23,6 +23,9 @@ defmodule FormFlow.Data.Instances.FlowProgress do
       `FormFlow.Data.Instances.FormProgress` structs carrying the label,
       live instance, and owning flow alongside the status. This is what the
       user-facing pages render.
+    * `subflows/2` - the journey's *subflow step* positions, as
+      `FormFlow.Data.Instances.SubflowProgress` structs - what a "subflows" flow's type
+      orders.
 
   Order, for `forms/2`, is the order a user works them: breadth-first from
   Start, descending into subflows the moment one is reached - the same scan
@@ -42,6 +45,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   """
 
   alias FormFlow.Data.Instances.FormProgress
+  alias FormFlow.Data.Instances.SubflowProgress
 
   @type status :: :pending | :available | :in_progress | :completed | :stranded
   @type path :: [binary()]
@@ -121,6 +125,34 @@ defmodule FormFlow.Data.Instances.FlowProgress do
 
     Enum.filter(forms, &(Enum.drop(&1.path, -1) == flow))
   end
+
+  @doc """
+  The journey's subflow steps in the order they are reached, each as a
+  `FormFlow.Data.Instances.SubflowProgress` - the step-level view beside
+  `forms/2`, walked the same way and carrying the same derived statuses.
+  What a "subflows" flow's `FormFlow.Config.Flows.Type` is asked about.
+  """
+  @spec subflows(tree :: map() | nil, form_instances :: [struct()]) :: [SubflowProgress.t()]
+  def subflows(tree, form_instances) do
+    ctx = %{statuses: derive(tree, form_instances)}
+
+    flow_subflows(tree, [], [], ctx)
+  end
+
+  @doc """
+  The steps sharing a step's "subflows" flow, in order - the siblings its
+  type orders. Compared by parent path, like `forms_in_flow/2`.
+  """
+  @spec subflows_in_flow([SubflowProgress.t()], path()) :: [SubflowProgress.t()]
+  def subflows_in_flow(steps, path) do
+    flow = Enum.drop(path, -1)
+
+    Enum.filter(steps, &(Enum.drop(&1.path, -1) == flow))
+  end
+
+  @doc "The step at a position, or nil when the tree no longer has it."
+  @spec find_subflow([SubflowProgress.t()], path()) :: SubflowProgress.t() | nil
+  def find_subflow(steps, path), do: Enum.find(steps, &(&1.path == path))
 
   @doc "The form at a position, or nil when the tree no longer has it."
   @spec find_form([FormProgress.t()], path()) :: FormProgress.t() | nil
@@ -241,6 +273,57 @@ defmodule FormFlow.Data.Instances.FlowProgress do
         end
 
       found ++ collect(rest ++ successors, seen, scope, ctx)
+    end
+  end
+
+  # The same scan as flow_forms/collect, keeping the subflow steps instead
+  # of the forms: a step is listed, then its interior is walked
+  defp flow_subflows(nil, _prefix, _ancestors, _ctx), do: []
+
+  defp flow_subflows(tree, prefix, ancestors, ctx) do
+    scope = %{
+      tree: tree,
+      prefix: prefix,
+      ancestors: ancestors,
+      outgoing: Enum.group_by(tree.relationships, & &1.source_id),
+      nodes_by_id: Map.new(tree.nodes, &{&1.id, &1})
+    }
+
+    starts = for node <- tree.nodes, kind(node) == :start, do: node.id
+
+    collect_subflows(starts, MapSet.new(), scope, ctx)
+  end
+
+  defp collect_subflows([], _seen, _scope, _ctx), do: []
+
+  defp collect_subflows([id | rest], seen, scope, ctx) do
+    if MapSet.member?(seen, id) do
+      collect_subflows(rest, seen, scope, ctx)
+    else
+      seen = MapSet.put(seen, id)
+      node = scope.nodes_by_id[id]
+      successors = for relationship <- Map.get(scope.outgoing, id, []), do: relationship.target_id
+      path = scope.prefix ++ [id]
+
+      found =
+        case kind(node) do
+          :subflow ->
+            step = %SubflowProgress{
+              path: path,
+              node: node,
+              label: node_label(node),
+              ancestors: scope.ancestors,
+              status: ctx.statuses[path],
+              flow: scope.tree.flow
+            }
+
+            [step | flow_subflows(scope.tree.subflows[id], path, scope.ancestors ++ [node], ctx)]
+
+          _other ->
+            []
+        end
+
+      found ++ collect_subflows(rest ++ successors, seen, scope, ctx)
     end
   end
 

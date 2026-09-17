@@ -783,8 +783,8 @@ defmodule Demo.FormFlowFlowsTest do
       {:ok, _} =
         Flows.update(Flows.get(s.subflow_id), %{
           properties: %{
-            "form_flow_type" => "wizard_any_order",
-            "form_flow_type_property_values" => %{"note" => "kept"}
+            "flow_type" => "wizard_any_order",
+            "flow_type_property_values" => %{"note" => "kept"}
           }
         })
 
@@ -793,8 +793,8 @@ defmodule Demo.FormFlowFlowsTest do
       [pasted] = Flows.get(cat.id).nodes
 
       copy = Flows.get(pasted.subflow_id)
-      assert copy.properties["form_flow_type"] == "wizard_any_order"
-      assert copy.properties["form_flow_type_property_values"] == %{"note" => "kept"}
+      assert copy.properties["flow_type"] == "wizard_any_order"
+      assert copy.properties["flow_type_property_values"] == %{"note" => "kept"}
     end
 
     test "a paste is refused when its source is gone or another tenant's, and nothing is written" do
@@ -908,14 +908,14 @@ defmodule Demo.FormFlowFlowsTest do
         Flows.create(%{
           name: "Onboarding",
           label: "subflows",
-          properties: %{"form_flow_type" => "wizard_any_order"}
+          properties: %{"flow_type" => "wizard_any_order"}
         })
 
       {:ok, copy} = Flows.copy(root)
 
       assert copy.name == "Onboarding"
       assert copy.label == "subflows"
-      assert copy.properties["form_flow_type"] == "wizard_any_order"
+      assert copy.properties["flow_type"] == "wizard_any_order"
       assert copy.slug == "onboarding-2"
       assert copy.properties["slug"] == "onboarding-2"
 

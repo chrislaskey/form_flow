@@ -177,11 +177,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   @doc """
   Everything a page or a request addressing one position needs loaded, from
   a plain map of the same attrs `assigns/1` reads off a socket:
-  `:flow_instance`, `:path`, `:user_id`, `:tenant_id`, `:perspectives`, and
-  `:flow_types`.
+  `:flow_instance`, `:path`, `:user_id`, `:tenant_id`, `:perspectives`,
+  and `:flow_types`.
 
-  Returns `%{tree: …, forms: …, form_instance: …, version: …, context: …}` -
-  the resolved template tree, the whole journey's progress, the live
+  Returns `%{tree: …, forms: …, steps: …, form_instance: …, version: …, context: …}` -
+  the resolved template tree, the whole journey's progress (its forms and
+  its subflow steps), the live
   instance at the position (`nil` until it is started), the version it is
   pinned to, and the `FormFlow.Context` the two form pages and every
   callback are given.
@@ -194,7 +195,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   def resolve(assigns) do
     %{flow_instance: flow_instance, path: path} = assigns
     tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+    instances = Instances.Flows.form_instances(flow_instance)
+    forms = FlowProgress.forms(tree, instances)
+    steps = FlowProgress.subflows(tree, instances)
 
     # An instance already at the position is simply used - including a
     # stranded one, whose position the tree no longer has
@@ -205,23 +208,31 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     form = version && Templates.Forms.get(version.form_id)
 
     context = %Context{
-      context(assigns, tree, forms)
+      context(assigns, tree, forms, steps)
       | form: form,
         form_version: version,
         form_type_property_values: FormFlow.Config.Forms.Type.property_values(form),
         form_instance: form_instance
     }
 
-    %{tree: tree, forms: forms, form_instance: form_instance, version: version, context: context}
+    %{
+      tree: tree,
+      forms: forms,
+      steps: steps,
+      form_instance: form_instance,
+      version: version,
+      context: context
+    }
   end
 
   @doc """
   The `FormFlow.Context` of the form at `path` in a flow instance: the form,
-  its flow's forms in order, and the template lineage they sit in. A stranded
-  position is no longer one of the tree's forms, so the flow instance's own
-  flow answers for it.
+  its flow's forms in order, the journey's subflow steps (`steps`, from
+  `FlowProgress.subflows/2` - the doors on the way down), and the template
+  lineage they sit in. A stranded position is no longer one of the tree's
+  forms, so the flow instance's own flow answers for it.
   """
-  def context(%{flow_instance: flow_instance, path: path} = assigns, tree, forms) do
+  def context(%{flow_instance: flow_instance, path: path} = assigns, tree, forms, steps) do
     form = FlowProgress.find_form(forms, path)
 
     subflow = (form && form.flow) || (tree && tree.flow)
@@ -238,7 +249,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       flow_instance: flow_instance,
       form_progress: form,
       flow_progress: FlowProgress.forms_in_flow(forms, path),
-      flow_instance_progress: forms
+      flow_instance_progress: forms,
+      flow_instance_subflows: steps
     }
 
     %Context{context | flow_perspectives: flow_perspectives(context, assigns)}
@@ -263,15 +275,17 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The first form of the whole flow instance the viewer can work next, in
-  flow order: actionable, and visible to them. `nil` when nothing is - the
-  viewer's part is done, or blocked on someone else's.
+  flow order: actionable, visible to them, and behind no closed step
+  (`enterable_chain?/2`). `nil` when nothing is - the viewer's part is done,
+  or blocked on someone else's.
   """
   def next_visible_form(%Context{flow_instance_progress: forms} = context, assigns) do
     Enum.find(forms, fn form ->
       form_context = form_context(context, form)
 
       FlowProgress.actionable?(form) and
-        visible?(flow_type(form_context, assigns), form_context, assigns)
+        visible?(flow_type(form_context, assigns), form_context, assigns) and
+        enterable_chain?(form_context, assigns)
     end)
   end
 
@@ -289,17 +303,108 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   end
 
   @doc """
+  Whether every "subflows" flow above the form at `:form_progress` lets the
+  step on the way down be entered - each ancestor step asked of its own
+  flow's type (`enterable?/2`), root first. A form in the root flow
+  has no steps above it and is never behind a door. A step the journey's
+  progress does not know (a stranded position) is a closed one.
+  """
+  def enterable_chain?(%Context{form_progress: nil}, _assigns), do: false
+
+  def enterable_chain?(%Context{form_progress: form} = context, assigns) do
+    form.ancestors
+    |> Enum.with_index(1)
+    |> Enum.all?(fn {_node, depth} ->
+      case FlowProgress.find_subflow(
+             context.flow_instance_subflows || [],
+             Enum.take(form.path, depth)
+           ) do
+        nil -> false
+        step -> enterable?(step_context(context, step), assigns)
+      end
+    end)
+  end
+
+  @doc """
+  The context re-aimed at a subflow step, for a "subflows" flow's type:
+  `:subflow` is the flow the step is in, `:subflow_node` the step,
+  `:subflow_progress` its progress and `:complex_progress` its siblings in
+  order. The form fields are left as they were.
+  """
+  def step_context(%Context{flow_instance_subflows: steps} = context, step) do
+    %Context{
+      context
+      | subflow: step.flow,
+        subflow_node: step.node,
+        subflow_progress: step,
+        complex_progress: FlowProgress.subflows_in_flow(steps || [], step.path),
+        flow_type_property_values: FormFlow.Config.Flows.Type.property_values(step.flow)
+    }
+  end
+
+  @doc "Whether the \"subflows\" flow at a step context's `:subflow` lets the step be entered."
+  def enterable?(%Context{} = step_context, assigns) do
+    type = flow_type(step_context, assigns)
+    type.module.enterable?(step_context, assigns.callback_data)
+  end
+
+  @doc """
+  Where the user goes when the "forms" flow of the form at `:form_progress`
+  has nothing left for them: each "subflows" flow above it is asked in turn,
+  innermost first, for the next step (`handle_complete/2`), and the first
+  form the viewer can work inside that step is the answer. `nil` when no
+  level names a step with work for this viewer.
+  """
+  def next_after_step(%Context{form_progress: nil}, _assigns), do: nil
+
+  def next_after_step(%Context{form_progress: form} = context, assigns) do
+    form.ancestors
+    |> Enum.with_index(1)
+    |> Enum.reverse()
+    |> Enum.find_value(fn {_node, depth} ->
+      with %{} = step <-
+             FlowProgress.find_subflow(
+               context.flow_instance_subflows || [],
+               Enum.take(form.path, depth)
+             ),
+           level = step_context(context, step),
+           type = flow_type(level, assigns),
+           %{path: next} <- type.module.handle_complete(level, assigns.callback_data) do
+        first_workable_under(context, next, assigns)
+      else
+        _nothing -> nil
+      end
+    end)
+  end
+
+  # The first form under a step the viewer can work: actionable, theirs, and
+  # behind no closed door
+  defp first_workable_under(%Context{flow_instance_progress: forms} = context, prefix, assigns) do
+    Enum.find(forms, fn form ->
+      List.starts_with?(form.path, prefix) and
+        FlowProgress.actionable?(form) and
+        with(form_context = form_context(context, form),
+          do:
+            visible?(flow_type(form_context, assigns), form_context, assigns) and
+              enterable_chain?(form_context, assigns)
+        )
+    end)
+  end
+
+  @doc """
   The `FormFlow.Config.Flows.Type` governing the flow at the context's
-  `:subflow`: its stored `properties["form_flow_type"]` looked up among the
-  page's `flow_types` (`FormFlow.Web.Templates.Shared.flow_types_for/2`, so a
-  "subflows" flow has none). An unset or unrecognized value resolves to the
-  first type - the defaults list the in-order wizard first, so it stays the
-  baseline - and a context with no types to the library's default, so a form
-  always has a type to ask.
+  `:subflow`: its stored `properties["flow_type"]` looked up among the
+  page's `flow_types` of the flow's kind
+  (`FormFlow.Web.Templates.Shared.flow_types_for/2`) - a "forms" flow's or,
+  for a step context (`step_context/2`), a "subflows" flow's. An unset or
+  unrecognized value resolves to the first type of the kind - the defaults
+  list the in-order wizard and In order first, so they stay the baseline -
+  and a context with no types to the library's default, so a flow always has
+  a type to ask.
   """
   def flow_type(%Context{subflow: flow} = context, assigns) do
     types = FormFlow.Web.Templates.Shared.flow_types_for(context, assigns)
-    id = flow && flow.properties["form_flow_type"]
+    id = flow && flow.properties["flow_type"]
 
     Enum.find(types, &(&1.id == id)) || List.first(types) || @default_type
   end
@@ -493,7 +598,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     visible? = visible?(type, context, assigns)
 
     {visible?,
-     visible? and continue_allowed?(context, assigns) and editable?(type, context, assigns)}
+     visible? and continue_allowed?(context, assigns) and enterable_chain?(context, assigns) and
+       editable?(type, context, assigns)}
   end
 
   # Whether the flow's status lets this viewer continue - start, edit,
@@ -517,6 +623,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   defp clickable(type, context, assigns) do
     for sibling <- context.flow_progress,
         sibling.path != assigns.path,
+        enterable_chain?(form_context(context, sibling), assigns),
         editable?(type, form_context(context, sibling), assigns),
         into: MapSet.new(),
         do: sibling.path

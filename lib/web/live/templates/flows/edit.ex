@@ -184,7 +184,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       pending_name: flow && step_name(flow, node),
       pending_slug: flow && step_slug(flow, node),
       pending_perspectives: Perspective.ids(flow),
-      pending_type: flow && flow.properties["form_flow_type"],
+      pending_type: flow && flow.properties["flow_type"],
       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
       pending_status: flow && flow.status
     }
@@ -222,7 +222,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     %{
       data: data,
       current: data,
-      embedded_flow_type_options: type_select_options(flow_types(assigns, embedded)),
+      embedded_flow_type_options: Shared.canvas_type_options(assigns.flow_types),
       embedded_form_type_options: embedded_form_type_options(assigns),
       embedded_perspective_options:
         Shared.perspective_options(Shared.all_perspectives(flow_types(assigns, embedded)))
@@ -241,7 +241,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp form_data(nil, _node, _types), do: nil
 
   defp form_data(flow, node, types) do
-    type_id = Shared.effective_type(types, flow.properties["form_flow_type"])
+    type_id = Shared.effective_type(types, flow.properties["flow_type"])
     values = FormFlow.Config.Flows.Type.property_values(flow)
 
     form_data(
@@ -257,7 +257,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   defp form_data(name, slug, perspectives, type_id, properties, values) do
     Map.merge(
-      %{name: name, slug: slug, perspectives: perspectives, form_flow_type: type_id},
+      %{name: name, slug: slug, perspectives: perspectives, flow_type: type_id},
       Shared.field_data(properties, values)
     )
   end
@@ -282,7 +282,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     types = socket.assigns.flow_types
     shown_type = Shared.effective_type(types, pending_type)
 
-    if shown_type == socket.assigns.form_data[:form_flow_type] do
+    if shown_type == socket.assigns.form_data[:flow_type] do
       socket
     else
       %{
@@ -293,7 +293,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         pending_status: status
       } = socket.assigns
 
-      saved_type = Shared.effective_type(types, flow.properties["form_flow_type"])
+      saved_type = Shared.effective_type(types, flow.properties["flow_type"])
 
       values =
         if shown_type == saved_type,
@@ -336,7 +336,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # The raw param, not the applied changeset data: picking the prompt again
   # ("") must clear the pending type, and Ecto's cast treats "" as a missing
   # param rather than a change to nil - payload.data would keep the old value
-  defp pending_type(%{changeset: %{params: %{"form_flow_type" => value}}}, _current) do
+  defp pending_type(%{changeset: %{params: %{"flow_type" => value}}}, _current) do
     presence(value)
   end
 
@@ -451,7 +451,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       assigns.pending_name != step_name(assigns.flow, assigns.subflow_node) or
       assigns.pending_slug != step_slug(assigns.flow, assigns.subflow_node) or
       assigns.pending_perspectives != Perspective.ids(assigns.flow) or
-      assigns.pending_type != assigns.flow.properties["form_flow_type"] or
+      assigns.pending_type != assigns.flow.properties["flow_type"] or
       assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow) or
       assigns.pending_status != assigns.flow.status
   end
@@ -556,7 +556,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           pending_name: step_name(flow, node),
           pending_slug: step_slug(flow, node),
           pending_perspectives: Perspective.ids(flow),
-          pending_type: flow.properties["form_flow_type"],
+          pending_type: flow.properties["flow_type"],
           pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
           pending_status: flow.status,
           form_data: form_data(flow, node, socket.assigns.flow_types),
@@ -590,18 +590,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     case {assigns.pending_type, assigns.pending_property_values} do
       {nil, _values} ->
         assigns.flow.properties
-        |> Map.delete("form_flow_type")
-        |> Map.delete("form_flow_type_property_values")
+        |> Map.delete("flow_type")
+        |> Map.delete("flow_type_property_values")
 
       {type, values} when values == %{} ->
         assigns.flow.properties
-        |> Map.put("form_flow_type", type)
-        |> Map.delete("form_flow_type_property_values")
+        |> Map.put("flow_type", type)
+        |> Map.delete("flow_type_property_values")
 
       {type, values} ->
         assigns.flow.properties
-        |> Map.put("form_flow_type", type)
-        |> Map.put("form_flow_type_property_values", values)
+        |> Map.put("flow_type", type)
+        |> Map.put("flow_type_property_values", values)
     end
   end
 
@@ -712,7 +712,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         data={@data}
         target={@myself}
         flow_label={@flow.label}
-        form_flow_type_options={@embedded_flow_type_options}
+        flow_type_options={@embedded_flow_type_options}
         form_type_options={@embedded_form_type_options}
         perspective_options={@embedded_perspective_options}
       />
@@ -722,9 +722,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             writes both - on_change reports values back through send_update,
             so there is no submit of its own (hide_submit). `data` carries the
             *saved* values; pending ones live in this component's assigns.
-            The type dropdown exists only when the page's flow_types apply
-            to this flow - how the forms are presented belongs to the flow
-            of forms itself, so that is "forms" flows only.
+            The type dropdown offers the page's flow_types of this flow's
+            kind - how its forms are presented for a "forms" flow, the order
+            its subflows are worked in for a "subflows" flow.
 
             Under the show page's heading and inside its border, so the
             two pages read as one sheet. Three columns, in two groups: who
@@ -798,8 +798,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             :if={@flow_types != []}
             group={kind_group(assigns)}
             type="dropdown"
-            name="form_flow_type"
-            label="Form flow type"
+            name="flow_type"
+            label="Flow type"
             options={type_select_options(@flow_types)}
           />
           <%!-- Who this flow's forms are for (FormFlow.Config.Flows.Perspective):

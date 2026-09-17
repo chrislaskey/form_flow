@@ -1,5 +1,79 @@
 # Changelog
 
+## v0.30.0
+
+### Flow types for a "subflows" flow: In order and Any order
+
+A "subflows" flow has a type now, the way a "forms" flow has had one - and
+it is the same `FormFlow.Config.Flows.Type`. The struct carries a `kind`,
+`:forms` or `:subflows` (the flow's `label`, as an atom; the default is
+`:forms`), and `FormFlow.Config.Flows.Type.defaults/0` returns four: the two
+wizards for "forms" flows and, for "subflows" flows, **In order**
+(`in_order`, the fallback for a flow that never chose) and **Any order**
+(`any_order`). The router's `flow_types` attr takes both kinds in one list,
+as before, and every page offers a flow the types of its kind
+(`FormFlow.Config.Flows.Type.for_kind/2`,
+`FormFlow.Web.Templates.Shared.flow_types_for/2`) - so the identity form's
+**Flow type** dropdown, the show page's fact sheet, the flows index's **Flow
+type** column, and the canvas's dropdown on a complex subflow node all light
+up for a complex flow. A host extends the list the same way it always has:
+a struct with `kind: :subflows`, a module that `use`s the behaviour,
+`defaults() ++ [mine()]`.
+
+The behaviour has one more callback, `enterable?/2`: whether the subflow
+step at `:subflow_progress` may be entered now. `handle_complete/2` is
+shared: asked of a `:forms` type it names the next form; asked of a
+`:subflows` type it names the next step. The context carries the step
+(`:subflow_progress`, a `FormFlow.Data.Instances.SubflowProgress`), its
+siblings (`:complex_progress`), and every step of the journey
+(`:flow_instance_subflows`, from
+`FormFlow.Data.Instances.FlowProgress.subflows/2`); a step context's
+`:subflow` is the "subflows" flow the step is in and
+`:flow_type_property_values` that flow's. `FormFlow.Config.Flows.Type.Default`
+answers both kinds in order, so a type overriding nothing is In order for
+its steps and the in-order wizard for its forms. The built-in modules are
+`FormFlow.Web.Components.Flows.Types.InOrder` and `Types.AnyOrder`, beside
+the wizards. A `:subflows` type has no perspectives - perspective is a
+"forms" flow's alone - and the identity form shows no Perspectives field
+for a complex flow.
+
+**Breaking.** The order between subflows is enforced for editing now, at
+every level. Before, only *navigation* was in order: a form inside a
+subflow whose predecessors were not done was still editable, because a
+subflow's interior statuses never looked at the step's own - so a reviewer
+could start reviewing before the applicant had finished. Every existing
+complex flow is In order from this release, and a form behind a step not
+yet open reads "This form isn't available yet - it comes later in the
+flow." on the form pages and has no Start on the journey's page; the
+viewer's standing there says Waiting rather than Your turn. A host that
+wants subflows worked side by side picks Any order on the complex flow.
+The rule composes: a form is editable when its own "forms" type allows it
+*and* every "subflows" flow above it lets the step on the way down be
+entered (`FormFlow.Web.Instances.Forms.Shared.enterable_chain?/2`); where a
+user lands after a form is the "forms" type's answer first, then each
+"subflows" flow's `handle_complete/2` upward, innermost first
+(`Forms.Shared.next_after_step/2`), then the journey's next visible form.
+
+The health check checks a complex flow's type as it does a simple flow's -
+a type the host does not offer is a warning, its properties are checked -
+and lists the types its "subflows" flows use under `complex_flow_types` in
+its summary, beside `flow_types` for its "forms" flows. A bare complex flow
+runs one more check than before.
+
+### The stored key is `flow_type`
+
+**Breaking.** A flow's chosen type is stored under
+`properties["flow_type"]`, and its entered property values under
+`properties["flow_type_property_values"]` (were `form_flow_type` and
+`form_flow_type_property_values`) - one key for both kinds, named for what
+it holds. Everything that spoke the old name follows: the canvas node data
+key `flow_type`, the identity form field `flow_type`, the Editor and
+Overview components' `flow_type_options` attr (now `{label, value, kind}`
+tuples, the canvas filtering by the kind a node embeds), the health
+summary's `flow_types`, and the admin label **Flow type** (was **Form flow
+type**). No migration: stored flows are read under the new key alone, and
+the demo snapshot is updated in place.
+
 ## v0.29.0
 
 ### A viewer with no perspective sees only the flows for everyone

@@ -37,7 +37,7 @@ defmodule FormFlow.Web.Instances do
   `FormFlow.Web.Instances.Paths` (every URL these pages link to).
 
   Which forms a user may navigate to, and where submitting takes them, is
-  the `FormFlow.Config.Flows.Type` a flow's `form_flow_type` resolves to
+  the `FormFlow.Config.Flows.Type` a flow's `flow_type` resolves to
   (`FormFlow.Web.Instances.Forms.Shared.flow_type/2`) - the pages ask, they
   don't decide.
 

@@ -160,11 +160,13 @@ defmodule FormFlow.Web.Router do
   attr(:flow_types, :list,
     default: FormFlow.Config.Flows.Type.defaults(),
     doc:
-      "the `FormFlow.Config.Flows.Type` structs a \"forms\" flow may be given, " <>
-        "in display order - the admin pages offer them, the instance pages act " <>
-        "on them, so pass the same list to both. Defaults to the library's " <>
-        "wizards (`FormFlow.Config.Flows.Type.defaults/0`); a host's list " <>
-        "usually starts from those"
+      "the `FormFlow.Config.Flows.Type` structs a flow may be given, both " <>
+        "kinds in one list - a \"forms\" flow is offered the `:forms` ones, a " <>
+        "\"subflows\" flow the `:subflows` ones - in display order; the admin " <>
+        "pages offer them, the instance pages act on them, so pass the same " <>
+        "list to both. Defaults to the library's wizards and orders " <>
+        "(`FormFlow.Config.Flows.Type.defaults/0`); a host's list usually " <>
+        "starts from those"
   )
 
   attr(:form_types, :list,

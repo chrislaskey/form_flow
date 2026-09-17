@@ -14,7 +14,7 @@ config :demo, Demo.Repo,
 # you can enable the server option below.
 config :demo, DemoWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
-  secret_key_base: "+WcIEW4IwzG5tEheXLICb2YsjB9dT4O9V/yJHlilWPFEcV4XqsdMWrUWyNZF4vJX",
+  secret_key_base: "SGRdebOILc2vTw323Nmc4cqt89XhLwQ1UFFRhBL/2LoHCWqT7vf9nhyc222cQqnJ",
   server: false
 
 # Print only warnings and errors during test

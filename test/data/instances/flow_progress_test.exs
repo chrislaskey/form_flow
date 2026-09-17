@@ -160,6 +160,28 @@ defmodule FormFlow.Data.Instances.FlowProgressTest do
       assert statuses[[subflow.id, inner_form.id]] == :available
     end
 
+    test "subflows/2 lists the steps in flow order with their derived status" do
+      {outer, subflow, inner_form, _stop} = nested_flow()
+
+      assert [%FormFlow.Data.Instances.SubflowProgress{} = step] =
+               FlowProgress.subflows(outer, [])
+
+      assert step.path == [subflow.id]
+      assert step.node == subflow
+      assert step.ancestors == []
+      assert step.flow == outer.flow
+      assert step.status == :available
+
+      completed = [form_instance([subflow.id, inner_form.id], "completed")]
+      assert [%{status: :completed}] = FlowProgress.subflows(outer, completed)
+
+      assert FlowProgress.subflows_in_flow([step], step.path) == [step]
+      assert FlowProgress.subflows_in_flow([step], [subflow.id, "deeper"]) == []
+      assert FlowProgress.find_subflow([step], [subflow.id]) == step
+      assert is_nil(FlowProgress.find_subflow([step], ["gone"]))
+      assert FlowProgress.subflows(nil, []) == []
+    end
+
     test "interior activity marks the subflow in progress; interior End completes it" do
       {outer, subflow, inner_form, stop} = nested_flow()
 
@@ -319,7 +341,7 @@ defmodule FormFlow.Data.Instances.FlowProgressTest do
   end
 
   describe "forms_in_flow/2 and find_form/2" do
-    test "narrow a journey's forms to the one flow a form_flow_type governs" do
+    test "narrow a journey's forms to the one flow a flow_type governs" do
       {subtree_a, flow_a, name_a, _address_a} = named_flow()
       {subtree_b, flow_b, name_b, _address_b} = named_flow()
 

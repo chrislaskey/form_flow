@@ -81,7 +81,8 @@ is the gate.
   instance page and the form pages show the viewer the flows for their
   perspectives and refuse the others, and say "your part is done" when the
   viewer's forms are complete and the instance is not. A viewer with no
-  perspective sees every form.
+  perspective sees only the flows that name no perspective - the flows for
+  everyone.
 
 Two more decide who may see a page at all and what the host's callbacks
 receive:
@@ -101,6 +102,50 @@ catalog form's, shared by every flow reusing it, and `nil` for a form a
 step owns.
 
 `tenant_id`, when the host has tenants, is applied on top of everything.
+
+## Flow types, for both kinds of flow
+
+A flow has a type, chosen by the administrator on its identity form and on
+its step on the canvas, and the type is where a host teaches FormFlow how
+its flows are worked. One struct, `FormFlow.Config.Flows.Type`, serves both
+kinds of flow; its `kind` says which. A host passes one list as the
+router's `flow_types`, both kinds together, and every page offers a flow the
+types of its kind.
+
+* **`:forms`** types are for a "forms" flow: how its forms are presented.
+  The library ships the in-order wizard and the any-order wizard. A type
+  answers `visible?/2` (whose forms these are - the perspectives test by
+  default), `editable?/2` (the order rule), `handle_complete/2` (where the
+  user goes next), and `progress_component/1`.
+* **`:subflows`** types are for a "subflows" flow: the order its subflows
+  are worked in. The library ships **In order** - a subflow opens when the
+  ones before it are done - and **Any order** - any unfinished subflow can
+  be worked. A type answers `enterable?/2` (may this step be entered now)
+  and `handle_complete/2` (which step comes next).
+
+The two compose down the tree. To edit a form, every "subflows" flow above
+it must say the step on the way down may be entered, and then the form's
+own "forms" type must say the form may be edited. A Dog License that is In
+order holding a License Info subflow that is In order holding an Applicant
+wizard: the applicant's second form waits for the first (the wizard), the
+Licensing subflow waits for Applicant (License Info), and the Reviewer
+subflow waits for everything before it (Dog License). Switch Dog License to
+Any order and the reviewer may start on day one - while License Info still
+opens Licensing only after Applicant. Perspective is checked before any of
+this: a form that is not the viewer's is refused whatever the doors say.
+
+    def flow_types do
+      FormFlow.Config.Flows.Type.defaults() ++ [checklist(), side_by_side()]
+    end
+
+    defp side_by_side do
+      %FormFlow.Config.Flows.Type{
+        id: "side_by_side",
+        kind: :subflows,
+        module: MyApp.FormFlow.SideBySide,
+        name: "Side by side"
+      }
+    end
 
 ## Three pages
 

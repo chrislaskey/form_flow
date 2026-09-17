@@ -4,7 +4,7 @@ defmodule Demo.FormFlowInstancesTest do
   pages — against a real database and a real LiveView mount.
 
   Two things are proven here that the library's own tests can't reach. First,
-  that a stored `form_flow_type` changes what a user sees: which forms offer
+  that a stored `flow_type` changes what a user sees: which forms offer
   to start, which of them are navigable, and where the flow's progress is
   drawn — the demo's own type included, which is the only place the whole
   `FormFlow.Config` → `FormFlow.Config.Flows.Type` path runs end to end.
@@ -685,8 +685,16 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   describe "several flows in one instance" do
-    test "each subflow's own type answers for its own forms", %{conn: conn} do
-      {:ok, root} = Flows.create(%{name: "Onboarding", label: "subflows", status: "open"})
+    # Onboarding: Start → Documents (in-order wizard) → Details (any-order
+    # wizard). `properties` are the root's - its own type goes there.
+    defp onboarding(properties \\ %{}) do
+      {:ok, root} =
+        Flows.create(%{
+          name: "Onboarding",
+          label: "subflows",
+          status: "open",
+          properties: properties
+        })
 
       %{flow: documents, forms: [doc_first, doc_second]} =
         owned_flow_of_two(root, "Documents", "wizard_in_order")
@@ -701,7 +709,21 @@ defmodule Demo.FormFlowInstancesTest do
       edge(root, first_node, documents_node)
       edge(root, documents_node, details_node)
 
-      instance = start_flow(root)
+      %{
+        instance: start_flow(root),
+        documents: [[documents_node.id, doc_first.id], [documents_node.id, doc_second.id]],
+        details: [[details_node.id, detail_first.id], [details_node.id, detail_second.id]]
+      }
+    end
+
+    test "each subflow's own type answers for its own forms, behind the root's door",
+         %{conn: conn} do
+      %{
+        instance: instance,
+        documents: [doc_first, doc_second],
+        details: [detail_first, detail_second]
+      } =
+        onboarding()
 
       {:ok, view, html} = live(conn, flow_path(instance))
 
@@ -712,11 +734,58 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Second"
       refute html =~ "Documents / First"
 
-      # The in-order subflow gates its second form; the any-order one doesn't
-      assert offered?(view, instance, [documents_node.id, doc_first.id])
-      refute offered?(view, instance, [documents_node.id, doc_second.id])
-      assert offered?(view, instance, [details_node.id, detail_first.id])
-      assert offered?(view, instance, [details_node.id, detail_second.id])
+      # The in-order subflow gates its second form. The root is In order too
+      # (the default for a "subflows" flow), so the whole of Details waits
+      # for Documents - whatever the any-order wizard inside would allow
+      assert offered?(view, instance, doc_first)
+      refute offered?(view, instance, doc_second)
+      refute offered?(view, instance, detail_first)
+      refute offered?(view, instance, detail_second)
+
+      {:ok, _view, html} = live(conn, edit_path(instance, detail_first))
+      assert html =~ "isn&#39;t available yet"
+
+      complete(instance, doc_first)
+      complete(instance, doc_second)
+
+      # Documents done, the Details door opens, and the any-order wizard
+      # offers both of its forms
+      {:ok, view, _html} = live(conn, flow_path(instance))
+      assert offered?(view, instance, detail_first)
+      assert offered?(view, instance, detail_second)
+    end
+
+    test "an any-order root opens every subflow from the start", %{conn: conn} do
+      %{
+        instance: instance,
+        documents: [doc_first, doc_second],
+        details: [detail_first, detail_second]
+      } =
+        onboarding(%{"flow_type" => "any_order"})
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+
+      # Every door open; the in-order wizard inside Documents still gates
+      # its own second form
+      assert offered?(view, instance, doc_first)
+      refute offered?(view, instance, doc_second)
+      assert offered?(view, instance, detail_first)
+      assert offered?(view, instance, detail_second)
+    end
+
+    test "finishing a subflow's last form lands in the next subflow the root opens",
+         %{conn: conn} do
+      %{instance: instance, documents: [doc_first, doc_second], details: [detail_first, _]} =
+        onboarding()
+
+      complete(instance, doc_first)
+
+      {:ok, view, _html} = live(conn, edit_path(instance, doc_second))
+      submit(view, instance_at(instance, doc_second), %{"name" => "Ada"})
+
+      # Documents has nothing left; the root, In order, names Details next
+      assert {path, _flash} = assert_redirect(view)
+      assert path == edit_path(instance, detail_first)
     end
   end
 
@@ -1839,7 +1908,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   defp properties(nil), do: %{}
-  defp properties(type), do: %{"form_flow_type" => type}
+  defp properties(type), do: %{"flow_type" => type}
 
   defp start_flow(flow) do
     {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})

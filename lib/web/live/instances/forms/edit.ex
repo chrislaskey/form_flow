@@ -392,10 +392,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # `:form_instance` is the completed row. The template side is as at mount.
   defp fresh_context(%{flow_instance: flow_instance, context: context} = assigns, completed) do
     tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
-    forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
+    instances = Instances.Flows.form_instances(flow_instance)
+    forms = FlowProgress.forms(tree, instances)
+    steps = FlowProgress.subflows(tree, instances)
 
     %Context{
-      Shared.context(assigns, tree, forms)
+      Shared.context(assigns, tree, forms, steps)
       | form: context.form,
         form_version: context.form_version,
         form_type_property_values: context.form_type_property_values,
@@ -427,16 +429,23 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     end
   end
 
-  # The flow's type answers first, and the flow instance answers when that
-  # flow has nothing left, carrying the user on to whatever follows it - the
-  # nearest form that is theirs to work, skipping other perspectives' flows.
+  # The flow's type answers first. When that flow has nothing left, the
+  # "subflows" flows above it answer in turn, innermost first (their type's
+  # `handle_complete/2` names the next step, and the first form the viewer
+  # can work in it is the destination). When none does, the flow instance
+  # answers: the nearest form that is theirs to work, skipping other
+  # perspectives' flows and closed steps.
   defp next_path(context, assigns) do
     case assigns.type.module.handle_complete(context, assigns.callback_data) do
       %FormProgress{path: next} ->
         next
 
       nil ->
-        with(%FormProgress{path: next} <- Shared.next_visible_form(context, assigns), do: next)
+        with(
+          %FormProgress{path: next} <-
+            Shared.next_after_step(context, assigns) || Shared.next_visible_form(context, assigns),
+          do: next
+        )
     end
   end
 

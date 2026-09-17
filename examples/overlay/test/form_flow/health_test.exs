@@ -80,9 +80,9 @@ defmodule Demo.FormFlowHealthTest do
     # An identity save from a page loaded before the ignore: its map has no
     # bookkeeping, and must not take the stored bookkeeping with it
     {:ok, saved} =
-      Flows.update(stale, %{properties: Map.put(stale.properties, "form_flow_type", "default")})
+      Flows.update(stale, %{properties: Map.put(stale.properties, "flow_type", "default")})
 
-    assert saved.properties["form_flow_type"] == "default"
+    assert saved.properties["flow_type"] == "default"
 
     assert [%{"code" => "unconnected"}] =
              saved.properties["_health_metadata"]["ignored_entries"]
@@ -128,12 +128,12 @@ defmodule Demo.FormFlowHealthTest do
     flow = starter_flow()
 
     {:ok, flow} =
-      Flows.update(flow, %{properties: Map.put(flow.properties, "form_flow_type", "default")})
+      Flows.update(flow, %{properties: Map.put(flow.properties, "flow_type", "default")})
 
     Health.refresh(flow.id)
 
     properties = Flows.get(flow.id).properties
-    assert properties["form_flow_type"] == "default"
+    assert properties["flow_type"] == "default"
     assert properties["slug"] == flow.slug
     assert Map.has_key?(properties, "_health_metadata")
   end

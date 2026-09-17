@@ -90,7 +90,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       Nothing sets it the other way - the editor never writes labels back, so
       `to_flow_attrs/1` just carries whatever it finds there like any other
       property, and the changeset re-derives the authoritative value on save.
-    * `form_flow_type` - the *embedded flow's* `properties["form_flow_type"]`,
+    * `flow_type` - the *embedded flow's* `properties["flow_type"]`,
       on subflow nodes (requires the node's `:subflow` preloaded, which
       `FormFlow.Data.Templates.Flows.get/1` does). This one does flow back:
       the canvas dropdown edits it, and `FormFlow.Data.Templates.Flows`
@@ -223,7 +223,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
     node.properties
     |> Map.put("id", node.id)
     |> put_labels(node.labels)
-    |> put_form_flow_type(node)
+    |> put_flow_type(node)
     |> put_form_type(node)
     |> put_perspectives(node)
   end
@@ -240,14 +240,14 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   # the load-side mirror of the save-side pop in
   # FormFlow.Data.Templates.Flows. An untyped, absent, or unloaded subflow
   # (%Ecto.Association.NotLoaded{} has no :properties) merges nothing.
-  defp put_form_flow_type(properties, node) do
+  defp put_flow_type(properties, node) do
     case node.subflow do
-      %{properties: %{"form_flow_type" => type}} ->
+      %{properties: %{"flow_type" => type}} ->
         Map.update(
           properties,
           "data",
-          %{"form_flow_type" => type},
-          &Map.put(&1, "form_flow_type", type)
+          %{"flow_type" => type},
+          &Map.put(&1, "flow_type", type)
         )
 
       _other ->
@@ -274,7 +274,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
   end
 
   # The collected form's type, projected into data for the canvas dropdown -
-  # the form-node twin of put_form_flow_type/2
+  # the form-node twin of put_flow_type/2
   defp put_form_type(properties, node) do
     case node.form do
       %{properties: %{"form_type" => type}} ->

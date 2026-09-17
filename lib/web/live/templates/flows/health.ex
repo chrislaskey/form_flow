@@ -52,6 +52,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Flows.Health.Entry
+  alias FormFlow.Config.Flows.Type
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared
@@ -457,14 +458,26 @@ defmodule FormFlow.Web.Templates.Flows.Health do
     end)
   end
 
-  defp flow_type_names(%Health{summary: %{form_flow_types: []}}, _flow_types), do: "-"
+  # The types its "forms" flows use, then those its "subflows" flows use, by
+  # name - each list resolved through the host's types of that kind, so a
+  # flow that never chose names the kind's fallback
+  defp flow_type_names(%Health{summary: summary}, flow_types) do
+    names =
+      type_names(List.wrap(summary.flow_types), Type.for_kind(flow_types, "forms")) ++
+        type_names(List.wrap(summary.complex_flow_types), Type.for_kind(flow_types, "subflows"))
 
-  defp flow_type_names(%Health{summary: %{form_flow_types: ids}}, flow_types) do
+    case names do
+      [] -> "-"
+      names -> Enum.join(names, ", ")
+    end
+  end
+
+  defp type_names(ids, types) do
     ids
-    |> Enum.map(&Shared.effective_type(flow_types, &1))
+    |> Enum.map(&Shared.effective_type(types, &1))
     |> Enum.uniq()
-    |> Enum.map_join(", ", fn id ->
-      case Shared.type(flow_types, id) do
+    |> Enum.map(fn id ->
+      case Shared.type(types, id) do
         nil -> id || "Default"
         type -> type.name
       end

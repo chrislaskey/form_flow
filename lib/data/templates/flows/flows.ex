@@ -47,9 +47,9 @@ defmodule FormFlow.Data.Templates.Flows do
   `FormFlow.Web.Helpers.ReactFlow.to_data/1` projects the entity's current
   type back into the node's `data` for display. Three write-throughs exist:
 
-    * `data.form_flow_type` on a subflow node - the embedded flow's
+    * `data.flow_type` on a subflow node - the embedded flow's
       presentation type, stored only in that flow's
-      `properties["form_flow_type"]` (see `FormFlow.Data.Templates.Flow`).
+      `properties["flow_type"]` (see `FormFlow.Data.Templates.Flow`).
       Popped from the node's properties at save; an absent key clears the
       child's property, so picking "default" un-pins rather than freezing a
       value. A type that changes takes the old type's property values with
@@ -259,7 +259,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # Each node's entity comes along so ReactFlow.to_data/1 can project the
-  # embedded flow's form_flow_type and name (or the form's name) into the
+  # embedded flow's flow_type and name (or the form's name) into the
   # node's data
   defp preload_contents(flow) do
     Repo.preload(flow, [:relationships, nodes: [:subflow, :form]])
@@ -1196,8 +1196,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp source_type(%Node{subflow_id: subflow_id}) when is_binary(subflow_id) do
     case Repo.get(Flow, subflow_id) do
-      %Flow{properties: %{"form_flow_type" => type}} when is_binary(type) ->
-        {"form_flow_type", type}
+      %Flow{properties: %{"flow_type" => type}} when is_binary(type) ->
+        {"flow_type", type}
 
       _untyped_or_gone ->
         nil
@@ -1266,14 +1266,14 @@ defmodule FormFlow.Data.Templates.Flows do
   # as well, for entity-less nodes and save-time child naming.
   defp pop_canvas_intents(nodes_attrs) do
     Enum.map_reduce(nodes_attrs, %{}, fn attrs, intents ->
-      {flow_type, properties} = pop_data_key(node_properties(attrs), "form_flow_type")
+      {flow_type, properties} = pop_data_key(node_properties(attrs), "flow_type")
       {form_type, properties} = pop_data_key(properties, "form_type")
       # Projected for display only (FormFlow.Web.Helpers.ReactFlow); the
       # subflow's identity form is where perspectives are set
       {_perspectives, properties} = pop_data_key(properties, "perspectives")
 
       intent = %{
-        form_flow_type: flow_type,
+        flow_type: flow_type,
         form_type: form_type,
         label: get_in(properties, ["data", "label"])
       }
@@ -1395,7 +1395,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp apply_canvas_intent(%{subflow_id: subflow_id}, intent)
        when not is_nil(subflow_id) do
     child = Repo.get(Flow, subflow_id)
-    properties = put_type(child.properties, "form_flow_type", intent.form_flow_type)
+    properties = put_type(child.properties, "flow_type", intent.flow_type)
     changes = rename_change(child, intent.label)
 
     changes =

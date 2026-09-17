@@ -45,13 +45,13 @@ defmodule FormFlow.Web.Components.Editor do
     doc: "the flow's declared flavor; picks the editor's add actions"
   )
 
-  attr(:form_flow_type_options, :list,
+  attr(:flow_type_options, :list,
     default: [],
     doc:
-      "form_flow_type choices as {label, value} tuples for the flows the " <>
-        "canvas's form subflow nodes embed (the page's `flow_types`, " <>
-        "as name and id); those nodes render them as a dropdown when editable " <>
-        "and as the value's label when not"
+      "flow_type choices as {label, value, kind} tuples for the flows the " <>
+        "canvas's subflow nodes embed (the page's `flow_types`, as name, id, " <>
+        "and kind); a node offers those of the kind it embeds, as a dropdown " <>
+        "when editable and as the value's label when not"
   )
 
   attr(:form_type_options, :list,
@@ -75,7 +75,7 @@ defmodule FormFlow.Web.Components.Editor do
   def editor(assigns) do
     assigns =
       assign(assigns,
-        form_flow_type_options_json: options_json(assigns.form_flow_type_options),
+        flow_type_options_json: options_json(assigns.flow_type_options),
         form_type_options_json: options_json(assigns.form_type_options),
         perspective_options_json: options_json(assigns.perspective_options)
       )
@@ -91,7 +91,7 @@ defmodule FormFlow.Web.Components.Editor do
       data-src={Assets.editor_path()}
       data-editable={to_string(@editable)}
       data-flow-label={@flow_label}
-      data-form-flow-type-options={Phoenix.json_library().encode!(@form_flow_type_options_json)}
+      data-flow-type-options={Phoenix.json_library().encode!(@flow_type_options_json)}
       data-form-type-options={Phoenix.json_library().encode!(@form_type_options_json)}
       data-perspective-options={Phoenix.json_library().encode!(@perspective_options_json)}
       data-flow={ReactFlow.to_json(@data)}
@@ -113,7 +113,7 @@ defmodule FormFlow.Web.Components.Editor do
               flow: JSON.parse(this.el.dataset.flow),
               editable: this.el.dataset.editable !== "false",
               flowLabel: this.el.dataset.flowLabel,
-              formFlowTypeOptions: JSON.parse(this.el.dataset.formFlowTypeOptions),
+              flowTypeOptions: JSON.parse(this.el.dataset.flowTypeOptions),
               formTypeOptions: JSON.parse(this.el.dataset.formTypeOptions),
               perspectiveOptions: JSON.parse(this.el.dataset.perspectiveOptions),
               onChange: (flow) => this.pushEventTo(this.el, "form_flow:flow_changed", flow),
@@ -143,6 +143,10 @@ defmodule FormFlow.Web.Components.Editor do
     """
   end
 
-  defp options_json(options),
-    do: for({label, value} <- options, do: %{label: label, value: value})
+  defp options_json(options) do
+    Enum.map(options, fn
+      {label, value} -> %{label: label, value: value}
+      {label, value, kind} -> %{label: label, value: value, kind: kind}
+    end)
+  end
 end

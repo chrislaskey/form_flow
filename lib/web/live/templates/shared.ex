@@ -37,14 +37,21 @@ defmodule FormFlow.Web.Templates.Shared do
   def effective_type(_types, id), do: id
 
   @doc """
-  The page's `flow_types` for the flow at the context's `:subflow`: flow
-  types apply to "forms" flows, so a "subflows" flow - or no flow - gets
-  none, and no dropdown.
+  The page's `flow_types` for the flow at the context's `:subflow`: the types
+  of its kind (`FormFlow.Config.Flows.Type.for_kind/2`) - a "forms" flow's
+  wizards, a "subflows" flow's orders. No flow gets none, and no dropdown.
   """
-  def flow_types_for(%FormFlow.Context{subflow: %{label: "forms"}}, assigns),
-    do: assigns.flow_types
+  def flow_types_for(%FormFlow.Context{subflow: %{label: label}}, assigns) when is_binary(label),
+    do: FormFlow.Config.Flows.Type.for_kind(assigns.flow_types, label)
 
   def flow_types_for(_context, _assigns), do: []
+
+  @doc """
+  The page's `flow_types` as the canvas's dropdown options - `{label, value,
+  kind}` tuples, both kinds in one list: a subflow node picks the options of
+  the kind of flow it embeds (`FormFlow.Web.Components.Editor`).
+  """
+  def canvas_type_options(types), do: Enum.map(types, &{&1.name, &1.id, &1.kind})
 
   @doc "The properties the type with `id` declares - none for no type."
   def properties(types, id) do

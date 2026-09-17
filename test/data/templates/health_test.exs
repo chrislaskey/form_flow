@@ -116,14 +116,14 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     start = start_node()
     stop = end_node()
 
-    # A "subflows" flow has no type to check, so the count is structure alone:
-    # Start and End looked for, the walk from one to the other, the steps on
-    # it, each of the two nodes for being connected, Start for leading on
+    # Structure - Start and End looked for, the walk from one to the other,
+    # the steps on it, each of the two nodes for being connected, Start for
+    # leading on - and the flow's type, unset here and passing
     health = Health.check(tree([start, stop], [edge(start, stop)], label: "subflows"))
 
     assert codes(health) == [:no_steps]
-    assert health.checks_run == 7
-    assert Health.passing(health) == 6
+    assert health.checks_run == 8
+    assert Health.passing(health) == 7
   end
 
   test "nil in, nil out" do
@@ -379,8 +379,61 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert Health.ok?(Health.check(outer))
   end
 
+  test "a complex flow's type the host does not offer is a warning; a known one passes" do
+    start = start_node()
+    stop = end_node()
+    edges = [edge(start, stop)]
+
+    health =
+      Health.check(
+        tree([start, stop], edges, label: "subflows", properties: %{"flow_type" => "gone"})
+      )
+
+    assert [%{code: :unknown_type, message: message}] =
+             Enum.filter(health.entries, &(&1.code == :unknown_type))
+
+    assert message =~ "flow type “gone”"
+
+    # A "forms" type is not offered to a "subflows" flow, whatever the list
+    health =
+      Health.check(
+        tree([start, stop], edges,
+          label: "subflows",
+          properties: %{"flow_type" => "wizard_in_order"}
+        )
+      )
+
+    assert :unknown_type in codes(health)
+
+    health =
+      Health.check(
+        tree([start, stop], edges, label: "subflows", properties: %{"flow_type" => "any_order"})
+      )
+
+    refute :unknown_type in codes(health)
+    assert health.summary.complex_flow_types == ["any_order"]
+
+    # The host's own list is what "offered" means
+    mine = [
+      %FormFlow.Config.Flows.Type{
+        id: "mine",
+        kind: :subflows,
+        module: FormFlow.Web.Components.Flows.Types.InOrder,
+        name: "Mine"
+      }
+    ]
+
+    health =
+      Health.check(
+        tree([start, stop], edges, label: "subflows", properties: %{"flow_type" => "any_order"}),
+        flow_types: mine
+      )
+
+    assert :unknown_type in codes(health)
+  end
+
   test "a flow type the host does not offer, and its stale perspectives, are warnings" do
-    health = Health.check(chain([form_node("Name")], properties: %{"form_flow_type" => "gone"}))
+    health = Health.check(chain([form_node("Name")], properties: %{"flow_type" => "gone"}))
     assert codes(health) == [:unknown_type]
 
     types = [
@@ -421,14 +474,14 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              :property_missing
            ]
 
-    filled = %{"form_flow_type_property_values" => %{"deadline" => "2026-12-31"}}
+    filled = %{"flow_type_property_values" => %{"deadline" => "2026-12-31"}}
 
     assert Health.ok?(
              Health.check(chain([form_node("Name")], properties: filled), flow_types: types)
            )
   end
 
-  test "a subflows flow has no flow type to check" do
+  test "a subflows flow's type is checked like a forms flow's, at every level" do
     inner = chain([form_node("Name")], name: "Application")
     step = subflow_node("Application", inner.flow.id)
 
@@ -436,10 +489,16 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       chain([step],
         label: "subflows",
         subflows: %{step.id => inner},
-        properties: %{"form_flow_type" => "gone"}
+        properties: %{"flow_type" => "gone"}
       )
 
-    assert Health.ok?(Health.check(outer))
+    health = Health.check(outer)
+    assert [%{code: :unknown_type, flow_id: flow_id}] = health.entries
+    assert flow_id == outer.flow.id
+
+    # Chosen, it passes; the inner wizard is checked on its own
+    chosen = %{outer | flow: %{outer.flow | properties: %{"flow_type" => "any_order"}}}
+    assert Health.ok?(Health.check(chosen))
   end
 
   # --- subflows ----------------------------------------------------------------
@@ -588,8 +647,8 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       tree([start, stop, dead], [edge(start, stop), edge(start, dead)]),
       tree(nodes ++ [loose], edges),
       chain([dangling], label: "subflows"),
-      chain([], properties: %{"form_flow_type" => "gone"}),
-      chain([], properties: %{"form_flow_type" => "review_flow", "perspectives" => ["nobody"]})
+      chain([], properties: %{"flow_type" => "gone"}),
+      chain([], properties: %{"flow_type" => "review_flow", "perspectives" => ["nobody"]})
     ]
 
     emitted =
@@ -626,7 +685,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     inner =
       chain([form_node("About"), form_node("Owner", form: shared)],
         name: "Application",
-        properties: %{"perspectives" => ["applicant"], "form_flow_type" => "wizard_in_order"}
+        properties: %{"perspectives" => ["applicant"], "flow_type" => "wizard_in_order"}
       )
 
     review =
@@ -654,7 +713,8 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              subflows: 2,
              forms: 3,
              perspectives: ["applicant", "reviewer"],
-             form_flow_types: ["wizard_in_order", nil]
+             flow_types: ["wizard_in_order", nil],
+             complex_flow_types: [nil]
            }
   end
 

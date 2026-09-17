@@ -419,9 +419,10 @@ defmodule FormFlow.Web.Templates.Flows.Index do
             {if flow.label == "subflows", do: "Complex", else: "Simple"}
           </span>
         </:column>
-        <%!-- How the forms are presented, and who they are for: a simple
-              flow's type and perspectives; a complex flow has neither --%>
-        <:column :let={flow} :if={@flow_types != []} label="Form flow type" optional>
+        <%!-- How the flow is worked, and who it is for: a simple flow's
+              wizard and perspectives, a complex flow's order; perspectives
+              are a simple flow's alone --%>
+        <:column :let={flow} :if={@flow_types != []} label="Flow type" optional>
           <span class="text-xs text-zinc-500">{type_name(flow, @flow_types) || "-"}</span>
         </:column>
         <:column :let={flow} :if={@flow_types != []} label="Perspectives" optional>
@@ -524,13 +525,13 @@ defmodule FormFlow.Web.Templates.Flows.Index do
     """
   end
 
-  # A simple flow's type, by name - the stored id resolved through the
-  # host's types, the id itself when they no longer declare it; a complex
-  # flow presents nothing, so nil
-  defp type_name(%{label: "subflows"}, _types), do: nil
-
+  # A flow's type, by name - the stored id resolved through the host's types
+  # of its kind, the id itself when they no longer declare it; nil when the
+  # host offers none for the kind
   defp type_name(flow, types) do
-    with id when is_binary(id) <- Shared.effective_type(types, flow.properties["form_flow_type"]) do
+    types = FormFlow.Config.Flows.Type.for_kind(types, flow.label)
+
+    with id when is_binary(id) <- Shared.effective_type(types, flow.properties["flow_type"]) do
       case Shared.type(types, id) do
         %{name: name} -> name
         nil -> id
@@ -543,7 +544,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
   defp perspective_names(%{label: "subflows"}, _types), do: []
 
   defp perspective_names(flow, types) do
-    type = Shared.effective_type(types, flow.properties["form_flow_type"])
+    type = Shared.effective_type(types, flow.properties["flow_type"])
     declared = Shared.perspectives(types, type)
 
     flow
