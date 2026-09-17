@@ -27,6 +27,10 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       nil when the flow no longer has the position
     * `:forms` - every form of the "forms" flow this one belongs to, in order
     * `:form_instance` - the live `FormFlow.Data.Instances.Form`, or nil
+    * `:events` - its event trail, oldest first
+      (`FormFlow.Data.Instances.Forms.list_events/2`); `[]` until it has an
+      instance. The header's status badge and last event line read it, and
+      the History page lists it
     * `:type` - the `FormFlow.Config.Flows.Type` governing this form's flow,
       which Edit asks again after a submit to find where to go next
     * `:form_type` - the `FormFlow.Config.Forms.Type` governing the form
@@ -104,6 +108,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       form: context.form_progress,
       forms: context.flow_progress,
       form_instance: form_instance,
+      events: (form_instance && Instances.Forms.list_events(form_instance)) || [],
       type: type,
       form_type: form_type,
       initial_data:

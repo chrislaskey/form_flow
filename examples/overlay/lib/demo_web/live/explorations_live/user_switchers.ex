@@ -95,8 +95,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     %{
       id: :gradient_ring,
       title: "5 · Gradient ring",
-      note:
-        "Borrows the header's gradient line as a hairline ring, so it reads as brand, not chrome."
+      note: "Borrows the header's gradient line as a hairline ring, so it reads as brand, not UI."
     },
     %{
       id: :avatar_stack,

@@ -11,14 +11,23 @@ defmodule FormFlow.Web.Instances do
       starting new ones
     * `FormFlow.Web.Instances.Flows.Show` - one instance's forms with
       derived progress
-    * `FormFlow.Web.Instances.Forms.Show` - one form of an instance, rendered
-      with `DynamicForm`, read-only or fillable
+    * `FormFlow.Web.Instances.Forms.Show` - the answers at one position,
+      read-only
+    * `FormFlow.Web.Instances.Forms.Edit` - the same position, editable -
+      the page that starts a form
+    * `FormFlow.Web.Instances.Forms.History` - what has happened to the
+      form there, newest first
 
-  plus `FormFlow.Web.Instances.Components.Header` (the breadcrumb and title
-  every one of them puts above its content, the same shape as the templates
-  side's), `FormFlow.Web.Instances.Components.Flows.Progress` (a flow's forms
-  and their state, drawn) and `FormFlow.Web.Instances.Paths` (every URL these
-  pages link to).
+  The three form pages are the three views of one form, and the header
+  offers them as tabs - Edit, View, History
+  (`FormFlow.Web.Instances.Components.Forms.Tabs`) - beside the form's
+  status and its last event (`FormFlow.Web.Instances.Components.Forms.Status`).
+
+  Plus `FormFlow.Web.Instances.Components.Header` (the breadcrumb and title
+  every page puts above its content, the same shape as the templates
+  side's; a form page's pins), `FormFlow.Web.Instances.Components.Flows.Progress`
+  (the card saying where the user is in the flow's forms) and
+  `FormFlow.Web.Instances.Paths` (every URL these pages link to).
 
   Which forms a user may navigate to, and where submitting takes them, is
   the `FormFlow.Config.Flows.Type` a flow's `form_flow_type` resolves to

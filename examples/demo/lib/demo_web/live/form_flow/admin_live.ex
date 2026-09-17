@@ -11,7 +11,6 @@ defmodule DemoWeb.FormFlowLive.Admin do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PageComponents
   import DemoWeb.PersonaComponents
 
   @impl true

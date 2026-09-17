@@ -52,6 +52,7 @@ defmodule FormFlow.Web.Router do
   | `/:id`                     | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
   | `/:id/forms/*path`         | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
   | `/:id/forms/*path/edit`    | `FormFlow.Web.Instances.Forms.Edit` (the editable form - the page that opens the position) |
+  | `/:id/forms/*path/history` | `FormFlow.Web.Instances.Forms.History` (what has happened to the form there, newest first) |
 
   The user-facing side has no landing page and no `/flows` segment: it has
   one section, so the mount root is its index. `live "/users/*path", ...`
@@ -596,6 +597,28 @@ defmodule FormFlow.Web.Router do
               uri={@uri}
               params={@params}
             />
+          <% {:form_history, id, form_path} -> %>
+            <.live_component
+              module={Instances.Forms.History}
+              id="instance-forms-history"
+              flow_instance_id={id}
+              path={form_path}
+              base={@base}
+              user_id={@user_id}
+              tenant_id={@tenant_id}
+              perspectives={@perspectives}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              components={@components}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
+              download_path={@download_path}
+              uri={@uri}
+              params={@params}
+            />
           <% {:form_edit, id, form_path} -> %>
             <.live_component
               module={Instances.Forms.Edit}
@@ -636,12 +659,14 @@ defmodule FormFlow.Web.Router do
   end
 
   # Everything after `/forms/` is the position - a chain of node ids - with an
-  # optional `edit` suffix. Node ids are UUIDs, so "edit" can never be one of
-  # them.
+  # optional `edit` or `history` suffix. Node ids are UUIDs, so neither word
+  # can ever be one of them.
   defp form_route(id, rest) do
     case Enum.split(rest, -1) do
       {[], ["edit"]} -> nil
+      {[], ["history"]} -> nil
       {path, ["edit"]} -> {:form_edit, id, path}
+      {path, ["history"]} -> {:form_history, id, path}
       _no_suffix -> {:form, id, rest}
     end
   end

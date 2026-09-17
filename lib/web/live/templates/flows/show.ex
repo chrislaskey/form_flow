@@ -45,6 +45,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Components.FactSheet
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
@@ -312,6 +313,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         components={@components}
       >
         <:actions>
+          <%!-- The four views of the flow, this one chosen. Edit and View
+                stay at this level; Overview and History are the root's --%>
+          <Tabs.tabs
+            base={@base}
+            flow={@flow}
+            root_id={@root_id}
+            node_id={@node_id}
+            active={:show}
+            class="mr-2"
+          />
           <%!-- The root's health, cached, from any depth --%>
           <Health.health base={@base} flow={@root || @flow} components={@components} />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
@@ -328,11 +339,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Status: {Shared.status_label(@flow.status)}
           </Core.button>
-          <%!-- The whole flow at once, every level, read-only - the root's,
-                from any depth. Show and Edit stay one level at a time. --%>
-          <Core.button components={@components} navigate={overview_path(assigns)} class="btn btn-ghost">
-            Flow Overview
-          </Core.button>
           <%!-- A root flow is copied whole from here; an owned subflow is
                 copied by pasting its step on a canvas --%>
           <Core.button
@@ -344,31 +350,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Duplicate Flow
           </Core.button>
-          <%!-- The flow's log, the root's from any depth --%>
-          <Core.button
-            components={@components}
-            navigate={"#{@base}/flows/#{(@root || @flow).id}/history"}
-            class="btn btn-ghost"
-          >
-            History
-          </Core.button>
-          <%!-- Mirrors the Edit page's Show/Edit toggle, fixed to the
-                opposite position: this page is always the "off" (Show)
-                side, so unlike there, nothing here needs to intercept the
-                click. --%>
-          <.link
-            navigate={edit_path(assigns)}
-            role="switch"
-            aria-checked="false"
-            aria-label="Switch to Edit"
-            class="flex items-center gap-1.5 text-sm mx-2"
-          >
-            <span class="font-semibold text-zinc-900">Show</span>
-            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-zinc-300 transition-colors">
-              <span class="inline-block h-5 w-5 translate-x-0.5 rounded-full bg-white shadow transition-transform" />
-            </span>
-            <span class="text-zinc-500">Edit</span>
-          </.link>
           <Core.button
             components={@components}
             phx-click="delete"
@@ -540,10 +521,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
       true ->
         "#{assigns.base}/flows/#{assigns.root_id}/edit"
     end
-  end
-
-  defp overview_path(assigns) do
-    "#{assigns.base}/flows/#{assigns.root_id || assigns.flow.id}/overview"
   end
 
   defp edit_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}/edit"

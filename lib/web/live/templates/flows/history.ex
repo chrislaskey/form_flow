@@ -31,6 +31,7 @@ defmodule FormFlow.Web.Templates.Flows.History do
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
@@ -78,17 +79,8 @@ defmodule FormFlow.Web.Templates.Flows.History do
       >
         <:crumb>History</:crumb>
         <:actions>
+          <Tabs.tabs base={@base} flow={@flow} active={:history} class="mr-2" />
           <Health.health base={@base} flow={@flow} components={@components} />
-          <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
-            Show
-          </Core.button>
-          <Core.button
-            components={@components}
-            navigate={"#{@base}/flows/#{@flow.id}/edit"}
-            class="btn"
-          >
-            Edit
-          </Core.button>
         </:actions>
       </Header.header>
 

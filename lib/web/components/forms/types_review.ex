@@ -1,9 +1,11 @@
 defmodule FormFlow.Web.Components.Forms.Types.Review do
   @moduledoc """
   Form type `"review"`: a form for checking an earlier form's answers. Both
-  pages show that form read-only on the left - the same rendering the
-  user-facing Show page gives submitted answers - and this form on the
-  right: as designed and editable on the edit page, read-only on Show.
+  pages show that form read-only on the left, as a card on the dotted
+  canvas the form editor uses - read, not edited, and visibly someone else's
+  - with when it was submitted and by whom over it; and this form on the
+  right, in its own bordered column that stays put while the answers
+  scroll: as designed and editable on the edit page, read-only on Show.
 
   Which earlier form is the type's one property, `"source"`, a
   `:related_form` an admin picks on the form edit page from the forms before
@@ -332,31 +334,48 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
     assigns = assign(assigns, :source, assigns.review.source)
 
     ~H"""
-    <div class="flex flex-wrap gap-6">
-      <section class="min-w-0 flex-1">
-        <h3 class="mb-2 text-sm font-medium text-zinc-500">
-          Reviewing{if @source, do: ": #{FlowProgress.qualified_label(@source)}"}
-        </h3>
-        <Core.error :if={is_nil(@source)} components={@components}>
-          The form to review is missing - an administrator needs to choose it on this form's settings.
-        </Core.error>
-        <p :if={@source && is_nil(@source.instance)} class="text-sm text-zinc-500">
-          {FlowProgress.qualified_label(@source)} hasn't been started yet, so there is nothing to review.
-        </p>
-        <.notice :if={@source} id={"#{@id}-review-notice"} review={@review} components={@components} />
-        <%!-- Read-only the way the Show page does it: a disabled fieldset
-              around the form, its submit button hidden --%>
-        <fieldset :if={@review.source_parsed} disabled class="max-w-md">
-          <DynamicForm.form
-            id={"#{@id}-source-#{@source.instance.id}"}
-            instance={@review.source_parsed}
-            data={@source.instance.data}
-            hide_submit
-            components={@components || CoreComponents}
-          />
-        </fieldset>
+    <div class="grid gap-6 lg:grid-cols-5">
+      <%!-- The answers being reviewed, as a card on the dotted canvas the
+            form editor draws definitions on: read, not edited, and visibly
+            someone else's --%>
+      <section class="rounded-md border border-zinc-200 bg-white bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] p-6 [background-size:16px_16px] lg:col-span-3">
+        <div class="mx-auto max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold">
+              Reviewing{if @source, do: ": #{FlowProgress.qualified_label(@source)}"}
+            </h3>
+            <p :if={@source && @source.instance && @source.instance.completed_at} class="text-xs text-zinc-500">
+              Submitted {FormFlow.Web.Templates.Shared.relative(@source.instance.completed_at)}
+              <span :if={@source.instance.user_id}>
+                by <code>{@source.instance.user_id}</code>
+              </span>
+              · {Calendar.strftime(@source.instance.completed_at, "%Y-%m-%d %H:%M")} UTC
+            </p>
+          </div>
+          <Core.error :if={is_nil(@source)} components={@components}>
+            The form to review is missing - an administrator needs to choose it on this form's settings.
+          </Core.error>
+          <p :if={@source && is_nil(@source.instance)} class="text-sm text-zinc-500">
+            {FlowProgress.qualified_label(@source)} hasn't been started yet, so there is nothing to review.
+          </p>
+          <.notice :if={@source} id={"#{@id}-review-notice"} review={@review} components={@components} />
+          <%!-- Read-only the way the Show page does it: a disabled fieldset
+                around the form, its submit button hidden --%>
+          <fieldset :if={@review.source_parsed} disabled>
+            <DynamicForm.form
+              id={"#{@id}-source-#{@source.instance.id}"}
+              instance={@review.source_parsed}
+              data={@source.instance.data}
+              hide_submit
+              components={@components || CoreComponents}
+            />
+          </fieldset>
+        </div>
       </section>
-      <section class="min-w-0 flex-1">
+      <%!-- The review itself, in its own bordered column, which stays put
+            under the pinned header while the answers scroll --%>
+      <section class="self-start rounded-lg border border-zinc-300 p-6 lg:sticky lg:top-28 lg:col-span-2">
+        <h3 class="mb-3 text-sm font-semibold">Your review</h3>
         {render_slot(@inner_block)}
       </section>
     </div>

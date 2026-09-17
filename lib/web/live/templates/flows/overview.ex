@@ -25,6 +25,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Overview
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
@@ -106,17 +107,8 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
       >
         <:crumb>Overview</:crumb>
         <:actions>
+          <Tabs.tabs base={@base} flow={@flow} active={:overview} class="mr-2" />
           <Health.health base={@base} flow={@flow} components={@components} />
-          <Core.button components={@components} navigate={"#{@base}/flows/#{@flow.id}"} class="btn">
-            Show
-          </Core.button>
-          <Core.button
-            components={@components}
-            navigate={"#{@base}/flows/#{@flow.id}/edit"}
-            class="btn"
-          >
-            Edit
-          </Core.button>
         </:actions>
       </Header.header>
 

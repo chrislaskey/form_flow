@@ -1,0 +1,45 @@
+defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
+  @moduledoc """
+  `FormFlow.Web.Instances.Components.Forms.Tabs` function component renders
+  the three views of one form inside a flow instance as a segmented control
+  (`FormFlow.Web.Components.Tabs`) - **Edit**, **View**, **History** - each
+  a link to its own URL:
+
+    * Edit - `/:id/forms/*path/edit`, `FormFlow.Web.Instances.Forms.Edit`
+    * View - `/:id/forms/*path`, `FormFlow.Web.Instances.Forms.Show`
+    * History - `/:id/forms/*path/history`, `FormFlow.Web.Instances.Forms.History`
+
+  All three are always offered: a view with nothing to show says so on its
+  own page - Edit on a submitted form says it was submitted and points back
+  at the answers - so the row never changes shape as the form moves along.
+
+  Sits among the header's actions on the three pages, left of the last
+  event line and the buttons.
+  """
+
+  use Phoenix.Component
+
+  alias FormFlow.Web.Components.Tabs
+  alias FormFlow.Web.Instances.Paths
+
+  attr(:base, :string, required: true)
+  attr(:flow_instance_id, :string, required: true)
+  attr(:path, :list, required: true, doc: "the position, as the pages address it")
+  attr(:active, :atom, required: true, values: [:edit, :show, :history])
+  attr(:class, :any, default: nil)
+
+  def tabs(assigns) do
+    %{base: base, flow_instance_id: id, path: path} = assigns
+
+    assigns =
+      assign(assigns, :items, [
+        {:edit, "Edit", Paths.form_edit_path(base, id, path)},
+        {:show, "View", Paths.form_path(base, id, path)},
+        {:history, "History", Paths.form_history_path(base, id, path)}
+      ])
+
+    ~H"""
+    <Tabs.tabs items={@items} active={@active} class={@class} />
+    """
+  end
+end

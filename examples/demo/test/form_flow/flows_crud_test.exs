@@ -1206,25 +1206,25 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert saved_node.properties["position"] == %{"x" => 40, "y" => 40}
   end
 
-  test "show navigates directly to the show page when nothing changed since save",
+  test "View navigates directly to the show page when nothing changed since save",
        %{conn: conn} do
     id = create_flow(conn)
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
 
-    view |> element("button", "Show") |> render_click()
+    view |> element("button", "View") |> render_click()
 
     assert_redirect(view, "/admin/flows/#{id}")
   end
 
-  test "show with unsaved changes prompts to save before leaving", %{conn: conn} do
+  test "View with unsaved changes prompts to save before leaving", %{conn: conn} do
     id = create_flow(conn)
 
     {:ok, view, _html} = live(conn, "/admin/flows/#{id}/edit")
 
     edit_step(view)
 
-    view |> element("button", "Show") |> render_click()
+    view |> element("button", "View") |> render_click()
 
     # Still on the edit page — no redirect fired — with the prompt showing
     assert render(view) =~ "unsaved changes"

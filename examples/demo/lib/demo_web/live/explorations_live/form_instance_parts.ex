@@ -1,6 +1,6 @@
 defmodule DemoWeb.ExplorationsLive.FormInstanceParts do
   @moduledoc """
-  The pieces of the form instance page's chrome that more than one
+  The UI components of the form instance page that more than one
   exploration draws: the T2 header, the status badge and save state, the
   F1 card and F3 rectangle with their step lists, the two-tone ring, the
   Edit / View / History tabs, A2's toolbar, and the inert form under it all.

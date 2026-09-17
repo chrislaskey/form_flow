@@ -51,8 +51,8 @@ defmodule DemoWeb.ExplorationsLive do
       path: "/explorations/template-layout",
       title: "Template page layouts",
       note: """
-      The chrome around a flow's or form's canvas: the header above it and
-      the fact sheet below.
+      The UI components around a flow's or form's canvas: the header above
+      it and the fact sheet below.
       """
     },
     %{

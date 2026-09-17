@@ -177,7 +177,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstance do
       id: :bar_sticky,
       title: "A2 · A toolbar under the header sticks",
       note:
-        "The header scrolls away like content; a slim bar right under it - the form's name, the save state, Save draft, Submit - is what pins. Less chrome held on screen than A1."
+        "The header scrolls away like content; a slim bar right under it - the form's name, the save state, Save draft, Submit - is what pins. Less UI held on screen than A1."
     },
     %{
       id: :actions_float,

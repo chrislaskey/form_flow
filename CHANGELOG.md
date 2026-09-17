@@ -2,7 +2,7 @@
 
 ## v0.28.0
 
-### The instance pages wear the templates pages' chrome
+### The instance pages wear the templates pages' UI components
 
 The four user-facing pages - `FormFlow.Web.Instances.Flows.Index`,
 `Flows.Show`, `Forms.Show`, and `Forms.Edit` - now put the same header
@@ -35,6 +35,75 @@ where the templates pages keep theirs.
 
 Wording is unchanged throughout: every sentence a page said before, it
 says now.
+
+### A form's three views, and a header that stays put
+
+A form inside a flow instance has three pages now, and the header offers
+them as one segmented control, **Edit | View | History**, each a link to
+its own URL: `/:id/forms/*path/edit` is `FormFlow.Web.Instances.Forms.Edit`,
+`/:id/forms/*path` is `Forms.Show`, and `/:id/forms/*path/history` is new -
+`FormFlow.Web.Instances.Forms.History`, what has happened to the form
+there, newest first: started, submitted, reopened, moved to a new version,
+each with who and when (`FormFlow.Web.Instances.Components.Forms.Tabs`;
+`FormFlow.Web.Instances.Paths.form_history_path/3`).
+
+The header of all three **pins** while the form scrolls
+(`FormFlow.Web.Instances.Components.Header`'s `sticky`), and carries the
+form's **status** after its name - Draft, Submitted, or Reopened - and,
+among its actions, the form's **last event** - "Started 3 minutes ago ·
+dog_owner" (`FormFlow.Web.Instances.Components.Forms.Status`). Reopened is
+derived from the event trail, not stored: an in-progress form with a
+`reopened` event since its last submission reads Reopened rather than
+Draft. Edit's **Submit** moved up into the pinned header, as a button whose
+`form` attribute names the form DynamicForm draws, so the form's own
+button is hidden; a **Save draft** button sits beside it, disabled, as a
+placeholder until saving a draft exists. Show's Download PDF and Print keep
+their place at the header's right.
+
+Under the header, the flow's progress is a **card** rather than a row of
+badges (`FormFlow.Web.Instances.Components.Flows.Progress`): a ring with
+how far along as a percentage, a link back to the flow instance's page,
+the flow's name, "Step 2 of 5 · next Health Information", and **Show
+steps** unfolding every step in columns - the current one bold, done ones
+checked, jumpable ones links. The same id, links, and `aria-current` as
+before, so a host's own flow type draws it by calling `flow_progress/1`
+as it did.
+
+A review form's two panes are laid out as the answers **on a canvas** -
+the applicant's form as a card on the dotted background the form editor
+uses, with when it was submitted and by whom over it - and the review
+itself in a bordered column on the right that stays put under the pinned
+header while the answers scroll (`FormFlow.Web.Components.Forms.Types.Review`).
+
+**Breaking:** `FormFlow.Config.Forms.Type`'s `edit_component/1` receives
+`:hide_submit` among its assigns; the default honours it. A type that
+renders the form under another id, or not through DynamicForm, has to
+draw its own Submit - the header's would submit nothing. The one-line title
+of a form page is the form's own name; the trail above it still carries
+the subflow's ("Applicant / Owner Information").
+
+### The flow pages: Edit | View | Overview | History
+
+A flow template's four pages offer each other as one segmented control in
+the header - **Edit | View | Overview | History** - the same control the
+form pages inside a flow instance carry
+(`FormFlow.Web.Components.Tabs`, drawn for flows by
+`FormFlow.Web.Templates.Components.Flows.Tabs`). Edit and View stay at
+the level the page is on, inside a subflow included; Overview and History
+are the root's from any depth, as the health badge is. It replaces three
+things that sat apart: the Show / Edit switch, the **Flow Overview**
+button, and the **History** button. On the Overview and History pages the
+control stands where their Show and Edit buttons were.
+
+The editor's tabs leave through its own `"navigate"` event, as its
+breadcrumb and Overview button did, so unsaved changes still prompt
+before the page is left. The health page keeps its single Flow Overview
+button: it is a report, not a fourth view of the canvas.
+
+**Breaking:** the read-only flow page is called **View** in the header, as
+it is on the instance side; "Show" stays the module's and the route's name
+(`FormFlow.Web.Templates.Flows.Show`). A test that clicked the editor's
+"Show" switch clicks the "View" tab.
 
 ### Two components shared by both sides
 

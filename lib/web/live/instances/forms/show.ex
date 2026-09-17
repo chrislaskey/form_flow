@@ -10,9 +10,11 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   It is the counterpart of `FormFlow.Web.Instances.Forms.Edit`, which is where
   work happens: `/:id/forms/*path` is this page,
-  `/:id/forms/*path/edit` is that one. Both are addressed by position
-  and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`); the
-  difference is that this page never starts anything. With nothing filled in
+  `/:id/forms/*path/edit` is that one, and `/:id/forms/*path/history`
+  (`FormFlow.Web.Instances.Forms.History`) is what has happened to the form
+  - the three views the header offers as tabs. All three are addressed by
+  position and resolve it the same way (`FormFlow.Web.Instances.Forms.Shared`);
+  the difference is that this page never starts anything. With nothing filled in
   yet it says so and offers the link across to Edit, which does. Like Edit, it
   asks the host's `on_mount` whether it may render at all and draws only its
   message, or nothing while redirecting, when not.
@@ -62,6 +64,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Controllers.Downloads
   alias FormFlow.Web.Downloads.Token
+  alias FormFlow.Web.Instances.Components.Forms.Status
+  alias FormFlow.Web.Instances.Components.Forms.Tabs
   alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -196,7 +200,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} tabs={false} />
 
       <Core.alert components={@components}>
         <span>{@mount_error}</span>
@@ -213,7 +217,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} tabs={false} />
 
       <Core.alert components={@components}>
         <span>This form is not part of your work here.</span>
@@ -230,7 +234,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} />
 
       <Core.alert components={@components}>
         <span>{unstarted_message(assigns)}</span>
@@ -252,7 +256,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} />
 
       <Core.alert kind={:warning} components={@components}>
         <div>
@@ -270,30 +274,29 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def render(%{page_state: state} = assigns) when state in [:ready, :completed] do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label}>
-        <:actions>
-          <%!-- A LiveView holds a websocket, not a response, so taking the
-                answers away is a request of its own, authorized by a token
-                this page mints on the click. Minting then, rather than when
-                the page was drawn, is what lets a tab left open for days
-                still print: the token is always seconds old, whatever the
-                page is. --%>
-          <div
-            :if={@download_path}
-            id={"#{@id}-downloads"}
-            phx-hook=".Downloads"
-            phx-target={@myself}
-            class="flex flex-wrap items-center gap-2"
-          >
-            <Core.button components={@components} type="button" data-disposition="download" class="btn btn-ghost">
-              Download PDF
-            </Core.button>
-            <Core.button components={@components} type="button" data-disposition="print" class="btn btn-ghost">
-              Print
-            </Core.button>
-          </div>
-        </:actions>
-      </Header.header>
+      <.page_header {header_assigns(assigns)}>
+        <Status.last_event events={@events} class="mr-2" />
+        <%!-- A LiveView holds a websocket, not a response, so taking the
+              answers away is a request of its own, authorized by a token
+              this page mints on the click. Minting then, rather than when
+              the page was drawn, is what lets a tab left open for days
+              still print: the token is always seconds old, whatever the
+              page is. --%>
+        <div
+          :if={@download_path}
+          id={"#{@id}-downloads"}
+          phx-hook=".Downloads"
+          phx-target={@myself}
+          class="flex flex-wrap items-center gap-2"
+        >
+          <Core.button components={@components} type="button" data-disposition="download" class="btn btn-ghost">
+            Download PDF
+          </Core.button>
+          <Core.button components={@components} type="button" data-disposition="print" class="btn btn-ghost">
+            Print
+          </Core.button>
+        </div>
+      </.page_header>
 
       {@type.module.progress_component(%{
         id: "#{@id}-flow-progress",
@@ -380,6 +383,64 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       })}
     </div>
     """
+  end
+
+  # The header every clause but the first two draws: pinned, the form's
+  # status after its name, and the three views as tabs with View chosen. A
+  # refused or invisible form draws it without tabs - nothing of the form
+  # is shown, so nothing of it is offered. The answers clause adds the last
+  # event and the download buttons in the slot.
+  attr(:base, :string, required: true)
+  attr(:flow_instance, :map, required: true)
+  attr(:flow_name, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:title, :string, default: nil)
+  attr(:path, :list, required: true)
+  attr(:form_instance, :map, default: nil)
+  attr(:events, :list, default: [])
+  attr(:components, :atom, default: nil)
+  attr(:tabs, :boolean, default: true)
+  slot(:inner_block)
+
+  defp page_header(assigns) do
+    ~H"""
+    <Header.header
+      base={@base}
+      flow_instance={@flow_instance}
+      flow_name={@flow_name}
+      label={@label}
+      title={@title}
+      sticky
+    >
+      <:status>
+        <Status.badge form_instance={@form_instance} events={@events} components={@components} />
+      </:status>
+      <:actions :if={@tabs}>
+        <Tabs.tabs
+          base={@base}
+          flow_instance_id={@flow_instance.id}
+          path={@path}
+          active={:show}
+          class="mr-2"
+        />
+        {render_slot(@inner_block)}
+      </:actions>
+    </Header.header>
+    """
+  end
+
+  defp header_assigns(assigns) do
+    %{
+      base: assigns.base,
+      flow_instance: assigns.flow_instance,
+      flow_name: assigns.flow_name,
+      label: assigns.form_label,
+      title: assigns[:form] && assigns.form.label,
+      path: assigns.path,
+      form_instance: assigns[:form_instance],
+      events: assigns[:events] || [],
+      components: assigns.components
+    }
   end
 
   # Anything but an explicit print is a download: it never navigates the user

@@ -265,7 +265,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     assigns = assign(assigns, :prompt, @prompt)
 
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={@prompt} />
       <div class="mt-3 flex items-end justify-between gap-3">
         <label class="text-sm">
@@ -277,18 +277,18 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </label>
         <span class="btn btn-primary">Build</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def reference(%{variant: :not_configured} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
         Build with AI isn't set up for this application yet. It needs a model and an API key,
         which an administrator configures where FormFlow is mounted.
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
@@ -298,20 +298,20 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
 
   def panel(%{direction: :button_spinner} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3">
         <span class="btn btn-primary btn-disabled">
           <span class="loading loading-spinner loading-sm" /> Building…
         </span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :inline_status} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-3">
         <span class="btn btn-primary btn-disabled">
@@ -321,13 +321,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
           Writing the form. This usually takes half a minute.
         </span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :progress_bar} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <div class="mb-3 h-1 w-full overflow-hidden rounded-full bg-zinc-200">
         <span class="bwa-indeterminate block h-full w-1/3 rounded-full bg-primary" />
       </div>
@@ -335,25 +335,25 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
       <div class="mt-3">
         <span class="btn btn-primary btn-disabled">Building…</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :typing_dots} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-3 rounded-md border border-dashed border-zinc-300 px-4 py-6">
         <span class="loading loading-dots loading-md text-primary" />
         <span class="text-sm text-gray-600">Building your form</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :elapsed_timer} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex flex-wrap items-center gap-3">
         <span class="btn btn-primary btn-disabled">
@@ -362,13 +362,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         <span class="font-mono text-sm tabular-nums text-gray-500">0:14</span>
         <button type="button" class="link link-primary text-sm">Stop</button>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :status_steps} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <ol class="mt-3 space-y-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
         <li class="flex items-center gap-2 text-gray-500">
@@ -385,13 +385,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
           Checking the builder can show them
         </li>
       </ol>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :rotating_lines} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-3 rounded-md border border-zinc-200 px-4 py-5">
         <span class="loading loading-ring loading-md text-primary" />
@@ -407,13 +407,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
           </span>
         </span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :skeleton_form} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <p class="mb-3 flex items-center gap-2 text-sm text-gray-600">
         <span class="loading loading-spinner loading-xs text-primary" /> Building your form…
       </p>
@@ -423,13 +423,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
           <div class="h-9 w-full rounded bwa-shimmer" />
         </div>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :ghost_elements} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <p class="mb-3 flex items-center gap-2 text-sm text-gray-600">
         <span class="loading loading-spinner loading-xs text-primary" /> Building your form…
       </p>
@@ -451,13 +451,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
           <span class="loading loading-dots loading-xs" /> and more
         </div>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :prompt_sweep} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <div class="bwa-sweep rounded-md border border-primary/40 bg-white p-3 text-sm text-gray-700">
         {prompt()}
       </div>
@@ -465,19 +465,19 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         <span class="btn btn-primary btn-disabled">Building…</span>
         <span class="text-sm text-gray-500">Working from what you wrote</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :cursor_blink} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 rounded-md border border-zinc-200 bg-zinc-900 p-3 font-mono text-sm text-zinc-100">
         <span class="text-zinc-400">building</span>
         <span class="bwa-blink ml-0.5 inline-block h-4 w-2 translate-y-0.5 bg-zinc-100" />
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
@@ -485,7 +485,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     ~H"""
     <div class="bwa-border rounded-xl p-[2px]">
       <div class="rounded-[10px] bg-white p-4">
-        <.chrome_head />
+        <.box_head />
         <.prompt_box text={prompt()} dim />
         <div class="mt-3">
           <span class="btn btn-primary btn-disabled">Building…</span>
@@ -497,7 +497,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
 
   def panel(%{direction: :sparkle_pulse} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-4 rounded-md border border-zinc-200 px-4 py-5">
         <span class="relative flex size-8 items-center justify-center">
@@ -506,13 +506,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </span>
         <span class="text-sm text-gray-600">Building your form…</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :progress_ring} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-4 rounded-md border border-zinc-200 px-4 py-5">
         <span class="relative flex size-9 items-center justify-center">
@@ -521,13 +521,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </span>
         <span class="text-sm text-gray-600">Building your form…</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :equalizer_bars} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex items-center gap-4 rounded-md border border-zinc-200 px-4 py-5">
         <span class="flex h-6 items-end gap-1">
@@ -539,13 +539,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </span>
         <span class="text-sm text-gray-600">Building your form…</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :dotted_wave} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <.prompt_box text={prompt()} dim />
       <div class="mt-3 flex flex-col items-center gap-3 rounded-md border border-zinc-200 px-4 py-6">
         <span class="flex gap-1.5">
@@ -557,7 +557,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </span>
         <span class="text-sm text-gray-600">Building your form…</span>
       </div>
-    </.chrome>
+    </.box>
     """
   end
 
@@ -565,7 +565,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     ~H"""
     <div class="relative overflow-hidden rounded-lg border border-zinc-200 bg-white">
       <div class="p-4 blur-[2px]">
-        <.chrome_head />
+        <.box_head />
         <.prompt_box text={prompt()} />
         <div class="mt-3"><span class="btn btn-primary">Build</span></div>
       </div>
@@ -581,28 +581,28 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
 
   def panel(%{direction: :quiet_lock} = assigns) do
     ~H"""
-    <.chrome>
+    <.box>
       <div class="opacity-40">
         <.prompt_box text={prompt()} />
       </div>
       <p class="mt-3 text-sm text-gray-500">
         Building<span class="bwa-ellipsis" />
       </p>
-    </.chrome>
+    </.box>
     """
   end
 
   def panel(%{direction: :preview_takeover} = assigns) do
     ~H"""
     <div class="grid gap-6 md:grid-cols-2">
-      <.chrome>
+      <.box>
         <.prompt_box text={prompt()} dim />
         <div class="mt-3">
           <span class="btn btn-primary btn-disabled">
             <span class="loading loading-spinner loading-sm" /> Building…
           </span>
         </div>
-      </.chrome>
+      </.box>
 
       <div class="rounded-lg border border-zinc-200 bg-white p-4">
         <h4 class="mb-1 text-lg font-bold text-gray-900">Preview</h4>
@@ -632,10 +632,10 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         </span>
         <button type="button" class="link link-primary ml-auto text-sm">Stop</button>
       </div>
-      <.chrome>
+      <.box>
         <.prompt_box text={prompt()} />
         <div class="mt-3"><span class="btn btn-primary btn-disabled">Build</span></div>
-      </.chrome>
+      </.box>
     </div>
     """
   end
@@ -714,7 +714,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :pick} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3"><.steps /></.bordered_box>
       <.waiting_footer />
@@ -725,7 +725,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :numbered} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <ol class="space-y-2 text-sm">
@@ -753,7 +753,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :horizontal} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <div class="flex items-center px-1 py-1">
@@ -789,7 +789,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :current_only} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <div class="space-y-2">
@@ -814,7 +814,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :sub_line} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <ol class="space-y-2 text-sm">
@@ -843,7 +843,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :timings} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <ol class="space-y-2 text-sm">
@@ -867,7 +867,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :instead_of_prompt} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.bordered_box>
         <p class="mb-3 px-1 text-base font-medium text-gray-900">Building your form</p>
         <.steps class="px-1 pb-1" />
@@ -880,7 +880,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :beside_skeleton} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.bordered_box class="mt-3">
         <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <.steps />
@@ -900,7 +900,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :plain_border} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3" tone={:plain}><.steps /></.bordered_box>
       <.waiting_footer />
@@ -911,7 +911,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :quiet_steps} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} dim />
       <.bordered_box class="mt-3">
         <ol class="space-y-2 text-sm">
@@ -929,7 +929,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :done} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} />
       <.bordered_box class="mt-3" tone={:done}>
         <ol class="space-y-2 text-sm text-gray-500">
@@ -952,7 +952,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   def steps_panel(%{variant: :failed} = assigns) do
     ~H"""
     <.card>
-      <.chrome_head />
+      <.box_head />
       <.prompt_box text={prompt()} />
       <.bordered_box class="mt-3" tone={:failed}>
         <ol class="space-y-2 text-sm">
@@ -1072,16 +1072,16 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
 
   slot(:inner_block, required: true)
 
-  defp chrome(assigns) do
+  defp box(assigns) do
     ~H"""
     <div class="rounded-lg border border-zinc-200 bg-white p-4">
-      <.chrome_head />
+      <.box_head />
       {render_slot(@inner_block)}
     </div>
     """
   end
 
-  defp chrome_head(assigns) do
+  defp box_head(assigns) do
     ~H"""
     <h4 class="text-lg font-bold text-gray-900">Build with AI</h4>
     <p class="mb-3 text-sm text-gray-500">

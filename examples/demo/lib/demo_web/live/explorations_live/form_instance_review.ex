@@ -11,8 +11,8 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
   columns of equal weight. The first section varies which of the two the
   page is about, and where the other one goes (V1 to V5). The second takes
   V2 - the answers as a card on the form editor's dotted canvas, the review
-  form in its own column - and puts the chrome picked on the continued page
-  around it: X1b's flush toolbar, X3a's pinned header, X3b's segmented tabs.
+  form in its own column - and puts the UI components picked on the continued
+  page around it: X1b's flush toolbar, X3a's pinned header, X3b's segmented tabs.
 
   The header, badge, card, tabs, toolbar, and save state are
   `DemoWeb.ExplorationsLive.FormInstanceParts`, the same pieces the
@@ -181,7 +181,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
 
         <section id="variations" class="space-y-10 border-t border-gray-200 pt-10">
           <header class="space-y-2">
-            <h2 class="text-2xl font-semibold">V2, with the page's chrome</h2>
+            <h2 class="text-2xl font-semibold">V2, with the page's UI components</h2>
             <p class="text-base-content/70">
               V2 under the header, badge, tabs, and actions picked on the <.link
                 navigate="/explorations/form-instance-continued"
@@ -360,7 +360,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
     do:
       "rounded-md border border-zinc-200 bg-white p-6 bg-[radial-gradient(#d4d4d8_1px,transparent_1px)] [background-size:16px_16px]"
 
-  # -- V2 with the page's chrome --------------------------------------------------
+  # -- V2 with the page's UI components ------------------------------------------
 
   attr :variant, :atom, required: true
   attr :steps, :list, required: true

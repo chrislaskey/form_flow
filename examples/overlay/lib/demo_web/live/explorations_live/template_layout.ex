@@ -1,6 +1,6 @@
 defmodule DemoWeb.ExplorationsLive.TemplateLayout do
   @moduledoc """
-  Scratch page for the templates pages' chrome: the header a flow or form
+  Scratch page for the templates pages' UI components: the header a flow or form
   page puts above its canvas (title, breadcrumb, metadata, actions), and
   the fact sheet it puts below.
 
@@ -295,7 +295,7 @@ defmodule DemoWeb.ExplorationsLive.TemplateLayout do
           <Shared.back_link />
           <h1 class="text-2xl font-semibold">Template page layouts</h1>
           <p class="text-base-content/70">
-            The chrome around a flow's or form's canvas: the header above it and
+            The UI components around a flow's or form's canvas: the header above it and
             the fact sheet below. Today the header is title top-left with dotted
             metadata, breadcrumb bottom-left, every action to the right - and the
             metadata repeats in the fact sheet. Hardcoded: the Dog License flow,

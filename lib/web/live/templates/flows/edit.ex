@@ -34,8 +34,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       flow edited here
 
   Navigating within the canvas is guarded against losing unsaved changes
-  (`current` differs from the last-persisted `data`): the header's Show
-  button, a subflow's Open button, and the breadcrumbs all push a generic
+  (`current` differs from the last-persisted `data`): the header's View,
+  Overview, and History tabs, a subflow's Open button, and the breadcrumbs
+  all push a generic
   `"navigate"` event with their destination rather than a bare `<.link
   navigate>`, precisely so that event can check first - if the canvas is
   dirty, navigation pauses for a prompt to save first or keep editing instead
@@ -102,6 +103,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
@@ -667,41 +669,22 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         components={@components}
       >
         <:actions>
+          <%!-- The four views of the flow, this one chosen - through the
+                "navigate" event like every other way off this page, so
+                unsaved changes prompt first. Not links: a link would leave
+                before the prompt --%>
+          <Tabs.tabs
+            base={@base}
+            flow={@flow}
+            root_id={@root_id}
+            node_id={@node_id}
+            active={:edit}
+            target={@myself}
+            class="mr-2"
+          />
           <%!-- The root's health, cached, from any depth - through the
-                "navigate" event, as below --%>
+                "navigate" event, as above --%>
           <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
-          <%!-- The whole flow at once, read-only - through the "navigate"
-                event like every other way off this page, so unsaved
-                changes prompt first --%>
-          <Core.button
-            components={@components}
-            phx-click="navigate"
-            phx-value-to={overview_path(assigns)}
-            phx-target={@myself}
-            class="btn btn-ghost"
-          >
-            Flow Overview
-          </Core.button>
-          <%!-- A styled toggle, not a real checkbox: a checkbox flips its own
-                visual state on click regardless of the server, which would
-                desync from reality when unsaved changes turn this click into
-                a prompt instead of an immediate mode switch. --%>
-          <button
-            type="button"
-            phx-click="navigate"
-            phx-value-to={show_path(assigns)}
-            phx-target={@myself}
-            role="switch"
-            aria-checked="true"
-            aria-label="Switch to Show"
-            class="flex items-center gap-1.5 text-sm mx-2"
-          >
-            <span class="text-zinc-500">Show</span>
-            <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-cyan-600 transition-colors">
-              <span class="inline-block h-5 w-5 translate-x-5 rounded-full bg-white shadow transition-transform" />
-            </span>
-            <span class="font-semibold text-zinc-900">Edit</span>
-          </button>
           <Core.button
             :if={unsaved_changes?(assigns)}
             components={@components}
@@ -1009,16 +992,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     })
 
     payload
-  end
-
-  defp overview_path(assigns) do
-    "#{assigns.base}/flows/#{assigns.root_id || assigns.flow.id}/overview"
-  end
-
-  defp show_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}"
-
-  defp show_path(assigns) do
-    "#{assigns.base}/flows/#{assigns.root_id}/nodes/#{assigns.node_id}"
   end
 
   # This edit page's own URL, for Discard's full reload

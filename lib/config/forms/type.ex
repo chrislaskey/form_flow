@@ -116,11 +116,17 @@ defmodule FormFlow.Config.Forms.Type do
   @doc """
   The edit page's form, drawn. `assigns` are `DynamicForm.form/1`'s - `:id`,
   `:instance` (the parsed definition), `:data` (from `initial_data/2`),
-  `:on_success` - plus `:context`, `:callback_data`, and `:components` (the
-  page's own, for a type that draws its own UI through
+  `:on_success`, `:hide_submit` - plus `:context`, `:callback_data`, and
+  `:components` (the page's own, for a type that draws its own UI through
   `FormFlow.Web.ComponentResolver`). The default renders the form and nothing
   else; a type that draws more around it renders the form itself by calling
   the default with the same assigns.
+
+  `:hide_submit` is true: the page draws **Submit** in its header, as a
+  `<button type="submit" form="<id>-form">` naming the `<form>` DynamicForm
+  renders under `:id`, so the form's own button is hidden. A type that
+  renders the form under another id, or not through DynamicForm, has to
+  draw its own Submit - the header's would submit nothing.
   """
   @callback edit_component(map()) :: Phoenix.LiveView.Rendered.t()
 

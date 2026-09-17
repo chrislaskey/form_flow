@@ -36,4 +36,9 @@ defmodule FormFlow.Web.Instances.Paths do
   def form_edit_path(base, flow_instance_id, path) do
     "#{form_path(base, flow_instance_id, path)}/edit"
   end
+
+  @doc "What has happened to the form at a position, newest first."
+  def form_history_path(base, flow_instance_id, path) do
+    "#{form_path(base, flow_instance_id, path)}/history"
+  end
 end

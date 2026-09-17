@@ -17,8 +17,13 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   def initial_data(%Context{form_instance: %{data: data}}, _callback_data), do: data
   def initial_data(%Context{form_instance: nil}, _callback_data), do: %{}
 
+  # `hide_submit` is the edit page's: it draws Submit in its pinned header,
+  # as a button whose `form` attribute names this form, so the form's own
+  # button would be a second one
   @impl true
   def edit_component(assigns) do
+    assigns = Map.put_new(assigns, :hide_submit, false)
+
     ~H"""
     <div class="max-w-md">
       <DynamicForm.form
@@ -26,6 +31,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
         instance={@instance}
         data={@data}
         on_success={@on_success}
+        hide_submit={@hide_submit}
         components={@components || CoreComponents}
       />
     </div>

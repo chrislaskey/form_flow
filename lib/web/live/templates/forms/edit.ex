@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   `FormFlow.Web.Templates.Forms.Edit` LiveComponent edits one draft.
 
   Drafts only - published and archived definitions are immutable, and this
-  page refuses to render them editable. The versioning chrome around the
+  page refuses to render them editable. The versioning UI around the
   definition is the point: the optimistic-lock "changed under you" conflict,
   the stale-draft warning, and the picker between coexisting drafts.
 

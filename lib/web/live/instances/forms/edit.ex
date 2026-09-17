@@ -116,6 +116,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Web.Components.Forms.PrefillMenu
   alias FormFlow.Web.Components.Forms.PrefillPicker
   alias FormFlow.Web.Components.Forms.Prefills
+  alias FormFlow.Web.Instances.Components.Forms.Status
+  alias FormFlow.Web.Instances.Components.Forms.Tabs
   alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -428,7 +430,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :refused} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} tabs={false} />
 
       <Core.alert components={@components}>
         <span>{@mount_error}</span>
@@ -445,7 +447,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :not_visible} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} tabs={false} />
 
       <Core.alert components={@components}>
         <span>This form is not part of your work here.</span>
@@ -462,7 +464,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :not_started} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} />
 
       <Core.alert components={@components}>
         <span>{blocked_message(assigns)}</span>
@@ -477,7 +479,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :broken_definition} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} />
 
       <Core.alert kind={:warning} components={@components}>
         <div>
@@ -494,7 +496,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :completed} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)} />
 
       <Core.alert components={@components}>
         <span>This form has already been submitted.</span>
@@ -515,7 +517,29 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} label={@form_label} />
+      <.page_header {header_assigns(assigns)}>
+        <Status.last_event events={@events} class="mr-2" />
+        <%!-- A placeholder until saving a draft exists: answers are written
+              on submit and at no other time
+              (`archive/plans/instances-refresh.md` §7) --%>
+        <span title="Saving a draft isn't available yet. Your answers are stored when you submit.">
+          <Core.button components={@components} type="button" class="btn btn-ghost" disabled>
+            Save draft
+          </Core.button>
+        </span>
+        <%!-- Submit lives up here, pinned with the header, as a button whose
+              `form` attribute names the form DynamicForm draws below - the
+              same id Capture reads - so the form's own button is hidden
+              (`hide_submit`) and there is one Submit on the page --%>
+        <Core.button
+          components={@components}
+          type="submit"
+          form={"#{form_component_id(assigns)}-form"}
+          variant="primary"
+        >
+          Submit
+        </Core.button>
+      </.page_header>
 
       {@type.module.progress_component(%{
         id: "#{@id}-flow-progress",
@@ -569,6 +593,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         instance: @parsed,
         data: @initial_data,
         on_success: &submitted(&1, @id),
+        hide_submit: true,
         context: @context,
         callback_data: @callback_data,
         components: @components
@@ -586,6 +611,64 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       />
     </div>
     """
+  end
+
+  # The header every clause but the first two draws: pinned, the form's
+  # status after its name, and the three views as tabs with Edit chosen. A
+  # refused or invisible form draws the header without tabs - nothing of
+  # the form is shown, so nothing of it is offered. The ready clause adds
+  # the last event and the buttons in the slot.
+  attr(:base, :string, required: true)
+  attr(:flow_instance, :map, required: true)
+  attr(:flow_name, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:title, :string, default: nil)
+  attr(:path, :list, required: true)
+  attr(:form_instance, :map, default: nil)
+  attr(:events, :list, default: [])
+  attr(:components, :atom, default: nil)
+  attr(:tabs, :boolean, default: true)
+  slot(:inner_block)
+
+  defp page_header(assigns) do
+    ~H"""
+    <Header.header
+      base={@base}
+      flow_instance={@flow_instance}
+      flow_name={@flow_name}
+      label={@label}
+      title={@title}
+      sticky
+    >
+      <:status>
+        <Status.badge form_instance={@form_instance} events={@events} components={@components} />
+      </:status>
+      <:actions :if={@tabs}>
+        <Tabs.tabs
+          base={@base}
+          flow_instance_id={@flow_instance.id}
+          path={@path}
+          active={:edit}
+          class="mr-2"
+        />
+        {render_slot(@inner_block)}
+      </:actions>
+    </Header.header>
+    """
+  end
+
+  defp header_assigns(assigns) do
+    %{
+      base: assigns.base,
+      flow_instance: assigns.flow_instance,
+      flow_name: assigns.flow_name,
+      label: assigns.form_label,
+      title: assigns[:form] && assigns.form.label,
+      path: assigns.path,
+      form_instance: assigns[:form_instance],
+      events: assigns[:events] || [],
+      components: assigns.components
+    }
   end
 
   # The id the form type is handed, and - with `-form` on the end - the DOM id

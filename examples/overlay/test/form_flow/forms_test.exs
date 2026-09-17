@@ -390,7 +390,9 @@ defmodule Demo.FormFlowFormsTest do
     test "a form's prefills are listed by name, and fetched by it" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
       {:ok, form} = Forms.create_prefill(form, %{name: "No vet record", data: %{}})
-      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
 
       assert ["Happy path", "No vet record"] = Enum.map(Forms.list_prefills(form), & &1.name)
       assert Forms.get_prefill(form, "Happy path").data == %{"pet_name" => "Rex"}
@@ -417,7 +419,10 @@ defmodule Demo.FormFlowFormsTest do
 
     test "update edits the answers and moves updated_at, keeping when it was saved" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
-      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
       saved_at = Forms.get_prefill(form, "Happy path").inserted_at
 
       assert {:ok, form} =
@@ -431,7 +436,10 @@ defmodule Demo.FormFlowFormsTest do
 
     test "update under another name renames it, and refuses a name already taken" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
-      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
       {:ok, form} = Forms.create_prefill(form, %{name: "No vet record", data: %{}})
 
       assert {:ok, form} = Forms.update_prefill(form, "Happy path", %{name: "Every field"})
@@ -464,7 +472,9 @@ defmodule Demo.FormFlowFormsTest do
 
     test "prefills survive a publish — they are the form's, not a version's" do
       {:ok, form} = Forms.create(%{name: "Dog Information", definition: %{"fields" => []}})
-      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
 
       [draft] = Forms.list_versions(form.id)
       {:ok, _published} = Forms.update_status(draft, :published)
@@ -474,7 +484,9 @@ defmodule Demo.FormFlowFormsTest do
 
     test "an ordinary update cannot drop the set" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
-      {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
+
+      {:ok, form} =
+        Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
 
       {:ok, renamed} = Forms.update(Forms.get(form.id), %{name: "Dog Details", prefills: %{}})
 

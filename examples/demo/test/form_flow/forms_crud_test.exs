@@ -1933,7 +1933,10 @@ defmodule Demo.FormFlowFormsCrudTest do
   # this was hidden: the stray submit saved those edits on the way past.
   test "a copy keeps a detail typed but not saved", %{conn: conn} do
     {:ok, source} =
-      Forms.create(%{name: "Source", definition: %{"elements" => [%{"type" => "text", "name" => "ssn"}]}})
+      Forms.create(%{
+        name: "Source",
+        definition: %{"elements" => [%{"type" => "text", "name" => "ssn"}]}
+      })
 
     [source_draft] = Forms.list_versions(source.id)
     {:ok, _v1} = Forms.update_status(source_draft, :published)
@@ -1941,7 +1944,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, form} = Forms.create(%{name: "Target", properties: %{"form_type" => "default"}})
     [draft] = Forms.list_versions(form.id)
 
-    {:ok, view, _html} = live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
+    {:ok, view, _html} =
+      live(conn, "/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
     change = fn params ->
       view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
@@ -1961,7 +1965,10 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     # Typed, not saved: Copy writes the definition and nothing else
     assert Forms.get(form.id).name == "Target"
-    assert Forms.get_version(draft.id).definition == %{"elements" => [%{"type" => "text", "name" => "ssn"}]}
+
+    assert Forms.get_version(draft.id).definition == %{
+             "elements" => [%{"type" => "text", "name" => "ssn"}]
+           }
   end
 
   test "a related-form property offers the forms earlier in the flow", %{conn: conn} do
@@ -2747,7 +2754,10 @@ defmodule Demo.FormFlowFormsCrudTest do
       %{conn: conn, form: form, draft: draft, path: edit_path(form, draft)}
     end
 
-    test "the picker is there, saying what it is, with nothing saved yet", %{conn: conn, path: path} do
+    test "the picker is there, saying what it is, with nothing saved yet", %{
+      conn: conn,
+      path: path
+    } do
       {:ok, view, html} = live(conn, path)
 
       # The placeholder is the label — one control, one word — and the select
@@ -2800,7 +2810,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert render(view) =~ "This form has no prefill named"
     end
 
-    test "choosing one from a clean draft goes straight there", %{conn: conn, form: form, path: path} do
+    test "choosing one from a clean draft goes straight there", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
 
       {:ok, view, _html} = live(conn, path)
@@ -2813,7 +2827,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert to == path <> "?prefill=Happy+path"
     end
 
-    test "choosing one from an edited draft asks to save first", %{conn: conn, form: form, path: path} do
+    test "choosing one from an edited draft asks to save first", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
 
       {:ok, view, _html} = live(conn, path)
@@ -2856,7 +2874,11 @@ defmodule Demo.FormFlowFormsCrudTest do
              }
     end
 
-    test "updating the selected one rewrites its answers in place", %{conn: conn, form: form, path: path} do
+    test "updating the selected one rewrites its answers in place", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} =
         Forms.create_prefill(form, %{name: "Happy path", data: %{"pet_name" => "Rex"}})
 
@@ -2877,7 +2899,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert render(view) =~ "Rexington"
     end
 
-    test "renaming the selected one follows it to its new name", %{conn: conn, form: form, path: path} do
+    test "renaming the selected one follows it to its new name", %{
+      conn: conn,
+      form: form,
+      path: path
+    } do
       {:ok, _form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
 
       {:ok, view, _html} = live(conn, path <> "?prefill=Happy+path")
