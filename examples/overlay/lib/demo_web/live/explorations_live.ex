@@ -80,6 +80,16 @@ defmodule DemoWeb.ExplorationsLive do
       The reviewer's form beside, over, or among the applicant's answers it
       reviews - one of them a card on the form editor's dotted canvas.
       """
+    },
+    %{
+      path: "/explorations/flow-instance",
+      title: "Flow instance page",
+      note: """
+      The user's page for one application - every form and where it stands -
+      in X3b's UX: a progress summary for the flow and each subflow, the rows
+      five ways, whose turn it is, Overview | History, and what would need
+      building.
+      """
     }
   ]
 

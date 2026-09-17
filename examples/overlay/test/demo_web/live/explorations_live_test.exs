@@ -17,6 +17,26 @@ defmodule DemoWeb.ExplorationsLiveTest do
     end
   end
 
+  test "the flow instance page redraws every frame at each scenario", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/explorations/flow-instance")
+    assert html =~ "Your turn"
+
+    for {id, standing} <- [
+          waiting: "With the reviewer",
+          reopened: "Needs your attention",
+          decided: "Approved",
+          started: "Your turn"
+        ] do
+      html =
+        view
+        |> element("input[type=radio][value=#{id}]")
+        |> render_click()
+
+      assert html =~ standing, "scenario #{id} did not draw #{standing}"
+      assert html =~ "What would need building"
+    end
+  end
+
   test "renders every user switcher direction in the header and in content", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/explorations/user-switchers")
 

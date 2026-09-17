@@ -92,8 +92,10 @@ form pages inside a flow instance carry
 the level the page is on, inside a subflow included; Overview and History
 are the root's from any depth, as the health badge is. It replaces three
 things that sat apart: the Show / Edit switch, the **Flow Overview**
-button, and the **History** button. On the Overview and History pages the
-control stands where their Show and Edit buttons were.
+button, and the **History** button. It stands where the switch stood: after
+the health badge, the status button, and Duplicate Flow, before Discard,
+Save, and Delete. On the Overview and History pages it stands where their
+Show and Edit buttons were, after the health badge.
 
 The editor's tabs leave through its own `"navigate"` event, as its
 breadcrumb and Overview button did, so unsaved changes still prompt

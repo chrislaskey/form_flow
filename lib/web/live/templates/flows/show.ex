@@ -313,16 +313,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         components={@components}
       >
         <:actions>
-          <%!-- The four views of the flow, this one chosen. Edit and View
-                stay at this level; Overview and History are the root's --%>
-          <Tabs.tabs
-            base={@base}
-            flow={@flow}
-            root_id={@root_id}
-            node_id={@node_id}
-            active={:show}
-            class="mr-2"
-          />
           <%!-- The root's health, cached, from any depth --%>
           <Health.health base={@base} flow={@root || @flow} components={@components} />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
@@ -350,6 +340,16 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             Duplicate Flow
           </Core.button>
+          <%!-- The four views of the flow, this one chosen. Edit and View
+                stay at this level; Overview and History are the root's --%>
+          <Tabs.tabs
+            base={@base}
+            flow={@flow}
+            root_id={@root_id}
+            node_id={@node_id}
+            active={:show}
+            class="mx-2"
+          />
           <Core.button
             components={@components}
             phx-click="delete"

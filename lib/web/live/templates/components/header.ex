@@ -10,10 +10,8 @@ defmodule FormFlow.Web.Templates.Components.Header do
   inside a root flow, with "in <root>" lighter after it, or the root flow
   itself. What the page has to say about the thing - its kind, its type,
   its version, its status - is not here: it is the fact sheet under the
-  canvas or the form, where it reads once. A page that is a view of the
-  thing rather than the thing itself - its history, its overview - says
-  what it shows in one line under the title, `description`. The right side
-  is the page's `actions` - buttons, in the order the page lists them.
+  canvas or the form, where it reads once. The right side is the page's
+  `actions` - buttons, in the order the page lists them.
 
   Side by side only where there is room for both: a page can carry half a
   dozen actions, and below `xl` they take the width the title needs. So the
@@ -100,11 +98,6 @@ defmodule FormFlow.Web.Templates.Components.Header do
 
   attr(:mode, :string, default: nil, doc: ~s(\"edit\" routes Root/Parent to their edit pages))
 
-  attr(:description, :string,
-    default: nil,
-    doc: "one line under the title saying what the page shows - the history and overview pages'"
-  )
-
   attr(:target, :any,
     default: nil,
     doc: "set to guard every crumb through the \"navigate\" event instead of linking directly"
@@ -168,7 +161,6 @@ defmodule FormFlow.Web.Templates.Components.Header do
             <span class="text-base font-normal text-zinc-400">in {@root.name || "Untitled"}</span>
           <% end %>
         </h2>
-        <p :if={@description} class="mt-0.5 text-sm text-zinc-500">{@description}</p>
       </div>
       <div :if={@actions != []} class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:flex-nowrap">
         {render_slot(@actions)}

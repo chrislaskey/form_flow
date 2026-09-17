@@ -44,6 +44,7 @@ defmodule DemoWeb.Router do
       live "/explorations/form-instance", ExplorationsLive.FormInstance
       live "/explorations/form-instance-continued", ExplorationsLive.FormInstanceContinued
       live "/explorations/form-instance-review", ExplorationsLive.FormInstanceReview
+      live "/explorations/flow-instance", ExplorationsLive.FlowInstance
       live "/docs", DocsLive.Index
       live "/docs/introduction", DocsLive.IntroductionLive
       live "/docs/data-modeling", DocsLive.DataModelingLive

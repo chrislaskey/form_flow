@@ -669,6 +669,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         components={@components}
       >
         <:actions>
+          <%!-- The root's health, cached, from any depth - through the
+                "navigate" event, as above --%>
+          <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
           <%!-- The four views of the flow, this one chosen - through the
                 "navigate" event like every other way off this page, so
                 unsaved changes prompt first. Not links: a link would leave
@@ -680,11 +683,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             node_id={@node_id}
             active={:edit}
             target={@myself}
-            class="mr-2"
+            class="mx-2"
           />
-          <%!-- The root's health, cached, from any depth - through the
-                "navigate" event, as above --%>
-          <Health.health base={@base} flow={@root || @flow} target={@myself} components={@components} />
           <Core.button
             :if={unsaved_changes?(assigns)}
             components={@components}

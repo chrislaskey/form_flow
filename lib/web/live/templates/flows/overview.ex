@@ -102,13 +102,12 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         section="flows"
         root={@flow}
         name="Overview"
-        description="Connected steps only, every level at once"
         components={@components}
       >
         <:crumb>Overview</:crumb>
         <:actions>
-          <Tabs.tabs base={@base} flow={@flow} active={:overview} class="mr-2" />
           <Health.health base={@base} flow={@flow} components={@components} />
+          <Tabs.tabs base={@base} flow={@flow} active={:overview} class="ml-2" />
         </:actions>
       </Header.header>
 
