@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.29.0
+
+### A viewer with no perspective sees only the flows for everyone
+
+**Breaking.** `FormFlow.Config.Flows.Perspective.visible?/1` - the default
+behind every flow type's `visible?/2` - no longer treats a viewer with no
+`perspectives` as one who sees everything. A "forms" flow naming
+perspectives shows only to a viewer sharing one of them, whoever they are;
+a flow naming none is still for everyone. So a router mounted without a
+`perspectives` attr now shows, opens, and counts the perspective-less flows
+of a journey alone, and hides the rest - where before it showed all of
+them. A host with a viewer who should see every side names every
+perspective the type declares, as the demo's admin does.
+
+The demo's users carry their perspectives (`Demo.Users`): the pet owners
+are applicants, the reviewer a reviewer, the admin both, the docs reader
+none. Both pet licensing pages pass the current user's `user_id` and
+`perspectives` through, so a dog owner sees the Applicant and License
+subflows of a journey and not the Reviewer's.
+
 ## v0.28.0
 
 ### The instance pages wear the templates pages' UI components

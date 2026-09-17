@@ -6,7 +6,7 @@ defmodule Demo.FormFlowFlowStatusTest do
   layer's writes and refusals, and what each status does on the user-facing
   pages and the admin pages.
 
-  `/demo/pet-licenses/applications` is the demo's page, which names `demo-user` among its pre-release
+  `/demo/pet-licenses/applications` is the demo's page, which names `dog_owner` among its pre-release
   users; `UnlistedPage` below is the same router with nobody named, for the
   other side of that rule.
   """
@@ -34,7 +34,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     def render(assigns) do
       ~H"""
       <FormFlow.Web.router
-        user_id="demo-user"
+        user_id="dog_owner"
         uri={@uri}
         params={@params}
         path={@path}
@@ -67,7 +67,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     def render(assigns) do
       ~H"""
       <FormFlow.Web.router
-        user_id="demo-user"
+        user_id="dog_owner"
         uri={@uri}
         params={@params}
         path={@path}
@@ -328,9 +328,9 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "a pre-release flow is open to the users a page names and a draft to the rest",
          %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
-      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
-      # /demo/pet-licenses/applications names demo-user: offered, listed, and open
+      # /demo/pet-licenses/applications names dog_owner: offered, listed, and open
       {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
       assert has_element?(view, start_button(flow))
       assert html =~ instance.id
@@ -352,7 +352,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "pre_release_user_ids takes a function of the page's context as well as a list",
          %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
-      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       # The function names the viewer: offered, listed, and open
       staff = %{"staff" => true}
@@ -412,13 +412,13 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       assert html =~ "That flow is no longer taking new starts."
 
-      assert Instances.Flows.list_query(user_id: "demo-user") |> FormFlowRepo.all() == []
+      assert Instances.Flows.list_query(user_id: "dog_owner") |> FormFlowRepo.all() == []
     end
 
     test "a winding-down flow's instances are listed and continue; a draft's disappear",
          %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License 2025", status: "open"})
-      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       {:ok, _} = Flows.update_status(flow, "winding_down", [])
       {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
@@ -442,7 +442,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "a read-only flow's instances are seen but not continued; an archived one's vanish",
          %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License 2024", status: "open"})
-      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       {:ok, _} = Flows.update_status(flow, "read_only", [])
 
@@ -698,7 +698,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "open"})
       {:ok, real} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "a"})
       {:ok, flow} = Flows.update_status(flow, "pre_release", [])
-      {:ok, trial_1} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, trial_1} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
       {:ok, trial_2} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "b"})
 
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
@@ -747,7 +747,7 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "the box left unticked deletes nothing, and no other move offers it", %{conn: conn} do
       {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
-      {:ok, trial} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+      {:ok, trial} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
       menu = "#flow-#{flow.id}-actions"
 
       # From the index's dialog, the offer made and declined

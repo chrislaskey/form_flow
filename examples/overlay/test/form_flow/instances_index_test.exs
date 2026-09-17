@@ -31,8 +31,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
   alias FormFlow.Data.Templates.Flows
 
   test "lists the current user's flow instances, newest first", %{conn: conn} do
-    older = start_flow("Older", "demo-user")
-    newer = start_flow("Newer", "demo-user")
+    older = start_flow("Older", "dog_owner")
+    newer = start_flow("Newer", "dog_owner")
 
     {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
 
@@ -43,7 +43,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "the flow's name comes from the preloaded template", %{conn: conn} do
-    instance = start_flow("Benefits Application", "demo-user")
+    instance = start_flow("Benefits Application", "dog_owner")
 
     {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
@@ -52,7 +52,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "another user's instances are not listed", %{conn: conn} do
-    mine = start_flow("Mine", "demo-user")
+    mine = start_flow("Mine", "dog_owner")
     theirs = start_flow("Theirs", "someone-else")
 
     {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
@@ -69,8 +69,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "the URL's sort compiles into the query", %{conn: conn} do
-    older = start_flow("Older", "demo-user")
-    newer = start_flow("Newer", "demo-user")
+    older = start_flow("Older", "dog_owner")
+    newer = start_flow("Newer", "dog_owner")
 
     {:ok, _view, html} =
       live(conn, "/demo/pet-licenses/applications?sort=inserted_at&sort_direction=asc")
@@ -79,7 +79,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "pagination splits the rows instead of rendering them all", %{conn: conn} do
-    instances = for i <- 1..11, do: start_flow("Flow #{i}", "demo-user")
+    instances = for i <- 1..11, do: start_flow("Flow #{i}", "dog_owner")
 
     {:ok, _view, page_one} = live(conn, "/demo/pet-licenses/applications")
     {:ok, _view, page_two} = live(conn, "/demo/pet-licenses/applications?page=2")

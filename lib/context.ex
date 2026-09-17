@@ -19,7 +19,7 @@ defmodule FormFlow.Context do
     * `:perspectives` - the kinds of user the viewer is here as - the
       router's optional `perspectives` attr, as a list of
       `FormFlow.Config.Flows.Perspective` ids - or `[]`, a viewer with no
-      perspective, who sees everything
+      perspective, who sees only the flows for everyone - those naming none
     * `:flow_perspectives` - the `FormFlow.Config.Flows.Perspective` structs
       the `:subflow` is for, resolved from its stored ids through its flow
       type's `:perspectives`; `[]` for a flow that is for everyone

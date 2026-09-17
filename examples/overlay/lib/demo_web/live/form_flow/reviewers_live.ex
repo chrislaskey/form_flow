@@ -50,7 +50,8 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
         >
           <div id="reviewers-pages">
             <FormFlow.Web.router
-              user_id="demo-reviewer"
+              user_id={@current_user.id}
+              perspectives={@current_user.perspectives}
               uri={@uri}
               params={@params}
               path={@path}
@@ -58,7 +59,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}
-              pre_release_user_ids={["demo-reviewer"]}
+              pre_release_user_ids={Enum.map(Demo.Users.with_roles([:reviewer]), & &1.id)}
             />
           </div>
         </.persona_gate>

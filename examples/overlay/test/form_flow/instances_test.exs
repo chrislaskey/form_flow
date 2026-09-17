@@ -144,7 +144,7 @@ defmodule Demo.FormFlowInstancesTest do
     def render(assigns) do
       ~H"""
       <FormFlow.Web.router
-        user_id="demo-user"
+        user_id="dog_owner"
         tenant_id={@tenant_id}
         perspectives={@perspectives}
         uri={@uri}
@@ -221,7 +221,7 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
 
       form_instance = instance_at(instance, [name.id])
-      assert form_instance.user_id == "demo-user"
+      assert form_instance.user_id == "dog_owner"
       assert form_instance.tenant_id == nil
     end
 
@@ -231,23 +231,23 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, tenant_instance} =
         Instances.Flows.create(%{
           template_flow_id: flow.id,
-          user_id: "demo-user",
+          user_id: "dog_owner",
           tenant_id: "acme"
         })
 
       {:ok, form_instance} =
         Instances.Forms.update_status(tenant_instance, [name.id], :in_progress,
-          user_id: "demo-user",
+          user_id: "dog_owner",
           tenant_id: "acme"
         )
 
       assert tenant_instance.tenant_id == "acme"
       assert form_instance.tenant_id == "acme"
 
-      assert [%{id: id}] = Instances.Flows.list(user_id: "demo-user", tenant_id: "acme")
+      assert [%{id: id}] = Instances.Flows.list(user_id: "dog_owner", tenant_id: "acme")
       assert id == tenant_instance.id
-      assert Instances.Flows.list(user_id: "demo-user", tenant_id: "other") == []
-      assert length(Instances.Flows.list(user_id: "demo-user")) == 2
+      assert Instances.Flows.list(user_id: "dog_owner", tenant_id: "other") == []
+      assert length(Instances.Flows.list(user_id: "dog_owner")) == 2
     end
   end
 
@@ -365,18 +365,20 @@ defmodule Demo.FormFlowInstancesTest do
       assert reviewer =~ "Review / Review"
       refute reviewer =~ "Application / Intake"
 
-      # A viewer with no perspective, and a viewer of both, sees everything -
-      # as a card per subflow, its name in the head and its forms unprefixed
-      {:ok, _view, everyone} = isolated(conn, [instance.id])
-      assert everyone =~ "Application"
-      assert everyone =~ "Intake"
-      assert everyone =~ "Review"
-      refute everyone =~ "Application / Intake"
-
+      # A viewer of both sees everything - as a card per subflow, its name in
+      # the head and its forms unprefixed
       {:ok, _view, both} = as(conn, ["applicant", "reviewer"], [instance.id])
       assert both =~ "Application"
       assert both =~ "Intake"
       assert both =~ "Review"
+      refute both =~ "Application / Intake"
+
+      # A viewer with no perspective sees only the flows for everyone, and
+      # every flow here is for someone
+      {:ok, _view, nobody} = isolated(conn, [instance.id])
+      assert nobody =~ "Nothing in this flow is for you to fill out."
+      refute nobody =~ "Intake"
+      refute nobody =~ "Review / Review"
     end
 
     test "the flow's page says where the viewer stands, and its history what happened",
@@ -452,16 +454,26 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Available"
     end
 
-    test "a viewer with no perspective moves on to the next form, whoever it is for",
+    test "a viewer of both perspectives moves on to the next form, whoever it is for",
          %{conn: conn} do
       %{instance: instance, intake: intake, review: review} = licensing()
 
-      {:ok, view, _html} = isolated_edit(conn, instance, intake)
+      {:ok, view, _html} =
+        as(conn, ["applicant", "reviewer"], [instance.id, "forms"] ++ intake ++ ["edit"])
 
       submit(view, instance_at(instance, intake), %{"name" => "Ada"})
 
       assert {path, _flash} = assert_redirect(view)
       assert path == edit_path(instance, review)
+    end
+
+    test "a viewer with no perspective is refused a form that is for someone", %{conn: conn} do
+      %{instance: instance, intake: intake} = licensing()
+
+      {:ok, _view, html} = isolated_edit(conn, instance, intake)
+
+      assert html =~ "This form is not part of your work here."
+      refute instance_at(instance, intake)
     end
   end
 
@@ -997,10 +1009,10 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
 
       {:ok, dog_instance} =
-        Instances.Flows.create(%{template_flow_id: dog.id, user_id: "demo-user"})
+        Instances.Flows.create(%{template_flow_id: dog.id, user_id: "dog_owner"})
 
       {:ok, cat_instance} =
-        Instances.Flows.create(%{template_flow_id: cat.id, user_id: "demo-user"})
+        Instances.Flows.create(%{template_flow_id: cat.id, user_id: "dog_owner"})
 
       # None named: the user's own instances of every flow
       {:ok, _view, html} = isolated(conn, [])
@@ -1646,7 +1658,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert [prefill] = Forms.list_prefills(Forms.get(node.form_id))
       assert prefill.name == "Happy path"
       assert prefill.data == %{"name" => "Rex"}
-      assert prefill.user_id == "demo-user"
+      assert prefill.user_id == "dog_owner"
     end
 
     test "updating the selected one re-fills the form with it", %{conn: conn} do
@@ -1830,7 +1842,7 @@ defmodule Demo.FormFlowInstancesTest do
   defp properties(type), do: %{"form_flow_type" => type}
 
   defp start_flow(flow) do
-    {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "demo-user"})
+    {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
     instance
   end

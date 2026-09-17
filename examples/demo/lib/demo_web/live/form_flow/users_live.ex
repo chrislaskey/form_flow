@@ -10,6 +10,10 @@ defmodule DemoWeb.FormFlowLive.Users do
   router dispatches the remaining path to the right LiveComponent — this page
   just supplies the layout around it. `base="/demo/pet-licenses/applications"`
   is what makes every link the components build carry the mount prefix.
+
+  `user_id` and `perspectives` are the current user's (`Demo.Users`): a pet
+  owner is an applicant, so FormFlow shows them the applicant subflows of a
+  journey and hides the reviewer's.
   """
 
   use DemoWeb, :live_view
@@ -47,7 +51,8 @@ defmodule DemoWeb.FormFlowLive.Users do
         >
           <div id="users-pages">
             <FormFlow.Web.router
-              user_id="demo-user"
+              user_id={@current_user.id}
+              perspectives={@current_user.perspectives}
               uri={@uri}
               params={@params}
               path={@path}
@@ -55,7 +60,7 @@ defmodule DemoWeb.FormFlowLive.Users do
               flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
               form_types={DemoWeb.FormFlowLive.Types.form_types()}
               callback_data={%{hello: "world"}}
-              pre_release_user_ids={["demo-user"]}
+              pre_release_user_ids={Enum.map(Demo.Users.with_roles([:owner]), & &1.id)}
             />
           </div>
         </.persona_gate>

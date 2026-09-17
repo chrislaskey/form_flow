@@ -15,10 +15,19 @@ defmodule Demo.Users do
   #
   # `role` is what the pages gate on (`DemoWeb.PersonaComponents`): the two
   # pet owners share `:owner`, since nothing in the demo tells them apart.
+  #
+  # `perspectives` is what the FormFlow pages pass as their `perspectives`
+  # attr: the ids the demo's flow types declare
+  # (`DemoWeb.FormFlowLive.Types.perspectives/0`), so a user translates to
+  # FormFlow one-to-one. A pet owner is an applicant and the reviewer a
+  # reviewer; the admin, who builds the flows and reads every side, names
+  # both, because FormFlow shows a viewer naming none only the flows that are
+  # for everyone. The reader names none.
   @users [
     %{
       id: "docs_reader",
       role: :reader,
+      perspectives: [],
       name: "Docs Reader",
       initials: "DR",
       blurb: "Reads the README-style docs at /"
@@ -26,6 +35,7 @@ defmodule Demo.Users do
     %{
       id: "dog_owner",
       role: :owner,
+      perspectives: ["applicant"],
       name: "User - Dog Owner",
       initials: "DO",
       blurb: "Applies for and renews a dog license"
@@ -33,6 +43,7 @@ defmodule Demo.Users do
     %{
       id: "cat_owner",
       role: :owner,
+      perspectives: ["applicant"],
       name: "User - Cat Owner",
       initials: "CO",
       blurb: "Applies for and renews a cat license"
@@ -40,6 +51,7 @@ defmodule Demo.Users do
     %{
       id: "reviewer",
       role: :reviewer,
+      perspectives: ["reviewer"],
       name: "Reviewer - Pet Licenses",
       initials: "RE",
       blurb: "Reviews and decides license applications"
@@ -47,6 +59,7 @@ defmodule Demo.Users do
     %{
       id: "admin",
       role: :admin,
+      perspectives: ["applicant", "reviewer"],
       name: "Admin",
       initials: "AD",
       blurb: "Builds the flows and forms"

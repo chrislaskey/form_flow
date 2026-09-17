@@ -59,11 +59,13 @@ defmodule FormFlow.Config.Flows.TypesTest do
       refute Checklist.visible?(other, %{})
     end
 
-    test "a flow for everyone, or a viewer with no perspective, is visible" do
+    test "a flow for everyone is visible to anyone; a viewer with no perspective sees it alone" do
       everyone = %FormFlow.Data.Templates.Flow{label: "forms", properties: %{}}
       assert Types.WizardInOrder.visible?(%Context{subflow: everyone, perspectives: ["x"]}, %{})
 
-      assert Types.WizardInOrder.visible?(
+      assert Types.WizardInOrder.visible?(%Context{subflow: everyone, perspectives: []}, %{})
+
+      refute Types.WizardInOrder.visible?(
                %Context{subflow: reviewer_flow(), perspectives: []},
                %{}
              )

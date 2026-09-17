@@ -27,9 +27,11 @@ defmodule FormFlow.Config.Flows.Perspective do
   The property *states* which perspectives a flow is for; what that means is
   the flow type's to implement, in `FormFlow.Config.Flows.Type`'s
   `visible?/2` and `editable?/2`. The library's defaults read it as
-  `visible?/1` here: a flow is for everyone when it names no perspective, a
-  viewer with no perspective sees everything, and otherwise the flow shows
-  for a viewer sharing at least one of its perspectives. Perspective is
+  `visible?/1` here: a flow naming no perspective is for everyone, and a
+  flow naming some shows only to a viewer sharing at least one of them - so
+  a viewer with no perspective sees the flows for everyone and no other.
+  There is no viewer who sees everything: a host that wants one names every
+  perspective the type declares. Perspective is
   routing and hiding, not authorization - the router's `on_mount` is the
   gate.
 
@@ -96,14 +98,15 @@ defmodule FormFlow.Config.Flows.Perspective do
   @doc """
   Whether the context's `:subflow` is for one of the viewer's `:perspectives`
   - the library's default reading of the property (see the moduledoc). A
-  flow naming no perspective is for everyone; a viewer with none sees
-  everything.
+  flow naming no perspective is for everyone; a flow naming some is for
+  viewers sharing one, so a viewer with none sees only the flows for
+  everyone.
   """
   @spec visible?(Context.t()) :: boolean()
   def visible?(%Context{subflow: flow, perspectives: viewer}) do
     flow_ids = ids(flow)
     viewer = normalize(viewer)
 
-    flow_ids == [] or viewer == [] or Enum.any?(flow_ids, &(&1 in viewer))
+    flow_ids == [] or Enum.any?(flow_ids, &(&1 in viewer))
   end
 end

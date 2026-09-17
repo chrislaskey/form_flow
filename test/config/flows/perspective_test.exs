@@ -67,9 +67,11 @@ defmodule FormFlow.Config.Flows.PerspectiveTest do
       assert Perspective.visible?(%Context{subflow: nil, perspectives: ["applicant"]})
     end
 
-    test "a viewer with no perspective sees everything" do
-      assert Perspective.visible?(%Context{subflow: flow(["reviewer"]), perspectives: []})
-      assert Perspective.visible?(%Context{subflow: flow(["reviewer"]), perspectives: nil})
+    test "a viewer with no perspective sees only the flows for everyone" do
+      refute Perspective.visible?(%Context{subflow: flow(["reviewer"]), perspectives: []})
+      refute Perspective.visible?(%Context{subflow: flow(["reviewer"]), perspectives: nil})
+      assert Perspective.visible?(%Context{subflow: flow([]), perspectives: []})
+      assert Perspective.visible?(%Context{subflow: nil, perspectives: nil})
     end
   end
 end

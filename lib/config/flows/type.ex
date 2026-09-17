@@ -101,7 +101,8 @@ defmodule FormFlow.Config.Flows.Type do
   the flow instance's page, counted toward where they go next, and openable
   at all. The default is `FormFlow.Config.Flows.Perspective.visible?/1`: the
   flow's stored perspectives against the viewer's `:perspectives`, with a
-  flow naming none for everyone and a viewer with none seeing everything.
+  flow naming none for everyone and a flow naming some for viewers sharing
+  one - a viewer with none sees only the flows for everyone.
   Asked with `:form_progress` set, like `editable?/2`, so a type can answer
   per form; the pages then treat a form that is not visible as not editable.
   """

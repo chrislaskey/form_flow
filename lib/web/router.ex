@@ -151,8 +151,9 @@ defmodule FormFlow.Web.Router do
     doc:
       "the kinds of user the current user is here as - one or more " <>
         "`FormFlow.Config.Flows.Perspective` ids, a string or a list. The " <>
-        "instance pages show, offer, and open only the flows for those " <>
-        "perspectives; the default, none, sees everything. Ignored by the " <>
+        "instance pages show and open only the flows for those perspectives " <>
+        "and the flows for everyone - those naming no perspective. The " <>
+        "default, none, sees the flows for everyone alone. Ignored by the " <>
         "template pages"
   )
 

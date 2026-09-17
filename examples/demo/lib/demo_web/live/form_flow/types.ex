@@ -33,7 +33,8 @@ defmodule DemoWeb.FormFlowLive.Types do
   # the users page then shows a viewer only the subflows for the
   # perspectives its `perspectives` attr names. The metadata is the host's
   # own — here, which desk a reviewer's work lands on.
-  defp perspectives do
+  @doc "The two kinds of user the demo's flows are for - the ids `Demo.Users` carries."
+  def perspectives do
     [
       %FormFlow.Config.Flows.Perspective{
         id: "applicant",
