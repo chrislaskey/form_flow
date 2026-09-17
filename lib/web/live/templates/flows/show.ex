@@ -315,41 +315,6 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         <:actions>
           <%!-- The root's health, cached, from any depth --%>
           <Health.health base={@base} flow={@root || @flow} components={@components} />
-          <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
-                status table), and where it is changed; the root's, so a
-                drill-in page offers nothing --%>
-          <Core.button
-            :if={is_nil(@flow.owner_flow_id)}
-            components={@components}
-            phx-click="request_status"
-            phx-target={@myself}
-            class="btn btn-ghost"
-            title={"#{Shared.status_summary(@flow.status)} Click to change."}
-            aria-label={"Status: #{Shared.status_label(@flow.status)}. Change status"}
-          >
-            Status: {Shared.status_label(@flow.status)}
-          </Core.button>
-          <%!-- A root flow is copied whole from here; an owned subflow is
-                copied by pasting its step on a canvas --%>
-          <Core.button
-            :if={is_nil(@flow.owner_flow_id)}
-            components={@components}
-            phx-click="request_copy"
-            phx-target={@myself}
-            class="btn btn-ghost"
-          >
-            Duplicate Flow
-          </Core.button>
-          <%!-- The four views of the flow, this one chosen. Edit and View
-                stay at this level; Overview and History are the root's --%>
-          <Tabs.tabs
-            base={@base}
-            flow={@flow}
-            root_id={@root_id}
-            node_id={@node_id}
-            active={:show}
-            class="mx-2"
-          />
           <Core.button
             components={@components}
             phx-click="delete"
@@ -366,6 +331,41 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           >
             <Core.icon components={@components} name="hero-trash" class="size-5" />
           </Core.button>
+          <%!-- A root flow is copied whole from here; an owned subflow is
+                copied by pasting its step on a canvas --%>
+          <Core.button
+            :if={is_nil(@flow.owner_flow_id)}
+            components={@components}
+            phx-click="request_copy"
+            phx-target={@myself}
+            class="btn btn-ghost"
+          >
+            Duplicate Flow
+          </Core.button>
+          <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
+                status table), and where it is changed; the root's, so a
+                drill-in page offers nothing --%>
+          <Core.button
+            :if={is_nil(@flow.owner_flow_id)}
+            components={@components}
+            phx-click="request_status"
+            phx-target={@myself}
+            class="btn btn-ghost"
+            title={"#{Shared.status_summary(@flow.status)} Click to change."}
+            aria-label={"Status: #{Shared.status_label(@flow.status)}. Change status"}
+          >
+            Status: {Shared.status_label(@flow.status)}
+          </Core.button>
+          <%!-- The four views of the flow, this one chosen. Edit and View
+                stay at this level; Overview and History are the root's --%>
+          <Tabs.tabs
+            base={@base}
+            flow={@flow}
+            root_id={@root_id}
+            node_id={@node_id}
+            active={:show}
+            class="mx-2"
+          />
         </:actions>
       </Header.header>
 

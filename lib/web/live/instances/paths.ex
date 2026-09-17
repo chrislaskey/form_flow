@@ -27,6 +27,10 @@ defmodule FormFlow.Web.Instances.Paths do
   @doc "One flow instance: its forms and their progress."
   def flow_path(base, flow_instance_id), do: "#{base}/#{flow_instance_id}"
 
+  @doc "What has happened in a flow instance, newest first."
+  def flow_history_path(base, flow_instance_id),
+    do: "#{flow_path(base, flow_instance_id)}/history"
+
   @doc "The answers at a position, read-only."
   def form_path(base, flow_instance_id, path) do
     "#{flow_path(base, flow_instance_id)}/forms/#{Enum.join(path, "/")}"

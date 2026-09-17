@@ -50,6 +50,7 @@ defmodule FormFlow.Web.Router do
   |----------------------------|---------------|
   | `/`                        | `FormFlow.Web.Instances.Flows.Index` (the user's flow instances + starting new ones) |
   | `/:id`                     | `FormFlow.Web.Instances.Flows.Show` (one instance: its forms and their progress) |
+  | `/:id/history`             | `FormFlow.Web.Instances.Flows.History` (what has happened in the instance, newest first) |
   | `/:id/forms/*path`         | `FormFlow.Web.Instances.Forms.Show` (the answers at a position, read-only) |
   | `/:id/forms/*path/edit`    | `FormFlow.Web.Instances.Forms.Edit` (the editable form - the page that opens the position) |
   | `/:id/forms/*path/history` | `FormFlow.Web.Instances.Forms.History` (what has happened to the form there, newest first) |
@@ -575,6 +576,27 @@ defmodule FormFlow.Web.Router do
               uri={@uri}
               params={@params}
             />
+          <% {:flow_history, id} -> %>
+            <.live_component
+              module={Instances.Flows.History}
+              id="instance-flows-history"
+              flow_instance_id={id}
+              base={@base}
+              user_id={@user_id}
+              tenant_id={@tenant_id}
+              perspectives={@perspectives}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              callback_data={@callback_data}
+              components={@components}
+              on_mount={@on_mount}
+              instances={@instances}
+              flows={@flows}
+              pre_release_user_ids={@pre_release_user_ids}
+              download_path={@download_path}
+              uri={@uri}
+              params={@params}
+            />
           <% {:form, id, form_path} -> %>
             <.live_component
               module={Instances.Forms.Show}
@@ -653,6 +675,7 @@ defmodule FormFlow.Web.Router do
     case segments(path) do
       [] -> :index
       [id] -> {:flow, id}
+      [id, "history"] -> {:flow_history, id}
       [id, "forms" | rest] when rest != [] -> form_route(id, rest)
       _other -> nil
     end

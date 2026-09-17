@@ -1,9 +1,35 @@
 defmodule FormFlow.Web.Instances.Flows.Show do
   @moduledoc """
   `FormFlow.Web.Instances.Flows.Show` LiveComponent is one flow instance's
-  detail page: every form in flow order with its derived state - Available /
-  In progress / Done / Pending - plus any stranded answers (filled at a
-  position the flow no longer has).
+  page - its **Overview**: every form in flow order with its derived state,
+  where the viewer stands among them, and what wants them next.
+
+  ## What the page draws
+
+  The header names the flow and, after its name, the viewer's **standing** -
+  Your turn, Needs your attention, Waiting on others, Completed
+  (`FormFlow.Web.Instances.Components.Flows.Status`). Its actions are the
+  two views as tabs, **Overview | History**
+  (`FormFlow.Web.Instances.Components.Flows.Tabs`), and **Download all**,
+  drawn disabled: one PDF of every completed form does not exist yet, and
+  the button says so on hover (`archive/plans/instances-refresh.md` §8).
+
+  Under the header, a **card** for the whole flow in the vocabulary of the
+  card a form page carries (`FormFlow.Web.Instances.Components.Flows.Progress`):
+  the ring of forms done, the flow's name, "2 of 5 forms done · next Dog
+  Information", and the one **Start** or **Continue** that goes to the form
+  that wants the viewer now - a form sent back to them first, then one under
+  way, then the first they may start.
+
+  Then the forms. A complex flow draws **a card per subflow** the viewer
+  can see - a small ring and "1 of 5 done" in its head, its forms as rows
+  inside - because the flow reads that way on the admin canvas; a simple
+  flow draws its rows in one bordered box. Every row is the form's name, its
+  badge (Done / In progress / Available / Pending, or **Reopened** when the
+  form was sent back since it was last submitted), what last happened to it
+  and when, and its actions on the right. The row that is next up is tinted
+  and carries the page's only primary button; every other Start or Continue
+  is plain. Under it all, **Details** is the instance's own fact sheet.
 
   Which forms appear, and which offer to start, is not this page's decision:
   each form belongs to a "forms" flow, and that flow's `FormFlow.Config.Flows.Type`
@@ -16,9 +42,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   page says so: their part is finished, the rest is someone else's.
 
   Whether the page renders at all is the host's `on_mount` to say (with the
-  flow instance's context):
-  refused, only its message is drawn; redirected, nothing is until the
-  navigation lands.
+  flow instance's context): refused, only its message is drawn; redirected,
+  nothing is until the navigation lands.
 
   Every action here navigates, because a form's URL addresses its *position*
   and so exists before its instance row does - starting happens on the form
@@ -54,45 +79,33 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   the same hole. Narrowing the lookup to the journey's own tree is the
   follow-up; it touches the data layer and needs its own audit of what would
   change.
+
+  What the page shares with `FormFlow.Web.Instances.Flows.History` - the
+  loading, the rows, the trail, the standing - is
+  `FormFlow.Web.Instances.Flows.Shared`.
   """
 
   use Phoenix.LiveComponent
 
-  alias FormFlow.Config.Flows.Perspective
-  alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.FactSheet
   alias FormFlow.Web.Components.SectionHeading
-  alias FormFlow.Web.Instances.Components
+  alias FormFlow.Web.Instances.Components.Flows.Progress
+  alias FormFlow.Web.Instances.Components.Flows.Status
+  alias FormFlow.Web.Instances.Components.Flows.Tabs
+  alias FormFlow.Web.Instances.Components.Forms.Status, as: FormStatus
   alias FormFlow.Web.Instances.Components.Header
-  alias FormFlow.Web.Instances.Forms.Shared
+  alias FormFlow.Web.Instances.Flows.Shared
   alias FormFlow.Web.Instances.Paths
 
   @impl true
   def update(assigns, socket) do
-    socket =
-      socket
-      |> assign(assigns)
-      |> assign_new(:base, fn -> "" end)
-      |> assign_new(:tenant_id, fn -> nil end)
-      |> assign_new(:perspectives, fn -> [] end)
-      |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
-      |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
-      |> assign_new(:callback_data, fn -> %{} end)
-      |> assign_new(:components, fn -> nil end)
-      |> assign_new(:on_mount, fn -> nil end)
-      |> assign_new(:instances, fn -> nil end)
-      |> assign_new(:flows, fn -> nil end)
-      |> assign_new(:pre_release_user_ids, fn -> [] end)
-      |> assign_new(:download_path, fn -> nil end)
-      |> assign_new(:uri, fn -> nil end)
-      |> assign_new(:params, fn -> %{} end)
-      |> assign_new(:error, fn -> nil end)
+    socket = socket |> assign(assigns) |> Shared.defaults()
 
-    {:ok, socket |> load() |> assign_page_state()}
+    {:ok, socket |> Shared.load() |> assign_page_state()}
   end
 
   # The state the page is in, computed once where the loading and the gate
@@ -133,12 +146,12 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   defp reopen(socket, path) do
     flow = Templates.Flows.get_row(socket.assigns.flow_instance.template_flow_id)
 
-    if continue_allowed?(flow, socket.assigns) do
+    if Shared.continue_allowed?(flow, socket.assigns) do
       case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
              user_id: socket.assigns.user_id,
              tenant_id: socket.assigns.tenant_id
            ) do
-        {:ok, _reopened} -> {:noreply, socket |> load() |> assign_page_state()}
+        {:ok, _reopened} -> {:noreply, socket |> Shared.load() |> assign_page_state()}
         {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
       end
     else
@@ -146,110 +159,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     end
   end
 
-  defp continue_allowed?(%Templates.Flow{} = flow, assigns),
-    do: FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns)
-
-  defp continue_allowed?(_none, _assigns), do: false
-
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
-  end
-
-  defp load(%{assigns: %{flow_instance_id: flow_instance_id}} = socket) do
-    case Instances.Flows.get(flow_instance_id) do
-      nil ->
-        assign(socket, flow_instance: nil, rows: [], groups: [], stranded: [], flow_name: nil)
-
-      flow_instance ->
-        tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
-        forms = FlowProgress.forms(tree, Instances.Flows.form_instances(flow_instance))
-        flow = tree && tree.flow
-
-        # The page's own context - the flow instance as a whole, no form in
-        # scope - for the host's on_mount to answer with
-        context = %Context{
-          user_id: socket.assigns.user_id,
-          tenant_id: socket.assigns.tenant_id,
-          perspectives: Perspective.normalize(socket.assigns.perspectives),
-          flow: flow,
-          subflow: flow,
-          flow_type_property_values: FormFlow.Config.Flows.Type.property_values(flow),
-          flow_instance: flow_instance,
-          flow_instance_progress: forms
-        }
-
-        # The context first, and the page's pre-release users with it: the
-        # rows and `continue_allowed?/2` ask the status by this viewer
-        socket =
-          socket
-          |> assign(:context, context)
-          |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
-
-        rows = rows(forms, tree, flow_instance, socket.assigns)
-
-        socket =
-          assign(socket,
-            flow_instance: flow_instance,
-            rows: rows,
-            groups: groups(rows),
-            continue_allowed?: continue_allowed?(flow, socket.assigns),
-            part_done?: part_done?(rows, flow_instance),
-            stranded: Instances.Flows.list_stranded(flow_instance),
-            flow_name: (flow && flow.name) || "Untitled flow",
-            mount_error: nil,
-            navigate_to: nil
-          )
-
-        Shared.on_mount(socket)
-    end
-  end
-
-  # Every form the viewer's perspectives are for, with the one question its
-  # own flow's type answers here - forms of a flow that is not for the viewer
-  # are not rows at all.
-  defp rows(forms, tree, flow_instance, assigns) do
-    for form <- forms,
-        context = form_context(form, forms, tree, flow_instance, assigns),
-        type = Shared.flow_type(context, assigns),
-        Shared.visible?(type, context, assigns) do
-      %{form: form, editable?: type.module.editable?(context, assigns.callback_data)}
-    end
-  end
-
-  defp form_context(form, forms, tree, flow_instance, assigns) do
-    context = %Context{
-      user_id: assigns.user_id,
-      tenant_id: assigns.tenant_id,
-      perspectives: Perspective.normalize(assigns.perspectives),
-      flow: tree.flow,
-      subflow: form.flow,
-      subflow_node: List.last(form.ancestors),
-      form_node: form.node,
-      flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
-      flow_instance: flow_instance,
-      form_progress: form,
-      flow_progress: FlowProgress.forms_in_flow(forms, form.path),
-      flow_instance_progress: forms
-    }
-
-    %Context{context | flow_perspectives: Shared.flow_perspectives(context, assigns)}
-  end
-
-  # The viewer's part is done when every form they can see is completed and
-  # the instance as a whole is not - what remains is someone else's
-  defp part_done?(rows, flow_instance) do
-    rows != [] and flow_instance.status != "completed" and
-      Enum.all?(rows, &(&1.form.status == :completed))
-  end
-
-  # The rows in the order the flow walks them, cut where one "forms" flow
-  # ends and the next begins. A simple flow is one group; a complex one is
-  # a group per subflow the viewer can see, headed by that subflow's name.
-  defp groups(rows) do
-    rows
-    |> Enum.chunk_by(& &1.form.flow.id)
-    |> Enum.map(fn [first | _] = group -> {first.form.flow, group} end)
   end
 
   # The instance's status as `{text, kind}` - the same two words and palette
@@ -302,7 +214,26 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   def render(%{page_state: :ready} = assigns) do
     ~H"""
     <div>
-      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name} />
+      <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name}>
+        <:status>
+          <Status.badge standing={@standing} components={@components} />
+        </:status>
+        <:actions>
+          <Tabs.tabs base={@base} flow_instance_id={@flow_instance.id} active={:show} class="mr-2" />
+          <%!-- One PDF of every completed form in flow order does not exist
+                yet; each form's page downloads its own. Drawn only where
+                downloads are on at all, and disabled, so the host sees the
+                shape of what is coming without a button that does nothing --%>
+          <span
+            :if={@download_path}
+            title="Downloading every form at once isn't available yet. Each form's page has its own download."
+          >
+            <Core.button components={@components} type="button" class="btn btn-ghost" disabled>
+              Download all
+            </Core.button>
+          </span>
+        </:actions>
+      </Header.header>
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
@@ -314,71 +245,57 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         Your part is done. The rest of this flow is being worked on by others.
       </Core.alert>
 
-      <SectionHeading.section_heading
+      <.overall_card
         :if={@rows != []}
-        title="Forms"
-        description="Each form in this flow and where it stands."
-        class="mb-3"
+        base={@base}
+        flow_instance={@flow_instance}
+        flow_name={@flow_name}
+        rows={@rows}
+        next_up={@next_up}
+        components={@components}
       />
-      <div :if={@rows != []} id={"#{@id}-forms"} class="border border-zinc-300 rounded-lg">
-        <%= for {{flow, rows}, index} <- Enum.with_index(@groups) do %>
-          <%!-- A complex flow's forms are headed by the subflow they belong
-                to; a simple flow's need no heading, there is one group --%>
-          <div
-            :if={length(@groups) > 1}
-            class={[
-              "px-6 py-2 bg-zinc-50 text-sm font-semibold text-zinc-700",
-              index == 0 && "rounded-t-lg",
-              index > 0 && "border-t border-zinc-300"
-            ]}
-          >
-            {flow.name || "Untitled"}
-          </div>
-          <div class="divide-y divide-zinc-200">
-            <div :for={row <- rows} class="flex flex-wrap items-center gap-3 px-6 py-4">
-              <% {text, kind} = Components.Flows.Progress.badge(row.form.status) %>
-              <span class="font-medium">{FlowProgress.qualified_label(row.form)}</span>
-              <Core.badge components={@components} kind={kind}>{text}</Core.badge>
-              <span class="ml-auto flex items-center gap-3">
-                <%!-- Start is the offer to begin work here - an any-order wizard
-                      makes it on forms an in-order one keeps closed. A form
-                      already started continues instead; both land on the same
-                      page, which is the one that starts the form. --%>
-                <Core.button
-                  :if={row.editable? && is_nil(row.form.instance)}
-                  components={@components}
-                  navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-                  variant="primary"
-                >
-                  Start
-                </Core.button>
-                <Core.button
-                  :if={row.form.status == :in_progress && row.form.instance && @continue_allowed?}
-                  components={@components}
-                  navigate={Paths.form_edit_path(@base, @flow_instance.id, row.form.path)}
-                  class="btn"
-                >
-                  Continue
-                </Core.button>
-                <.link
-                  :if={row.form.status == :completed && row.form.instance}
-                  navigate={Paths.form_path(@base, @flow_instance.id, row.form.path)}
-                  class="text-cyan-600 hover:underline"
-                >
-                  View
-                </.link>
-                <Core.button
-                  :if={row.form.status == :completed && row.form.instance && @continue_allowed?}
-                  components={@components}
-                  phx-click="reopen"
-                  phx-value-path={Enum.join(row.form.path, ",")}
-                  phx-target={@myself}
-                  class="text-cyan-600 hover:underline"
-                >
-                  Reopen
-                </Core.button>
-              </span>
+
+      <%!-- A complex flow's forms are cards, one per subflow they belong
+            to, each with its own count; a simple flow's need no heading,
+            there is one group --%>
+      <div :if={@rows != []} id={"#{@id}-forms"} class="space-y-4">
+        <%= if length(@groups) > 1 do %>
+          <div :for={{flow, rows} <- @groups} class="rounded-2xl border border-zinc-300">
+            <div class="flex items-center gap-4 px-5 py-4">
+              <Progress.ring size={:sm} {ring_assigns(rows)} />
+              <div class="min-w-0 flex-1 leading-tight">
+                <p class="font-semibold">{flow.name || "Untitled"}</p>
+                <p class="text-xs text-zinc-500">{done(rows)} of {length(rows)} done</p>
+              </div>
             </div>
+            <div class="divide-y divide-zinc-200 border-t border-zinc-200">
+              <.row
+                :for={row <- rows}
+                row={row}
+                label={row.form.label}
+                next_up={@next_up}
+                base={@base}
+                flow_instance={@flow_instance}
+                continue_allowed?={@continue_allowed?}
+                components={@components}
+                myself={@myself}
+                last
+              />
+            </div>
+          </div>
+        <% else %>
+          <div :for={{_flow, rows} <- @groups} class="divide-y divide-zinc-200 rounded-lg border border-zinc-300">
+            <.row
+              :for={row <- rows}
+              row={row}
+              label={FlowProgress.qualified_label(row.form)}
+              next_up={@next_up}
+              base={@base}
+              flow_instance={@flow_instance}
+              continue_allowed?={@continue_allowed?}
+              components={@components}
+              myself={@myself}
+            />
           </div>
         <% end %>
       </div>
@@ -408,5 +325,132 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       </FactSheet.fact_sheet>
     </div>
     """
+  end
+
+  # The whole flow as the form pages' card: the ring of forms done, the
+  # name, the count and what is next, and the one button that goes there
+  attr(:base, :string, required: true)
+  attr(:flow_instance, :map, required: true)
+  attr(:flow_name, :string, required: true)
+  attr(:rows, :list, required: true)
+  attr(:next_up, :map, default: nil)
+  attr(:components, :atom, default: nil)
+
+  defp overall_card(assigns) do
+    assigns = assign(assigns, done: done(assigns.rows), total: length(assigns.rows))
+
+    ~H"""
+    <div class="mb-6 flex flex-wrap items-center gap-5 rounded-2xl border border-zinc-300 px-5 py-4">
+      <Progress.ring {ring_assigns(@rows)} />
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-lg font-semibold leading-tight">{@flow_name}</p>
+        <p class="text-sm text-zinc-500">
+          {@done} of {@total} forms done
+          <span :if={@next_up}>· next {@next_up.form.label}</span>
+          <span :if={is_nil(@next_up) and @done == @total}>· all done</span>
+          <span :if={is_nil(@next_up) and @done < @total}>· nothing for you right now</span>
+        </p>
+      </div>
+      <Core.button
+        :if={@next_up}
+        components={@components}
+        navigate={Paths.form_edit_path(@base, @flow_instance.id, @next_up.form.path)}
+        variant="primary"
+      >
+        {if @next_up.form.instance, do: "Continue", else: "Start"}
+      </Core.button>
+    </div>
+    """
+  end
+
+  # One form: its name, its badge, what last happened to it, its actions.
+  # The row that is next up is tinted and carries the only primary button.
+  attr(:row, :map, required: true)
+  attr(:label, :string, required: true)
+  attr(:next_up, :map, default: nil)
+  attr(:base, :string, required: true)
+  attr(:flow_instance, :map, required: true)
+  attr(:continue_allowed?, :boolean, required: true)
+  attr(:components, :atom, default: nil)
+  attr(:myself, :any, required: true)
+  attr(:last, :boolean, default: false, doc: "the row list's last row rounds the card's corners")
+
+  defp row(assigns) do
+    assigns = assign(assigns, next?: assigns.row == assigns.next_up)
+
+    ~H"""
+    <div class={[
+      "flex flex-wrap items-center gap-3 px-6 py-4",
+      @next? && "bg-primary/5",
+      @last && "last:rounded-b-2xl",
+      @row.form.status == :pending && "text-zinc-400"
+    ]}>
+      <% {text, kind} = row_badge(@row) %>
+      <span class={[if(@next?, do: "font-semibold", else: "font-medium")]}>{@label}</span>
+      <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+      <span :if={@row.last} class="text-sm text-zinc-500" title={FormStatus.absolute(@row.last.event.inserted_at)}>
+        {FormStatus.event_label(@row.last.event)}
+        {FormFlow.Web.Templates.Shared.relative(@row.last.event.inserted_at)}
+        <span :if={@row.last.event.user_id}>· <code class="text-xs">{@row.last.event.user_id}</code></span>
+      </span>
+      <span class="ml-auto flex items-center gap-3">
+        <%!-- Start is the offer to begin work here - an any-order wizard
+              makes it on forms an in-order one keeps closed. A form
+              already started continues instead; both land on the same
+              page, which is the one that starts the form. --%>
+        <Core.button
+          :if={@row.editable? && is_nil(@row.form.instance)}
+          components={@components}
+          navigate={Paths.form_edit_path(@base, @flow_instance.id, @row.form.path)}
+          class={if(@next?, do: "btn btn-primary", else: "btn")}
+        >
+          Start
+        </Core.button>
+        <Core.button
+          :if={@row.form.status == :in_progress && @row.form.instance && @continue_allowed?}
+          components={@components}
+          navigate={Paths.form_edit_path(@base, @flow_instance.id, @row.form.path)}
+          class={if(@next?, do: "btn btn-primary", else: "btn")}
+        >
+          Continue
+        </Core.button>
+        <.link
+          :if={@row.form.status == :completed && @row.form.instance}
+          navigate={Paths.form_path(@base, @flow_instance.id, @row.form.path)}
+          class="text-cyan-600 hover:underline"
+        >
+          View
+        </.link>
+        <Core.button
+          :if={@row.form.status == :completed && @row.form.instance && @continue_allowed?}
+          components={@components}
+          phx-click="reopen"
+          phx-value-path={Enum.join(@row.form.path, ",")}
+          phx-target={@myself}
+          class="text-cyan-600 hover:underline"
+        >
+          Reopen
+        </Core.button>
+      </span>
+    </div>
+    """
+  end
+
+  # A row's badge: the flow's word for its state, except that a form sent
+  # back since it was last submitted reads Reopened, as its own pages say
+  defp row_badge(%{word: :reopened, form: %{status: :in_progress}}),
+    do: FormStatus.label(:reopened)
+
+  defp row_badge(%{form: %{status: status}}), do: Progress.badge(status)
+
+  defp done(rows), do: Enum.count(rows, &(&1.form.status == :completed))
+
+  # The ring's three numbers for a list of rows: done in the brand colour,
+  # in progress tinted, the percentage done inside
+  defp ring_assigns(rows) do
+    total = length(rows)
+    behind = round(done(rows) / total * 100)
+    each = round(Enum.count(rows, &(&1.form.status == :in_progress)) / total * 100)
+    %{percent: behind, behind: behind, each: each}
   end
 end

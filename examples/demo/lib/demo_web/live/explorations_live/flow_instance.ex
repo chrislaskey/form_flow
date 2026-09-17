@@ -427,9 +427,9 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
   @combos [
     %{
       id: :evolve,
-      title: "X1 · S1 + S3 + L4 + T1",
+      title: "X1 · S1 + S4 + L4 + T1 - picked, built 2026-09-17",
       note:
-        "The smallest step from today that carries the whole idea: the standing badge after the title, tabs and Download all right, the F1 card with Continue, subflow headings with counts and segment bars, the next-up row raised."
+        "The smallest step from today that carries the whole idea: the standing badge after the title, tabs and Download all right, the F1 card with Continue, a card per subflow with its ring and count, the next-up row raised. Built as drawn on the real page, with S4's cards in place of S3's segment bars."
     },
     %{
       id: :tasklist,
@@ -1699,7 +1699,9 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
       </:actions>
     </.flow_header>
     <.overall_card groups={@groups} />
-    <.groups groups={@groups} heading={:segments} rows={:nextup} />
+    <div class="space-y-4">
+      <.subflow_card :for={group <- @groups} group={group} rows={:nextup} />
+    </div>
     <.fact_sheet flow={@flow} class="mt-8" />
     """
   end

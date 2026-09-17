@@ -25,7 +25,9 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   list doesn't shift as forms become reachable; the link only wraps it.
 
   `badge/1` lives here too: the wording and the palette of a form's state,
-  shared with the flow instance page's listing so the two can't drift.
+  shared with the flow instance page's listing so the two can't drift. So
+  does `ring/1`, which that page draws for the whole flow and for each
+  subflow (`FormFlow.Web.Instances.Flows.Show`).
   """
 
   use Phoenix.Component
@@ -136,17 +138,29 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
     """
   end
 
-  # A two-tone ring: the steps behind the user in the brand colour, the
-  # step they are on in a lighter tint of it, what is ahead grey. The number
-  # inside is how far along they are. `pathLength` lets the dashes be
-  # percentages whatever the radius.
-  attr(:percent, :integer, required: true)
-  attr(:behind, :integer, required: true, doc: "the steps behind the user, as a percentage")
-  attr(:each, :integer, required: true, doc: "one step, as a percentage")
+  attr(:percent, :integer, required: true, doc: "the number inside")
+  attr(:behind, :integer, required: true, doc: "what is done, as a percentage - the brand colour")
+  attr(:each, :integer, required: true, doc: "what is under way, as a percentage - the tint")
 
-  defp ring(assigns) do
+  attr(:size, :atom,
+    default: :lg,
+    values: [:lg, :sm],
+    doc: ":lg is the card's, with a percent sign; :sm fits a heading line"
+  )
+
+  @doc """
+  The two-tone ring every progress surface draws: what is done in the brand
+  colour, what is under way in a lighter tint of it, what is ahead grey,
+  with a number inside. On a form page the tint is the step the user is
+  on; on the flow instance's page it is the forms in progress. `pathLength`
+  lets the dashes be percentages whatever the radius.
+  """
+  def ring(assigns) do
     ~H"""
-    <span class="relative grid size-16 shrink-0 place-items-center">
+    <span class={[
+      "relative grid shrink-0 place-items-center",
+      if(@size == :lg, do: "size-16", else: "size-9")
+    ]}>
       <svg viewBox="0 0 36 36" class="absolute inset-0 -rotate-90" aria-hidden="true">
         <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" stroke-width="3" class="text-zinc-200" />
         <circle
@@ -174,8 +188,11 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
           class="text-primary"
         />
       </svg>
-      <span class="relative text-base font-semibold tabular-nums">
-        {@percent}<span class="text-xs text-zinc-400">%</span>
+      <span class={[
+        "relative font-semibold tabular-nums",
+        if(@size == :lg, do: "text-base", else: "text-[10px]")
+      ]}>
+        {@percent}<span :if={@size == :lg} class="text-xs text-zinc-400">%</span>
       </span>
     </span>
     """

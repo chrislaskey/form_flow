@@ -10,7 +10,9 @@ defmodule FormFlow.Web.Instances do
     * `FormFlow.Web.Instances.Flows.Index` - the user's flow instances, and
       starting new ones
     * `FormFlow.Web.Instances.Flows.Show` - one instance's forms with
-      derived progress
+      derived progress, and where the viewer stands in it
+    * `FormFlow.Web.Instances.Flows.History` - what has happened in the
+      instance, newest first
     * `FormFlow.Web.Instances.Forms.Show` - the answers at one position,
       read-only
     * `FormFlow.Web.Instances.Forms.Edit` - the same position, editable -
@@ -22,6 +24,11 @@ defmodule FormFlow.Web.Instances do
   offers them as tabs - Edit, View, History
   (`FormFlow.Web.Instances.Components.Forms.Tabs`) - beside the form's
   status and its last event (`FormFlow.Web.Instances.Components.Forms.Status`).
+  The two flow instance pages are likewise its two views - Overview,
+  History (`FormFlow.Web.Instances.Components.Flows.Tabs`) - beside the
+  viewer's standing in it (`FormFlow.Web.Instances.Components.Flows.Status`).
+  What the two share - the instance, its forms, the viewer's rows, the
+  trail - is `FormFlow.Web.Instances.Flows.Shared`.
 
   Plus `FormFlow.Web.Instances.Components.Header` (the breadcrumb and title
   every page puts above its content, the same shape as the templates

@@ -365,14 +365,47 @@ defmodule Demo.FormFlowInstancesTest do
       assert reviewer =~ "Review / Review"
       refute reviewer =~ "Application / Intake"
 
-      # A viewer with no perspective, and a viewer of both, sees everything
+      # A viewer with no perspective, and a viewer of both, sees everything -
+      # as a card per subflow, its name in the head and its forms unprefixed
       {:ok, _view, everyone} = isolated(conn, [instance.id])
-      assert everyone =~ "Application / Intake"
-      assert everyone =~ "Review / Review"
+      assert everyone =~ "Application"
+      assert everyone =~ "Intake"
+      assert everyone =~ "Review"
+      refute everyone =~ "Application / Intake"
 
       {:ok, _view, both} = as(conn, ["applicant", "reviewer"], [instance.id])
-      assert both =~ "Application / Intake"
-      assert both =~ "Review / Review"
+      assert both =~ "Application"
+      assert both =~ "Intake"
+      assert both =~ "Review"
+    end
+
+    test "the flow's page says where the viewer stands, and its history what happened",
+         %{conn: conn} do
+      %{instance: instance, intake: intake} = licensing()
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Your turn"
+      assert html =~ "0 of 1 forms done"
+      assert html =~ ~s(href="#{flow_path(instance)}/history")
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id, "history"])
+      assert html =~ "Started"
+      assert html =~ "Licensing"
+      assert html =~ ~s(href="#{flow_path(instance)}")
+      refute html =~ "Submitted"
+
+      complete(instance, intake, %{"name" => "Ada"})
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Waiting on others"
+      assert html =~ "1 of 1 forms done"
+
+      {:ok, _view, html} = as(conn, "reviewer", [instance.id])
+      assert html =~ "Your turn"
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id, "history"])
+      assert html =~ "Submitted"
+      assert html =~ "Application / Intake"
     end
 
     test "a position for another perspective is refused, started or not", %{conn: conn} do
@@ -652,9 +685,12 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, view, html} = live(conn, flow_path(instance))
 
-      # Forms are labeled by the subflow they were reached through
-      assert html =~ "Documents / First"
-      assert html =~ "Details / Second"
+      # A card per subflow, named in its head, its forms unprefixed inside
+      assert html =~ "Documents"
+      assert html =~ "Details"
+      assert html =~ "First"
+      assert html =~ "Second"
+      refute html =~ "Documents / First"
 
       # The in-order subflow gates its second form; the any-order one doesn't
       assert offered?(view, instance, [documents_node.id, doc_first.id])

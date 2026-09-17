@@ -359,6 +359,47 @@ defmodule FormFlow.Data.Instances.Flows do
     Repo.all(from(f in Instances.Form, where: f.instance_flow_id == ^instance.id))
   end
 
+  @doc """
+  Everything that has happened in a journey, oldest first: its own events
+  (`FormFlow.Data.Instances.Flow.Event` - created, status_changed,
+  reconciled) and every form instance's
+  (`FormFlow.Data.Instances.Form.Event`), superseded instances included,
+  merged by `inserted_at` then `id`. Each entry is `%{event: event,
+  form_instance: form_instance}`, with `form_instance` nil for the
+  journey's own.
+
+  Two queries, whatever the count of forms: the trail is read whole, so a
+  page listing it or deriving a standing from it asks once.
+  """
+  @spec list_events(Instances.Flow.t()) :: [
+          %{event: Event.t() | Instances.Form.Event.t(), form_instance: Instances.Form.t() | nil}
+        ]
+  def list_events(%Instances.Flow{id: id}) do
+    own =
+      from(e in Event, where: e.instance_flow_id == ^id)
+      |> Repo.all()
+      |> Enum.map(&%{event: &1, form_instance: nil})
+
+    forms =
+      from(e in Instances.Form.Event,
+        join: f in Instances.Form,
+        on: e.instance_form_id == f.id,
+        where: f.instance_flow_id == ^id,
+        select: {e, f}
+      )
+      |> Repo.all()
+      |> Enum.map(fn {event, form} -> %{event: event, form_instance: form} end)
+
+    Enum.sort_by(own ++ forms, &{&1.event.inserted_at, &1.event.id}, fn
+      {a_at, a_id}, {b_at, b_id} ->
+        case DateTime.compare(a_at, b_at) do
+          :lt -> true
+          :gt -> false
+          :eq -> a_id <= b_id
+        end
+    end)
+  end
+
   defp delete_form_instance!(form_instance, opts) do
     case Instances.Forms.delete_instance(form_instance, opts) do
       {:ok, _deleted} -> :ok

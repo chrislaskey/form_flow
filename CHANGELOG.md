@@ -82,6 +82,53 @@ draw its own Submit - the header's would submit nothing. The one-line title
 of a form page is the form's own name; the trail above it still carries
 the subflow's ("Applicant / Owner Information").
 
+### The flow instance's page: where you stand, and its history
+
+The page a user lands on for one flow instance
+(`FormFlow.Web.Instances.Flows.Show`) is its **Overview** now, in the
+vocabulary the form pages settled on. After the flow's name, the viewer's
+**standing** - **Your turn**, **Needs your attention**, **Waiting on
+others**, **Completed** - derived per viewer from the rows the page draws
+for them, never stored (`FormFlow.Web.Instances.Components.Flows.Status`):
+a form of theirs sent back since it was submitted outranks everything; every
+form of theirs done, or none they can work on, waits; a form in progress or
+ready to start is their turn. Among the actions, the two views as one
+segmented control, **Overview | History**
+(`FormFlow.Web.Instances.Components.Flows.Tabs`), and **Download all**,
+disabled, a placeholder until one PDF of every completed form exists.
+
+Under the header, a **card** for the whole flow like the one a form page
+carries: the ring of forms done (`Components.Flows.Progress.ring/1`, public
+now, with a small size), the flow's name, "2 of 5 forms done · next Dog
+Information", and the one primary **Start** or **Continue** that goes to
+the form that wants the viewer now - sent back first, then under way, then
+the first they may start. A complex flow's forms are **a card per
+subflow** - a small ring and "1 of 5 done" in the head, the forms as rows
+inside, unprefixed since the head names the subflow; a simple flow's rows
+stay in one bordered box, labelled as before. Every row gained what last
+happened to it and when - "Submitted 3 days ago · dog_owner" - and reads
+**Reopened** in place of In progress when it was sent back. The row that is
+next up is tinted and carries the page's only primary button. **Details**
+is unchanged.
+
+`/:id/history` is new - `FormFlow.Web.Instances.Flows.History`: everything
+that has happened in the instance, newest first, each line naming the form
+it happened to - the instance started and completed, every form started,
+submitted, reopened, moved to a new version
+(`FormFlow.Data.Instances.Flows.list_events/1`, the instance's own events
+and every form instance's merged in two queries;
+`FormFlow.Web.Instances.Paths.flow_history_path/2`). What the two pages
+share - loading, rows, trail, standing - is
+`FormFlow.Web.Instances.Flows.Shared`, the sibling of `Forms.Shared`.
+
+**Breaking:** in a complex flow the rows are no longer labelled
+"Applicant / Owner Information"; the subflow's card head says Applicant
+and the row says Owner Information. A test asserting the qualified label on
+that page asserts the two apart now. The templates header
+(`FormFlow.Web.Templates.Components.Header`) lost its `description`
+attribute with the Overview and History pages' subtitles, so the header is
+the same two lines on every flow page and its actions sit at one height.
+
 ### The flow pages: Edit | View | Overview | History
 
 A flow template's four pages offer each other as one segmented control in
