@@ -31,6 +31,17 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   and carries the page's only primary button; every other Start or Continue
   is plain. Under it all, **Details** is the instance's own fact sheet.
 
+  The badge is the row's own word, not the derivation's alone. A form's
+  derived status is read inside its "forms" flow, where the first form of a
+  subflow is `:available` the moment that flow's Start is - even when the
+  step holding the flow is still shut. The row knows better, because it
+  also asked `editable?` of the flow's type and walked the doors above the
+  form (`FormFlow.Web.Instances.Flows.Shared`): an unstarted form the row
+  makes no offer on reads **Pending**, because Available is an offer and
+  this row has none. `row_status/1` is that word, and the badge, the
+  greying and the row's tint all read it, so nothing on the row can say
+  one thing while its buttons say another.
+
   Which forms appear, and which offer to start, is not this page's decision:
   each form belongs to a "forms" flow, and that flow's `FormFlow.Config.Flows.Type`
   answers `visible?/2` and `editable?/2` for it. A flow for another
@@ -414,16 +425,20 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   attr(:last, :boolean, default: false, doc: "the row list's last row rounds the card's corners")
 
   defp row(assigns) do
-    assigns = assign(assigns, next?: assigns.row == assigns.next_up)
+    assigns =
+      assign(assigns, next?: assigns.row == assigns.next_up, status: row_status(assigns.row))
 
     ~H"""
-    <div class={[
-      "flex flex-wrap items-center gap-3 px-6 py-4",
-      @next? && "bg-primary/5",
-      @last && "last:rounded-b-2xl",
-      @row.form.status == :pending && "text-zinc-400"
-    ]}>
-      <% {text, kind} = row_badge(@row) %>
+    <div
+      data-path={Enum.join(@row.form.path, ",")}
+      class={[
+        "flex flex-wrap items-center gap-3 px-6 py-4",
+        @next? && "bg-primary/5",
+        @last && "last:rounded-b-2xl",
+        @status == :pending && "text-zinc-400"
+      ]}
+    >
+      <% {text, kind} = row_badge(@status) %>
       <span class={[if(@next?, do: "font-semibold", else: "font-medium")]}>{@label}</span>
       <Core.badge components={@components} kind={kind}>{text}</Core.badge>
       <span :if={@row.last} class="text-sm text-zinc-500" title={FormStatus.absolute(@row.last.event.inserted_at)}>
@@ -474,12 +489,19 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     """
   end
 
-  # A row's badge: the flow's word for its state, except that a form sent
-  # back since it was last submitted reads Reopened, as its own pages say
-  defp row_badge(%{word: :reopened, form: %{status: :in_progress}}),
-    do: FormStatus.label(:reopened)
+  # A row's state as the page says it: the derived status of its form,
+  # except that a form sent back since it was last submitted reads Reopened,
+  # as its own pages say, and an unstarted form this row offers nothing on
+  # reads Pending rather than Available - the door above it is shut, or its
+  # flow's type keeps it closed
+  defp row_status(%{word: :reopened, form: %{status: :in_progress}}), do: :reopened
 
-  defp row_badge(%{form: %{status: status}}), do: Progress.badge(status)
+  defp row_status(%{editable?: false, form: %{status: :available, instance: nil}}), do: :pending
+
+  defp row_status(%{form: %{status: status}}), do: status
+
+  defp row_badge(:reopened), do: FormStatus.label(:reopened)
+  defp row_badge(status), do: Progress.badge(status)
 
   defp done(rows), do: Enum.count(rows, &(&1.form.status == :completed))
 

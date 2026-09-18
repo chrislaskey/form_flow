@@ -117,11 +117,16 @@ checks port 4001 and aborts if something is listening.
 
 The pet licensing flows (`archive/plans/pet-licensing.md`) are built by hand
 in the admin UI, not in code, so the demo has to carry them as data. It does
-so as SQL: `snapshot.sh` dumps every FormFlow table in `demo/demo_dev.db` to
-`overlay/priv/repo/form_flow_snapshot.sql`, one `INSERT` per row, and the
-migration `*_load_form_flow_snapshot.exs` replays that file when `mix setup`
-builds a fresh database. Ids are kept as built, so subflow references,
-`related_form` paths, and review `source` paths survive the round trip.
+so as SQL: `snapshot.sh` dumps the FormFlow template tables in
+`demo/demo_dev.db` to `overlay/priv/repo/form_flow_snapshot.sql`, one
+`INSERT` per row with its columns named, and the migration
+`*_load_form_flow_snapshot.exs` replays that file when `mix setup` builds a
+fresh database. Ids are kept as built, so subflow references, `related_form`
+paths, and review `source` paths survive the round trip. The instance tables
+- journeys and forms filled while trying the flows out - are left out unless
+asked for with `--with-instances`; they are test data more often than demo
+data. Naming the columns is what lets an older snapshot load after the
+library adds a column to a table.
 
 The cycle after editing a flow at `/admin`:
 

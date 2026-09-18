@@ -320,7 +320,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
         flow_instance_id: @flow_instance.id,
         forms: @forms,
         current_path: @path,
-        clickable: @clickable,
+        step_links: @step_links,
         context: @context,
         callback_data: @callback_data,
         components: @components

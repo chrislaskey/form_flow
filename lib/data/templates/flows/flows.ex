@@ -491,6 +491,37 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
+  Every node on the way down from the root to the given flow, root first:
+  the root's node that embeds the first subflow, that subflow's node that
+  embeds the next, and so on to the node that embeds `flow_id` itself
+  (`embedding_node/2` at each level). `[]` for the root flow itself, or for
+  a flow no node in the domain embeds.
+
+  This is the whole trail a breadcrumb walks back through
+  (`FormFlow.Web.Templates.Components.Header`), however deep the flow is
+  nested - each node is one crumb, linking to the page of the flow it sits
+  in.
+  """
+  @spec embedding_nodes(String.t(), String.t()) :: [Node.t()]
+  def embedding_nodes(flow_id, root_id), do: embedding_nodes(flow_id, root_id, [])
+
+  defp embedding_nodes(flow_id, root_id, acc) when flow_id == root_id, do: acc
+
+  defp embedding_nodes(flow_id, root_id, acc) do
+    case embedding_node(flow_id, root_id) do
+      nil ->
+        acc
+
+      %Node{} = node ->
+        # A cycle would be a corrupt tree; the guard against walking one
+        # forever is that every node is new to the trail
+        if Enum.any?(acc, &(&1.id == node.id)),
+          do: acc,
+          else: embedding_nodes(node.flow_id, root_id, [node | acc])
+    end
+  end
+
+  @doc """
   The node attributes every flow starts from: a pinned `Start` and `End`,
   nothing else - the user connects the dots. One universal seed for both
   flavors, used for new flows and for subflow children created at save.

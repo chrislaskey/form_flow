@@ -83,4 +83,63 @@ defmodule FormFlow.Web.Instances.Forms.EditTest do
       end
     end
   end
+
+  describe "save draft" do
+    # The form as the browser serialises it, which is what the Capture
+    # button pushes
+    defp save_draft, do: %{"params" => "dynamic_form%5Bname%5D=Ad"}
+
+    test "is refused in every state but the page drawing its form" do
+      for state <- [
+            :flow_not_found,
+            :redirecting,
+            :refused,
+            :not_visible,
+            :not_started,
+            :broken_definition,
+            :completed
+          ] do
+        socket = socket(%{page_state: state})
+
+        assert {:noreply, ^socket} = Edit.handle_event("save_draft", save_draft(), socket)
+      end
+    end
+
+    test "is refused when the page has no state at all" do
+      socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
+
+      assert {:noreply, ^socket} = Edit.handle_event("save_draft", save_draft(), socket)
+    end
+
+    test "the state is what decides it: ready reaches the write" do
+      # As far as the repo, which is absent here
+      assert_raise UndefinedFunctionError, fn ->
+        Edit.handle_event("save_draft", save_draft(), socket(%{}))
+      end
+    end
+  end
+
+  describe "discard changes" do
+    test "asking and confirming are both refused outside the page drawing its form" do
+      for state <- [:refused, :not_visible, :not_started, :broken_definition, :completed] do
+        socket = socket(%{page_state: state})
+
+        assert {:noreply, ^socket} = Edit.handle_event("request_discard", %{}, socket)
+        assert {:noreply, ^socket} = Edit.handle_event("confirm_discard", %{}, socket)
+      end
+    end
+
+    test "asking opens the dialog; confirming reaches the write" do
+      assert {:noreply, %{assigns: %{confirming_discard?: true}}} =
+               Edit.handle_event("request_discard", %{}, socket(%{}))
+
+      assert {:noreply, %{assigns: %{confirming_discard?: false}}} =
+               Edit.handle_event("cancel_discard", %{}, socket(%{confirming_discard?: true}))
+
+      # As far as the repo, which is absent here
+      assert_raise UndefinedFunctionError, fn ->
+        Edit.handle_event("confirm_discard", %{}, socket(%{}))
+      end
+    end
+  end
 end

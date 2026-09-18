@@ -1627,16 +1627,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     })
   end
 
-  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
+  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, ancestors: [])
 
+  # The whole way down from the root to the flow this node sits in, one
+  # crumb per level
   defp assign_breadcrumb(socket, node) do
     root = Flows.get(socket.assigns.root_id)
+    ancestors = if root, do: Flows.embedding_nodes(node.flow_id, root.id), else: []
 
-    parent_node =
-      if root && node.flow_id != root.id,
-        do: Flows.embedding_node(node.flow_id, root.id)
-
-    assign(socket, root: root, parent_node: parent_node)
+    assign(socket, root: root, ancestors: ancestors)
   end
 
   # The definition gate, run by DynamicForm on every submit. In form mode the
@@ -1734,7 +1733,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         base={@base}
         section="forms"
         root={@root}
-        parent_node={@parent_node}
+        ancestors={@ancestors}
         name={@form.name}
         mode={@params["mode"]}
         components={@components}
@@ -1874,7 +1873,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         base={@base}
         section="forms"
         root={@root}
-        parent_node={@parent_node}
+        ancestors={@ancestors}
         name={@form.name}
         mode={@params["mode"]}
         components={@components}

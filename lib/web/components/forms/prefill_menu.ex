@@ -22,18 +22,13 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
 
   **Capture** reads the answers off the form as it stands on the page and
   opens the same dialog New and Edit open, with them already filled in. It is
-  the one part of this feature with JavaScript in it, and it is there because
-  the DOM is the only thing the surfaces share: the template pages draw their
-  form in a child LiveView of their own (`FormFlow.Web.Templates.Forms.Preview`)
-  and an instance draws it in the page's own process, while both put the same
-  `<form>` on screen. `form_id` is which form - an explicit attr, since a
-  template page has two (the preview, and the editor's own fields) and the
-  answers are always the preview's.
-
-  What `FormData` collects is what the browser would submit, not what the
-  page can see: an unchecked box and a disabled field are absent rather than
-  empty, and a question hidden by a condition is present. The dialog says so
-  (`FormFlow.Web.Components.Forms.PrefillDialog`).
+  a `FormFlow.Web.Components.Forms.Capture` button - the one piece of
+  JavaScript in the feature lives there, shared with the Edit page's Save
+  draft, and its moduledoc says why the DOM is where the form is read from
+  and what `FormData` does and does not collect. `form_id` is which form -
+  an explicit attr, since a template page has two (the preview, and the
+  editor's own fields) and the answers are always the preview's. The dialog
+  says what a capture can miss (`FormFlow.Web.Components.Forms.PrefillDialog`).
 
   The caller owns what the items do: `open_prefill` with an `action` of
   `"create"` or `"update"`, `capture_prefill` with the serialised form as
@@ -42,6 +37,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
 
   use Phoenix.Component
 
+  alias FormFlow.Web.Components.Forms.Capture
   alias Phoenix.LiveView.JS
 
   attr(:id, :string, required: true)
@@ -99,20 +95,19 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
         <li>
           <%!-- The click does two things and neither is a server event from
                 the button: the JS command closes the menu the way its
-                siblings do, and the hook below reads the form and pushes
-                what it found. --%>
-          <button
-            type="button"
-            role="menuitem"
+                siblings do, and the Capture button's hook reads the form
+                and pushes what it found. --%>
+          <Capture.capture_button
             id={"#{@id}-capture"}
-            phx-hook=".Capture"
-            phx-target={@target}
-            data-form-id={@form_id}
+            form_id={@form_id}
+            event="capture_prefill"
+            target={@target}
+            role="menuitem"
             phx-click={JS.remove_attribute("open", to: "##{@id}")}
             class={item_class()}
           >
             Capture prefill
-          </button>
+          </Capture.capture_button>
         </li>
         <li :if={@selected}>
           <button
@@ -129,22 +124,6 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
           </button>
         </li>
       </ul>
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".Capture">
-        export default {
-          mounted() {
-            this.el.addEventListener("click", () => {
-              const form = document.getElementById(this.el.dataset.formId)
-              if (!form) return
-
-              // The same encoding a submit would send, so the page decodes it
-              // with Plug.Conn.Query and gets the params it already knows.
-              const params = new URLSearchParams(new FormData(form)).toString()
-
-              this.pushEventTo(this.el, "capture_prefill", {params})
-            })
-          }
-        }
-      </script>
     </details>
     """
   end

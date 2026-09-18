@@ -641,14 +641,25 @@ defmodule FormFlow.Data.Templates.Forms do
        when action in [:keep, :untouched],
        do: :ok
 
+  # The user's saved draft (FormFlow.Data.Instances.Form.Draft) follows the
+  # answers under every policy: carried along with them, re-keyed and pruned
+  # the same way, or cleared with them. It is never snapshotted onto the
+  # event - a draft is not attested, the answers are.
   defp apply_policy(instance, :carry, published, policy) do
     {data, dropped} = transform_data(instance.data, published, policy)
 
-    migrate!(instance, published, policy, "migrated", %{data: data}, dropped)
+    migrate!(
+      instance,
+      published,
+      policy,
+      "migrated",
+      %{data: data, draft: transform_draft(instance.draft, published, policy)},
+      dropped
+    )
   end
 
   defp apply_policy(instance, :reset, published, policy) do
-    migrate!(instance, published, policy, "migrated", %{data: %{}}, instance.data)
+    migrate!(instance, published, policy, "migrated", %{data: %{}, draft: nil}, instance.data)
   end
 
   defp apply_policy(instance, :reopen_carry, published, policy) do
@@ -659,7 +670,12 @@ defmodule FormFlow.Data.Templates.Forms do
       published,
       policy,
       "reopened",
-      %{data: data, status: "in_progress", completed_at: nil},
+      %{
+        data: data,
+        draft: transform_draft(instance.draft, published, policy),
+        status: "in_progress",
+        completed_at: nil
+      },
       dropped
     )
   end
@@ -670,9 +686,17 @@ defmodule FormFlow.Data.Templates.Forms do
       published,
       policy,
       "reopened",
-      %{data: %{}, status: "in_progress", completed_at: nil},
+      %{data: %{}, draft: nil, status: "in_progress", completed_at: nil},
       instance.data
     )
+  end
+
+  defp transform_draft(nil, _published, _policy), do: nil
+
+  defp transform_draft(%{"data" => data} = entry, published, policy) when is_map(data) do
+    {data, _dropped} = transform_data(data, published, policy)
+
+    Map.put(entry, "data", data)
   end
 
   defp migrate!(instance, published, policy, event, changes, snapshot) do

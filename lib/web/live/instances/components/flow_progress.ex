@@ -15,14 +15,22 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   the order can change and a percentage alone does not show it.
 
   The component is type-agnostic: it draws what it is given. Whether to draw
-  it at all and which forms can be jumped to (`clickable`) are the flow
-  type's decisions - `progress_component/1` and `editable?/2` of
+  it at all and where each step goes (`step_links`) are the flow type's
+  decisions - `progress_component/1` and `editable?/2` of
   `FormFlow.Config.Flows.Type` - asked by `FormFlow.Web.Instances.Forms.Shared`.
 
-  A jumpable step is a link to that position's edit page - which is the page
-  that starts it, so jumping needs no event of its own - and every other one
-  is the same row as plain text. The row is identical either way, so the
+  A step links one of two ways, and `step_links` says which by path: `:edit`
+  to the position's edit page - which is the page that starts it, so jumping
+  needs no event of its own - and `:view` to its answers, which is where a
+  submitted form belongs (its edit page only says it was submitted
+  already). A path `step_links` has no entry for is the same row as plain
+  text, the current form among them. The row is identical either way, so the
   list doesn't shift as forms become reachable; the link only wraps it.
+
+  So an in-order wizard's steps read back: the forms behind the user link to
+  their answers, the one they are on is plain, the ones ahead are plain and
+  grey. An any-order wizard's all link - what is done to its answers, the
+  rest to its form.
 
   `badge/1` lives here too: the wording and the palette of a form's state,
   shared with the flow instance page's listing so the two can't drift. So
@@ -47,11 +55,11 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
     doc: "the page's `FormFlow.Context`, for the flow's and subflow's names"
   )
 
-  attr(:clickable, :any,
-    default: nil,
+  attr(:step_links, :map,
+    default: %{},
     doc:
-      "a MapSet of the paths that can be navigated to - the current form " <>
-        "belongs in it only if navigating to it would do something; nil for none"
+      "where each step links, `:view` or `:edit` by path - a path absent " <>
+        "from it is drawn as plain text, and so the current form always is"
   )
 
   # Called as a plain function by the flow type's `progress_component/1`,
@@ -76,6 +84,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
         next: next,
         flow_name: flow_name(assigns[:context]),
         subflow_name: subflow_name(assigns[:context]),
+        step_links: assigns[:step_links] || %{},
         components: assigns[:components]
       })
 
@@ -123,14 +132,15 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
           ]}>
             {marker(form.status, index)}
           </span>
+          <% target = @step_links[form.path] %>
           <.link
-            :if={clickable?(@clickable, form)}
-            navigate={Paths.form_edit_path(@base, @flow_instance_id, form.path)}
+            :if={target}
+            navigate={step_path(target, @base, @flow_instance_id, form.path)}
             class="truncate hover:underline"
           >
             {form.label}
           </.link>
-          <span :if={not clickable?(@clickable, form)} class="truncate">{form.label}</span>
+          <span :if={is_nil(target)} class="truncate">{form.label}</span>
           <span class="sr-only">- {elem(badge(form.status), 0)}</span>
         </li>
       </ol>
@@ -208,8 +218,8 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   def badge(:available), do: {"Available", :info}
   def badge(_pending), do: {"Pending", :neutral}
 
-  defp clickable?(nil, _form), do: false
-  defp clickable?(clickable, form), do: MapSet.member?(clickable, form.path)
+  defp step_path(:edit, base, id, path), do: Paths.form_edit_path(base, id, path)
+  defp step_path(:view, base, id, path), do: Paths.form_path(base, id, path)
 
   defp marker(:completed, _index), do: "✓"
   defp marker(_status, index), do: index

@@ -237,6 +237,49 @@ defmodule Demo.FormFlowFormsTest do
       assert events_for(completed) == []
     end
 
+    test "the saved draft follows the answers: carried and re-keyed with them" do
+      {form, v1} = published_form()
+
+      instance =
+        insert_instance(v1,
+          data: %{"name" => "Ada"},
+          draft: %{"data" => %{"name" => "Ad", "note" => "wip"}, "user_id" => "ada"}
+        )
+
+      {:ok, v2} = publish_next(form, v1, preset: :bug_fix, renames: %{"name" => "full_name"})
+
+      carried = reload(instance)
+      assert carried.template_form_version_id == v2.id
+      assert carried.data == %{"full_name" => "Ada"}
+
+      # Re-keyed like the answers, with who saved it untouched
+      assert carried.draft == %{
+               "data" => %{"full_name" => "Ad", "note" => "wip"},
+               "user_id" => "ada"
+             }
+
+      # The event snapshots what prune dropped from the answers - nothing
+      # here - and never the draft
+      assert [%{event: "migrated", snapshot: %{}}] = events_for(instance)
+    end
+
+    test "the saved draft is cleared with the answers, and not snapshotted" do
+      {form, v1} = published_form()
+
+      instance =
+        insert_instance(v1,
+          data: %{"name" => "Ada"},
+          draft: %{"data" => %{"name" => "Ad"}, "user_id" => "ada"}
+        )
+
+      {:ok, _v2} = publish_next(form, v1, preset: :big_fix)
+
+      reset = reload(instance)
+      assert reset.data == %{}
+      assert reset.draft == nil
+      assert [%{event: "migrated", snapshot: %{"name" => "Ada"}}] = events_for(instance)
+    end
+
     test "big fix resets in-progress and reopens completed, snapshotting discarded data" do
       {form, v1} = published_form()
       in_progress = insert_instance(v1, data: %{"name" => "Ada"})

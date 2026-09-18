@@ -21,6 +21,14 @@ defmodule FormFlow.Data.Instances.Form do
   snapshot - is a deliberately deferred optimization; see
   `archive/plans/instances-next.md`.)
 
+  `draft` is the user's saved draft, or nil: one entry holding the form as
+  it stood on the page when they pressed Save draft - valid or not - with
+  who saved it and when (`FormFlow.Data.Instances.Form.Draft`). It is not
+  answers and nothing reads it as answers; the Edit page draws it over
+  `data`, and completion clears it. It moves only through
+  `draft_changeset/2`, never `changeset/2`, so an update to anything else
+  on the row can never carry a stray draft with it.
+
   An instance carries two opaque host identities, the same pair as
   `FormFlow.Data.Instances.Flow`: `user_id`, the user who started it, and
   `tenant_id`, the host tenant it belongs to, `nil` for a host with no
@@ -50,6 +58,7 @@ defmodule FormFlow.Data.Instances.Form do
   import Ecto.Changeset
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.Form.Draft
   alias FormFlow.Data.Templates.Form.Version
 
   @statuses ~w(in_progress completed)
@@ -67,6 +76,7 @@ defmodule FormFlow.Data.Instances.Form do
     field(:data, :map, default: %{})
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
+    field(:draft, :map)
 
     belongs_to(:instance_flow, Instances.Flow, foreign_key: :instance_flow_id)
     field(:path, {:array, :string}, default: [])
@@ -118,6 +128,26 @@ defmodule FormFlow.Data.Instances.Form do
     |> put_change(:instance_flow_id, instance_flow_id)
     |> put_change(:path, path)
     |> finalize()
+  end
+
+  @doc """
+  The one changeset that moves `draft`: the whole entry, or nil to clear
+  it. `FormFlow.Data.Instances.Forms.save_draft/4` is what writes one;
+  `changeset/2` never casts it. The check is the shape and nothing more -
+  `FormFlow.Data.Instances.Form.Draft.entry?/1` - since a draft's answers
+  are unvalidated by definition, and what would fail here is a program
+  writing the wrong thing, not a user.
+  """
+  def draft_changeset(instance, nil), do: change(instance, draft: nil)
+
+  def draft_changeset(instance, draft) when is_map(draft) do
+    changeset = change(instance, draft: draft)
+
+    if Draft.entry?(draft) do
+      changeset
+    else
+      add_error(changeset, :draft, ~s(a draft is a map with its answers under "data"))
+    end
   end
 
   defp finalize(changeset) do

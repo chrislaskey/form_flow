@@ -190,16 +190,15 @@ defmodule FormFlow.Web.Templates.Forms.Show do
     id && Forms.get(id)
   end
 
-  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, parent_node: nil)
+  defp assign_breadcrumb(socket, nil), do: assign(socket, root: nil, ancestors: [])
 
+  # The whole way down from the root to the flow this node sits in, one
+  # crumb per level
   defp assign_breadcrumb(socket, node) do
     root = Flows.get(socket.assigns.root_id)
+    ancestors = if root, do: Flows.embedding_nodes(node.flow_id, root.id), else: []
 
-    parent_node =
-      if root && node.flow_id != root.id,
-        do: Flows.embedding_node(node.flow_id, root.id)
-
-    assign(socket, root: root, parent_node: parent_node)
+    assign(socket, root: root, ancestors: ancestors)
   end
 
   # An explicit version id wins; otherwise latest published, falling back to
@@ -412,7 +411,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
         base={@base}
         section="forms"
         root={@root}
-        parent_node={@parent_node}
+        ancestors={@ancestors}
         name={@form.name}
         mode={@params["mode"]}
         components={@components}

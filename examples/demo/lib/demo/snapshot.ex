@@ -9,7 +9,8 @@ defmodule Demo.Snapshot do
   (`Demo.Repo.Migrations.LoadFormFlowSnapshot`) and `Demo.Reset`, which puts a
   running demo back to it.
 
-  The file is one `INSERT` per line in parent-first table order — `sqlite3`
+  The file is one `INSERT` per line in parent-first table order, each naming
+  its columns so a row still loads after its table gains one — `sqlite3`
   escapes embedded newlines with `replace()`, which is what makes splitting on
   lines safe.
   """

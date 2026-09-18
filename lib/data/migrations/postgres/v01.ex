@@ -89,6 +89,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     replace all nodes (clear_contents), so any FK action would fire on
   #     every routine save - and a node column would be a derivable copy of
   #     last(path).
+  #   * `instance_forms.draft` - the user's saved draft: one entry holding
+  #     the answers as typed, valid or not, with who saved it and when
+  #     (FormFlow.Data.Instances.Form.Draft). NULL when there is none.
+  #     Cleared by completion; never read as answers - `data` is the answers.
   #   * `instance_forms.superseded_at` - stamped by strand reconciliation on
   #     the old instance when its successor is created; derivation skips
   #     superseded rows. The unique index is scoped to active rows: one
@@ -336,6 +340,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:data, :map, null: false, default: %{})
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
+      add(:draft, :map)
 
       add(
         :instance_flow_id,

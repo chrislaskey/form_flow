@@ -1,5 +1,104 @@
 # Changelog
 
+## v0.31.0
+
+### Save draft on a form instance
+
+A user filling a form can save what they have typed so far and come back
+to it: **Save draft** in the Edit page's header stores the form as it
+stands on the page - valid or not - on the form instance, without
+submitting it. The next visit draws the draft over the stored answers, and
+the header says "Draft saved 3 minutes ago · user" beside the last event
+line. Submitting clears it. Each form instance has one draft; saving again
+replaces it.
+
+The draft is a new nullable `draft` column on `form_flow_instance_forms`,
+holding one entry - the answers under `"data"`, with `"user_id"` and
+`"saved_at"` beside them - read and written through
+`FormFlow.Data.Instances.Form.Draft`, the shape a prefill's entry has.
+`FormFlow.Data.Instances.Forms.save_draft/4` writes it, addressed by
+journey and position like `update_status/4`; `get_draft/1` reads it;
+`FormFlow.Data.Instances.Form.draft_changeset/2` is the only changeset that
+moves the column. Completion sets it to nil in the same write that stores
+the answers. A publish's migration policy treats the draft as it treats
+the answers: carried and re-keyed with them, or cleared with them, and
+never snapshotted onto the event.
+
+A draft is not answers, and nothing reads it as answers: Show, the PDF, a
+review's snapshot, and progress derivation all keep reading `data`. Saving
+a draft writes **no event** - the trail keeps saying what happened to the
+form (Started, Submitted, Reopened, Moved to a new version), and who saved
+the draft and when are on the draft itself.
+
+The form is read off the page the way Capture prefill reads it, and the
+two now share one component: `FormFlow.Web.Components.Forms.Capture`'s
+`capture_button/1` carries the hook that serialises a rendered `<form>`
+and pushes it as `params` under the event the caller names.
+`FormFlow.Web.Components.Forms.Prefills.answers_from_params/1` decodes
+those params to question names and values; both Save draft and the
+prefill dialog's capture use it.
+
+**Discard changes** sits beside Save draft: it removes the saved draft
+(`FormFlow.Data.Instances.Forms.delete_draft/2`) and puts the form back to
+its answers - what was last submitted on a reopened form, an empty form on
+one never submitted. It asks first, and confirming reloads the page from
+the database, the way the flow editor's Discard changes does.
+
+**Schema.** `V01` gains the `draft` column on both adapters. A database
+migrated before this release has to be recreated (the library is
+pre-release and `V01` is the schema).
+
+### Template breadcrumbs walk the whole way down
+
+A template page reached inside a root flow - a nested subflow's canvas, or
+a form's page - now draws every subflow on the way down from the root as
+its own crumb, as the instance pages do: Flows / Taxes 2026 / Wages /
+Employer / W-2 Details, each crumb linking to the page of the flow its
+node sits in (in edit mode, to its editor). Before, the trail stopped at
+the immediate parent however deep the page was.
+`FormFlow.Data.Templates.Flows.embedding_nodes/2` is the chain behind it,
+root first; `FormFlow.Web.Templates.Components.Header` takes it as
+`ancestors` in place of the single `parent_node`.
+
+### The progress banner's steps link where they can be visited
+
+**Show steps** on a form page's progress banner now links the steps a user
+can actually reach. A form already submitted links to its **answers**, a
+form the flow's type lets them work in links to its **form**, and anything
+else stays plain text - the form they are on among them, since going there
+would do nothing. So an in-order wizard's banner, which used to be inert
+text from end to end, now reads back over the forms behind the user, and an
+any-order wizard's links all of its forms: what is done to its answers, the
+rest to its form.
+
+A submitted form's edit page only says it was submitted, so nothing links
+there any more. That is the whole rule change - which forms may be reached
+is still `editable?/2`'s answer and the doors above the form
+(`FormFlow.Web.Instances.Forms.Shared.enterable_chain?/2`), untouched.
+
+**Breaking.** `FormFlow.Web.Instances.Components.Flows.Progress.flow_progress/1`
+takes `step_links` in place of `clickable`: a map of path to `:view` or
+`:edit` rather than a `MapSet` of paths, a path absent from it drawn as
+plain text. `FormFlow.Web.Instances.Forms.Shared.assigns/1` assigns
+`:step_links` in place of `:clickable`. A host drawing its own progress
+component from `progress_component/1` has to read the new key.
+
+### A flow overview row that offers nothing says Pending
+
+A form's row on a flow instance's Overview no longer says **Available**
+when it has no Start to offer. A form's derived status is read inside its
+own "forms" flow, so the first form of a subflow is `:available` as soon as
+that flow's Start is - even while the step holding the flow is still shut,
+which is why the row drew Available beside no button at all. The row now
+takes the same two answers the button takes - the flow type's `editable?/2`
+and the doors above the form - and an unstarted form it makes no offer on
+reads **Pending**, greyed with the other pending rows.
+
+The derivation is unchanged, and deliberately: whether a step can be
+entered out of turn is its flow type's answer, not the AND-join's, so the
+page is where the two meet. Each row also carries its position as
+`data-path` now.
+
 ## v0.30.0
 
 ### Flow types for a "subflows" flow: In order and Any order

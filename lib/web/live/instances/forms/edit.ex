@@ -71,6 +71,40 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   the dialog says on screen. Who may write one in an `open` flow is a
   question this page does not answer yet.
 
+  ## Drafts
+
+  **Save draft** keeps the user's place: it stores the form as it stands on
+  the page - valid or not - on the instance
+  (`FormFlow.Data.Instances.Forms.save_draft/4`,
+  `FormFlow.Data.Instances.Form.Draft`), without submitting it. The next
+  visit draws the draft over the stored answers
+  (`FormFlow.Web.Instances.Forms.Shared.assigns/1`), and the header says
+  when and by whom it was saved. A draft is not answers: Show never sees
+  it, nothing downstream reads it, and the event trail is not told - the
+  last event line keeps saying what actually happened to the form.
+  Submitting clears it.
+
+  The form is read off the DOM for the same reason Capture reads it there
+  (`FormFlow.Web.Components.Forms.Capture`): a submit's payload has been
+  validated, and validating is exactly what a draft must not do. The same
+  edges apply - an unchecked box and a disabled field are absent from
+  what is saved, a question hidden by a condition is present. After a
+  save the page refreshes the instance and the header line and leaves the
+  form's `data` alone: re-assigning it would rebuild the form under the
+  user (the DynamicForm rebuild trap), and what it would rebuild from is
+  not identical to what is on screen.
+
+  **Discard changes** is the way back: it removes the saved draft
+  (`FormFlow.Data.Instances.Forms.delete_draft/2`) and puts the form back to
+  its answers - what was last submitted on a reopened form, an empty form on
+  one never submitted. It asks first, as the flow editor's does, and
+  confirming reloads this page via `push_navigate/2` - a full remount from
+  the database rather than resetting the form by hand, for the reason the
+  flow editor gives (`FormFlow.Web.Templates.Flows.Edit`): a fresh load
+  cannot drift from what a fresh load already does correctly. The reload
+  drops a `?prefill=` from the URL too, so discarding leaves nothing but
+  the answers on the form.
+
   ## The states it draws
 
   Every one of `FormFlow.Web.Instances.Shared.form_page_state/1`'s, each in
@@ -115,6 +149,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Forms.Capture
   alias FormFlow.Web.Components.Forms.PrefillDialog
   alias FormFlow.Web.Components.Forms.PrefillMenu
   alias FormFlow.Web.Components.Forms.PrefillPicker
@@ -196,6 +231,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:prefill_dialog, fn -> nil end)
       |> assign_new(:prefill_error, fn -> nil end)
       |> assign_new(:confirming_reopen?, fn -> false end)
+      |> assign_new(:confirming_discard?, fn -> false end)
 
     {:ok, socket |> load() |> assign_page_state()}
   end
@@ -306,6 +342,75 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def handle_event("cancel_prefill", _params, socket) do
     {:noreply, assign(socket, prefill_dialog: nil, prefill_error: nil)}
   end
+
+  # Save draft: the form as it stands, off the DOM, stored without a
+  # validation pass. Guarded on `:ready` as the submit is - a page the gate
+  # would refuse cannot write - and, like the submit, it does not recompute
+  # the state, so it relies on `save_draft/4` refusing a completed instance.
+  # `:initial_data` is deliberately left alone afterwards: see the moduledoc.
+  @impl true
+  def handle_event("save_draft", %{"params" => params}, socket)
+      when socket.assigns.page_state == :ready do
+    %{flow_instance: flow_instance, form_instance: form_instance, context: context} =
+      socket.assigns
+
+    answers = Prefills.answers_from_params(params)
+
+    case Instances.Forms.save_draft(flow_instance, form_instance.path, answers,
+           user_id: socket.assigns.user_id
+         ) do
+      {:ok, saved} ->
+        {:noreply,
+         assign(socket,
+           form_instance: saved,
+           draft: Instances.Forms.get_draft(saved),
+           context: %{context | form_instance: saved},
+           error: nil
+         )}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, :error, "Could not save the draft. Please try again.")}
+    end
+  end
+
+  # Silent for the reason a refused submit is
+  def handle_event("save_draft", _params, socket), do: {:noreply, socket}
+
+  # Discard changes: asked first, then the draft goes and the page reloads
+  # from the database. Both the asking and the write are guarded on `:ready`,
+  # the state the button is drawn in.
+  @impl true
+  def handle_event("request_discard", _params, socket)
+      when socket.assigns.page_state == :ready do
+    {:noreply, assign(socket, :confirming_discard?, true)}
+  end
+
+  def handle_event("request_discard", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("cancel_discard", _params, socket) do
+    {:noreply, assign(socket, :confirming_discard?, false)}
+  end
+
+  @impl true
+  def handle_event("confirm_discard", _params, socket)
+      when socket.assigns.page_state == :ready do
+    %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
+
+    case Instances.Forms.delete_draft(flow_instance, form_instance.path) do
+      {:ok, _instance} ->
+        {:noreply, push_navigate(socket, to: prefill_path(socket.assigns, nil))}
+
+      {:error, _reason} ->
+        {:noreply,
+         assign(socket,
+           confirming_discard?: false,
+           error: "Could not discard the changes. Please try again."
+         )}
+    end
+  end
+
+  def handle_event("confirm_discard", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("request_reopen", _params, socket)
@@ -586,15 +691,29 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     ~H"""
     <div>
       <.page_header {header_assigns(assigns)}>
+        <.draft_line draft={@draft} class="mr-2" />
         <Status.last_event events={@events} class="mr-2" />
-        <%!-- A placeholder until saving a draft exists: answers are written
-              on submit and at no other time
-              (`archive/plans/instances-refresh.md` §7) --%>
-        <span title="Saving a draft isn't available yet. Your answers are stored when you submit.">
-          <Core.button components={@components} type="button" class="btn btn-ghost" disabled>
-            Save draft
-          </Core.button>
-        </span>
+        <%!-- Save draft reads the form below off the page - the same form
+              Capture reads, by the same id - and stores it as it stands --%>
+        <Capture.capture_button
+          id={"#{@id}-save-draft"}
+          form_id={"#{form_component_id(assigns)}-form"}
+          event="save_draft"
+          target={@myself}
+          class="btn btn-ghost"
+        >
+          Save draft
+        </Capture.capture_button>
+        <Core.button
+          id={"#{@id}-discard"}
+          components={@components}
+          type="button"
+          phx-click="request_discard"
+          phx-target={@myself}
+          class="btn btn-error btn-ghost"
+        >
+          Discard changes
+        </Core.button>
         <%!-- Submit lives up here, pinned with the header, as a button whose
               `form` attribute names the form DynamicForm draws below - the
               same id Capture reads - so the form's own button is hidden
@@ -615,7 +734,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         flow_instance_id: @flow_instance.id,
         forms: @forms,
         current_path: @path,
-        clickable: @clickable,
+        step_links: @step_links,
         context: @context,
         callback_data: @callback_data,
         components: @components
@@ -666,6 +785,39 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         callback_data: @callback_data,
         components: @components
       })}
+
+      <div
+        :if={@confirming_discard?}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <div class="w-96 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+          <p class="mb-4 text-sm text-zinc-700">
+            Discard changes? The form goes back to what was last submitted, or empties if it
+            never was. A saved draft is removed too. This can't be undone.
+          </p>
+          <div class="flex justify-end gap-2">
+            <Core.button
+              components={@components}
+              type="button"
+              phx-click="cancel_discard"
+              phx-target={@myself}
+              class="btn"
+            >
+              Keep editing
+            </Core.button>
+            <Core.button
+              id={"#{@id}-confirm-discard"}
+              components={@components}
+              type="button"
+              phx-click="confirm_discard"
+              phx-target={@myself}
+              class="btn btn-error btn-ghost"
+            >
+              Discard changes
+            </Core.button>
+          </div>
+        </div>
+      </div>
 
       <PrefillDialog.prefill_dialog
         :if={@prefill_dialog}
@@ -742,8 +894,32 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     }
   end
 
+  attr(:draft, :map, default: nil, doc: "the user's saved draft, or nil")
+  attr(:class, :any, default: nil)
+
+  # The saved draft as one line - "Draft saved 3 minutes ago · dog_owner" -
+  # drawn the way the last event line is, since it answers the same question
+  # about a different thing: this is not an event and is not in the trail.
+  # Nothing when there is no draft.
+  defp draft_line(assigns) do
+    ~H"""
+    <span :if={@draft} class={["flex items-center gap-2 text-sm text-zinc-600", @class]}>
+      <span class="size-2 shrink-0 rounded-full bg-cyan-600" />
+      <span>
+        Draft saved
+        <span :if={@draft.saved_at} class="text-zinc-500" title={Status.absolute(@draft.saved_at)}>
+          {FormFlow.Web.Templates.Shared.relative(@draft.saved_at)}
+        </span>
+        <span :if={@draft.user_id} class="text-zinc-500">
+          · <code class="text-xs">{@draft.user_id}</code>
+        </span>
+      </span>
+    </span>
+    """
+  end
+
   # The id the form type is handed, and - with `-form` on the end - the DOM id
-  # of the `<form>` it draws, which is what Capture reads
+  # of the `<form>` it draws, which is what Capture and Save draft read
   # (`FormFlow.Config.Forms.Type`'s `edit_component/1` renders `DynamicForm.form`
   # under this id, and DynamicForm's renderer adds the suffix). Spelled once,
   # so the menu and the form it names cannot drift apart.

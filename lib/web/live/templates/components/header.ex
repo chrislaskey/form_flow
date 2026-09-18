@@ -5,7 +5,8 @@ defmodule FormFlow.Web.Templates.Components.Header do
   about on the left, its actions on the right.
 
   The left side is two lines. On top, small, the **breadcrumb**: Form Flow
-  / Flows|Forms / Root / Parent / this page, the trail back out. Under it
+  / Flows|Forms / Root / each subflow on the way down / this page, the trail
+  back out. Under it
   the **title** names the thing on the page - the subflow or form reached
   inside a root flow, with "in <root>" lighter after it, or the root flow
   itself. What the page has to say about the thing - its kind, its type,
@@ -41,14 +42,15 @@ defmodule FormFlow.Web.Templates.Components.Header do
   own top-level section instead (`section`): `"flows"` for a flow shown or
   edited directly, `"forms"` for a form from the catalog.
 
-  `root` and `parent_node` are the structs the pages already load
-  (`FormFlow.Data.Templates.Flow` and `.Flow.Node`) - `nil` for either skips
-  its crumb. `parent_node` is the *immediate* embedding node
-  (`FormFlow.Data.Templates.Flows.embedding_node/2`), which is as far back
-  as a breadcrumb goes regardless of how many levels a form is actually
-  nested.
+  `root` is the root `FormFlow.Data.Templates.Flow` the pages already load -
+  `nil` skips its crumb - and `ancestors` the `FormFlow.Data.Templates.Flow.Node`s
+  on the way down from it to the flow the page is in, root first
+  (`FormFlow.Data.Templates.Flows.embedding_nodes/2`): one crumb per level,
+  however deep the subflow or form is nested, each linking to the page of
+  the flow that node sits in - so the trail reads the whole chain, as the
+  instance pages' does. `[]` for a page in the root flow.
 
-  `mode` decides whether the Root and Parent crumbs target their flow's
+  `mode` decides whether the Root and subflow crumbs target their flow's
   edit page or its show page - `"edit"` for the one, anything else (`nil`
   included) for the other. It answers "was the visitor editing this flow
   before they got here", not "is this page itself in edit mode":
@@ -91,9 +93,11 @@ defmodule FormFlow.Web.Templates.Components.Header do
     doc: "the root `FormFlow.Data.Templates.Flow` - nil outside a drill-in"
   )
 
-  attr(:parent_node, :map,
-    default: nil,
-    doc: "the immediate embedding `FormFlow.Data.Templates.Flow.Node` - form pages only"
+  attr(:ancestors, :list,
+    default: [],
+    doc:
+      "the embedding `FormFlow.Data.Templates.Flow.Node`s from the root down to the " <>
+        "flow the page is in, root first - `[]` for a page in the root flow"
   )
 
   attr(:mode, :string, default: nil, doc: ~s(\"edit\" routes Root/Parent to their edit pages))
@@ -128,15 +132,16 @@ defmodule FormFlow.Web.Templates.Components.Header do
               {@root.name || "Untitled"}
             </.crumb>
             <span class="text-zinc-400">/</span>
-            <.crumb
-              :if={@parent_node}
-              to={node_path(@base, @root.id, @parent_node.id, @mode)}
-              target={@target}
-              components={@components}
-            >
-              {parent_node_label(@parent_node)}
-            </.crumb>
-            <span :if={@parent_node} class="text-zinc-400">/</span>
+            <%= for node <- @ancestors do %>
+              <.crumb
+                to={node_path(@base, @root.id, node.id, @mode)}
+                target={@target}
+                components={@components}
+              >
+                {node_label(node)}
+              </.crumb>
+              <span class="text-zinc-400">/</span>
+            <% end %>
           <% else %>
             <%= if @name do %>
               <.crumb to={"#{@base}/#{@section}"} target={@target} components={@components}>
@@ -204,7 +209,7 @@ defmodule FormFlow.Web.Templates.Components.Header do
     """
   end
 
-  defp parent_node_label(node), do: get_in(node.properties, ["data", "label"]) || "Subflow"
+  defp node_label(node), do: get_in(node.properties, ["data", "label"]) || "Subflow"
 
   defp flow_path(base, flow_id, "edit"), do: "#{base}/flows/#{flow_id}/edit"
   defp flow_path(base, flow_id, _mode), do: "#{base}/flows/#{flow_id}"

@@ -15,10 +15,11 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
   difference more than they need the row's word.
 
   The last event line names the newest event by what it did - Started,
-  Submitted, Reopened, Moved to a new version - when, and by whom. There is
-  no "Saved" here yet: the pages write answers only on submit, so the
-  newest thing that happened is always one of those four. When saving a
-  draft exists it will be a fifth (`archive/plans/instances-refresh.md` §7).
+  Submitted, Reopened, Moved to a new version - when, and by whom. Saving a
+  draft is deliberately not among them: a draft is the user keeping their
+  place, not something that happened to the form, so it writes no event
+  and the Edit page says "Draft saved" in a line of its own beside this one
+  (`archive/plans/instance-form-drafts.md` §9).
 
   Pure functions first (`status/2`, `event_label/1`) so the rules are
   tested without a socket; then the two components that draw them.

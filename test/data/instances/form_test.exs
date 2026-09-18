@@ -147,6 +147,69 @@ defmodule FormFlow.Data.Instances.FormTest do
     end
   end
 
+  describe "the saved draft" do
+    alias FormFlow.Data.Instances.Form.Draft
+
+    test "draft is not castable - save_draft/4 is what writes one" do
+      changeset =
+        Instances.Form.changeset(%Instances.Form{}, %{
+          template_form_version_id: @version_id,
+          draft: %{"data" => %{"name" => "Ada"}}
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :draft) == nil
+    end
+
+    test "draft_changeset/2 takes an entry or nil, and refuses anything else" do
+      instance = %Instances.Form{template_form_version_id: @version_id}
+      entry = %{"data" => %{"name" => "Ad"}, "user_id" => "ada"}
+
+      assert Instances.Form.draft_changeset(instance, entry).valid?
+      assert Instances.Form.draft_changeset(instance, nil).valid?
+
+      # The answers are the entry's, not the entry: a program writing the
+      # bare map is what this catches
+      changeset = Instances.Form.draft_changeset(instance, %{"name" => "Ad"})
+      refute changeset.valid?
+      assert [draft: _] = changeset.errors
+    end
+
+    test "an entry round-trips through the struct, saying only what was set" do
+      saved_at = ~U[2026-09-17 15:04:11.412000Z]
+      draft = %Draft{data: %{"name" => "Ad"}, user_id: "ada", saved_at: saved_at}
+
+      entry = Draft.to_entry(draft)
+
+      assert entry == %{
+               "data" => %{"name" => "Ad"},
+               "user_id" => "ada",
+               "saved_at" => "2026-09-17T15:04:11.412000Z"
+             }
+
+      assert Draft.from_entry(entry) == draft
+
+      # Nothing set but the answers: no nil keys stored, nils read back
+      assert Draft.to_entry(%Draft{data: %{}}) == %{"data" => %{}}
+      assert %Draft{data: %{}, user_id: nil, saved_at: nil} = Draft.from_entry(%{"data" => %{}})
+
+      # A timestamp that will not parse reads as none rather than crashing
+      assert Draft.from_entry(%{"data" => %{}, "saved_at" => "yesterday"}).saved_at == nil
+    end
+
+    test "saved_at is not castable - the context stamps it" do
+      changeset =
+        Draft.changeset(%Draft{}, %{
+          data: %{"name" => "Ada"},
+          user_id: "ada",
+          saved_at: DateTime.utc_now()
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :saved_at) == nil
+    end
+  end
+
   describe "Instances.Form.Event.changeset/2" do
     test "requires the instance and a whitelisted event" do
       instance_id = Ecto.UUID.generate()

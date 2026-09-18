@@ -35,8 +35,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       which Edit asks again after a submit to find where to go next
     * `:form_type` - the `FormFlow.Config.Forms.Type` governing the form
       itself
-    * `:initial_data` - what the form renders with, from the form type's
-      `initial_data/2`; nil until the form has an instance
+    * `:initial_data` - what the form renders with: the form type's
+      `initial_data/2`, over a chosen prefill, under the user's saved
+      draft; nil until the form has an instance
+    * `:draft` - the user's saved draft
+      (`FormFlow.Data.Instances.Form.Draft`), or nil. Edit says when and by
+      whom it was saved; its answers are already in `:initial_data`
     * `:context` - the `FormFlow.Context` both types' callbacks take, for
       this form
     * `:visible?` - whether the type says this form's flow is for the viewer
@@ -46,8 +50,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:start_error` - why `start/1` could not start the form, or nil
     * `:mount_error` / `:navigate_to` - the host's `on_mount` answer when it
       refused or redirected, or nil
-    * `:clickable` - the sibling forms the type lets the user jump to, for
-      `FormFlow.Web.Instances.Components.Flows.Progress`
+    * `:step_links` - where each sibling form's step links, `:view` or
+      `:edit` by path, for `FormFlow.Web.Instances.Components.Flows.Progress`
     * `:flow_name` / `:form_label` / `:form_trail` - what the breadcrumb needs:
       the flow's name, the full "subflow / subflow / form" text, and the
       subflow names alone, outermost first, for drawing each as its own link
@@ -70,6 +74,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
 
   # What a flow is governed by when its context has no types at all - a
@@ -104,21 +109,26 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     form_type = form_type(context, socket.assigns)
     prefills = prefills(context)
     prefill = prefill(context, socket.assigns.params["prefill"])
+    draft = Instances.Forms.get_draft(form_instance)
 
     socket
     |> assign(
       form: context.form_progress,
       forms: context.flow_progress,
       form_instance: form_instance,
-      events: (form_instance && Instances.Forms.list_events(form_instance)) || [],
+      events: events(form_instance),
       type: type,
       form_type: form_type,
       initial_data:
-        form_instance &&
-          fill_from_prefill(
-            form_type.module.initial_data(context, socket.assigns.callback_data),
-            prefill
-          ),
+        initial_data(
+          form_instance,
+          form_type,
+          context,
+          socket.assigns.callback_data,
+          prefill,
+          draft
+        ),
+      draft: draft,
       context: context,
       visible?: visible?,
       editable?: editable?,
@@ -126,7 +136,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       start_error: nil,
       mount_error: nil,
       navigate_to: nil,
-      clickable: clickable(type, context, socket.assigns),
+      step_links: step_links(type, context, socket.assigns),
       flow_name: (tree && tree.flow.name) || "Untitled flow",
       prefills: prefills,
       prefill: prefill,
@@ -140,12 +150,30 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     |> parse(version)
   end
 
+  defp events(nil), do: []
+  defp events(form_instance), do: Instances.Forms.list_events(form_instance)
+
+  defp initial_data(nil, _form_type, _context, _callback_data, _prefill, _draft), do: nil
+
+  defp initial_data(_form_instance, form_type, context, callback_data, prefill, draft) do
+    form_type.module.initial_data(context, callback_data)
+    |> fill_from_prefill(prefill)
+    |> fill_from_draft(draft)
+  end
+
   # The prefill's answers under whatever the form type supplies, which is the
   # user's stored answers by default: filling a form in from a saved set can
   # never replace something the user typed
   # (`FormFlow.Data.Templates.Form.Prefill`).
   defp fill_from_prefill(initial_data, nil), do: initial_data
   defp fill_from_prefill(initial_data, prefill), do: Map.merge(prefill.data, initial_data)
+
+  # The user's saved draft over everything else: it is the newest thing they
+  # did to this form. A reopened form has its submitted answers in `data`;
+  # a draft saved after the reopen is what they were changing them to. So
+  # the order is prefill under, stored answers over it, draft over both.
+  defp fill_from_draft(initial_data, nil), do: initial_data
+  defp fill_from_draft(initial_data, draft), do: Map.merge(initial_data, draft.data)
 
   defp prefills(%Context{form: %Templates.Form{} = form}), do: Templates.Forms.list_prefills(form)
   defp prefills(_context), do: []
@@ -383,12 +411,15 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     Enum.find(forms, fn form ->
       List.starts_with?(form.path, prefix) and
         FlowProgress.actionable?(form) and
-        with(form_context = form_context(context, form),
-          do:
-            visible?(flow_type(form_context, assigns), form_context, assigns) and
-              enterable_chain?(form_context, assigns)
-        )
+        workable?(context, form, assigns)
     end)
+  end
+
+  defp workable?(context, form, assigns) do
+    form_context = form_context(context, form)
+
+    visible?(flow_type(form_context, assigns), form_context, assigns) and
+      enterable_chain?(form_context, assigns)
   end
 
   @doc """
@@ -614,18 +645,29 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   defp editable?(type, context, assigns),
     do: type.module.editable?(context, assigns.callback_data)
 
-  # The sibling forms the user may jump to - asked of the type one form at a
-  # time, through form_context/2, so the type is asked about the sibling with
-  # every field of the context aimed at it, `form_node` included. Navigating
-  # to the one this page addresses would do nothing, so it is never among
-  # them, which is what leaves an in-order wizard's progress entirely inert:
-  # the only form it lets the user edit is that one.
-  defp clickable(type, context, assigns) do
+  # Where each sibling form's step links, behind the doors above it: `:view`
+  # for one already submitted, `:edit` for one the type lets the user work
+  # in - asked of the type one form at a time, through form_context/2, so
+  # the type is asked about the sibling with every field of the context
+  # aimed at it, `form_node` included. A sibling with neither is absent, and
+  # so is the one this page addresses: navigating to it would do nothing.
+  #
+  # The two answers together are what an in-order wizard's steps read as -
+  # the forms behind the user link to their answers, the ones ahead are
+  # plain text - and an any-order wizard's, where everything links: what is
+  # done to its answers, the rest to its form.
+  defp step_links(type, context, assigns) do
     for sibling <- context.flow_progress,
         sibling.path != assigns.path,
         enterable_chain?(form_context(context, sibling), assigns),
-        editable?(type, form_context(context, sibling), assigns),
-        into: MapSet.new(),
-        do: sibling.path
+        target = step_target(type, context, sibling, assigns),
+        into: %{},
+        do: {sibling.path, target}
+  end
+
+  defp step_target(_type, _context, %FormProgress{status: :completed}, _assigns), do: :view
+
+  defp step_target(type, context, sibling, assigns) do
+    if editable?(type, form_context(context, sibling), assigns), do: :edit
   end
 end

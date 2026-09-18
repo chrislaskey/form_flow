@@ -2442,6 +2442,46 @@ defmodule Demo.FormFlowFormsCrudTest do
     end
   end
 
+  test "a breadcrumb walks the whole way down, however deep the nesting", %{conn: conn} do
+    # Taxes 2026 → Wages → Employer → W-2 Details: two subflow levels
+    {root, wages_node, employer_node, form_node} = deeply_nested_flow_with_form_node()
+
+    wages_path = "/demo/admin/flows/#{root.id}/nodes/#{wages_node.id}"
+    employer_path = "/demo/admin/flows/#{root.id}/nodes/#{employer_node.id}"
+
+    # The form's page: Flows / Taxes 2026 / Wages / Employer / W-2 Details,
+    # each subflow crumb linking to the page of the flow its node sits in
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root.id}/nodes/#{form_node.id}/form")
+
+    assert has_element?(view, "a[href='/demo/admin/flows/#{root.id}']", "Taxes 2026")
+    assert has_element?(view, "a[href='#{wages_path}']", "Wages")
+    assert has_element?(view, "a[href='#{employer_path}']", "Employer")
+    assert html =~ "W-2 Details"
+
+    [crumbs] = Regex.run(~r/<nav aria-label="Breadcrumb".*?<\/nav>/s, html)
+    assert :binary.match(crumbs, "Wages") < :binary.match(crumbs, "Employer")
+
+    # The inner subflow's own page walks back through the outer one
+    {:ok, view, _html} = live(conn, employer_path)
+    assert has_element?(view, "a[href='#{wages_path}']", "Wages")
+
+    # And its editor, in edit mode, as buttons
+    {:ok, view, _html} = live(conn, "#{employer_path}/edit")
+    assert has_element?(view, "button[phx-value-to='#{wages_path}/edit']", "Wages")
+
+    assert has_element?(
+             view,
+             "button[phx-value-to='/demo/admin/flows/#{root.id}/edit']",
+             "Taxes 2026"
+           )
+
+    # The data function behind it, root first
+    assert Enum.map(Flows.embedding_nodes(form_node.flow_id, root.id), & &1.id) ==
+             [wages_node.id, employer_node.id]
+
+    assert Flows.embedding_nodes(root.id, root.id) == []
+  end
+
   test "opening a form node from a subflow's edit canvas points its breadcrumb back at both editors",
        %{conn: conn} do
     {root, subflow_node, form_node} = nested_flow_with_form_node()
@@ -3207,5 +3247,38 @@ defmodule Demo.FormFlowFormsCrudTest do
     [form_node] = Flows.get(child.id).nodes
 
     {root, subflow_node, form_node}
+  end
+
+  # Root flow → subflow ("Wages") → subflow ("Employer") → form node ("W-2
+  # Details"): two levels of nesting, so a breadcrumb has more than one
+  # subflow crumb to walk back through
+  defp deeply_nested_flow_with_form_node do
+    {:ok, root} = Flows.create(%{name: "Taxes 2026", label: "subflows"})
+
+    {:ok, _} = Flows.update(root, %{nodes: [subflow_node_attrs("Wages", "subflows")]})
+    [wages_node] = Flows.get(root.id).nodes
+    wages = Flows.get(wages_node.subflow_id)
+
+    {:ok, _} = Flows.update(wages, %{nodes: [subflow_node_attrs("Employer", "forms")]})
+    [employer_node] = Flows.get(wages.id).nodes
+    employer = Flows.get(employer_node.subflow_id)
+
+    form_attrs = %{
+      properties: %{"type" => "step", "data" => %{"label" => "W-2 Details", "kind" => "form"}}
+    }
+
+    {:ok, _} = Flows.update(employer, %{nodes: [form_attrs]})
+    [form_node] = Flows.get(employer.id).nodes
+
+    {root, wages_node, employer_node, form_node}
+  end
+
+  defp subflow_node_attrs(label, subflow_label) do
+    %{
+      properties: %{
+        "type" => "subflow",
+        "data" => %{"label" => label, "subflow_label" => subflow_label}
+      }
+    }
   end
 end

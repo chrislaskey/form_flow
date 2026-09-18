@@ -58,10 +58,7 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
   nothing wrapped around them.
   """
   def captured_dialog(prefill, params) do
-    answers =
-      params
-      |> Plug.Conn.Query.decode()
-      |> Map.get("dynamic_form", %{})
+    answers = answers_from_params(params)
 
     %{
       action: (prefill && :update) || :create,
@@ -69,6 +66,20 @@ defmodule FormFlow.Web.Components.Forms.Prefills do
       data: Phoenix.json_library().encode!(answers, pretty: true),
       captured: true
     }
+  end
+
+  @doc """
+  The answers in a form captured off the page
+  (`FormFlow.Web.Components.Forms.Capture`): `params` is the form
+  serialised by the browser, so it is decoded the way Phoenix decodes any
+  form body, and the answers are lifted out of `DynamicForm`'s namespace -
+  question names to values, as typed, with nothing wrapped around them.
+  Shared with the Edit page's Save draft, which stores exactly this.
+  """
+  def answers_from_params(params) when is_binary(params) do
+    params
+    |> Plug.Conn.Query.decode()
+    |> Map.get("dynamic_form", %{})
   end
 
   @doc """

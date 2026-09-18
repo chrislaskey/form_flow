@@ -478,7 +478,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   describe "a form's page draws the flow's progress" do
-    test "in order draws it, none of it navigable", %{conn: conn} do
+    test "in order draws it, with nothing ahead navigable", %{conn: conn} do
       %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
 
       {:ok, view, html} = live(conn, edit_path(instance, [name.id]))
@@ -488,6 +488,20 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Address"
       assert html =~ ~s(aria-current="step")
       refute has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
+      refute has_element?(view, "a[href='#{form_path(instance, [address.id])}']")
+    end
+
+    test "in order links a form behind the user to its answers", %{conn: conn} do
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
+
+      complete(instance, [name.id])
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [address.id]))
+
+      # A submitted form's edit page only says it was submitted, so the step
+      # goes to the answers instead
+      assert has_element?(view, "a[href='#{form_path(instance, [name.id])}']")
+      refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
     end
 
     test "any order makes the other forms navigable", %{conn: conn} do
@@ -498,6 +512,17 @@ defmodule Demo.FormFlowInstancesTest do
       # The form being filled is never a link to itself — only the others are.
       refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
       assert has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
+    end
+
+    test "any order sends a form already submitted to its answers", %{conn: conn} do
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_any_order")
+
+      complete(instance, [address.id])
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
+
+      assert has_element?(view, "a[href='#{form_path(instance, [address.id])}']")
+      refute has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
 
     test "a lone form is no sequence, so nothing is drawn", %{conn: conn} do
@@ -753,6 +778,28 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, view, _html} = live(conn, flow_path(instance))
       assert offered?(view, instance, detail_first)
       assert offered?(view, instance, detail_second)
+    end
+
+    test "a form behind a shut door reads Pending, not Available", %{conn: conn} do
+      %{
+        instance: instance,
+        documents: [doc_first, doc_second],
+        details: [detail_first, detail_second]
+      } = onboarding()
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+
+      # Details' first form is available inside Details - its Start is - but
+      # the root's Details step is shut, so the row offers nothing and says so
+      assert badge?(view, doc_first, "Available")
+      assert badge?(view, detail_first, "Pending")
+      assert badge?(view, detail_second, "Pending")
+
+      complete(instance, doc_first)
+      complete(instance, doc_second)
+
+      {:ok, view, _html} = live(conn, flow_path(instance))
+      assert badge?(view, detail_first, "Available")
     end
 
     test "an any-order root opens every subflow from the start", %{conn: conn} do
@@ -1784,6 +1831,195 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "drafts" do
+    test "Save draft keeps the form as it stands, and the next visit draws it", %{conn: conn} do
+      %{instance: instance, form: node} = flow_of_one()
+
+      {:ok, view, html} = live(conn, edit_path(instance, [node.id]))
+      form_instance = instance_at(instance, [node.id])
+
+      # The button reads the form the user is filling in - the same form
+      # Capture reads, by the same id - and there is no draft yet
+      form_id = "instance-forms-edit-#{form_instance.id}-form"
+      assert has_element?(view, ~s(#instance-forms-edit-save-draft[data-form-id="#{form_id}"]))
+      refute html =~ "Draft saved"
+
+      view
+      |> element("#instance-forms-edit-save-draft")
+      |> render_hook("save_draft", %{"params" => "dynamic_form%5Bname%5D=Re"})
+
+      # The header says so, from the draft itself
+      html = render(view)
+      assert html =~ "Draft saved"
+      assert html =~ "just now"
+      assert html =~ "dog_owner"
+
+      # Stored as typed, beside the answers and not in them; status unmoved
+      saved = instance_at(instance, [node.id])
+      assert saved.status == "in_progress"
+      assert saved.data == %{}
+      assert saved.draft["data"] == %{"name" => "Re"}
+      assert saved.draft["user_id"] == "dog_owner"
+
+      draft = Instances.Forms.get_draft(saved)
+      assert draft.data == %{"name" => "Re"}
+      assert draft.user_id == "dog_owner"
+      assert %DateTime{} = draft.saved_at
+
+      # No event: the trail says what happened to the form, and nothing did
+      assert Enum.map(Instances.Forms.list_events(saved), & &1.event) == ["created"]
+
+      # The next visit draws it
+      {:ok, _view, html} = live(conn, edit_path(instance, [node.id]))
+      assert html =~ ~s(value="Re")
+      assert html =~ "Draft saved"
+    end
+
+    test "a draft need not be valid, and submitting clears it", %{conn: conn} do
+      %{instance: instance, form: node} =
+        flow_of_one(nil,
+          definition: %{
+            "elements" => [
+              %{"type" => "text", "name" => "name", "title" => "Name", "isRequired" => true}
+            ]
+          }
+        )
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+      form_instance = instance_at(instance, [node.id])
+
+      # The required question left blank - a submit would refuse this
+      view
+      |> element("#instance-forms-edit-save-draft")
+      |> render_hook("save_draft", %{"params" => "dynamic_form%5Bname%5D="})
+
+      assert instance_at(instance, [node.id]).draft["data"] == %{"name" => ""}
+
+      # A second save replaces the first
+      {:ok, saved} = Instances.Forms.save_draft(instance, [node.id], %{"name" => "Rex"})
+      assert saved.draft["data"] == %{"name" => "Rex"}
+
+      submit(view, form_instance, %{"name" => "Rex"})
+
+      completed = instance_at(instance, [node.id])
+      assert completed.status == "completed"
+      assert completed.data == %{"name" => "Rex"}
+      assert completed.draft == nil
+      assert Instances.Forms.get_draft(completed) == nil
+    end
+
+    test "save_draft/4 refuses a position with no instance, and a submitted one" do
+      %{instance: instance, form: node} = flow_of_one()
+
+      # A draft never starts a form
+      assert {:error, :not_found} =
+               Instances.Forms.save_draft(instance, [node.id], %{"name" => "R"})
+
+      complete(instance, [node.id], %{"name" => "Rex"})
+
+      assert {:error, :completed} =
+               Instances.Forms.save_draft(instance, [node.id], %{"name" => "R"})
+
+      assert instance_at(instance, [node.id]).draft == nil
+    end
+
+    test "the draft is drawn over the stored answers and a prefill; Show keeps the answers",
+         %{conn: conn} do
+      %{flow: flow, instance: instance, form: node} = flow_of_one()
+      {:ok, _flow} = Flows.update_status(flow, "pre_release")
+
+      {:ok, _form} =
+        Forms.create_prefill(Forms.get(node.form_id), %{
+          name: "Happy path",
+          data: %{"name" => "Prefilled"}
+        })
+
+      complete(instance, [node.id], %{"name" => "Submitted"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [node.id], :in_progress)
+
+      {:ok, _saved} =
+        Instances.Forms.save_draft(instance, [node.id], %{"name" => "Drafted"},
+          user_id: "dog_owner"
+        )
+
+      {:ok, _view, html} = live(conn, edit_path(instance, [node.id]) <> "?prefill=Happy+path")
+
+      assert html =~ ~s(value="Drafted")
+      refute html =~ ~s(value="Submitted")
+      refute html =~ ~s(value="Prefilled")
+
+      # The status badge is the form's standing, not the button: Reopened
+      assert html =~ "Reopened"
+
+      # Show renders the answers, never the draft
+      {:ok, _view, html} = live(conn, form_path(instance, [node.id]))
+
+      assert html =~ ~s(value="Submitted")
+      refute html =~ ~s(value="Drafted")
+      refute html =~ "Draft saved"
+    end
+
+    test "Discard changes removes the draft and puts the form back to its answers",
+         %{conn: conn} do
+      %{instance: instance, form: node} = flow_of_one()
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+      {:ok, _saved} = Instances.Forms.save_draft(instance, [node.id], %{"name" => "Drafted"})
+
+      # Never submitted: it asks, then the form comes back empty
+      view |> element("#instance-forms-edit-discard") |> render_click()
+      assert render(view) =~ "Discard changes?"
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> element("#instance-forms-edit-confirm-discard") |> render_click()
+
+      assert to == edit_path(instance, [node.id])
+      assert instance_at(instance, [node.id]).draft == nil
+
+      {:ok, _view, html} = live(conn, to)
+      refute html =~ ~s(value="Drafted")
+      refute html =~ "Draft saved"
+
+      # Submitted, reopened, drafted: back to the submitted answers
+      complete(instance, [node.id], %{"name" => "Submitted"})
+      {:ok, _reopened} = Instances.Forms.update_status(instance, [node.id], :in_progress)
+      {:ok, _saved} = Instances.Forms.save_draft(instance, [node.id], %{"name" => "Drafted"})
+
+      {:ok, view, html} = live(conn, edit_path(instance, [node.id]))
+      assert html =~ ~s(value="Drafted")
+
+      view |> element("#instance-forms-edit-discard") |> render_click()
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view |> element("#instance-forms-edit-confirm-discard") |> render_click()
+
+      {:ok, _view, html} = live(conn, to)
+      assert html =~ ~s(value="Submitted")
+      refute html =~ ~s(value="Drafted")
+
+      # Keep editing closes the dialog and changes nothing
+      {:ok, _saved} = Instances.Forms.save_draft(instance, [node.id], %{"name" => "Again"})
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+      view |> element("#instance-forms-edit-discard") |> render_click()
+      view |> element("button", "Keep editing") |> render_click()
+      refute render(view) =~ "Discard changes?"
+      assert instance_at(instance, [node.id]).draft["data"] == %{"name" => "Again"}
+
+      # No event for any of it
+      assert Enum.map(Instances.Forms.list_events(instance_at(instance, [node.id])), & &1.event) ==
+               ["created", "status_changed", "reopened"]
+    end
+
+    test "delete_draft/2 refuses a position with no instance, and is a no-op without a draft" do
+      %{instance: instance, form: node} = flow_of_one()
+
+      assert {:error, :not_found} = Instances.Forms.delete_draft(instance, [node.id])
+
+      {:ok, started} = Instances.Forms.update_status(instance, [node.id], :in_progress)
+      assert {:ok, ^started} = Instances.Forms.delete_draft(instance, [node.id])
+    end
+  end
+
   defp flow_path(instance), do: "/demo/pet-licenses/applications/#{instance.id}"
 
   defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"
@@ -1792,6 +2028,11 @@ defmodule Demo.FormFlowInstancesTest do
 
   defp offered?(view, instance, path) do
     has_element?(view, "a[href='#{edit_path(instance, path)}']")
+  end
+
+  # The badge word on one form's row of a flow instance's page
+  defp badge?(view, path, word) do
+    has_element?(view, "[data-path='#{Enum.join(path, ",")}'] .badge", word)
   end
 
   # A user-facing page, through the test config's page

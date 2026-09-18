@@ -165,6 +165,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      |> assign(
        flow: flow,
        root: root,
+       ancestors: ancestors(root, subflow_node),
        subflow_node: subflow_node,
        # The host's lists as given, before the page narrows its own to the
        # flow's kind: the health check reads every level of the tree
@@ -664,6 +665,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         section="flows"
         root={@root}
         name={@flow.name || "Untitled"}
+        ancestors={@ancestors}
         mode="edit"
         target={@myself}
         components={@components}
@@ -899,6 +901,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     </div>
     """
   end
+
+  # The breadcrumb's way down from the root to the flow the subflow node sits
+  # in - one crumb per level, empty on the root canvas
+  defp ancestors(nil, _subflow_node), do: []
+  defp ancestors(root, subflow_node), do: Flows.embedding_nodes(subflow_node.flow_id, root.id)
 
   defp resolve_flow(%{node_id: nil} = assigns, _node), do: Flows.get(assigns.flow_id)
 

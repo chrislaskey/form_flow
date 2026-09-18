@@ -24,6 +24,17 @@ defmodule FormFlow.Data.Instances.Forms do
       successor positions in `FormFlow.Data.Instances.FlowProgress`.
       Completing a completed instance is a no-op - reopen first.
 
+  Beside the lifecycle, `save_draft/4` keeps the user's place: it stores the
+  form as it stands on the page - valid or not - in the instance's `draft`
+  column (`FormFlow.Data.Instances.Form.Draft`) without moving its status,
+  and completing the instance clears it in the same write that stores the
+  answers. Saving a draft writes **no event**: a draft is not something that
+  happened to the form, it is the user keeping their place, and the trail
+  keeps saying what actually happened - started, submitted, reopened, moved
+  to a new version. Who saved the draft and when are on the draft itself.
+  `get_draft/1` reads it and `delete_draft/2` removes it - the user
+  discarding their changes.
+
   Deletion stays its own named operation: `delete_instance/2` is the host's
   retention decision, made visibly. Events never cascade-delete with their
   instance, so it is the only deletion path. The trail itself is read through
@@ -41,6 +52,7 @@ defmodule FormFlow.Data.Instances.Forms do
   import Ecto.Query
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.Form.Draft
   alias FormFlow.Data.Instances.Form.Event
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
@@ -153,6 +165,59 @@ defmodule FormFlow.Data.Instances.Forms do
     do: complete(instance, opts)
 
   @doc """
+  Saves the user's draft on the form instance at a journey position: `data`
+  is the form as it stands on the page, keyed by question name, valid or
+  not. A second save replaces the first - an instance has one draft. `opts`:
+
+    * `:user_id` - the user saving it, recorded on the draft
+
+  Writes no event (see the moduledoc). Returns `{:ok, instance}`. Errors:
+  `{:error, :not_found}` when the position has no instance - a draft never
+  starts a form; `update_status/4` with `:in_progress` does - and
+  `{:error, :completed}` on a submitted one, which has nothing to draft
+  until it is reopened.
+  """
+  def save_draft(%Instances.Flow{} = journey, path, data, opts \\ [])
+      when is_list(path) and path != [] and is_map(data) do
+    case find_instance(journey, path) do
+      nil ->
+        {:error, :not_found}
+
+      %Instances.Form{status: "completed"} ->
+        {:error, :completed}
+
+      %Instances.Form{} = instance ->
+        draft = %Draft{
+          data: data,
+          user_id: Keyword.get(opts, :user_id),
+          saved_at: DateTime.utc_now()
+        }
+
+        Repo.update(Instances.Form.draft_changeset(instance, Draft.to_entry(draft)))
+    end
+  end
+
+  @doc """
+  Removes the saved draft from the form instance at a journey position, so
+  the form goes back to its answers - what was last submitted, or nothing.
+  Writes no event, as `save_draft/4` writes none. Returns `{:ok, instance}`,
+  the instance unchanged when it had no draft; `{:error, :not_found}` when
+  the position has no instance.
+  """
+  def delete_draft(%Instances.Flow{} = journey, path) when is_list(path) and path != [] do
+    case find_instance(journey, path) do
+      nil -> {:error, :not_found}
+      %Instances.Form{draft: nil} = instance -> {:ok, instance}
+      %Instances.Form{} = instance -> Repo.update(Instances.Form.draft_changeset(instance, nil))
+    end
+  end
+
+  @doc "The instance's saved draft as a `FormFlow.Data.Instances.Form.Draft`, or nil."
+  @spec get_draft(Instances.Form.t() | nil) :: Draft.t() | nil
+  def get_draft(%Instances.Form{draft: entry}) when is_map(entry), do: Draft.from_entry(entry)
+  def get_draft(_instance), do: nil
+
+  @doc """
   Deletes an instance and its event trail, deliberately and in order: the
   copies other instances' events hold of its answers are blanked first
   (`redact_snapshots/1`, so a failed redaction aborts the deletion rather
@@ -236,9 +301,12 @@ defmodule FormFlow.Data.Instances.Forms do
     end)
   end
 
+  # Completing clears the draft in the same write: the answers are what the
+  # user submitted, and a draft kept beside them would be an older copy of
+  # the form the page would then draw over them on a reopen
   defp complete(instance, opts) do
     Repo.transaction(fn ->
-      changes = %{status: "completed", completed_at: DateTime.utc_now()}
+      changes = %{status: "completed", completed_at: DateTime.utc_now(), draft: nil}
 
       changes =
         case Keyword.fetch(opts, :data) do
