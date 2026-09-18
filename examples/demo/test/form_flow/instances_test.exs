@@ -525,6 +525,28 @@ defmodule Demo.FormFlowInstancesTest do
       refute has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
 
+    test "the summary names the step either side, linked where the list links it",
+         %{conn: conn} do
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_any_order")
+
+      # Folded shut, the card names the next step - and links it, because
+      # this flow lets the user work it
+      {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
+      assert has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']")
+
+      # From the second form, the step behind is named instead, and a
+      # submitted form goes to its answers as the unfolded list sends it
+      complete(instance, [name.id])
+      {:ok, view, _html} = live(conn, edit_path(instance, [address.id]))
+      assert has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{form_path(instance, [name.id])}']")
+
+      # In order, the step ahead is named but is no link: the same answer
+      # the unfolded list gives it
+      %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
+      {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
+      refute has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']")
+    end
+
     test "a lone form is no sequence, so nothing is drawn", %{conn: conn} do
       %{instance: instance, form: only} = flow_of_one()
 
@@ -1282,6 +1304,20 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "submitting says so in the host's flash" do
+    test "the form's name and the word the button used", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one()
+      {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
+
+      submit(view, instance_at(instance, [only.id]), %{"name" => "Ada"})
+
+      # FormFlow is a LiveComponent, and a component's flash reaches the
+      # host only when the component navigates - which a submit always does
+      assert {_path, flash} = assert_redirect(view)
+      assert flash == %{"info" => "Only submitted."}
+    end
+  end
+
   describe "submitting runs the form type's completion callbacks" do
     setup do
       :ok = Phoenix.PubSub.subscribe(Demo.PubSub, "form_flow_test")
@@ -1875,6 +1911,22 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Draft saved"
     end
 
+    test "Save draft turns the button green, since it never leaves the page", %{conn: conn} do
+      %{instance: instance, form: node} = flow_of_one()
+
+      {:ok, view, _html} = live(conn, edit_path(instance, [node.id]))
+      assert has_element?(view, "#instance-forms-edit-save-draft.btn-ghost")
+
+      view
+      |> element("#instance-forms-edit-save-draft")
+      |> render_hook("save_draft", %{"params" => "dynamic_form%5Bname%5D=Re"})
+
+      # Green for a moment - a save writes without navigating, so there is no
+      # flash to carry the news. A timed send_update takes it off again.
+      assert has_element?(view, "#instance-forms-edit-save-draft.btn-success")
+      refute has_element?(view, "#instance-forms-edit-save-draft.btn-ghost")
+    end
+
     test "a draft need not be valid, and submitting clears it", %{conn: conn} do
       %{instance: instance, form: node} =
         flow_of_one(nil,
@@ -1970,10 +2022,11 @@ defmodule Demo.FormFlowInstancesTest do
       view |> element("#instance-forms-edit-discard") |> render_click()
       assert render(view) =~ "Discard changes?"
 
-      assert {:error, {:live_redirect, %{to: to}}} =
-               view |> element("#instance-forms-edit-confirm-discard") |> render_click()
+      view |> element("#instance-forms-edit-confirm-discard") |> render_click()
 
+      assert {to, flash} = assert_redirect(view)
       assert to == edit_path(instance, [node.id])
+      assert flash == %{"info" => "Changes discarded."}
       assert instance_at(instance, [node.id]).draft == nil
 
       {:ok, _view, html} = live(conn, to)

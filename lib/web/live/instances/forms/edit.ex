@@ -47,7 +47,11 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   DynamicForm's default success message targets the parent LiveView's
   `handle_info/2` - the host's process, not ours - so `on_success` routes the
   payload back into this component via `send_update`, and the redirect happens
-  in `handle_async` (redirects are forbidden inside `update/2`).
+  in `handle_async` (redirects are forbidden inside `update/2`). The same
+  place puts the "<form> submitted." flash: a LiveComponent's flash reaches
+  the host's layout only when the component navigates, and this one always
+  does, so the host's own flash says it worked and FormFlow draws no banner
+  of its own.
 
   ## Prefills
 
@@ -78,11 +82,18 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   (`FormFlow.Data.Instances.Forms.save_draft/4`,
   `FormFlow.Data.Instances.Form.Draft`), without submitting it. The next
   visit draws the draft over the stored answers
-  (`FormFlow.Web.Instances.Forms.Shared.assigns/1`), and the header says
-  when and by whom it was saved. A draft is not answers: Show never sees
-  it, nothing downstream reads it, and the event trail is not told - the
-  last event line keeps saying what actually happened to the form.
+  (`FormFlow.Web.Instances.Forms.Shared.assigns/1`), and the activity button
+  says when and by whom it was saved. A draft is not answers: Show never
+  sees it, nothing downstream reads it, and the event trail is not told -
+  the event line keeps saying what actually happened to the form.
   Submitting clears it.
+
+  Saving is the one action here that does not navigate, so it has no flash
+  to say it worked: the button goes **green** for a second and a half
+  instead (`flag_draft_saved/1`). Reloading the page to flash would be
+  the worse trade - it would throw away whatever the form holds that a
+  reload cannot put back, which is what a draft is there to protect.
+  **Discard changes** does navigate, and flashes.
 
   The form is read off the DOM for the same reason Capture reads it there
   (`FormFlow.Web.Components.Forms.Capture`): a submit's payload has been
@@ -209,6 +220,17 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # and a message would describe the gate to whoever was probing it.
   def update(%{event: "submitted"}, socket), do: {:ok, socket}
 
+  # The Save draft button's green, taken back off. A token from a superseded
+  # save is already in the mailbox and is dropped, so a second save holds the
+  # green for its own two seconds rather than the first save's remainder.
+  def update(%{event: "draft_saved_shown", token: token}, socket) do
+    if token == socket.assigns.draft_saved_token do
+      {:ok, assign(socket, :draft_saved_token, nil)}
+    else
+      {:ok, socket}
+    end
+  end
+
   def update(assigns, socket) do
     socket =
       socket
@@ -232,6 +254,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       |> assign_new(:prefill_error, fn -> nil end)
       |> assign_new(:confirming_reopen?, fn -> false end)
       |> assign_new(:confirming_discard?, fn -> false end)
+      |> assign_new(:draft_saved_token, fn -> nil end)
 
     {:ok, socket |> load() |> assign_page_state()}
   end
@@ -243,9 +266,17 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     assign(socket, :page_state, FormFlow.Web.Instances.Shared.form_page_state(socket.assigns))
   end
 
+  # The submit's navigation, and the message that says it worked. A
+  # LiveComponent may `put_flash/3`, and the flash it puts reaches the host's
+  # layout only when the component navigates - which this one is doing, so
+  # the host's own flash carries the message and FormFlow draws no banner of
+  # its own. A host that renders no `@flash` simply shows nothing.
   @impl true
   def handle_async(:navigate, {:ok, to}, socket) do
-    {:noreply, push_navigate(socket, to: to)}
+    {:noreply,
+     socket
+     |> put_flash(:info, "#{submitted_name(socket.assigns)} submitted.")
+     |> push_navigate(to: to)}
   end
 
   # Which prefill the form is filled from is in the URL, as it is on the
@@ -361,12 +392,14 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
          ) do
       {:ok, saved} ->
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            form_instance: saved,
            draft: Instances.Forms.get_draft(saved),
            context: %{context | form_instance: saved},
            error: nil
-         )}
+         )
+         |> flag_draft_saved()}
 
       {:error, _reason} ->
         {:noreply, assign(socket, :error, "Could not save the draft. Please try again.")}
@@ -399,7 +432,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
     case Instances.Forms.delete_draft(flow_instance, form_instance.path) do
       {:ok, _instance} ->
-        {:noreply, push_navigate(socket, to: prefill_path(socket.assigns, nil))}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Changes discarded.")
+         |> push_navigate(to: prefill_path(socket.assigns, nil))}
 
       {:error, _reason} ->
         {:noreply,
@@ -553,6 +589,36 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         )
     end
   end
+
+  # How long Save draft stays green.
+  @draft_saved_ms 700
+
+  # Save draft writes without leaving the page, so there is no navigation to
+  # carry a flash the way the submit and Discard changes do. The button says
+  # it worked instead: a green background for a second and a half, then the
+  # ghost button it was. Nothing fades - the swap is two ordinary button
+  # classes, which is what lets the button keep its ordinary hover. Reloading
+  # the page to flash instead would be the worse trade - it would throw away
+  # whatever the form holds that a reload cannot put back, an uploaded file
+  # among it, which is the very thing a draft is for. A LiveComponent has no
+  # `handle_info/2`, so the timer is a `send_update_after` to itself, the
+  # token guarding it as the template editor's timers do.
+  defp flag_draft_saved(socket) do
+    token = System.unique_integer([:positive])
+
+    Phoenix.LiveView.send_update_after(
+      __MODULE__,
+      %{id: socket.assigns.id, event: "draft_saved_shown", token: token},
+      @draft_saved_ms
+    )
+
+    assign(socket, :draft_saved_token, token)
+  end
+
+  # What the message calls the form: its own name, as the title line says it,
+  # and the plain word when the page has no form to name.
+  defp submitted_name(%{form: %{label: label}}) when is_binary(label), do: label
+  defp submitted_name(_assigns), do: "The form"
 
   defp submitted(payload, component_id) do
     Phoenix.LiveView.send_update(__MODULE__, %{
@@ -708,7 +774,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
           form_id={"#{form_component_id(assigns)}-form"}
           event="save_draft"
           target={@myself}
-          class="btn btn-ghost"
+          class={(@draft_saved_token && "btn btn-success") || "btn btn-ghost"}
         >
           Save draft
         </Capture.capture_button>

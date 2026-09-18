@@ -49,6 +49,56 @@ the database, the way the flow editor's Discard changes does.
 migrated before this release has to be recreated (the library is
 pre-release and `V01` is the schema).
 
+### The progress card names the step either side
+
+A form page's progress card used to name only what came next - "Step 3 of
+4 · next Household Information". It now names the step behind as well -
+"Step 3 of 4 · Previous User Information · Next Household Information" -
+because those are the two steps a user moves to.
+
+Each name links exactly where the unfolded **Show steps** list links it:
+the same `step_links` answer, underlined on hover like the link above it,
+with the word inside the link - "Previous User Information" is one thing
+to click. So a step the flow's type will not let the user work is named
+and left as plain text, and a step already submitted goes to its answers
+rather than its form.
+
+The subflow moved off that line and up to the title, lighter and smaller
+after the flow's own name: "Dog License **User Information**". So the
+title says where you are and the line under it says how far along.
+
+**Show steps** is now the only part of the card that folds it open. The
+card used to be a `<details>`, whose whole `<summary>` toggles by
+definition, so a click anywhere on the row - the flow's name, the space
+beside a step's link - opened the list. It is a plain `<div>` now, and the
+button switches the list, its own two words and the chevron with
+`Phoenix.LiveView.JS`.
+
+**Back to flow overview** now reads **Back to overview**.
+
+### A form page says its actions worked
+
+Submitting a form now leaves an **info flash** behind - "Dog Information
+submitted." - and so does **Discard changes** - "Changes discarded." Both
+are carried by the host application's own flash, in the host's own layout,
+styled the way the rest of the host says things. FormFlow draws no banner
+of its own for either.
+
+It works because both actions navigate: a `Phoenix.LiveComponent` may
+`put_flash/3`, and the flash it puts is copied to the parent LiveView when
+the component calls `push_navigate/2` or `push_patch/2`, which
+`FormFlow.Web.Instances.Forms.Edit` does on every completion and every
+discard. A host that renders no `@flash` shows nothing and is otherwise
+unaffected.
+
+**Save draft** says it differently, because it is the one action that does
+not navigate: the button goes green for a second and a half and then is a
+ghost button again. The swap is two ordinary button classes and nothing
+fades, so the button keeps its ordinary hover throughout. A
+reload would flash, but it would also throw away whatever the page holds
+that a reload cannot put back - an uploaded file among it - which is the
+very thing a draft is there to protect.
+
 ### Where a form stands moved behind an activity button
 
 A form page's header no longer writes "Draft saved 3 minutes ago ·

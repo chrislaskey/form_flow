@@ -7,10 +7,18 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
   The card is one row: a ring on the left, how far along as a percentage
   inside it - the step over the count - with the steps behind the user in
   the brand colour and the one they are on in a lighter tint of it; then a
-  link back to the flow instance's page, the flow's name, and "Step 2 of 5
-  · next Health Information"; then **Show steps** on the right. The steps
-  themselves are folded away by default, because a percentage and a next
-  step are what most visits need, and unfold inside the card in columns -
+  link back to the flow instance's page, the flow's name with the subflow's
+  lighter after it, and "Step 2 of 5 · Previous Owner Information · Next
+  Health Information"; then **Show steps** on the right, which is the only
+  part of the row that folds the card: the rest of it is links, and a click
+  meant for one of those should not also open the list. The step either
+  side is named because those are the two a user moves to, and each links
+  where the unfolded list links it - the same `step_links` answer, so the
+  summary and the list cannot say different things about the same step. The
+  word is inside the link: "Previous Owner Information" is one thing to
+  click. The steps themselves are folded
+  away by default, because a percentage and the steps either side are what
+  most visits need, and unfold inside the card in columns -
   the current one bold, done ones checked, the ones ahead grey - because
   the order can change and a percentage alone does not show it.
 
@@ -42,6 +50,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
 
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Instances.Paths
+  alias Phoenix.LiveView.JS
 
   attr(:id, :string, required: true)
   attr(:base, :string, required: true, doc: "the router's mount prefix, for the links")
@@ -72,6 +81,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
     done = Enum.count(assigns.forms, &(&1.status == :completed))
     percent = if step, do: round(step / count * 100), else: round(done / count * 100)
     behind = if step, do: round((step - 1) / count * 100), else: round(done / count * 100)
+    previous = step && step > 1 && Enum.at(assigns.forms, step - 2)
     next = step && Enum.at(assigns.forms, step)
 
     assigns =
@@ -81,6 +91,7 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
         percent: percent,
         behind: behind,
         each: round(100 / count),
+        previous: previous || nil,
         next: next,
         flow_name: flow_name(assigns[:context]),
         subflow_name: subflow_name(assigns[:context]),
@@ -89,34 +100,65 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
       })
 
     ~H"""
-    <details id={@id} class="group/progress mb-6 rounded-2xl border border-zinc-300">
-      <summary class="flex cursor-pointer list-none flex-wrap items-center gap-5 px-5 py-4 [&::-webkit-details-marker]:hidden">
+    <div id={@id} class="mb-6 rounded-2xl border border-zinc-300">
+      <div id={"#{@id}-summary"} class="flex flex-wrap items-center gap-5 px-5 py-4">
         <.ring percent={@percent} behind={@behind} each={@each} />
         <div class="min-w-0 flex-1">
           <p class="text-xs text-zinc-500">
             <.link navigate={Paths.flow_path(@base, @flow_instance_id)} class="hover:underline">
-              ← Back to flow overview
+              ← Back to overview
             </.link>
           </p>
-          <p class="truncate text-lg font-semibold leading-tight">{@flow_name}</p>
+          <p class="truncate text-lg leading-tight">
+            <span class="font-semibold">{@flow_name}</span>
+            <span :if={@subflow_name} class="text-base text-zinc-500">{@subflow_name}</span>
+          </p>
           <p class="text-sm text-zinc-500">
-            <span :if={@subflow_name}>{@subflow_name} ·</span>
             <span :if={@step}>Step {@step} of {@count}</span>
             <span :if={!@step}>{@count} steps</span>
-            <span :if={@next}>· next {@next.label}</span>
+            <span :if={@previous}>
+              ·
+              <.step_name
+                form={@previous}
+                target={@step_links[@previous.path]}
+                base={@base}
+                flow_instance_id={@flow_instance_id}
+              >
+                Previous
+              </.step_name>
+            </span>
+            <span :if={@next}>
+              ·
+              <.step_name
+                form={@next}
+                target={@step_links[@next.path]}
+                base={@base}
+                flow_instance_id={@flow_instance_id}
+              >
+                Next
+              </.step_name>
+            </span>
           </p>
         </div>
-        <span class="flex items-center gap-1 text-sm text-cyan-600">
-          <span class="group-open/progress:hidden">Show steps</span>
-          <span class="hidden group-open/progress:inline">Hide steps</span>
-          <Core.icon
-            components={@components}
-            name="hero-chevron-down"
-            class="size-4 transition-transform group-open/progress:rotate-180"
-          />
-        </span>
-      </summary>
-      <ol class="grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-zinc-200 px-5 py-4 text-sm sm:grid-cols-3 lg:grid-cols-4">
+        <button
+          type="button"
+          id={"#{@id}-toggle"}
+          phx-click={toggle_steps(@id)}
+          aria-controls={"#{@id}-steps"}
+          aria-expanded="false"
+          class="flex cursor-pointer items-center gap-1 text-sm text-cyan-600 hover:underline"
+        >
+          <span id={"#{@id}-show"}>Show steps</span>
+          <span id={"#{@id}-hide"} class="hidden">Hide steps</span>
+          <span id={"#{@id}-chevron"} class="flex transition-transform">
+            <Core.icon components={@components} name="hero-chevron-down" class="size-4" />
+          </span>
+        </button>
+      </div>
+      <ol
+        id={"#{@id}-steps"}
+        class="hidden grid-cols-2 gap-x-6 gap-y-1.5 border-t border-zinc-200 px-5 py-4 text-sm sm:grid-cols-3 lg:grid-cols-4"
+      >
         <li
           :for={{form, index} <- Enum.with_index(@forms, 1)}
           class={[
@@ -144,7 +186,47 @@ defmodule FormFlow.Web.Instances.Components.Flows.Progress do
           <span class="sr-only">- {elem(badge(form.status), 0)}</span>
         </li>
       </ol>
-    </details>
+    </div>
+    """
+  end
+
+  # Show steps is the toggle, and the only part of the card that is one: the
+  # rest of the row is a link back, a title, and two links to the steps
+  # either side, and a click meant for one of those should not also fold the
+  # card open. So the card is a plain `<div>` rather than a `<details>`,
+  # whose whole `<summary>` is clickable by definition, and the button
+  # switches the list, its own two words, and the chevron by class.
+  defp toggle_steps(id) do
+    %JS{}
+    |> JS.toggle_class("hidden", to: "##{id}-steps")
+    |> JS.toggle_class("grid", to: "##{id}-steps")
+    |> JS.toggle_class("hidden", to: "##{id}-show")
+    |> JS.toggle_class("hidden", to: "##{id}-hide")
+    |> JS.toggle_class("rotate-180", to: "##{id}-chevron")
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{id}-toggle")
+  end
+
+  attr(:form, :map, required: true, doc: "the step being named")
+  attr(:target, :atom, default: nil, doc: "its `step_links` entry, or nil for plain text")
+  attr(:base, :string, required: true)
+  attr(:flow_instance_id, :string, required: true)
+  slot(:inner_block, required: true, doc: "the word before the name - \"Previous\", \"Next\"")
+
+  # A step named on the summary line, linked where the unfolded list would
+  # link it: the same `step_links` answer, so the two cannot say different
+  # things about the same step. The word is inside the link - "Previous Dog
+  # Information" is one thing to click, not a name with a label loose beside
+  # it. Underlined on hover, as the link above it is.
+  defp step_name(assigns) do
+    ~H"""
+    <.link
+      :if={@target}
+      navigate={step_path(@target, @base, @flow_instance_id, @form.path)}
+      class="hover:underline"
+    >
+      {render_slot(@inner_block)} {@form.label}
+    </.link>
+    <span :if={is_nil(@target)}>{render_slot(@inner_block)} {@form.label}</span>
     """
   end
 
