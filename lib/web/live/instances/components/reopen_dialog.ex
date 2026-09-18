@@ -5,6 +5,12 @@ defmodule FormFlow.Web.Instances.Components.ReopenDialog do
   back in progress for everyone who can see it, so it is a deliberate click
   behind a click rather than a `data-confirm`.
 
+  It says **Reopen form?** over what reopening does - that the form was
+  submitted, that reopening is how to change it again, and that it goes
+  back to "in progress" - because the same dialog is reached from a Reopen
+  button and from the Edit tab, and the second reader did not ask for a
+  reopen by name.
+
   Every caller wires the same two events at `target`: `"cancel_reopen"`
   closes it, `"confirm_reopen"` is what actually reopens the form.
   """
@@ -19,9 +25,11 @@ defmodule FormFlow.Web.Instances.Components.ReopenDialog do
   def reopen_dialog(assigns) do
     ~H"""
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+      <div class="w-96 max-w-[90vw] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+        <h2 class="mb-2 text-base font-semibold text-zinc-900">Reopen form?</h2>
         <p class="mb-4 text-sm text-zinc-700">
-          Reopen this form? It goes back to in progress and can be changed again.
+          This form has been submitted. Reopen the form if you would like to make
+          additional changes. Reopening a form puts it back to "in progress" status.
         </p>
         <div class="flex justify-end gap-2">
           <Core.button

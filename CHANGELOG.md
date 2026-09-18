@@ -132,6 +132,35 @@ children out as a grid, so the link and the button are inline in a single
 paragraph now, keeping the link's colour and underline. The inline reopen
 is drawn only where reopening is allowed, as the button is.
 
+### The Edit tab asks before it opens a submitted form
+
+The reopen dialog is titled **Reopen form?** now, and says what reopening
+does rather than asking a bare question: "This form has been submitted.
+Reopen the form if you would like to make additional changes. Reopening a
+form puts it back to \"in progress\" status." It is reached from the Edit
+tab as well as from a Reopen button, and that second reader did not ask
+for a reopen by name.
+
+
+From **View** and **History**, the **Edit** tab of a submitted form no
+longer walks to a page that can only say it was submitted. It asks first:
+the reopen dialog opens where the user is, Cancel leaves them there, and
+only a confirmed reopen lands on Edit. So the Reopen button is gone from
+the View page - the tab is the offer now. Edit's own page keeps its
+button, for whoever arrives at that URL directly.
+
+A form still in progress keeps an ordinary Edit link, and so does a
+submitted form in a flow that is read-only: there is nothing to ask.
+
+`FormFlow.Web.Components.Tabs` takes `events`, one key's own event at
+`target` in place of its link, which is how one tab asks while the others
+stay ordinary links;
+`FormFlow.Web.Instances.Components.Forms.Tabs` takes `reopen_first?` and
+`target` above it. The reopen write itself moved to
+`FormFlow.Web.Instances.Forms.Shared.reopen/1`, so all three form pages
+apply the same rule - the flow's status asked again at the click, not
+trusted from when the button was drawn.
+
 The title line drops the flow it is in - "Dog Information in Dog License"
 is now just "Dog Information", with the status badge after it. The flow is
 already the crumb directly above, and the page reads with one element

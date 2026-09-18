@@ -65,7 +65,6 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Data.Instances
-  alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Controllers.Downloads
   alias FormFlow.Web.Downloads.Token
@@ -150,28 +149,20 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   def handle_event("confirm_reopen", _params, socket)
       when socket.assigns.page_state in [:ready, :completed] do
     socket = assign(socket, :confirming_reopen?, false)
-    %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
-    # The status is the pages' rule, asked again at the click from the flow
-    # as it now is - Reopen was drawn while continuing was allowed, and the
-    # year may have closed since
-    flow = Templates.Flows.get_row(flow_instance.template_flow_id)
+    case Shared.reopen(socket.assigns) do
+      {:ok, reopened} ->
+        to =
+          Paths.form_edit_path(
+            socket.assigns.base,
+            socket.assigns.flow_instance.id,
+            reopened.path
+          )
 
-    if match?(%Templates.Flow{}, flow) and
-         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, socket.assigns) do
-      case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
-             user_id: socket.assigns.user_id,
-             tenant_id: socket.assigns.tenant_id
-           ) do
-        {:ok, reopened} ->
-          to = Paths.form_edit_path(socket.assigns.base, flow_instance.id, reopened.path)
-          {:noreply, push_navigate(socket, to: to)}
+        {:noreply, push_navigate(socket, to: to)}
 
-        {:error, _changeset} ->
-          {:noreply, assign(socket, :error, "Could not reopen the form.")}
-      end
-    else
-      {:noreply, assign(socket, :error, "This flow is read-only now.")}
+      {:error, message} ->
+        {:noreply, assign(socket, :error, message)}
     end
   end
 
@@ -314,19 +305,6 @@ defmodule FormFlow.Web.Instances.Forms.Show do
             Print
           </Core.button>
         </div>
-        <%!-- Reopen sits with Download and Print because it is the third
-              thing to do with a set of answers, not a notice about them:
-              when they were submitted is in the status badge now. --%>
-        <Core.button
-          :if={@form_instance.status == "completed" and @continue_allowed?}
-          components={@components}
-          type="button"
-          phx-click="request_reopen"
-          phx-target={@myself}
-          class="btn btn-ghost"
-        >
-          Reopen
-        </Core.button>
       </.page_header>
 
       {@type.module.progress_component(%{
@@ -417,6 +395,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
   attr(:id, :string, required: true)
+  attr(:reopen_first?, :boolean, default: false)
+  attr(:myself, :any, default: nil)
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
   slot(:inner_block)
@@ -447,6 +427,8 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           flow_instance_id={@flow_instance.id}
           path={@path}
           active={:show}
+          reopen_first?={@reopen_first?}
+          target={@myself}
           class="ml-2"
         />
       </:actions>
@@ -466,9 +448,20 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],
       id: assigns.id,
+      reopen_first?: reopen_first?(assigns),
+      myself: assigns.myself,
       components: assigns.components
     }
   end
+
+  # The Edit tab asks before it goes when there is nothing to edit until the
+  # form is reopened, and reopening is allowed. Anything else - in progress,
+  # or submitted in a flow that is read-only now - is an ordinary link to a
+  # page that says what it can.
+  defp reopen_first?(%{form_instance: %{status: "completed"}} = assigns),
+    do: assigns[:continue_allowed?] == true
+
+  defp reopen_first?(_assigns), do: false
 
   # Anything but an explicit print is a download: it never navigates the user
   # away from the page they were on

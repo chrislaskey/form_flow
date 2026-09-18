@@ -13,8 +13,16 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
   own page - Edit on a submitted form says it was submitted and points back
   at the answers - so the row never changes shape as the form moves along.
 
-  Sits among the header's actions on the three pages, left of the last
-  event line and the buttons.
+  `reopen_first?` is the one exception to going straight there. A submitted
+  form that may be reopened has nothing to edit until it is, so from View
+  and History the Edit tab asks - it pushes `"request_reopen"` at `target`,
+  which draws `FormFlow.Web.Instances.Components.ReopenDialog`, and only a
+  confirmed reopen lands on Edit. Cancelling leaves the user where they
+  were. Edit's own page keeps its Reopen button for whoever arrives at that
+  URL directly.
+
+  Sits among the header's actions on the three pages, right of the page's
+  own buttons.
   """
 
   use Phoenix.Component
@@ -26,20 +34,30 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
   attr(:flow_instance_id, :string, required: true)
   attr(:path, :list, required: true, doc: "the position, as the pages address it")
   attr(:active, :atom, required: true, values: [:edit, :show, :history])
+
+  attr(:reopen_first?, :boolean,
+    default: false,
+    doc:
+      "Edit asks to reopen the form rather than going to a page that would only say it was submitted"
+  )
+
+  attr(:target, :any, default: nil, doc: "the LiveComponent asked, when `reopen_first?`")
   attr(:class, :any, default: nil)
 
   def tabs(assigns) do
     %{base: base, flow_instance_id: id, path: path} = assigns
 
     assigns =
-      assign(assigns, :items, [
+      assigns
+      |> assign(:items, [
         {:show, "View", Paths.form_path(base, id, path)},
         {:history, "History", Paths.form_history_path(base, id, path)},
         {:edit, "Edit", Paths.form_edit_path(base, id, path)}
       ])
+      |> assign(:events, (assigns.reopen_first? && %{edit: "request_reopen"}) || %{})
 
     ~H"""
-    <Tabs.tabs items={@items} active={@active} class={@class} />
+    <Tabs.tabs items={@items} active={@active} events={@events} target={@target} class={@class} />
     """
   end
 end

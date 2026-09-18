@@ -591,6 +591,33 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   def start(socket), do: socket
 
+  @doc """
+  Puts the page's form instance back in progress, and answers with the
+  instance or with the message the page shows.
+
+  The flow's status is asked again here, from the flow as it now is: Reopen
+  was drawn while continuing was allowed, and the year may have closed while
+  the tab sat open. All three form pages reopen through this, so the rule
+  cannot hold on one of them and not another.
+  """
+  @spec reopen(map()) :: {:ok, Instances.Form.t()} | {:error, String.t()}
+  def reopen(%{flow_instance: flow_instance, form_instance: form_instance} = assigns) do
+    flow = Templates.Flows.get_row(flow_instance.template_flow_id)
+
+    if match?(%Templates.Flow{}, flow) and
+         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns) do
+      case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
+             user_id: assigns.user_id,
+             tenant_id: assigns.tenant_id
+           ) do
+        {:ok, reopened} -> {:ok, reopened}
+        {:error, _changeset} -> {:error, "Could not reopen the form."}
+      end
+    else
+      {:error, "This flow is read-only now."}
+    end
+  end
+
   defp start_instance(flow_instance, path, %{user_id: user_id, tenant_id: tenant_id}) do
     case Instances.Forms.update_status(flow_instance, path, :in_progress,
            user_id: user_id,

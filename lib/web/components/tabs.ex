@@ -22,6 +22,11 @@ defmodule FormFlow.Web.Components.Tabs do
     * `target` set - every other tab is a button pushing `"navigate"` with
       `phx-value-to` to that target, the way the flow editor leaves through
       its own event so unsaved changes prompt first
+
+  `events` names one tab at a time rather than all of them: the key's own
+  event goes to `target` in place of its link, which is how a form's Edit
+  tab asks to reopen a submitted form instead of walking to a page that
+  would only say it was submitted. The other tabs stay ordinary links.
   """
 
   use Phoenix.Component
@@ -33,6 +38,13 @@ defmodule FormFlow.Web.Components.Tabs do
   attr(:target, :any,
     default: nil,
     doc: "set to leave through the \"navigate\" event instead of linking directly"
+  )
+
+  attr(:events, :map,
+    default: %{},
+    doc:
+      "one key's own event at `target` in place of its link - " <>
+        "`%{edit: \"request_reopen\"}` for a tab that has to ask before it goes"
   )
 
   attr(:class, :any, default: nil)
@@ -48,15 +60,24 @@ defmodule FormFlow.Web.Components.Tabs do
         >
           {label}
         </span>
+        <button
+          :if={key != @active and @events[key]}
+          type="button"
+          phx-click={@events[key]}
+          phx-target={@target}
+          class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
+        >
+          {label}
+        </button>
         <.link
-          :if={key != @active and is_nil(@target)}
+          :if={key != @active and is_nil(@events[key]) and is_nil(@target)}
           navigate={to}
           class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
         >
           {label}
         </.link>
         <button
-          :if={key != @active and not is_nil(@target)}
+          :if={key != @active and is_nil(@events[key]) and not is_nil(@target)}
           type="button"
           phx-click="navigate"
           phx-value-to={to}

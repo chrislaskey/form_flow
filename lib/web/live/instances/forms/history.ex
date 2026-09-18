@@ -39,6 +39,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
   alias FormFlow.Web.Instances.Components.Forms.Status
   alias FormFlow.Web.Instances.Components.Forms.Tabs
   alias FormFlow.Web.Instances.Components.Header
+  alias FormFlow.Web.Instances.Components.ReopenDialog
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
 
@@ -61,6 +62,8 @@ defmodule FormFlow.Web.Instances.Forms.History do
       |> assign_new(:download_path, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
       |> assign_new(:params, fn -> %{} end)
+      |> assign_new(:error, fn -> nil end)
+      |> assign_new(:confirming_reopen?, fn -> false end)
 
     socket = load(socket)
 
@@ -84,6 +87,45 @@ defmodule FormFlow.Web.Instances.Forms.History do
   def handle_async(:navigate, {:ok, to}, socket) do
     {:noreply, push_navigate(socket, to: to)}
   end
+
+  # The Edit tab asks here rather than walking to a page with nothing to
+  # edit, so this read-only page carries the one write after all - and a
+  # cancelled ask leaves the reader on the trail they were reading.
+  @impl true
+  def handle_event("request_reopen", _params, socket)
+      when socket.assigns.page_state in [:ready, :completed] do
+    {:noreply, assign(socket, :confirming_reopen?, true)}
+  end
+
+  # A refused event is silent: the client was not driving a rendered
+  # control, and a message would describe the gate to whoever was probing it
+  def handle_event("request_reopen", _params, socket), do: {:noreply, socket}
+
+  def handle_event("cancel_reopen", _params, socket) do
+    {:noreply, assign(socket, :confirming_reopen?, false)}
+  end
+
+  def handle_event("confirm_reopen", _params, socket)
+      when socket.assigns.page_state in [:ready, :completed] do
+    socket = assign(socket, :confirming_reopen?, false)
+
+    case Shared.reopen(socket.assigns) do
+      {:ok, reopened} ->
+        to =
+          Paths.form_edit_path(
+            socket.assigns.base,
+            socket.assigns.flow_instance.id,
+            reopened.path
+          )
+
+        {:noreply, push_navigate(socket, to: to)}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :error, message)}
+    end
+  end
+
+  def handle_event("confirm_reopen", _params, socket), do: {:noreply, socket}
 
   @impl true
   def render(%{page_state: :flow_not_found} = assigns) do
@@ -168,6 +210,14 @@ defmodule FormFlow.Web.Instances.Forms.History do
     <div>
       <.page_header {header_assigns(assigns)} />
 
+      <Core.error :if={@error} components={@components}>{@error}</Core.error>
+
+      <ReopenDialog.reopen_dialog
+        :if={@confirming_reopen?}
+        target={@myself}
+        components={@components}
+      />
+
       <ol id={"#{@id}-events"} class="relative ml-2 mt-6 border-l border-zinc-200 pl-6">
         <li :for={event <- @newest_first} class="relative pb-6 last:pb-0">
           <span class={[
@@ -208,6 +258,8 @@ defmodule FormFlow.Web.Instances.Forms.History do
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
   attr(:id, :string, required: true)
+  attr(:reopen_first?, :boolean, default: false)
+  attr(:myself, :any, default: nil)
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
 
@@ -236,6 +288,8 @@ defmodule FormFlow.Web.Instances.Forms.History do
           flow_instance_id={@flow_instance.id}
           path={@path}
           active={:history}
+          reopen_first?={@reopen_first?}
+          target={@myself}
         />
       </:actions>
     </Header.header>
@@ -254,7 +308,16 @@ defmodule FormFlow.Web.Instances.Forms.History do
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],
       id: assigns.id,
+      reopen_first?: reopen_first?(assigns),
+      myself: assigns.myself,
       components: assigns.components
     }
   end
+
+  # The Edit tab asks before it goes when there is nothing to edit until the
+  # form is reopened, and reopening is allowed.
+  defp reopen_first?(%{form_instance: %{status: "completed"}} = assigns),
+    do: assigns[:continue_allowed?] == true
+
+  defp reopen_first?(_assigns), do: false
 end

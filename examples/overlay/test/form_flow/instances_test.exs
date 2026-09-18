@@ -592,7 +592,7 @@ defmodule Demo.FormFlowInstancesTest do
       # and inline in the sentence the alert makes
       assert view
              |> element(~s(button.btn-ghost[phx-click="request_reopen"]))
-             |> render_click() =~ "Reopen this form?"
+             |> render_click() =~ "Reopen form"
     end
 
     test "reopen lives with the answers, on show, and lands on edit", %{conn: conn} do
@@ -604,7 +604,7 @@ defmodule Demo.FormFlowInstancesTest do
       # Selected by phx-click, not text: the modal's confirm button also
       # reads "Reopen", the trigger's own label
       view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
-      assert render(view) =~ "Reopen this form?"
+      assert render(view) =~ "Reopen form"
 
       view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
 
@@ -614,15 +614,67 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "the Edit tab asks to reopen a submitted form" do
+    test "from View: cancel stays, confirm reopens and lands on Edit", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+      complete(instance, [name.id])
+
+      {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
+
+      # The Edit tab is the ask, not a link to a page with nothing to edit
+      refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      assert has_element?(view, ~s(button[phx-click="request_reopen"]), "Edit")
+
+      view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      assert render(view) =~ "Reopen form"
+
+      # Cancel leaves the reader where they were, and the form submitted
+      view |> element(~s(button[phx-click="cancel_reopen"])) |> render_click()
+      refute render(view) =~ "Reopen form"
+      assert %{status: "completed"} = instance_at(instance, [name.id])
+
+      view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
+
+      assert {path, _flash} = assert_redirect(view)
+      assert path == edit_path(instance, [name.id])
+      assert %{status: "in_progress"} = instance_at(instance, [name.id])
+    end
+
+    test "from History too", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+      complete(instance, [name.id])
+
+      {:ok, view, _html} = live(conn, history_path(instance, [name.id]))
+
+      view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
+      view |> element(~s(button[phx-click="confirm_reopen"])) |> render_click()
+
+      assert {path, _flash} = assert_redirect(view)
+      assert path == edit_path(instance, [name.id])
+      assert %{status: "in_progress"} = instance_at(instance, [name.id])
+    end
+
+    test "a form still in progress keeps an ordinary Edit link", %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+
+      {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
+
+      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      refute has_element?(view, ~s(button[phx-click="request_reopen"]))
+    end
+  end
+
   describe "reopen and the flow's status" do
     test "a reopen drawn before the year closed is refused at the click, on both pages",
          %{conn: conn} do
       %{flow: flow, instance: instance, form: only} = flow_of_one()
       complete(instance, [only.id])
 
-      # The form's show page draws Reopen while continuing is allowed
+      # The form's show page offers it on the Edit tab while continuing is
+      # allowed: there is nothing to edit until the form is reopened
       {:ok, form_view, _html} = live(conn, form_path(instance, [only.id]))
-      assert has_element?(form_view, "button", "Reopen")
+      assert has_element?(form_view, ~s(button[phx-click="request_reopen"]), "Edit")
       # So does the instance page
       {:ok, flow_view, _html} = live(conn, flow_path(instance))
       assert has_element?(flow_view, "button", "Reopen")
@@ -2084,6 +2136,8 @@ defmodule Demo.FormFlowInstancesTest do
   defp form_path(instance, path), do: "#{flow_path(instance)}/forms/#{Enum.join(path, "/")}"
 
   defp edit_path(instance, path), do: "#{form_path(instance, path)}/edit"
+
+  defp history_path(instance, path), do: "#{form_path(instance, path)}/history"
 
   defp offered?(view, instance, path) do
     has_element?(view, "a[href='#{edit_path(instance, path)}']")

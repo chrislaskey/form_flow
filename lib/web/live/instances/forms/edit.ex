@@ -467,21 +467,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   def handle_event("confirm_reopen", _params, socket)
       when socket.assigns.page_state == :completed do
     socket = assign(socket, :confirming_reopen?, false)
-    %{flow_instance: flow_instance, form_instance: form_instance} = socket.assigns
 
-    flow = Templates.Flows.get_row(flow_instance.template_flow_id)
-
-    if match?(%Templates.Flow{}, flow) and
-         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, socket.assigns) do
-      case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
-             user_id: socket.assigns.user_id,
-             tenant_id: socket.assigns.tenant_id
-           ) do
-        {:ok, _reopened} -> {:noreply, reload(socket)}
-        {:error, _changeset} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}
-      end
-    else
-      {:noreply, assign(socket, :error, "This flow is read-only now.")}
+    case Shared.reopen(socket.assigns) do
+      {:ok, _reopened} -> {:noreply, reload(socket)}
+      {:error, message} -> {:noreply, assign(socket, :error, message)}
     end
   end
 
@@ -743,20 +732,15 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
           <.link
             navigate={Paths.form_path(@base, @flow_instance.id, @path)}
             class="link link-primary"
-          >
-            View the answers.
-          </.link>
+          >View the answers</.link>.
           <span :if={@continue_allowed?}>
-            Or
-            <Core.button
+            Or <Core.button
               components={@components}
               type="button"
               phx-click="request_reopen"
               phx-target={@myself}
               class="link link-primary align-baseline"
-            >
-              reopen the form to edit.
-            </Core.button>
+            >reopen the form to edit</Core.button>.
           </span>
         </p>
       </Core.alert>
