@@ -31,10 +31,13 @@ defmodule FormFlow.Web.Instances.Forms.Show do
 
   The one write here is Reopen, and it lives here on purpose: reopening
   changes state, so it stays an explicit button rather than a mode of a URL,
-  and it belongs beside the answers it reopens. It asks for confirmation
-  first (`FormFlow.Web.Instances.Components.ReopenDialog`), since it puts
-  the form back in front of everyone who can see it. It lands on Edit,
-  where those answers can then be changed.
+  and it belongs beside the answers it reopens. It sits in the header with
+  Download PDF and Print, because it is the third thing to do with a set of
+  answers - when they were submitted is the status badge's to say, not a
+  banner's. It asks for confirmation first
+  (`FormFlow.Web.Instances.Components.ReopenDialog`), since it puts the form
+  back in front of everyone who can see it. It lands on Edit, where those
+  answers can then be changed.
 
   ## The states it draws
 
@@ -311,6 +314,19 @@ defmodule FormFlow.Web.Instances.Forms.Show do
             Print
           </Core.button>
         </div>
+        <%!-- Reopen sits with Download and Print because it is the third
+              thing to do with a set of answers, not a notice about them:
+              when they were submitted is in the status badge now. --%>
+        <Core.button
+          :if={@form_instance.status == "completed" and @continue_allowed?}
+          components={@components}
+          type="button"
+          phx-click="request_reopen"
+          phx-target={@myself}
+          class="btn btn-ghost"
+        >
+          Reopen
+        </Core.button>
       </.page_header>
 
       {@type.module.progress_component(%{
@@ -358,26 +374,6 @@ defmodule FormFlow.Web.Instances.Forms.Show do
           }
         }
       </script>
-
-      <Core.alert
-        :if={@form_instance.status == "completed"}
-        kind={:success}
-        components={@components}
-        class="mb-4"
-      >
-        <span>
-          Submitted {Calendar.strftime(@form_instance.completed_at, "%Y-%m-%d %H:%M")} UTC.
-        </span>
-        <Core.button
-          :if={@continue_allowed?}
-          components={@components}
-          phx-click="request_reopen"
-          phx-target={@myself}
-          class="btn btn-sm btn-success btn-soft"
-        >
-          Reopen
-        </Core.button>
-      </Core.alert>
 
       <ReopenDialog.reopen_dialog
         :if={@confirming_reopen?}
@@ -437,11 +433,15 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       sticky
     >
       <:status>
-        <Status.badge form_instance={@form_instance} events={@events} components={@components} />
+        <Status.badge
+          id={"#{@id}-status"}
+          form_instance={@form_instance}
+          events={@events}
+          components={@components}
+        />
       </:status>
       <:actions :if={@tabs}>
         {render_slot(@inner_block)}
-        <Status.activity id={"#{@id}-activity"} events={@events} components={@components} />
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}

@@ -207,6 +207,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
   attr(:path, :list, required: true)
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
+  attr(:id, :string, required: true)
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
 
@@ -222,7 +223,12 @@ defmodule FormFlow.Web.Instances.Forms.History do
       sticky
     >
       <:status>
-        <Status.badge form_instance={@form_instance} events={@events} components={@components} />
+        <Status.badge
+          id={"#{@id}-status"}
+          form_instance={@form_instance}
+          events={@events}
+          components={@components}
+        />
       </:status>
       <:actions :if={@tabs}>
         <Tabs.tabs
@@ -247,6 +253,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
       path: assigns.path,
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],
+      id: assigns.id,
       components: assigns.components
     }
   end

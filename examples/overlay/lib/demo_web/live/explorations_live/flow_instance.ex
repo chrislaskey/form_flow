@@ -506,7 +506,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
     %{
       title: "Last activity per row",
       today:
-        "The newest event's user and time are read on the form pages (`Status.last_event/1`).",
+        "The newest event's user and time are read on the form pages (`Status.badge/1`).",
       needs:
         "The same on the listing rows without an N+1: one query for the newest event per position."
     },

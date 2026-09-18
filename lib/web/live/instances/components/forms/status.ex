@@ -78,79 +78,82 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
   def event_kind(%Event{event: "created"}), do: :info
   def event_kind(%Event{event: "migrated"}), do: :neutral
 
+  attr(:id, :string, required: true)
   attr(:form_instance, :map, default: nil, doc: "the `FormFlow.Data.Instances.Form`, or nil")
   attr(:events, :list, default: [], doc: "its events, oldest first")
+  attr(:draft, :map, default: nil, doc: "the user's saved draft, or nil")
   attr(:components, :atom, default: nil)
   attr(:class, :any, default: nil)
 
   @doc """
-  The status badge. Draws nothing for a position with no instance: an
-  unstarted form has no status to show.
+  The status badge, and behind it where the form stands: the newest event,
+  and the saved draft under it, one line each, in a card that opens on
+  hover and on focus. The event comes first because it is the form's own
+  history; the draft is the user's own work on top of it.
+
+  The two are one thing on the page because they are one thing to a reader:
+  "Draft" is the word, and when it became that word and who made it so is
+  the same question asked further. So the badge carries an **i** after its
+  word, and the whole badge is the button - tapping it focuses it, so a
+  touch screen opens the same card a pointer does.
+
+  The lines are written out only in the card. Spelled across the header
+  they crowd the actions the page is for - Submit is what the header is
+  there to offer - while the question they answer ("is my work safe?",
+  "what happened last?") is asked once, not read continuously.
+
+  Draws nothing for a position with no instance: an unstarted form has no
+  status to show. A form with a status but no activity yet - no event, no
+  draft - is the plain badge, with no **i** and nothing to open.
   """
   def badge(assigns) do
-    assigns = assign(assigns, :status, status(assigns.form_instance, assigns.events))
+    assigns =
+      assigns
+      |> assign(:status, status(assigns.form_instance, assigns.events))
+      |> assign(:event, List.last(assigns.events))
 
     ~H"""
     <%= if @status do %>
       <% {text, kind} = label(@status) %>
-      <Core.badge components={@components} kind={kind} class={@class}>{text}</Core.badge>
-    <% end %>
-    """
-  end
-
-  attr(:events, :list, required: true, doc: "the form instance's events, oldest first")
-  attr(:draft, :map, default: nil, doc: "the user's saved draft, or nil")
-  attr(:components, :atom, default: nil)
-  attr(:id, :string, required: true)
-  attr(:class, :any, default: nil)
-
-  @doc """
-  Where the form stands, behind an **i** button: the newest event, and the
-  saved draft under it, one line each, in a card that opens on hover and on
-  focus. Tapping the button focuses it, so a touch screen opens the same
-  card. The event comes first because it is the form's own history; the
-  draft is the user's own work on top of it.
-
-  The lines are written out only in the card. Spelled out beside the
-  buttons they crowd the actions the page is for - Submit is what the
-  header is there to offer - while the question they answer ("is my work
-  safe?", "what happened last?") is asked once, not read continuously.
-
-  Nothing when there is neither a draft nor an event: an unstarted form has
-  no activity to report.
-  """
-  def activity(assigns) do
-    assigns = assign(assigns, :event, List.last(assigns.events))
-
-    ~H"""
-    <span :if={@event || @draft} class={["group relative inline-flex", @class]}>
-      <button
-        type="button"
-        id={@id}
-        aria-label="Activity"
-        class="flex items-center rounded-full p-1 text-zinc-400 hover:text-zinc-600 focus:text-zinc-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
-      >
-        <Core.icon components={@components} name="hero-information-circle" class="size-5" />
-      </button>
-      <span
-        role="tooltip"
-        class="pointer-events-none invisible absolute top-full right-0 z-30 mt-1 w-max rounded-xl border border-zinc-200 bg-white px-5 py-4 whitespace-nowrap opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-      >
-        <.line
-          :if={@event}
-          what={event_label(@event)}
-          at={@event.inserted_at}
-          user_id={@event.user_id}
-        />
-        <.line
-          :if={@draft}
-          what="Draft saved"
-          at={@draft.saved_at}
-          user_id={@draft.user_id}
-          class={@event && "mt-3"}
-        />
+      <span :if={!@event && !@draft} class="inline-flex">
+        <Core.badge components={@components} kind={kind} class={@class}>{text}</Core.badge>
       </span>
-    </span>
+      <span :if={@event || @draft} class="group relative inline-flex">
+        <button
+          type="button"
+          id={@id}
+          aria-label={"#{text} - when, and by whom"}
+          class="inline-flex cursor-default items-center focus:outline-none"
+        >
+          <Core.badge components={@components} kind={kind} class={@class}>
+            {text}
+            <Core.icon
+              components={@components}
+              name="hero-information-circle"
+              class="size-3.5 opacity-60"
+            />
+          </Core.badge>
+        </button>
+        <span
+          role="tooltip"
+          class="pointer-events-none invisible absolute top-full left-0 z-30 mt-1 w-max rounded-xl border border-zinc-200 bg-white px-5 py-4 font-normal whitespace-nowrap opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+        >
+          <.line
+            :if={@event}
+            what={event_label(@event)}
+            at={@event.inserted_at}
+            user_id={@event.user_id}
+          />
+          <.line
+            :if={@draft}
+            what="Draft saved"
+            at={@draft.saved_at}
+            user_id={@draft.user_id}
+            class={@event && "mt-3"}
+          />
+        </span>
+      </span>
+    <% end %>
     """
   end
 

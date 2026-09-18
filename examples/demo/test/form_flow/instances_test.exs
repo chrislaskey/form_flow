@@ -587,6 +587,12 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "already been submitted"
       refute has_element?(view, "button[type='submit']")
       assert has_element?(view, "a[href='#{form_path(instance, [name.id])}']")
+
+      # Reopen is offered twice on this page: in the header with the tabs,
+      # and inline in the sentence the alert makes
+      assert view
+             |> element(~s(button.btn-ghost[phx-click="request_reopen"]))
+             |> render_click() =~ "Reopen this form?"
     end
 
     test "reopen lives with the answers, on show, and lands on edit", %{conn: conn} do

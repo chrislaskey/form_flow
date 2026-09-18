@@ -130,7 +130,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     * `:not_started` - why it could not be started, and the way back
     * `:broken_definition` - the parse error, inline
     * `:completed` - "This form has already been submitted.", a link to its
-      answers, and Reopen
+      answers, and Reopen - in the header beside the tabs, and again inline
+      in the sentence
     * `:ready` - the form
 
   The submit guards on `:ready` alone. It arrives through `update/2` rather
@@ -714,31 +715,50 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # Already submitted, so there is nothing to edit until it is reopened -
-  # which happens beside the answers, on Show.
+  # Already submitted, so there is nothing to edit until it is reopened.
   def render(%{page_state: :completed} = assigns) do
     ~H"""
     <div>
-      <.page_header {header_assigns(assigns)} />
-
-      <Core.alert components={@components}>
-        <span>This form has already been submitted.</span>
-        <.link
-          navigate={Paths.form_path(@base, @flow_instance.id, @path)}
-          class="link link-primary"
-        >
-          View the answers.
-        </.link>
-        <span>Or</span>
+      <.page_header {header_assigns(assigns)}>
         <Core.button
+          :if={@continue_allowed?}
           components={@components}
           type="button"
           phx-click="request_reopen"
           phx-target={@myself}
-          class="link link-primary"
+          class="btn btn-ghost"
         >
-          reopen the form to edit.
+          Reopen
         </Core.button>
+      </.page_header>
+
+      <%!-- One sentence, in one child: daisyUI's alert lays its children
+            out as a grid, so a link and a button beside the text arrive as
+            three blocks with gaps between them rather than as prose. The
+            clickable halves are inline in the sentence and keep the link's
+            colour and underline. --%>
+      <Core.alert components={@components}>
+        <p>
+          This form has already been submitted.
+          <.link
+            navigate={Paths.form_path(@base, @flow_instance.id, @path)}
+            class="link link-primary"
+          >
+            View the answers.
+          </.link>
+          <span :if={@continue_allowed?}>
+            Or
+            <Core.button
+              components={@components}
+              type="button"
+              phx-click="request_reopen"
+              phx-target={@myself}
+              class="link link-primary align-baseline"
+            >
+              reopen the form to edit.
+            </Core.button>
+          </span>
+        </p>
       </Core.alert>
 
       <ReopenDialog.reopen_dialog
@@ -929,16 +949,16 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       sticky
     >
       <:status>
-        <Status.badge form_instance={@form_instance} events={@events} components={@components} />
-      </:status>
-      <:actions :if={@tabs}>
-        {render_slot(@inner_block)}
-        <Status.activity
-          id={"#{@id}-activity"}
+        <Status.badge
+          id={"#{@id}-status"}
+          form_instance={@form_instance}
           events={@events}
           draft={@draft}
           components={@components}
         />
+      </:status>
+      <:actions :if={@tabs}>
+        {render_slot(@inner_block)}
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}

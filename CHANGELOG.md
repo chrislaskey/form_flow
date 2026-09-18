@@ -99,23 +99,38 @@ reload would flash, but it would also throw away whatever the page holds
 that a reload cannot put back - an uploaded file among it - which is the
 very thing a draft is there to protect.
 
-### Where a form stands moved behind an activity button
+### Where a form stands moved into the status badge
 
 A form page's header no longer writes "Draft saved 3 minutes ago ·
-dog_owner · Started 11 hours ago · dog_owner" beside its buttons. The two
-lines now sit in a card behind an **i** button, which opens on hover and
-on focus - a tap focuses it, so a touch screen opens the same card. The
-button stands between Submit and the Edit / View / History tabs, where the
-line used to start.
+dog_owner · Started 11 hours ago · dog_owner" beside its buttons. The
+status badge carries it: **Draft ⓘ**, and the two lines sit in a card that
+opens on hover and on focus. A tap focuses the badge, so a touch screen
+opens the same card. The badge is where a reader already looks for the
+word, and when it became that word and who made it so is the same question
+asked further - so they are one thing on the page.
 
 Each entry is a sentence now - "Started by dog_owner" - with when it
 happened smaller on a second line under it, "11 hours ago 2026-09-18 02:47
 UTC". Both times are written out rather than the full one hidden behind a
 second hover, and the user is named rather than set in a code span. The
-newest event is on top and the saved draft under it.
+newest event is on top and the saved draft under it. A form with a status
+but no activity yet draws the plain badge, with no ⓘ and nothing to open.
 
 The header's buttons also read in the order the work is done: **Discard
 changes**, **Save draft**, **Submit**.
+
+A submitted form's View page loses its green banner entirely - "Submitted
+2026-09-18 15:00 UTC. Reopen". The badge says when it was submitted, and
+**Reopen** moved into the header beside Download PDF and Print, where the
+other things to do with a set of answers already were.
+
+A submitted form's Edit page carries **Reopen** in its header too, beside
+the tabs, and its notice reads as one sentence - "This form has already
+been submitted. View the answers. Or reopen the form to edit." - rather
+than three blocks with gaps between them. daisyUI's alert lays its
+children out as a grid, so the link and the button are inline in a single
+paragraph now, keeping the link's colour and underline. The inline reopen
+is drawn only where reopening is allowed, as the button is.
 
 The title line drops the flow it is in - "Dog Information in Dog License"
 is now just "Dog Information", with the status badge after it. The flow is
@@ -123,8 +138,9 @@ already the crumb directly above, and the page reads with one element
 fewer.
 
 **Breaking.** `FormFlow.Web.Instances.Components.Forms.Status`'s
-`last_event/1` is replaced by `activity/1`, which takes `events`, an
-optional `draft`, and a required `id` for the button.
+`last_event/1` is gone, and `badge/1` takes its work: a required `id` and
+an optional `draft` alongside the `form_instance` and `events` it already
+took.
 
 ### Template breadcrumbs walk the whole way down
 
