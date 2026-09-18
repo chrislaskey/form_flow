@@ -19,14 +19,15 @@ defmodule FormFlow.Web.Components.Tabs do
   Two navigation styles, as `FormFlow.Web.Templates.Components.Header` has:
 
     * `target` unset - every other tab is a plain `<.link navigate>`
-    * `target` set - every other tab is a button pushing `"navigate"` with
-      `phx-value-to` to that target, the way the flow editor leaves through
-      its own event so unsaved changes prompt first
+    * `target` set and `events` empty - every other tab is a button pushing
+      `"navigate"` with `phx-value-to` to that target, the way the flow
+      editor leaves through its own event so unsaved changes prompt first
 
   `events` names one tab at a time rather than all of them: the key's own
   event goes to `target` in place of its link, which is how a form's Edit
   tab asks to reopen a submitted form instead of walking to a page that
-  would only say it was submitted. The other tabs stay ordinary links.
+  would only say it was submitted. Naming one tab leaves the rest ordinary
+  links - a caller that wants every tab routed through itself names none.
   """
 
   use Phoenix.Component
@@ -50,18 +51,32 @@ defmodule FormFlow.Web.Components.Tabs do
   attr(:class, :any, default: nil)
 
   def tabs(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :items,
+        Enum.map(assigns.items, fn {key, label, to} -> {key, label, to, mode(key, assigns)} end)
+      )
+
     ~H"""
     <nav class={["inline-flex rounded-lg bg-zinc-100 p-1 text-sm", @class]} aria-label={@label}>
-      <%= for {key, label, to} <- @items do %>
+      <%= for {key, label, to, mode} <- @items do %>
         <span
-          :if={key == @active}
+          :if={mode == :current}
           class="rounded-md bg-white px-3 py-1.5 font-semibold text-primary shadow-sm"
           aria-current="page"
         >
           {label}
         </span>
+        <.link
+          :if={mode == :link}
+          navigate={to}
+          class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
+        >
+          {label}
+        </.link>
         <button
-          :if={key != @active and @events[key]}
+          :if={mode == :ask}
           type="button"
           phx-click={@events[key]}
           phx-target={@target}
@@ -69,15 +84,8 @@ defmodule FormFlow.Web.Components.Tabs do
         >
           {label}
         </button>
-        <.link
-          :if={key != @active and is_nil(@events[key]) and is_nil(@target)}
-          navigate={to}
-          class="rounded-md px-3 py-1.5 text-zinc-500 hover:text-zinc-900"
-        >
-          {label}
-        </.link>
         <button
-          :if={key != @active and is_nil(@events[key]) and not is_nil(@target)}
+          :if={mode == :navigate}
           type="button"
           phx-click="navigate"
           phx-value-to={to}
@@ -89,5 +97,19 @@ defmodule FormFlow.Web.Components.Tabs do
       <% end %>
     </nav>
     """
+  end
+
+  # What one tab is: the page itself; its own event, when `events` names it;
+  # the "navigate" event, when the caller routes every tab through itself;
+  # an ordinary link otherwise. Naming one tab in `events` leaves the rest
+  # links - only a caller that names none is asking for all of them.
+  defp mode(key, %{active: key}), do: :current
+
+  defp mode(key, assigns) do
+    cond do
+      assigns.events[key] -> :ask
+      assigns.target && assigns.events == %{} -> :navigate
+      true -> :link
+    end
   end
 end

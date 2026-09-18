@@ -625,6 +625,10 @@ defmodule Demo.FormFlowInstancesTest do
       refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
       assert has_element?(view, ~s(button[phx-click="request_reopen"]), "Edit")
 
+      # The other tabs are still ordinary links: naming Edit in `events`
+      # does not route the whole control through the page
+      assert has_element?(view, "a[href='#{history_path(instance, [name.id])}']")
+
       view |> element(~s(button[phx-click="request_reopen"])) |> render_click()
       assert render(view) =~ "Reopen form"
 
