@@ -291,7 +291,6 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     ~H"""
     <div>
       <.page_header {header_assigns(assigns)}>
-        <Status.last_event events={@events} class="mr-2" />
         <%!-- A LiveView holds a websocket, not a response, so taking the
               answers away is a request of its own, authorized by a token
               this page mints on the click. Minting then, rather than when
@@ -421,6 +420,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
   attr(:path, :list, required: true)
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
+  attr(:id, :string, required: true)
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
   slot(:inner_block)
@@ -441,6 +441,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       </:status>
       <:actions :if={@tabs}>
         {render_slot(@inner_block)}
+        <Status.activity id={"#{@id}-activity"} events={@events} components={@components} />
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}
@@ -464,6 +465,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
       path: assigns.path,
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],
+      id: assigns.id,
       components: assigns.components
     }
   end

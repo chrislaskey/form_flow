@@ -8,8 +8,9 @@ A user filling a form can save what they have typed so far and come back
 to it: **Save draft** in the Edit page's header stores the form as it
 stands on the page - valid or not - on the form instance, without
 submitting it. The next visit draws the draft over the stored answers, and
-the header says "Draft saved 3 minutes ago · user" beside the last event
-line. Submitting clears it. Each form instance has one draft; saving again
+the header's activity button says "Draft saved by user", and under it
+"3 minutes ago 2026-09-18 14:08 UTC".
+Submitting clears it. Each form instance has one draft; saving again
 replaces it.
 
 The draft is a new nullable `draft` column on `form_flow_instance_forms`,
@@ -47,6 +48,33 @@ the database, the way the flow editor's Discard changes does.
 **Schema.** `V01` gains the `draft` column on both adapters. A database
 migrated before this release has to be recreated (the library is
 pre-release and `V01` is the schema).
+
+### Where a form stands moved behind an activity button
+
+A form page's header no longer writes "Draft saved 3 minutes ago ·
+dog_owner · Started 11 hours ago · dog_owner" beside its buttons. The two
+lines now sit in a card behind an **i** button, which opens on hover and
+on focus - a tap focuses it, so a touch screen opens the same card. The
+button stands between Submit and the Edit / View / History tabs, where the
+line used to start.
+
+Each entry is a sentence now - "Started by dog_owner" - with when it
+happened smaller on a second line under it, "11 hours ago 2026-09-18 02:47
+UTC". Both times are written out rather than the full one hidden behind a
+second hover, and the user is named rather than set in a code span. The
+newest event is on top and the saved draft under it.
+
+The header's buttons also read in the order the work is done: **Discard
+changes**, **Save draft**, **Submit**.
+
+The title line drops the flow it is in - "Dog Information in Dog License"
+is now just "Dog Information", with the status badge after it. The flow is
+already the crumb directly above, and the page reads with one element
+fewer.
+
+**Breaking.** `FormFlow.Web.Instances.Components.Forms.Status`'s
+`last_event/1` is replaced by `activity/1`, which takes `events`, an
+optional `draft`, and a required `id` for the button.
 
 ### Template breadcrumbs walk the whole way down
 

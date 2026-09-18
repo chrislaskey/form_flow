@@ -691,8 +691,16 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     ~H"""
     <div>
       <.page_header {header_assigns(assigns)}>
-        <.draft_line draft={@draft} class="mr-2" />
-        <Status.last_event events={@events} class="mr-2" />
+        <Core.button
+          id={"#{@id}-discard"}
+          components={@components}
+          type="button"
+          phx-click="request_discard"
+          phx-target={@myself}
+          class="btn btn-error btn-ghost"
+        >
+          Discard changes
+        </Core.button>
         <%!-- Save draft reads the form below off the page - the same form
               Capture reads, by the same id - and stores it as it stands --%>
         <Capture.capture_button
@@ -704,16 +712,6 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         >
           Save draft
         </Capture.capture_button>
-        <Core.button
-          id={"#{@id}-discard"}
-          components={@components}
-          type="button"
-          phx-click="request_discard"
-          phx-target={@myself}
-          class="btn btn-error btn-ghost"
-        >
-          Discard changes
-        </Core.button>
         <%!-- Submit lives up here, pinned with the header, as a button whose
               `form` attribute names the form DynamicForm draws below - the
               same id Capture reads - so the form's own button is hidden
@@ -847,6 +845,8 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   attr(:path, :list, required: true)
   attr(:form_instance, :map, default: nil)
   attr(:events, :list, default: [])
+  attr(:draft, :map, default: nil)
+  attr(:id, :string, required: true)
   attr(:components, :atom, default: nil)
   attr(:tabs, :boolean, default: true)
   slot(:inner_block)
@@ -867,6 +867,12 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       </:status>
       <:actions :if={@tabs}>
         {render_slot(@inner_block)}
+        <Status.activity
+          id={"#{@id}-activity"}
+          events={@events}
+          draft={@draft}
+          components={@components}
+        />
         <Tabs.tabs
           base={@base}
           flow_instance_id={@flow_instance.id}
@@ -890,32 +896,10 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
       path: assigns.path,
       form_instance: assigns[:form_instance],
       events: assigns[:events] || [],
+      draft: assigns[:draft],
+      id: assigns.id,
       components: assigns.components
     }
-  end
-
-  attr(:draft, :map, default: nil, doc: "the user's saved draft, or nil")
-  attr(:class, :any, default: nil)
-
-  # The saved draft as one line - "Draft saved 3 minutes ago · dog_owner" -
-  # drawn the way the last event line is, since it answers the same question
-  # about a different thing: this is not an event and is not in the trail.
-  # Nothing when there is no draft.
-  defp draft_line(assigns) do
-    ~H"""
-    <span :if={@draft} class={["flex items-center gap-2 text-sm text-zinc-600", @class]}>
-      <span class="size-2 shrink-0 rounded-full bg-cyan-600" />
-      <span>
-        Draft saved
-        <span :if={@draft.saved_at} class="text-zinc-500" title={Status.absolute(@draft.saved_at)}>
-          {FormFlow.Web.Templates.Shared.relative(@draft.saved_at)}
-        </span>
-        <span :if={@draft.user_id} class="text-zinc-500">
-          · <code class="text-xs">{@draft.user_id}</code>
-        </span>
-      </span>
-    </span>
-    """
   end
 
   # The id the form type is handed, and - with `-form` on the end - the DOM id

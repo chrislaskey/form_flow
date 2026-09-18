@@ -2,9 +2,11 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
   @moduledoc """
   `FormFlow.Web.Instances.Components.Forms.Status` says where one form
   instance stands, in the words the form pages use: the **status badge**
-  after the page's title - Draft, Submitted, Reopened - and the **last
-  event** line among the header's actions - "Started 3 minutes ago ·
-  dog_owner" - with the labels the History page gives every event.
+  after the page's title - Draft, Submitted, Reopened - and the **activity**
+  button among the header's actions, an **i** the header's lines open on
+  hover or focus - "Started by dog_owner", and under it "3 minutes ago
+  2026-09-18 02:47 UTC" - with the labels the History page gives every
+  event.
 
   The status is derived, not stored. A form instance's row holds two
   statuses, `in_progress` and `completed`; the third word comes from the
@@ -14,11 +16,11 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
   applicant sent back to it, or the reviewer who sent them - needs the
   difference more than they need the row's word.
 
-  The last event line names the newest event by what it did - Started,
+  The event line names the newest event by what it did - Started,
   Submitted, Reopened, Moved to a new version - when, and by whom. Saving a
   draft is deliberately not among them: a draft is the user keeping their
-  place, not something that happened to the form, so it writes no event
-  and the Edit page says "Draft saved" in a line of its own beside this one
+  place, not something that happened to the form, so it writes no event and
+  the card carries "Draft saved" as a line of its own under the event
   (`archive/plans/instance-form-drafts.md` §9).
 
   Pure functions first (`status/2`, `event_label/1`) so the rules are
@@ -97,26 +99,83 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
   end
 
   attr(:events, :list, required: true, doc: "the form instance's events, oldest first")
+  attr(:draft, :map, default: nil, doc: "the user's saved draft, or nil")
+  attr(:components, :atom, default: nil)
+  attr(:id, :string, required: true)
   attr(:class, :any, default: nil)
 
   @doc """
-  The newest event as one line - "Started 3 minutes ago · dog_owner" - the
-  absolute time on hover. Nothing for an empty trail.
+  Where the form stands, behind an **i** button: the newest event, and the
+  saved draft under it, one line each, in a card that opens on hover and on
+  focus. Tapping the button focuses it, so a touch screen opens the same
+  card. The event comes first because it is the form's own history; the
+  draft is the user's own work on top of it.
+
+  The lines are written out only in the card. Spelled out beside the
+  buttons they crowd the actions the page is for - Submit is what the
+  header is there to offer - while the question they answer ("is my work
+  safe?", "what happened last?") is asked once, not read continuously.
+
+  Nothing when there is neither a draft nor an event: an unstarted form has
+  no activity to report.
   """
-  def last_event(assigns) do
+  def activity(assigns) do
     assigns = assign(assigns, :event, List.last(assigns.events))
 
     ~H"""
-    <span :if={@event} class={["flex items-center gap-2 text-sm text-zinc-600", @class]}>
-      <span class="size-2 shrink-0 rounded-full bg-zinc-400" />
-      <span>
-        {event_label(@event)}
-        <span class="text-zinc-500" title={absolute(@event.inserted_at)}>
-          {FormFlow.Web.Templates.Shared.relative(@event.inserted_at)}
-        </span>
-        <span :if={@event.user_id} class="text-zinc-500">
-          · <code class="text-xs">{@event.user_id}</code>
-        </span>
+    <span :if={@event || @draft} class={["group relative inline-flex", @class]}>
+      <button
+        type="button"
+        id={@id}
+        aria-label="Activity"
+        class="flex items-center rounded-full p-1 text-zinc-400 hover:text-zinc-600 focus:text-zinc-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+      >
+        <Core.icon components={@components} name="hero-information-circle" class="size-5" />
+      </button>
+      <span
+        role="tooltip"
+        class="pointer-events-none invisible absolute top-full right-0 z-30 mt-1 w-max rounded-xl border border-zinc-200 bg-white px-5 py-4 whitespace-nowrap opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      >
+        <.line
+          :if={@event}
+          what={event_label(@event)}
+          at={@event.inserted_at}
+          user_id={@event.user_id}
+        />
+        <.line
+          :if={@draft}
+          what="Draft saved"
+          at={@draft.saved_at}
+          user_id={@draft.user_id}
+          class={@event && "mt-3"}
+        />
+      </span>
+    </span>
+    """
+  end
+
+  attr(:what, :string, required: true, doc: ~s|what happened - "Started", "Draft saved"|)
+  attr(:at, :any, default: nil, doc: "when it happened, or nil")
+  attr(:user_id, :string, default: nil, doc: "who did it, or nil")
+  attr(:class, :any, default: nil)
+
+  # One entry of the card, over two lines - "Draft saved by dog_owner", and
+  # under it, smaller, "11 hours ago 2026-09-17 21:04 UTC". What happened and
+  # who did it is the sentence a reader scans; when it happened is the answer
+  # they look up, so it sits on its own line rather than running the first one
+  # long. Both times are written - the relative one answers how long ago at a
+  # glance, the full one answers exactly when, and a card that opens on hover
+  # has no second hover to hide the second answer behind. The full one is
+  # lighter rather than bracketed: the weight does the work brackets were
+  # doing, without the punctuation. The user is a name in the sentence, not a
+  # code span: it reads as who, not as a value to copy.
+  defp line(assigns) do
+    ~H"""
+    <span class={["block text-sm text-zinc-600", @class]}>
+      <span class="block">{@what}<span :if={@user_id}> by {@user_id}</span></span>
+      <span :if={@at} class="flex items-baseline gap-1.5 text-xs text-zinc-500">
+        {FormFlow.Web.Templates.Shared.relative(@at)}
+        <span class="text-zinc-400">{absolute(@at)}</span>
       </span>
     </span>
     """

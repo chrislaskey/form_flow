@@ -10,22 +10,23 @@ defmodule FormFlow.Web.Instances.Components.Header do
   back out, every link but the last: a form nested in subflows has nowhere
   of their own to send a click, so each subflow name lands on the flow
   instance's own page too, the way its own name does. Under it the
-  **title** names the thing on the page: the form's label with "in <flow>"
-  lighter after it, the flow instance's name, or "Flows" on the listing.
-  What the page has to say about the thing - when
-  it was started, which flow - is not here: it is the fact sheet in the
-  page's body. The one exception is a form's **status** badge - Draft,
-  Submitted, Reopened - which reads with the name, so the `status` slot
-  sits at the end of the title line. A `description` is one line under the
+  **title** names the thing on the page and nothing else: the form's label,
+  the flow instance's name, or "Flows" on the listing. Which flow the form
+  is in is the crumb above it, and saying it twice on two lines that touch
+  is one element more than the page needs. What the page has to say about
+  the thing - when it was started, which flow - is not here either: it is
+  the fact sheet in the page's body. The one exception is a form's
+  **status** badge - Draft, Submitted, Reopened - which reads with the
+  name, so the `status` slot sits at the end of the title line. A `description` is one line under the
   title for a page that needs to say what it shows. The right side is the
   page's `actions`.
 
   Side by side only where there is room for both; below `xl` the two stack.
 
   A form page's header **pins** (`sticky`): the title, the status, the
-  tabs, the last event, and the buttons stay at the top of the window while
-  the form scrolls under them, so Submit is never further away than the
-  top of the screen. The listing and the flow instance's page do not pin -
+  tabs, the activity button, and the page's buttons stay at the top of the
+  window while the form scrolls under them, so Submit is never further away
+  than the top of the screen. The listing and the flow instance's page do not pin -
   nothing on them is an action on what scrolls.
 
       <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name}>
@@ -121,9 +122,6 @@ defmodule FormFlow.Web.Instances.Components.Header do
         </nav>
         <h2 class="mt-1 flex flex-wrap items-center gap-x-2 text-2xl font-semibold leading-tight">
           <span>{title(assigns)}</span>
-          <span :if={@label && @flow_instance} class="text-base font-normal text-zinc-400">
-            in {@flow_name}
-          </span>
           {render_slot(@status)}
         </h2>
         <p :if={@description} class="mt-0.5 text-sm text-zinc-500">{@description}</p>
