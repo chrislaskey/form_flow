@@ -2,6 +2,53 @@
 
 ## v0.31.0
 
+### A flow instance page hides what another perspective has to open first
+
+**Breaking.** `FormFlow.Web.Instances.Flows.Show` and
+`FormFlow.Web.Instances.Flows.History` now decide their rows by two rules
+rather than one. The first is unchanged: a form of a flow the viewer's
+perspectives are not for is not a row. The second is new: a form the
+viewer *can* see is dropped while a step holding it is **shut on another
+perspective** - the step's own flow's type will not let the viewer enter
+it, and among the positions still standing in that step's way is a step
+with no form inside it the viewer may see.
+
+The case it is for: a licence application runs Applicant → Reviewer →
+Feedback, where the closing feedback form is for everyone. The applicant
+used to see a Feedback row reading Pending from the first day, though no
+act of theirs would ever open it. Now they see it the moment the reviewer
+finishes, and not before. The rule reads the same from the other side: a
+reviewer looking at an application nobody has submitted sees "Nothing in
+this flow is for you to fill out", because the step in front of theirs is
+the applicant's and unfinished.
+
+Since the rows are what the counts, the ring, the standing, Next up and
+"Your part is done" are built from, all of those follow. A journey whose
+flows all name the same perspectives, or name none, is unchanged.
+
+The flow type is asked before the edges, which is what keeps this honest:
+a "subflows" flow worked in any order (`any_order`) lets a user into any
+unfinished step whatever the edges say, so none of its steps is ever shut
+on anyone.
+
+The form pages are not changed. A viewer who types the URL of a form that
+is theirs still gets the form's page, drawn as Pending with nothing to do,
+as before.
+
+### `FormFlow.Data.Instances.FlowProgress.unfinished_predecessors/3`
+
+New, and what the rule above walks: the positions that must complete
+before a position is reached and have not, nearest first, taking
+`derive/2`'s statuses. It walks back along the incoming edges through
+every source that is not completed and stops at every source that is -
+under the AND-join, everything behind a completed source is completed too.
+Only the position's own flow is walked; a step above it is answered at its
+own level.
+
+Pure traversal, like the rest of the module: it says which positions stand
+in the way, not whether standing in the way shuts a door. That is the flow
+type's answer, and a caller asks the type first.
+
 ### The overview offers four layouts
 
 A flow template's overview page (`/flows/:id/overview`) draws the whole

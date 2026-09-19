@@ -15,7 +15,8 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
       whole, no form in scope) for the host's `on_mount` to answer with
     * `forms` - every form of the flow with its derived state
       (`FormFlow.Data.Instances.FlowProgress.forms/2`)
-    * `rows` - the forms the viewer's perspectives are for, each
+    * `rows` - the forms the viewer's perspectives are for and no other
+      perspective stands in front of, each
       `%{form: form, editable?: bool, word: word, last: entry}`: the flow
       type's `editable?/2`, the form pages' status word for its instance
       (`FormFlow.Web.Instances.Components.Forms.Status.status/2`), and the
@@ -36,6 +37,28 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
   The rows are only the forms the viewer may see - a form of a flow that is
   not for them is not a row at all - so every count, the standing, and
   next up are the viewer's, as the page under them is.
+
+  ## Two rules decide which forms are rows
+
+  The first is the flow type's `visible?/2`, the perspectives test by
+  default: a form of a flow that is not for the viewer is not a row.
+
+  The second is about the journey rather than the template. A form can be
+  the viewer's and still be one no act of theirs will ever reach: the
+  applicant's closing feedback form, sitting behind the reviewer's step.
+  Listing it says "later" when the truth is "not yours to move". So a form
+  is dropped when a step holding it is **shut on another perspective** -
+  its flow's type will not let the viewer enter it
+  (`FormFlow.Web.Instances.Forms.Shared.enterable?/2`), and among the
+  positions still standing in that step's way
+  (`FormFlow.Data.Instances.FlowProgress.unfinished_predecessors/3`) is a
+  step with no form inside it the viewer may see.
+
+  The type is asked before the edges on purpose. A "subflows" flow worked
+  in any order lets a user into any unfinished step whatever the edges say,
+  so none of its steps is ever shut on anyone. When the other perspective
+  finishes its step, the walk back stops at a completed position, and the
+  form appears on the next render with nothing else changed.
   """
 
   import Phoenix.Component
@@ -124,7 +147,8 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
           |> FormFlow.Web.Instances.Shared.resolve_pre_release_user_ids()
 
         trail = Instances.Flows.list_events(flow_instance)
-        rows = rows(forms, steps, tree, flow_instance, trail, socket.assigns)
+        statuses = FlowProgress.derive(tree, instances)
+        rows = rows(forms, steps, tree, statuses, flow_instance, trail, socket.assigns)
         continue_allowed? = continue_allowed?(flow, socket.assigns)
 
         socket =
@@ -154,21 +178,26 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
 
   def continue_allowed?(_none, _assigns), do: false
 
-  # Every form the viewer's perspectives are for, with the one question its
-  # own flow's type answers here - forms of a flow that is not for the viewer
-  # are not rows at all - and what its trail says of it. Editable means the
-  # form's type says so and every step above it is open
-  # (`Forms.Shared.enterable_chain?/2`)
-  defp rows(forms, steps, tree, flow_instance, trail, assigns) do
+  # Every form the viewer's perspectives are for and no other perspective
+  # stands in front of, with the one question its own flow's type answers
+  # here, and what its trail says of it. Editable means the form's type says
+  # so and every step above it is open (`Forms.Shared.enterable_chain?/2`)
+  defp rows(forms, steps, tree, statuses, flow_instance, trail, assigns) do
     by_instance =
       trail
       |> Enum.reject(&is_nil(&1.form_instance))
       |> Enum.group_by(& &1.form_instance.id)
 
-    for form <- forms,
-        context = form_context(form, forms, steps, tree, flow_instance, assigns),
-        type = Forms.Shared.flow_type(context, assigns),
-        Forms.Shared.visible?(type, context, assigns) do
+    mine =
+      for form <- forms,
+          context = form_context(form, forms, steps, tree, flow_instance, assigns),
+          type = Forms.Shared.flow_type(context, assigns),
+          Forms.Shared.visible?(type, context, assigns),
+          do: {form, context, type}
+
+    shut = shut_on_another_perspective(mine, forms, steps, tree, statuses, assigns)
+
+    for {form, context, type} <- mine, not behind_another_perspective?(form, shut) do
       entries = (form.instance && Map.get(by_instance, form.instance.id, [])) || []
 
       %{
@@ -180,6 +209,52 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
         last: List.last(entries)
       }
     end
+  end
+
+  # Whether one of the steps holding this form is a step only another
+  # perspective can open.
+  defp behind_another_perspective?(form, shut) do
+    Enum.any?(1..length(form.ancestors)//1, &MapSet.member?(shut, Enum.take(form.path, &1)))
+  end
+
+  # The steps only another perspective can open: the step's own flow's type
+  # will not let the viewer in, and among the positions still standing in
+  # its way is a step with nothing inside for them. Their paths.
+  #
+  # Asking the type first is what keeps the edges honest. A "subflows" flow
+  # worked in any order has predecessors and no door - every unfinished
+  # step of it is enterable - so none of its steps is ever shut on anyone.
+  defp shut_on_another_perspective(mine, forms, steps, tree, statuses, assigns) do
+    theirs = steps_holding_nothing_of_mine(forms, mine)
+
+    if MapSet.size(theirs) == 0 do
+      MapSet.new()
+    else
+      for step <- steps,
+          not Forms.Shared.enterable?(Forms.Shared.step_context(assigns.context, step), assigns),
+          tree
+          |> FlowProgress.unfinished_predecessors(statuses, step.path)
+          |> Enum.any?(&MapSet.member?(theirs, &1)),
+          into: MapSet.new(),
+          do: step.path
+    end
+  end
+
+  # The steps with no form inside them, at any depth, that the viewer's
+  # perspectives are for. A step holding no form at all is not one of them:
+  # there is nobody it belongs to instead.
+  defp steps_holding_nothing_of_mine(forms, mine) do
+    seen = MapSet.new(mine, fn {form, _context, _type} -> form.path end)
+
+    forms
+    |> Enum.flat_map(fn form ->
+      for depth <- 1..length(form.ancestors)//1,
+          do: {Enum.take(form.path, depth), MapSet.member?(seen, form.path)}
+    end)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.reject(fn {_path, mine?} -> Enum.any?(mine?) end)
+    |> Enum.map(&elem(&1, 0))
+    |> MapSet.new()
   end
 
   defp form_context(form, forms, steps, tree, flow_instance, assigns) do

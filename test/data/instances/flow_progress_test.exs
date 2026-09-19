@@ -388,6 +388,150 @@ defmodule FormFlow.Data.Instances.FlowProgressTest do
     end
   end
 
+  describe "unfinished_predecessors/3" do
+    # Start → Applicant → Reviewer → Feedback → End, three steps of one
+    # form each: the shape of a licence application with a review in it
+    defp reviewed_flow do
+      root = %Flow{id: Ecto.UUID.generate(), label: "subflows"}
+
+      {applicant_tree, applicant_flow, applicant_form, _address} = named_flow()
+      {reviewer_tree, reviewer_flow, reviewer_form, _address} = named_flow()
+      {feedback_tree, feedback_flow, feedback_form, _address} = named_flow()
+
+      start = build_node(["Start"])
+      applicant = build_node(["Subflow"], subflow_id: applicant_flow.id, label: "Applicant")
+      reviewer = build_node(["Subflow"], subflow_id: reviewer_flow.id, label: "Reviewer")
+      feedback = build_node(["Subflow"], subflow_id: feedback_flow.id, label: "Feedback")
+      stop = build_node(["End"])
+
+      tree =
+        tree(
+          [start, applicant, reviewer, feedback, stop],
+          [
+            edge(start, applicant),
+            edge(applicant, reviewer),
+            edge(reviewer, feedback),
+            edge(feedback, stop)
+          ],
+          %{
+            applicant.id => applicant_tree,
+            reviewer.id => reviewer_tree,
+            feedback.id => feedback_tree
+          },
+          root
+        )
+
+      %{
+        tree: tree,
+        applicant: applicant,
+        reviewer: reviewer,
+        feedback: feedback,
+        applicant_form: applicant_form,
+        reviewer_form: reviewer_form,
+        feedback_form: feedback_form
+      }
+    end
+
+    # Both forms of a named_flow subflow completed, so its End is reached
+    defp step_done(step, tree) do
+      for node <- tree.subflows[step.id].nodes,
+          kind = node.labels |> List.first() |> to_string(),
+          kind == "Form",
+          do: form_instance([step.id, node.id], "completed")
+    end
+
+    test "every unfinished step before a position, nearest first" do
+      %{tree: tree, applicant: applicant, reviewer: reviewer, feedback: feedback} =
+        reviewed_flow()
+
+      statuses = FlowProgress.derive(tree, [])
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [feedback.id]) ==
+               [[reviewer.id], [applicant.id]]
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [reviewer.id]) ==
+               [[applicant.id]]
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [applicant.id]) == []
+    end
+
+    test "a completed predecessor ends the walk" do
+      %{tree: tree, applicant: applicant, reviewer: reviewer, feedback: feedback} =
+        reviewed_flow()
+
+      instances = step_done(applicant, tree)
+      statuses = FlowProgress.derive(tree, instances)
+      assert statuses[[applicant.id]] == :completed
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [feedback.id]) ==
+               [[reviewer.id]]
+
+      instances = instances ++ step_done(reviewer, tree)
+      statuses = FlowProgress.derive(tree, instances)
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [feedback.id]) == []
+    end
+
+    test "walks the position's own flow only" do
+      %{tree: tree, reviewer: reviewer, feedback: feedback, feedback_form: feedback_form} =
+        reviewed_flow()
+
+      statuses = FlowProgress.derive(tree, [])
+
+      # The form inside Feedback has one predecessor of its own, the flow's
+      # Start, which is completed - the Reviewer step above is not its
+      # question to answer
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [
+               feedback.id,
+               feedback_form.id
+             ]) == []
+
+      refute [reviewer.id] in FlowProgress.unfinished_predecessors(tree, statuses, [
+               feedback.id,
+               feedback_form.id
+             ])
+    end
+
+    test "both sources of a join are named, and a cleared branch is not" do
+      root = %Flow{id: Ecto.UUID.generate(), label: "subflows"}
+      {left_tree, left_flow, _name, _address} = named_flow()
+      {right_tree, right_flow, _name, _address} = named_flow()
+
+      start = build_node(["Start"])
+      left = build_node(["Subflow"], subflow_id: left_flow.id, label: "Left")
+      right = build_node(["Subflow"], subflow_id: right_flow.id, label: "Right")
+      stop = build_node(["End"])
+
+      tree =
+        tree(
+          [start, left, right, stop],
+          [edge(start, left), edge(start, right), edge(left, stop), edge(right, stop)],
+          %{left.id => left_tree, right.id => right_tree},
+          root
+        )
+
+      statuses = FlowProgress.derive(tree, [])
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [stop.id]) ==
+               [[left.id], [right.id]]
+
+      instances = step_done(left, tree)
+      statuses = FlowProgress.derive(tree, instances)
+
+      assert FlowProgress.unfinished_predecessors(tree, statuses, [stop.id]) == [[right.id]]
+    end
+
+    test "nothing to walk: no tree, no path, a position the tree lost" do
+      %{tree: tree, feedback: feedback} = reviewed_flow()
+      statuses = FlowProgress.derive(tree, [])
+
+      assert FlowProgress.unfinished_predecessors(nil, statuses, [feedback.id]) == []
+      assert FlowProgress.unfinished_predecessors(tree, statuses, []) == []
+      assert FlowProgress.unfinished_predecessors(tree, statuses, ["gone"]) == []
+      assert FlowProgress.unfinished_predecessors(tree, statuses, ["gone", "deeper"]) == []
+    end
+  end
+
   describe "actionable?/1" do
     test "is where the flow allows work: an available or started form" do
       assert FlowProgress.actionable?(%Instances.FormProgress{status: :available})

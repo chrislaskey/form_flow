@@ -49,6 +49,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   flow allows work; an any-order one offers every form of its own that isn't
   done, which is how a user jumps ahead. One instance can hold several
   "forms" flows with different types, so the questions are asked per form.
+  A form of the viewer's own that sits behind a step only another
+  perspective can open is not listed either, until that other side finishes
+  - `FormFlow.Web.Instances.Flows.Shared` is where both rules are.
   When every form the viewer can see is done but the instance is not, the
   page says so: their part is finished, the rest is someone else's.
 

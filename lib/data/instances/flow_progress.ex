@@ -27,6 +27,10 @@ defmodule FormFlow.Data.Instances.FlowProgress do
       `FormFlow.Data.Instances.SubflowProgress` structs - what a "subflows" flow's type
       orders.
 
+  And one question asked of the edges rather than of a position:
+  `unfinished_predecessors/3` - what still stands in the way of a position,
+  which is how a page tells whose turn it is waiting on.
+
   Order, for `forms/2`, is the order a user works them: breadth-first from
   Start, descending into subflows the moment one is reached - the same scan
   `next_path_position/2` performs. `forms_in_flow/2` narrows the list to one
@@ -157,6 +161,71 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   @doc "The form at a position, or nil when the tree no longer has it."
   @spec find_form([FormProgress.t()], path()) :: FormProgress.t() | nil
   def find_form(forms, path), do: Enum.find(forms, &(&1.path == path))
+
+  @doc """
+  The positions that must complete before a position is reached and have
+  not: its predecessors, then theirs, walking back along the incoming edges
+  through every source that is not completed and stopping at every source
+  that is. Nearest first. `statuses` is `derive/2`'s answer for the journey.
+
+  A completed source ends the walk because everything behind it is
+  completed too - that is the AND-join. `[]` when every way in is clear,
+  and for a position the tree no longer has.
+
+  Only the position's own flow is walked. A step above it is a separate
+  question, asked at its own level, where its own flow's type answers.
+
+  Pure traversal, as the rest of this module is: this says which positions
+  stand in the way, not whether standing in the way shuts a door. A
+  "subflows" flow worked in any order has predecessors here and no door at
+  all, so a caller asks the flow's type before it asks this.
+  """
+  @spec unfinished_predecessors(tree :: map() | nil, %{path() => status()}, path()) :: [path()]
+  def unfinished_predecessors(tree, statuses, path)
+
+  def unfinished_predecessors(nil, _statuses, _path), do: []
+
+  def unfinished_predecessors(_tree, _statuses, []), do: []
+
+  def unfinished_predecessors(tree, statuses, path) do
+    prefix = Enum.drop(path, -1)
+
+    case flow_at(tree, prefix) do
+      nil ->
+        []
+
+      scope ->
+        incoming = Enum.group_by(scope.relationships, & &1.target_id)
+        id = List.last(path)
+
+        walk_back([id], MapSet.new([id]), incoming, statuses, prefix, [])
+    end
+  end
+
+  # The flow a prefix of subflow node ids names, one descent per id.
+  defp flow_at(nil, _prefix), do: nil
+  defp flow_at(tree, []), do: tree
+  defp flow_at(tree, [id | rest]), do: flow_at(Map.get(tree.subflows, id), rest)
+
+  # Breadth-first along the incoming edges, so nearer positions come first.
+  # An edge whose source the flow no longer has is no obstacle, and neither
+  # is a completed one.
+  defp walk_back([], _seen, _incoming, _statuses, _prefix, found), do: Enum.reverse(found)
+
+  defp walk_back([id | rest], seen, incoming, statuses, prefix, found) do
+    sources =
+      incoming
+      |> Map.get(id, [])
+      |> Enum.map(& &1.source_id)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(seen, &1))
+      |> Enum.filter(&(Map.get(statuses, prefix ++ [&1]) not in [nil, :completed]))
+
+    seen = Enum.reduce(sources, seen, &MapSet.put(&2, &1))
+    found = Enum.reduce(sources, found, &[prefix ++ [&1] | &2])
+
+    walk_back(rest ++ sources, seen, incoming, statuses, prefix, found)
+  end
 
   @doc """
   Whether the flow allows work on a form: its predecessors are done, or it is

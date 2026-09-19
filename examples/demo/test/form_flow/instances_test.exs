@@ -355,11 +355,19 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "the flow's page lists only the forms for the viewer's perspective", %{conn: conn} do
-      %{instance: instance} = licensing()
+      %{instance: instance, intake: intake} = licensing()
 
       {:ok, _view, applicant} = as(conn, "applicant", [instance.id])
       assert applicant =~ "Application / Intake"
       refute applicant =~ "Review / Review"
+
+      # The reviewer's own step is shut on the applicant, who has not
+      # finished, so there is nothing of theirs to list yet; once the
+      # applicant is done it is theirs and no other's
+      {:ok, _view, waiting} = as(conn, "reviewer", [instance.id])
+      assert waiting =~ "Nothing in this flow is for you to fill out."
+
+      complete(instance, intake, %{"name" => "Ada"})
 
       {:ok, _view, reviewer} = as(conn, "reviewer", [instance.id])
       assert reviewer =~ "Review / Review"
@@ -474,6 +482,93 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert html =~ "This form is not part of your work here."
       refute instance_at(instance, intake)
+    end
+
+    # Licensing with a closing form of the applicant's own behind the
+    # review: Start → Application (applicant) → Review (reviewer) →
+    # Feedback (everyone) → End
+    defp licensing_with_feedback(root_properties \\ %{}) do
+      {:ok, root} =
+        Flows.create(%{
+          name: "Licensing",
+          label: "subflows",
+          status: "open",
+          properties: root_properties
+        })
+
+      application = owned_forms_flow(root, "Application", ["applicant"], "Intake")
+      review = owned_forms_flow(root, "Review", ["reviewer"], "Review")
+      feedback = owned_forms_flow(root, "Feedback", [], "Feedback")
+
+      first_node = build_node(root, ["Start"], "Start")
+      application_node = subflow_node(root, application.flow, "Application")
+      review_node = subflow_node(root, review.flow, "Review")
+      feedback_node = subflow_node(root, feedback.flow, "Feedback")
+      last_node = build_node(root, ["End"], "End")
+
+      edge(root, first_node, application_node)
+      edge(root, application_node, review_node)
+      edge(root, review_node, feedback_node)
+      edge(root, feedback_node, last_node)
+
+      %{
+        instance: start_flow(root),
+        intake: [application_node.id, application.form.id],
+        review: [review_node.id, review.form.id]
+      }
+    end
+
+    test "a form behind another perspective's step is not listed until that side finishes",
+         %{conn: conn} do
+      %{instance: instance, intake: intake, review: review} = licensing_with_feedback()
+
+      # The applicant's own closing form is for everyone, but only the
+      # reviewer can open the step it sits behind, so it is not a row
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Intake"
+      refute html =~ "Feedback"
+
+      complete(instance, intake, %{"name" => "Ada"})
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Waiting on others"
+      refute html =~ "Feedback"
+
+      complete(instance, review, %{"name" => "Rex"})
+
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Feedback"
+      assert html =~ "Your turn"
+    end
+
+    test "the rule reads the same from the other side of the handoff", %{conn: conn} do
+      %{instance: instance, intake: intake} = licensing_with_feedback()
+
+      # The reviewer waits on the applicant exactly as the applicant waits
+      # on them: nothing to list while the step in front is another
+      # perspective's and unfinished
+      {:ok, _view, html} = as(conn, "reviewer", [instance.id])
+      assert html =~ "Nothing in this flow is for you to fill out."
+
+      complete(instance, intake, %{"name" => "Ada"})
+
+      # Now everything in front of the review is done, so it is listed - and
+      # so is the closing form, which nothing of another perspective's shuts
+      # for a reviewer
+      {:ok, _view, html} = as(conn, "reviewer", [instance.id])
+      assert html =~ "Review"
+      assert html =~ "Feedback"
+      assert html =~ "Your turn"
+    end
+
+    test "a root worked in any order holds nobody back", %{conn: conn} do
+      %{instance: instance} = licensing_with_feedback(%{"flow_type" => "any_order"})
+
+      # Any unfinished step can be entered whatever comes before it, so no
+      # step is shut on anyone and the closing form is listed from the start
+      {:ok, _view, html} = as(conn, "applicant", [instance.id])
+      assert html =~ "Intake"
+      assert html =~ "Feedback"
     end
   end
 
