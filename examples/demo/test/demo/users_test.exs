@@ -20,8 +20,28 @@ defmodule Demo.UsersTest do
     assert perspectives("docs_reader") == []
   end
 
-  defp perspectives(id) do
+  test "the pet owners list their own journeys, the reviewer and admin everyone's" do
+    assert Users.instances(fetch("dog_owner")) == nil
+    assert Users.instances(fetch("cat_owner")) == nil
+    assert Users.instances(fetch("docs_reader")) == nil
+
+    for id <- ["reviewer", "admin"] do
+      assert %Ecto.Query{} = Users.instances(fetch(id)),
+             "#{id} should list everyone's journeys"
+    end
+  end
+
+  test "every user says whose journeys their pages list" do
+    for user <- Users.all() do
+      assert user.journeys in [:own, :everyone],
+             "#{user.id} has journeys: #{inspect(user.journeys)}"
+    end
+  end
+
+  defp perspectives(id), do: fetch(id).perspectives
+
+  defp fetch(id) do
     {:ok, user} = Users.fetch(id)
-    user.perspectives
+    user
   end
 end

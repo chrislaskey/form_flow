@@ -9,10 +9,15 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
   `base="/demo/pet-licenses/reviews"` is what makes every link the components
   build carry the mount prefix.
 
-  What separates it from the applications is who is looking: `user_id` is the
-  reviewer's, so the listing is the instances the reviewer owns rather than
-  an applicant's. The review flows themselves are still to come — the page
-  exists now so the reviewer persona has somewhere of its own to land.
+  What separates it from the applications is who is looking. `perspectives`
+  is the reviewer's, so FormFlow shows them the reviewer subflows of a
+  journey and hides the applicant's. `instances` is every journey rather
+  than the default of the viewer's own (`Demo.Users.instances/1`), because
+  a reviewer starts none: without it this page is an empty table.
+
+  Listing is not access control. FormFlow opens any journey by id for
+  anyone who reaches its URL, so what keeps an applicant off this page is
+  `persona_gate` and the `:reviewer` role, not the query.
   """
 
   use DemoWeb, :live_view
@@ -52,6 +57,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
             <FormFlow.Web.router
               user_id={@current_user.id}
               perspectives={@current_user.perspectives}
+              instances={Demo.Users.instances(@current_user)}
               uri={@uri}
               params={@params}
               path={@path}

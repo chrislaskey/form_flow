@@ -24,6 +24,16 @@ defmodule Demo.Users do
   # both, because FormFlow shows a viewer naming none only the flows that are
   # for everyone. The reader names none.
   #
+  # `journeys` is whose flow instances the user's pages list, turned into
+  # the FormFlow pages' `instances` attr by `instances/1`. `:own` is the
+  # pet owners', and FormFlow's own default: a listing of what you started.
+  # `:everyone` is the reviewer's and the admin's, and it is what makes the
+  # reviews page a queue of other people's applications rather than the
+  # empty table it is without it - a reviewer starts no journeys of their
+  # own. Listing only: FormFlow opens any journey by id for anyone who
+  # reaches its URL, and `DemoWeb.PersonaComponents.persona_gate/1` is what
+  # keeps a visitor off the page to begin with.
+  #
   # `landing` is where switching to the user sends the visitor
   # (`DemoWeb.UserSwitchController`): the page that perspective is for. The
   # demo is unguided, and the page someone switched from is rarely a page the
@@ -34,6 +44,7 @@ defmodule Demo.Users do
       id: "docs_reader",
       role: :reader,
       perspectives: [],
+      journeys: :own,
       landing: "/docs",
       name: "Docs Reader",
       initials: "DR",
@@ -43,6 +54,7 @@ defmodule Demo.Users do
       id: "dog_owner",
       role: :owner,
       perspectives: ["applicant"],
+      journeys: :own,
       landing: "/demo/pet-licenses/applications",
       name: "User - Dog Owner",
       initials: "DO",
@@ -52,6 +64,7 @@ defmodule Demo.Users do
       id: "cat_owner",
       role: :owner,
       perspectives: ["applicant"],
+      journeys: :own,
       landing: "/demo/pet-licenses/applications",
       name: "User - Cat Owner",
       initials: "CO",
@@ -61,6 +74,7 @@ defmodule Demo.Users do
       id: "reviewer",
       role: :reviewer,
       perspectives: ["reviewer"],
+      journeys: :everyone,
       landing: "/demo/pet-licenses/reviews",
       name: "Reviewer - Pet Licenses",
       initials: "RE",
@@ -70,6 +84,7 @@ defmodule Demo.Users do
       id: "admin",
       role: :admin,
       perspectives: ["applicant", "reviewer"],
+      journeys: :everyone,
       landing: "/demo/admin",
       name: "Admin",
       initials: "AD",
@@ -96,6 +111,17 @@ defmodule Demo.Users do
 
   @doc "Every user holding one of `roles`, in display order."
   def with_roles(roles), do: Enum.filter(@users, &(&1.role in roles))
+
+  @doc """
+  The journeys this user's pages list, in the shape the FormFlow pages'
+  `instances` attr wants: `nil` for a user who lists their own, which is
+  what the attr does when it is not given, and a query over every journey
+  for a user who works other people's.
+
+  A listing, not a gate - see the note above `@users`.
+  """
+  def instances(%{journeys: :own}), do: nil
+  def instances(%{journeys: :everyone}), do: FormFlow.Data.Instances.Flows.list_query()
 
   @doc "Looks a user up by id."
   def fetch(id), do: Enum.find_value(@users, :error, &if(&1.id == id, do: {:ok, &1}))

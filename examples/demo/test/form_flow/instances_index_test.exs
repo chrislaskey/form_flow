@@ -99,6 +99,29 @@ defmodule Demo.FormFlowInstancesIndexTest do
     assert path =~ ~r|^/demo/pet-licenses/applications/[0-9a-f-]{36}$|
   end
 
+  describe "a user who works other people's journeys" do
+    @describetag user: "reviewer"
+
+    test "lists them, where a user who works their own would see nothing",
+         %{conn: conn} do
+      theirs = start_flow("Dog License", "dog_owner")
+
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/reviews")
+
+      assert has_element?(view, @table)
+      assert html =~ theirs.id
+      assert has_element?(view, "a[href='/demo/pet-licenses/reviews/#{theirs.id}']")
+    end
+
+    test "an empty table is still empty when nobody has started anything",
+         %{conn: conn} do
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/reviews")
+
+      refute has_element?(view, @table)
+      assert html =~ "Nothing started yet"
+    end
+  end
+
   defp row_link(instance), do: "a[href='/demo/pet-licenses/applications/#{instance.id}']"
 
   defp start_flow(name, user_id) do
