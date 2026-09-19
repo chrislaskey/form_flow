@@ -17,11 +17,29 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   Edit pages link here from any depth with the root's id. Open on a form
   node or a group's header navigates to that node's show page under this
   root, the same destinations the Show page's Open buttons use.
+
+  Two layouts, chosen by the `layout` query param and offered as a segmented
+  control above the canvas - **Horizontal View** | **Mixed View** - so each
+  is a URL someone can be sent:
+
+    * `horizontal` (the default, and what any other value falls back to) -
+      every level runs left to right, Start to End, each subflow a box in
+      that line holding its own left-to-right line
+    * `mixed` - a level's steps still run left to right, but its Start
+      stands above them at the top-left and its End below at the
+      bottom-right, so a subflow is a box entered at its top and left at
+      its bottom, and nesting grows the drawing downwards rather than into
+      one long line
+
+  The canvas is `phx-update="ignore"`, so switching layouts keys it on the
+  layout: a different element mounts, and the bundle lays the tree out
+  afresh.
   """
 
   use Phoenix.LiveComponent
 
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Web.Components
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Overview
   alias FormFlow.Web.Helpers.ReactFlow
@@ -39,6 +57,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
       |> assign_new(:flow_types, fn -> FormFlow.Config.Flows.Type.defaults() end)
       |> assign_new(:form_types, fn -> FormFlow.Config.Forms.Type.defaults() end)
       |> assign_new(:components, fn -> nil end)
+      |> assign_new(:params, fn -> %{} end)
 
     tree = socket.assigns.flow_id |> Flows.resolve_tree() |> Flows.connected_tree()
 
@@ -46,6 +65,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
      assign(socket,
        flow: tree && tree.flow,
        tree: tree && ReactFlow.to_tree_data(tree),
+       layout: layout(socket.assigns.params["layout"]),
        # Every type and perspective the page knows, as name lookups: a group
        # header names its stored type and perspectives, and a form node its
        # type, wherever in the tree it sits
@@ -57,6 +77,9 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
          |> Shared.perspective_options()
      )}
   end
+
+  defp layout("mixed"), do: :mixed
+  defp layout(_other), do: :horizontal
 
   @impl true
   def handle_event("form_flow:overview_mounted", _params, socket) do
@@ -111,9 +134,21 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         </:actions>
       </Header.header>
 
+      <div class="mb-3 flex justify-end">
+        <Components.Tabs.tabs
+          items={[
+            {:horizontal, "Horizontal View", "#{@base}/flows/#{@flow.id}/overview"},
+            {:mixed, "Mixed View", "#{@base}/flows/#{@flow.id}/overview?layout=mixed"}
+          ]}
+          active={@layout}
+          label="Layout"
+        />
+      </div>
+
       <Overview.overview
-        id={"#{@id}-overview"}
+        id={"#{@id}-overview-#{@layout}"}
         tree={@tree}
+        layout={@layout}
         target={@myself}
         flow_type_options={@flow_type_options}
         form_type_options={@form_type_options}

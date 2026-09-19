@@ -371,6 +371,7 @@ defmodule FormFlow.Web.Router do
               flow_types={@flow_types}
               form_types={@form_types}
               components={@components}
+              params={@params}
             />
           <% {:health, id} -> %>
             <.live_component

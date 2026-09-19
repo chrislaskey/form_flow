@@ -8,7 +8,10 @@ defmodule FormFlow.Web.Components.Overview do
   export instead of `mount`, so a page showing both downloads it once. What
   it draws is a *tree* - `FormFlow.Web.Helpers.ReactFlow.to_tree_data/1` -
   with every subflow node expanded into a group holding its inner flow. The
-  bundle lays it out; nothing here has a position.
+  bundle lays it out; nothing here has a position. `layout` picks which of
+  the bundle's two layouts - `:horizontal`, every level left to right, or
+  `:mixed`, each level's Start above its steps and End below - and is
+  passed through as is.
 
   The hook is the only channel between Elixir and React, the container being
   `phx-update="ignore"`, and it runs one way. React pushes to Elixir with
@@ -40,6 +43,12 @@ defmodule FormFlow.Web.Components.Overview do
   )
 
   attr(:target, :any, required: true, doc: "the LiveComponent receiving the canvas's events")
+
+  attr(:layout, :atom,
+    default: :horizontal,
+    values: [:horizontal, :mixed],
+    doc: "how the bundle lays the tree out, see FormFlow.Web.Templates.Flows.Overview"
+  )
 
   attr(:flow_type_options, :list,
     default: [],
@@ -82,6 +91,7 @@ defmodule FormFlow.Web.Components.Overview do
       data-form-type-options={Phoenix.json_library().encode!(@form_type_options_json)}
       data-perspective-options={Phoenix.json_library().encode!(@perspective_options_json)}
       data-tree={ReactFlow.to_json(@tree)}
+      data-layout={@layout}
       style="height: calc(100vh - 220px); min-height: 480px; border: 1px solid #d4d4d8; border-radius: 8px; overflow: hidden;"
     >
     </div>
@@ -98,6 +108,7 @@ defmodule FormFlow.Web.Components.Overview do
 
             this.overview = editor.mountOverview(this.el, {
               tree: JSON.parse(this.el.dataset.tree),
+              layout: this.el.dataset.layout,
               flowTypeOptions: JSON.parse(this.el.dataset.flowTypeOptions),
               formTypeOptions: JSON.parse(this.el.dataset.formTypeOptions),
               perspectiveOptions: JSON.parse(this.el.dataset.perspectiveOptions),

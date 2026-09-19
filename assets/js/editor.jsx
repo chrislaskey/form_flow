@@ -269,11 +269,21 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
   const typeLabel =
     formTypeOptions.find((option) => option.value === data.form_type)?.label ?? data.form_type;
 
+  // Edges leave a step's right side and enter its left - except on the
+  // overview's mixed layout, which stands a level's Start above its row of
+  // steps and its End below (data.handles "vertical"): there a Start's edges
+  // drop out of its bottom and an End's arrive at its top
+  const vertical = data.handles === "vertical";
+
   return (
     <div className={`ff-node ff-node--${data.kind} ${selected ? "is-selected" : ""}`}>
       <NodeMenu items={menuItems} />
       {data.kind !== "start" && (
-        <Handle type="target" position={Position.Left} isConnectable={isConnectable} />
+        <Handle
+          type="target"
+          position={vertical ? Position.Top : Position.Left}
+          isConnectable={isConnectable}
+        />
       )}
       <div className="ff-node__title">
         {editable ? <NodeTitleInput id={id} label={data.label} /> : data.label}
@@ -311,7 +321,11 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
         </button>
       )}
       {data.kind !== "end" && (
-        <Handle type="source" position={Position.Right} isConnectable={isConnectable} />
+        <Handle
+          type="source"
+          position={vertical ? Position.Bottom : Position.Right}
+          isConnectable={isConnectable}
+        />
       )}
     </div>
   );
@@ -852,6 +866,16 @@ function normalize(flow) {
 // ReactFlow has no layout engine, so positions are computed here (layoutLevel)
 // from the sizes ReactFlow measured on a first, invisible render — never
 // guessed from CSS. See archive/plans/flow-overview.md for the decisions.
+//
+// Two layouts, chosen by the page (`layout`):
+//
+//   * "horizontal" - every level runs left to right, Start to End, each
+//     subflow a box in that line holding its own left-to-right line
+//   * "mixed" - the steps of a level still run left to right, but its Start
+//     stands above them at the top-left and its End below at the
+//     bottom-right, so a subflow is a box entered at its top and left at its
+//     bottom, and nesting grows the drawing downwards instead of ever
+//     further to the right
 
 // Space between layers (x) and between nodes in a layer (y), and the padding
 // a group keeps around the inner flow it contains
@@ -859,8 +883,14 @@ const LAYER_GAP = 72;
 const NODE_GAP = 28;
 const GROUP_PADDING = 20;
 
-// The vertical room one detour lane takes, above a level (see DetourEdge)
+// The vertical room one lane takes, above or below a level's row of steps
+// (see ElbowEdge), and the room the mixed layout keeps between a Start or
+// End and that row
 const LANE_GAP = 24;
+const END_GAP = 40;
+
+// How far an elbow edge runs straight out of a side handle before it turns
+const EDGE_TURN = 24;
 
 // A subflow expanded in place. ReactFlow draws the inner flow's nodes inside
 // this one (they carry parentId), so this renders only the header; the body
@@ -918,38 +948,101 @@ function SubflowGroupNode({ id, data, isConnectable }) {
 // so the fix is the name. It is also the better name: this is a subflow.
 const overviewNodeTypes = { step: StepNode, subflow: SubflowGroupNode };
 
-// An edge that skips a layer — Application → Payment, past Review — would be
-// drawn straight through whatever sits in between, and ReactFlow paints
-// edges *under* nodes, so behind an expanded subflow it would simply
-// vanish. Such edges instead take a lane above the level: out of the source,
-// up to the lane, along, and down into the target. The layout reserves the
-// lanes (layoutLevel) and tells the edge how far above its source the lane
-// sits (data.rise), in the level's own coordinates, so the edge needs no
-// knowledge of the nodes it passes.
-function DetourEdge({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, style }) {
-  const laneY = sourceY - (data?.rise ?? 0);
-  const radius = 10;
-  const out = sourceX + 24;
-  const into = targetX - 24;
-  const direction = into >= out ? 1 : -1;
+// An edge drawn as straight runs and right-angle turns, never a curve
+// across whatever sits between its ends. ReactFlow paints edges *under*
+// nodes, so a curve behind an expanded subflow would simply vanish.
+//
+// Which sides it leaves and enters come from the handles: a step's right
+// and left, or a Start's bottom and an End's top on the mixed layout. The
+// layout says whether it takes a lane - `data.lane`, how far below the
+// source's handle the lane runs, negative for above, null for none - and
+// reserves the room for it (layoutLevel); the edge itself knows nothing of
+// the nodes it passes. An edge that skips a layer - Application → Payment,
+// past Review - is the case a lane exists for: out of the source, up to the
+// lane, along, and down into the target.
+function ElbowEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  markerEnd,
+  style,
+}) {
+  const lane = data?.lane ?? null;
+  const fromBottom = sourcePosition === Position.Bottom;
+  const intoTop = targetPosition === Position.Top;
 
-  const path = [
-    `M ${sourceX} ${sourceY}`,
-    `L ${out - radius} ${sourceY}`,
-    `Q ${out} ${sourceY} ${out} ${sourceY - radius}`,
-    `L ${out} ${laneY + radius}`,
-    `Q ${out} ${laneY} ${out + radius * direction} ${laneY}`,
-    `L ${into - radius * direction} ${laneY}`,
-    `Q ${into} ${laneY} ${into} ${laneY + radius}`,
-    `L ${into} ${targetY - radius}`,
-    `Q ${into} ${targetY} ${into + radius} ${targetY}`,
-    `L ${targetX} ${targetY}`,
-  ].join(" ");
+  // The vertical line each end's run turns on: a side handle's, one turn
+  // out; a top or bottom handle's, its own
+  const out = fromBottom ? sourceX : sourceX + EDGE_TURN;
+  const into = intoTop ? targetX : targetX - EDGE_TURN;
 
-  return <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />;
+  let points;
+
+  if (lane === null) {
+    if (fromBottom && intoTop) {
+      const midY = (sourceY + targetY) / 2;
+      points = [[sourceX, sourceY], [sourceX, midY], [targetX, midY], [targetX, targetY]];
+    } else if (fromBottom) {
+      points = [[sourceX, sourceY], [sourceX, targetY], [targetX, targetY]];
+    } else if (intoTop) {
+      points = [[sourceX, sourceY], [targetX, sourceY], [targetX, targetY]];
+    } else {
+      points = [[sourceX, sourceY], [out, sourceY], [out, targetY], [targetX, targetY]];
+    }
+  } else {
+    const laneY = sourceY + lane;
+
+    points = [
+      [sourceX, sourceY],
+      ...(fromBottom ? [] : [[out, sourceY]]),
+      [out, laneY],
+      [into, laneY],
+      ...(intoTop ? [] : [[into, targetY]]),
+      [targetX, targetY],
+    ];
+  }
+
+  return <BaseEdge id={id} path={roundedPath(points, 10)} markerEnd={markerEnd} style={style} />;
 }
 
-const overviewEdgeTypes = { detour: DetourEdge };
+// The SVG path through `points`, each corner rounded by `radius` - less
+// where a run is too short for it. Repeated points are dropped, so a route
+// whose runs collapse (a lane directly under its source, say) still draws.
+function roundedPath(points, radius) {
+  const route = points.filter(
+    ([x, y], index) =>
+      index === 0 || Math.abs(x - points[index - 1][0]) > 0.5 || Math.abs(y - points[index - 1][1]) > 0.5,
+  );
+
+  let path = `M ${route[0][0]} ${route[0][1]}`;
+
+  for (let index = 1; index < route.length - 1; index++) {
+    const [px, py] = route[index - 1];
+    const [cx, cy] = route[index];
+    const [nx, ny] = route[index + 1];
+    const inLength = Math.hypot(cx - px, cy - py);
+    const outLength = Math.hypot(nx - cx, ny - cy);
+    const r = Math.min(radius, inLength / 2, outLength / 2);
+
+    const inX = cx - ((cx - px) / inLength) * r;
+    const inY = cy - ((cy - py) / inLength) * r;
+    const outX = cx + ((nx - cx) / outLength) * r;
+    const outY = cy + ((ny - cy) / outLength) * r;
+
+    path += ` L ${inX} ${inY} Q ${cx} ${cy} ${outX} ${outY}`;
+  }
+
+  const [lastX, lastY] = route[route.length - 1];
+
+  return `${path} L ${lastX} ${lastY}`;
+}
+
+const overviewEdgeTypes = { elbow: ElbowEdge };
 
 // Nothing on the overview moves, connects, or selects
 const READ_ONLY_NODE = { draggable: false, selectable: false, connectable: false, deletable: false };
@@ -974,13 +1067,16 @@ const WITHOUT_EDITOR_LAYOUT = { origin: [0, 0], measured: undefined };
 
 // The tree as ReactFlow's flat lists, every node at the origin until the
 // layout has sizes to work with. Parents precede their children, as
-// ReactFlow requires of parentId nesting.
-function flattenTree(tree, parentId = null, nodes = [], edges = []) {
+// ReactFlow requires of parentId nesting. On the mixed layout a Start's and
+// an End's handles are turned to the vertical (StepNode), since their
+// edges run down into the row of steps and down out of it.
+function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
   if (!tree) return { nodes, edges };
 
   for (const node of tree.nodes ?? []) {
     const subflow = node.type === "subflow" || node.id in (tree.subflows ?? {});
     const subtree = tree.subflows?.[node.id];
+    const end = node.data?.kind === "start" || node.data?.kind === "end";
 
     const flat = {
       ...node,
@@ -997,11 +1093,13 @@ function flattenTree(tree, parentId = null, nodes = [], edges = []) {
         flow_label: subtree?.flow?.label ?? node.data?.subflow_label ?? "forms",
         empty: !subtree?.nodes?.length,
       };
+    } else if (end && layout === "mixed") {
+      flat.data = { ...node.data, handles: "vertical" };
     }
 
     nodes.push(flat);
 
-    if (subflow && subtree) flattenTree(subtree, node.id, nodes, edges);
+    if (subflow && subtree) flattenTree(subtree, layout, node.id, nodes, edges);
   }
 
   for (const edge of tree.edges ?? []) {
@@ -1016,9 +1114,9 @@ function flattenTree(tree, parentId = null, nodes = [], edges = []) {
 // Positions are relative to the level's own top-left corner — for a child
 // level that is what ReactFlow expects of a node with parentId. Writes
 // every node's position into `positions`, every group's size into `sizes`,
-// and the lane rise of every edge that needs a detour into `detours` (see
-// DetourEdge); returns the level's own size.
-function layoutLevel(tree, measured, positions, sizes, detours) {
+// and, for every edge drawn as an elbow, its lane offset (or null for no
+// lane) into `lanes` (see ElbowEdge); returns the level's own size.
+function layoutLevel(tree, measured, positions, sizes, lanes, layout) {
   const nodes = tree.nodes ?? [];
   if (nodes.length === 0) return { width: 0, height: 0 };
 
@@ -1034,7 +1132,7 @@ function layoutLevel(tree, measured, positions, sizes, detours) {
       continue;
     }
 
-    const inner = layoutLevel(subtree ?? { nodes: [] }, measured, positions, sizes, detours);
+    const inner = layoutLevel(subtree ?? { nodes: [] }, measured, positions, sizes, lanes, layout);
     const body = inner.width > 0 ? inner.height + GROUP_PADDING : 0;
     const group = {
       width: Math.max(header.width, inner.width + 2 * GROUP_PADDING),
@@ -1051,12 +1149,16 @@ function layoutLevel(tree, measured, positions, sizes, detours) {
     sizes.set(node.id, group);
   }
 
+  return layout === "mixed"
+    ? placeMixed(tree, size, positions, lanes)
+    : placeHorizontal(tree, size, positions, lanes);
+}
+
+// The horizontal layout of one level: every node in a layer, layers left to
+// right from Start to End.
+function placeHorizontal(tree, size, positions, lanes) {
   const layers = layerNodes(tree);
-  const layerWidths = layers.map((layer) => Math.max(...layer.map((id) => size.get(id).width)));
-  const layerHeights = layers.map(
-    (layer) => layer.reduce((sum, id) => sum + size.get(id).height, 0) + (layer.length - 1) * NODE_GAP,
-  );
-  const height = Math.max(...layerHeights);
+  const { layerHeights, height } = measureLayers(layers, size);
 
   // Edges that do not step to the very next layer — a skip forwards, a loop
   // back, a same-layer link — detour through lanes above the level. The
@@ -1065,39 +1167,178 @@ function layoutLevel(tree, measured, positions, sizes, detours) {
   const layerOf = new Map();
   layers.forEach((ids, index) => ids.forEach((id) => layerOf.set(id, index)));
 
-  const detourEdges = (tree.edges ?? [])
-    .filter((edge) => layerOf.has(edge.source) && layerOf.has(edge.target))
-    .filter((edge) => layerOf.get(edge.target) - layerOf.get(edge.source) !== 1)
-    .sort(
-      (a, b) =>
-        Math.abs(layerOf.get(a.target) - layerOf.get(a.source)) -
-        Math.abs(layerOf.get(b.target) - layerOf.get(b.source)),
-    );
-  const band = detourEdges.length * LANE_GAP;
+  const detours = laneEdges(tree.edges, layerOf);
+  const band = detours.length * LANE_GAP;
 
-  let x = 0;
+  const row = placeRow(layers, size, positions, 0, band, layerHeights, height);
+
+  detours.forEach((edge, lane) => {
+    const laneY = band - (lane + 0.5) * LANE_GAP;
+    lanes.set(edge.id, laneY - sideHandleY(edge.source, size, positions));
+  });
+
+  return { width: row.right, height: height + band };
+}
+
+// The mixed layout of one level: its steps in a row as the horizontal
+// layout would place them, but its Start above that row at the top-left
+// and its End below it at the bottom-right. A Start's edge drops straight
+// down and turns into the row's first layer; the last layer's edges run
+// right and turn down into End. Edges to a later layer, or into End from an
+// earlier one, take lanes - above the row for the former, below for the
+// latter - as the horizontal layout's detours do.
+function placeMixed(tree, size, positions, lanes) {
+  const nodes = tree.nodes ?? [];
+  const edges = tree.edges ?? [];
+  const kindOf = new Map(nodes.map((node) => [node.id, node.data?.kind]));
+  const starts = nodes.filter((node) => kindOf.get(node.id) === "start").map((node) => node.id);
+  const ends = nodes.filter((node) => kindOf.get(node.id) === "end").map((node) => node.id);
+  const steps = nodes.filter((node) => !starts.includes(node.id) && !ends.includes(node.id));
+
+  const isStart = (id) => kindOf.get(id) === "start";
+  const isEnd = (id) => kindOf.get(id) === "end";
+
+  // A Start's handle is its bottom centre, a step's its right centre
+  const handleY = (id) =>
+    isStart(id)
+      ? positions.get(id).y + size.get(id).height
+      : sideHandleY(id, size, positions);
+
+  // Start, top-left. Several Starts (not something the editor makes) sit
+  // side by side.
+  const startRow = placeSideBySide(starts, size, positions, 0, 0);
+
+  // The row begins one turn to the right of the first Start's centre line,
+  // so its edge drops straight down and turns into the first layer
+  const rowX = starts.length
+    ? positions.get(starts[0]).x + size.get(starts[0]).width / 2 + EDGE_TURN
+    : 0;
+  const rowTop = starts.length ? startRow.height + END_GAP : 0;
+
+  // Nothing between Start and End: End straight under Start
+  if (steps.length === 0) {
+    const endRow = placeSideBySide(ends, size, positions, 0, rowTop);
+
+    edges
+      .filter((edge) => isStart(edge.source) && isEnd(edge.target))
+      .forEach((edge) => lanes.set(edge.id, null));
+
+    return {
+      width: Math.max(startRow.width, endRow.width),
+      height: rowTop + endRow.height,
+    };
+  }
+
+  // The steps are layered from the ones Start leads to; Start itself
+  // stands before every layer and End after, for the span an edge covers
+  const roots = edges
+    .filter((edge) => isStart(edge.source) && kindOf.has(edge.target) && !isEnd(edge.target))
+    .map((edge) => edge.target)
+    .filter((id, index, all) => all.indexOf(id) === index);
+
+  const layers = layerNodes({ nodes: steps, edges }, roots);
+  const { layerHeights, height } = measureLayers(layers, size);
+
+  const layerOf = new Map();
+  starts.forEach((id) => layerOf.set(id, -1));
+  ends.forEach((id) => layerOf.set(id, layers.length));
+  layers.forEach((ids, index) => ids.forEach((id) => layerOf.set(id, index)));
+
+  const above = laneEdges(edges, layerOf, (edge) => !isEnd(edge.target));
+  const below = laneEdges(edges, layerOf, (edge) => isEnd(edge.target));
+
+  const top = rowTop + above.length * LANE_GAP;
+  const row = placeRow(layers, size, positions, rowX, top, layerHeights, height);
+  const bottom = top + height;
+
+  // End, bottom-right: its centre line one turn past the row's right edge,
+  // so the last layer's edges run right and turn down into it
+  const endTop = bottom + below.length * LANE_GAP + (ends.length ? END_GAP : 0);
+  const endX = ends.length ? row.right + EDGE_TURN - size.get(ends[0]).width / 2 : 0;
+  const endRow = placeSideBySide(ends, size, positions, endX, endTop);
+
+  above.forEach((edge, lane) => {
+    const laneY = top - (lane + 0.5) * LANE_GAP;
+    lanes.set(edge.id, laneY - handleY(edge.source));
+  });
+
+  below.forEach((edge, lane) => {
+    const laneY = bottom + (lane + 0.5) * LANE_GAP;
+    lanes.set(edge.id, laneY - handleY(edge.source));
+  });
+
+  // Every other edge out of a Start or into an End is an elbow too, with no
+  // lane: down and into the first layer, or right and down into End
+  edges
+    .filter((edge) => layerOf.has(edge.source) && layerOf.has(edge.target))
+    .filter((edge) => isStart(edge.source) || isEnd(edge.target))
+    .forEach((edge) => lanes.has(edge.id) || lanes.set(edge.id, null));
+
+  return {
+    width: Math.max(startRow.width, row.right, endX + endRow.width),
+    height: endTop + endRow.height,
+  };
+}
+
+// The edges of a level that need a lane: those between layered nodes that do
+// not step to the very next layer, among the ones `keep` admits. Ordered
+// shortest span first, so the lane nearest the nodes goes to the edge that
+// covers the least and lanes nest rather than cross.
+function laneEdges(edges, layerOf, keep = () => true) {
+  const span = (edge) => layerOf.get(edge.target) - layerOf.get(edge.source);
+
+  return (edges ?? [])
+    .filter((edge) => layerOf.has(edge.source) && layerOf.has(edge.target))
+    .filter((edge) => span(edge) !== 1)
+    .filter(keep)
+    .sort((a, b) => Math.abs(span(a)) - Math.abs(span(b)));
+}
+
+// Each layer's height with its nodes stacked, and the tallest of them
+function measureLayers(layers, size) {
+  const layerHeights = layers.map(
+    (layer) => layer.reduce((sum, id) => sum + size.get(id).height, 0) + (layer.length - 1) * NODE_GAP,
+  );
+
+  return { layerHeights, height: Math.max(...layerHeights) };
+}
+
+// Places the layers left to right from (x, top), each centred on the
+// tallest so a straight Start → End line stays straight; returns the row's
+// right edge.
+function placeRow(layers, size, positions, x, top, layerHeights, height) {
   layers.forEach((layer, index) => {
-    // Each layer is centred on the tallest one, so a straight Start → End
-    // line stays straight
-    let y = band + (height - layerHeights[index]) / 2;
+    let y = top + (height - layerHeights[index]) / 2;
 
     for (const id of layer) {
       positions.set(id, { x, y });
       y += size.get(id).height + NODE_GAP;
     }
 
-    x += layerWidths[index] + LAYER_GAP;
+    x += Math.max(...layer.map((id) => size.get(id).width)) + LAYER_GAP;
   });
 
-  detourEdges.forEach((edge, lane) => {
-    const laneY = band - (lane + 0.5) * LANE_GAP;
-    const source = positions.get(edge.source);
-    const sourceCenterY = source.y + size.get(edge.source).height / 2;
+  return { right: x - LAYER_GAP };
+}
 
-    detours.set(edge.id, sourceCenterY - laneY);
-  });
+// Places `ids` in one line from (x, y), a node gap apart; returns the
+// line's size
+function placeSideBySide(ids, size, positions, x, y) {
+  let right = x;
+  let height = 0;
 
-  return { width: x - LAYER_GAP, height: height + band };
+  for (const id of ids) {
+    positions.set(id, { x: right, y });
+    right += size.get(id).width + NODE_GAP;
+    height = Math.max(height, size.get(id).height);
+  }
+
+  return { width: ids.length ? right - NODE_GAP - x : 0, height };
+}
+
+// A node's right-hand handle, vertically: its centre
+function sideHandleY(id, size, positions) {
+  return positions.get(id).y + size.get(id).height / 2;
 }
 
 // Longest-path layering from the level's Start nodes, left to right. A DFS
@@ -1106,7 +1347,11 @@ function layoutLevel(tree, measured, positions, sizes, detours) {
 // Within a layer, nodes are ordered by the mean position of their
 // predecessors in the layer before — one barycenter pass, which keeps most
 // edges from crossing. Ties keep the stored order.
-function layerNodes(tree) {
+//
+// The first layer is the Start nodes, or `roots` when the caller has taken
+// them out of the level (the mixed layout, which lays out the steps alone
+// and passes the ones Start leads to).
+function layerNodes(tree, roots = []) {
   const nodes = tree.nodes ?? [];
   const order = new Map(nodes.map((node, index) => [node.id, index]));
   const outgoing = new Map(nodes.map((node) => [node.id, []]));
@@ -1120,7 +1365,7 @@ function layerNodes(tree) {
   const starts = nodes.filter((node) => node.data?.kind === "start").map((node) => node.id);
   // Should not happen — the server sends connected nodes, which means a
   // Start exists — but a level without one still needs a first layer
-  const roots = starts.length ? starts : nodes.slice(0, 1).map((node) => node.id);
+  const first = roots.length ? roots : starts.length ? starts : nodes.slice(0, 1).map((node) => node.id);
 
   // Back edges, by DFS
   const back = new Set();
@@ -1139,7 +1384,7 @@ function layerNodes(tree) {
     state.set(id, "done");
   };
 
-  roots.forEach((id) => state.get(id) || visit(id));
+  first.forEach((id) => state.get(id) || visit(id));
   // Nodes the roots never reached (only possible without a Start): treat
   // each as another root so every node gets a layer
   nodes.forEach((node) => state.get(node.id) || visit(node.id));
@@ -1193,6 +1438,7 @@ function layerNodes(tree) {
 
 function FlowOverview({
   tree,
+  layout = "horizontal",
   flowTypeOptions = [],
   formTypeOptions = [],
   perspectiveOptions = [],
@@ -1202,7 +1448,7 @@ function FlowOverview({
   // Same combined state as the editor, for the same reason: dimension
   // changes arrive per node through onNodesChange, and the layout needs
   // them all at once
-  const [state, setState] = useState(() => flattenTree(tree));
+  const [state, setState] = useState(() => flattenTree(tree, layout));
 
   // "measured": every node has a size from ReactFlow; "placed": positions
   // and group sizes are set; "fitted": the viewport shows all of it. Nothing
@@ -1212,9 +1458,9 @@ function FlowOverview({
   const { fitView } = useReactFlow();
 
   useEffect(() => {
-    setState(flattenTree(tree));
+    setState(flattenTree(tree, layout));
     setPhase("measuring");
-  }, [tree]);
+  }, [tree, layout]);
 
   const onNodesChange = useCallback(
     (changes) =>
@@ -1238,9 +1484,9 @@ function FlowOverview({
       const sizesByNode = new Map(current.nodes.map((node) => [node.id, node.measured]));
       const positions = new Map();
       const groupSizes = new Map();
-      const detours = new Map();
+      const lanes = new Map();
 
-      layoutLevel(tree, sizesByNode, positions, groupSizes, detours);
+      layoutLevel(tree, sizesByNode, positions, groupSizes, lanes, layout);
 
       return {
         nodes: current.nodes.map((node) => ({
@@ -1249,15 +1495,15 @@ function FlowOverview({
           ...(groupSizes.has(node.id) ? { style: groupSizes.get(node.id) } : {}),
         })),
         edges: current.edges.map((edge) =>
-          detours.has(edge.id)
-            ? { ...edge, type: "detour", data: { ...edge.data, rise: detours.get(edge.id) } }
+          lanes.has(edge.id)
+            ? { ...edge, type: "elbow", data: { ...edge.data, lane: lanes.get(edge.id) } }
             : edge,
         ),
       };
     });
 
     setPhase("placed");
-  }, [phase, measured, state.nodes.length, tree]);
+  }, [phase, measured, state.nodes.length, tree, layout]);
 
   // Fit once the groups have been re-measured at the sizes the layout gave
   // them — fitting earlier would frame the header-sized groups
@@ -1392,7 +1638,8 @@ export function mount(el, opts = {}) {
 /**
  * Renders the overview into `el`: the whole flow, every level at once,
  * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
- * shape. The option lists and the two open callbacks mean what they mean for
+ * shape. `opts.layout` is "horizontal" (the default) or "mixed" - see
+ * the overview section above for what each draws. The option lists and the two open callbacks mean what they mean for
  * mount/2; there is no onChange, since nothing here can change. Nor is
  * there a setter for the tree: the page never edits, so the only tree it
  * ever draws is the one it mounted with, and a fresh one arrives as a fresh
@@ -1407,6 +1654,7 @@ export function mountOverview(el, opts = {}) {
     <ReactFlowProvider>
       <FlowOverview
         tree={opts.tree}
+        layout={opts.layout}
         flowTypeOptions={opts.flowTypeOptions}
         formTypeOptions={opts.formTypeOptions}
         perspectiveOptions={opts.perspectiveOptions}

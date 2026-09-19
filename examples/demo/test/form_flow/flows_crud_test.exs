@@ -1744,6 +1744,46 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert inner_html =~ "Draft form"
   end
 
+  test "the overview offers two layouts, chosen by the layout query param", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+    save_subflow_node(conn, root_id)
+
+    # Horizontal by default: the toggle's Horizontal View is the page, Mixed
+    # View a link, and the canvas mounts with that layout
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
+
+    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Horizontal View")
+
+    assert has_element?(
+             view,
+             ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview?layout=mixed"]),
+             "Mixed View"
+           )
+
+    assert has_element?(view, ~s(#flows-overview-overview-horizontal[data-layout="horizontal"]))
+    refute has_element?(view, "#flows-overview-overview-mixed")
+
+    # Mixed when asked: the roles swap, and the canvas is another element,
+    # so the bundle lays the tree out afresh
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=mixed")
+
+    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Mixed View")
+
+    assert has_element?(
+             view,
+             ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview"]),
+             "Horizontal View"
+           )
+
+    assert has_element?(view, ~s(#flows-overview-overview-mixed[data-layout="mixed"]))
+    refute has_element?(view, "#flows-overview-overview-horizontal")
+
+    # Anything else is horizontal
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=sideways")
+
+    assert has_element?(view, ~s(#flows-overview-overview-horizontal[data-layout="horizontal"]))
+  end
+
   test "the overview's Open events navigate under the root, like the show page's", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
     save_subflow_node(conn, root_id)
@@ -1752,7 +1792,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
-    |> element("#flows-overview-overview")
+    |> element("#flows-overview-overview-horizontal")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
     assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
@@ -1760,7 +1800,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
-    |> element("#flows-overview-overview")
+    |> element("#flows-overview-overview-horizontal")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
     assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/form")
@@ -1950,7 +1990,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   # hook's container the way the bundle reads it
   defp overview_tree(view) do
     view
-    |> element("#flows-overview-overview")
+    |> element("#flows-overview-overview-horizontal")
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.attribute("data-tree")
