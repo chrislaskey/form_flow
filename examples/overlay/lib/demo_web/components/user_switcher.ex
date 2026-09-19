@@ -5,8 +5,9 @@ defmodule DemoWeb.UserSwitcher do
   Rendered in the header by `Layouts.app` and anywhere in page content that
   benefits from it. A dark initials avatar with a gradient chevron badge, a
   "Viewing as" caption over the user's name, and a menu whose rows post to
-  `DemoWeb.UserSwitchController`, so choosing a user reloads the page as them.
-  The current row's avatar carries a check badge instead of the chevron.
+  `DemoWeb.UserSwitchController`, so choosing a user opens that user's landing
+  page as them. The current row's avatar carries a check badge instead of the
+  chevron.
 
   The design was chosen on `/explorations/user-switchers` (direction 16
   with check badges).
@@ -16,15 +17,16 @@ defmodule DemoWeb.UserSwitcher do
 
   alias Demo.Users
 
-  attr :id, :string, required: true
-  attr :current_user, :map, required: true
+  attr(:id, :string, required: true)
+  attr(:current_user, :map, required: true)
 
-  attr :align, :atom,
+  attr(:align, :atom,
     values: [:start, :end],
     default: :end,
     doc: "which edge the menu hangs from"
+  )
 
-  attr :open, :boolean, default: false, doc: "render the menu already open"
+  attr(:open, :boolean, default: false, doc: "render the menu already open")
 
   def user_switcher(assigns) do
     assigns = assign(assigns, :users, Users.all())
@@ -79,7 +81,7 @@ defmodule DemoWeb.UserSwitcher do
           </li>
         </ul>
         <p class="mt-1 border-t border-gray-100 px-2.5 pb-1 pt-2 text-[11px] text-gray-400">
-          Switching reloads the page as that user.
+          Switching opens that user's starting page.
         </p>
       </div>
     </details>
@@ -91,9 +93,9 @@ defmodule DemoWeb.UserSwitcher do
   overlapping its bottom-right corner: `:chevron` marks the switcher's
   trigger, `:check` marks the current user in its menu.
   """
-  attr :user, :map, required: true
-  attr :class, :string, default: "size-8 text-[11px]"
-  attr :badge, :any, default: nil, values: [nil, false, :chevron, :check]
+  attr(:user, :map, required: true)
+  attr(:class, :string, default: "size-8 text-[11px]")
+  attr(:badge, :any, default: nil, values: [nil, false, :chevron, :check])
 
   def user_avatar(assigns) do
     ~H"""

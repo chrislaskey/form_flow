@@ -2429,6 +2429,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         />
         <:group
           :for={scope <- @scopes}
+          name={"#{scope}_move_and_type"}
+          nested={scope}
+          type="horizontal"
+        />
+        <:group
+          :for={scope <- @scopes}
           name={"#{scope}_name_and_label"}
           nested={scope}
           type="horizontal"
@@ -2448,7 +2454,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field
           :let={field}
           nested="elements"
-          group="elements_name_and_label"
+          group="elements_move_and_type"
           type="text"
           name="move"
           label={false}
@@ -2474,7 +2480,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <:field
           :let={field}
           nested="children"
-          group="children_name_and_label"
+          group="children_move_and_type"
           type="text"
           name="move"
           label={false}
@@ -2697,7 +2703,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     do: Templates.Shared.properties(assigns.form_types, assigns.pending_type)
 
   # One entry's fields, in render order, for a scope: the form's elements or
-  # the members inside a container. Type and Name come first, then each
+  # the members inside a container. Type shares the first row with the move
+  # arrows, Name and Label the second, then each
   # editable property in Builder.properties/0 with its control. A field shows
   # only for the types its property applies to, and `required_for_type`
   # makes it required for those same types. Inside a container no container
@@ -2721,7 +2728,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         type: "dropdown",
         label: "Type",
         options: Builder.type_options(scope),
-        required: true
+        required: true,
+        group: "move_and_type"
       },
       %{
         name: "groupType",
@@ -2795,8 +2803,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The rows of related number fields, shown for the types of their first
-  # member. Name and Label share a row too, declared on its own since it has
-  # no visible_if.
+  # member. The move arrows and Type share a row, and Name and Label the next
+  # one; both are declared on their own since they have no visible_if.
   defp element_groups do
     [
       %{name: "rating", visible_if: "rateMin"},

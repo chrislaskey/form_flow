@@ -177,7 +177,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
       id: :built,
       title: "20 · Built: #16 with check badges",
       note:
-        "The real DemoWeb.UserSwitcher. The current row's avatar wears a check badge instead of a right-hand tick; choosing a row reloads the page as that user."
+        "The real DemoWeb.UserSwitcher. The current row's avatar wears a check badge instead of a right-hand tick; choosing a row opens that user's starting page as them."
     }
   ]
 
@@ -294,8 +294,8 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
 
   # The real header from `Layouts.app`, with a `:right` slot after the nav
   # and a `:strip` slot for a full-width row beneath it.
-  slot :right
-  slot :strip
+  slot(:right)
+  slot(:strip)
 
   defp mock_header(assigns) do
     ~H"""
@@ -335,17 +335,18 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
   header and in content). `current` is the selected user map. Selecting a
   user pushes a `"select"` event with `%{"direction" => ..., "user" => ...}`.
   """
-  attr :direction, :atom, required: true
-  attr :id, :string, required: true
-  attr :current, :map, required: true
-  attr :users, :list, default: @users
+  attr(:direction, :atom, required: true)
+  attr(:id, :string, required: true)
+  attr(:current, :map, required: true)
+  attr(:users, :list, default: @users)
 
-  attr :align, :atom,
+  attr(:align, :atom,
     values: [:start, :end],
     default: :end,
     doc: "which edge a dropdown menu hangs from"
+  )
 
-  attr :open, :boolean, default: false, doc: "render a dropdown menu already open"
+  attr(:open, :boolean, default: false, doc: "render a dropdown menu already open")
 
   def switcher(%{direction: :avatar_pill} = assigns) do
     ~H"""
@@ -384,7 +385,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
         users={@users}
         current={@current}
         heading="Switch perspective"
-        footer="Switching reloads the page as that user."
+        footer="Switching opens that user's starting page."
       />
     </.dropdown>
     """
@@ -628,7 +629,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
         users={@users}
         current={@current}
         heading="Viewing as"
-        footer="Switching reloads the page as that user."
+        footer="Switching opens that user's starting page."
       >
         <:lead :let={u}>
           <span class="inline-flex size-8 items-center justify-center rounded-full bg-gray-900 text-white">
@@ -855,13 +856,13 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
 
   # -- Shared pieces --------------------------------------------------------
 
-  attr :id, :string, required: true
-  attr :align, :atom, default: :end
-  attr :open, :boolean, default: false
-  attr :class, :string, default: nil
-  attr :menu_class, :string, default: nil
-  slot :trigger, required: true
-  slot :inner_block, required: true
+  attr(:id, :string, required: true)
+  attr(:align, :atom, default: :end)
+  attr(:open, :boolean, default: false)
+  attr(:class, :string, default: nil)
+  attr(:menu_class, :string, default: nil)
+  slot(:trigger, required: true)
+  slot(:inner_block, required: true)
 
   defp dropdown(assigns) do
     ~H"""
@@ -881,13 +882,13 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     """
   end
 
-  attr :id, :string, required: true
-  attr :direction, :atom, required: true
-  attr :users, :list, required: true
-  attr :current, :map, required: true
-  attr :heading, :string, default: nil
-  attr :footer, :string, default: nil
-  slot :lead, doc: "optional avatar rendered before the name; receives the user"
+  attr(:id, :string, required: true)
+  attr(:direction, :atom, required: true)
+  attr(:users, :list, required: true)
+  attr(:current, :map, required: true)
+  attr(:heading, :string, default: nil)
+  attr(:footer, :string, default: nil)
+  slot(:lead, doc: "optional avatar rendered before the name; receives the user")
 
   defp menu_rows(assigns) do
     ~H"""
@@ -933,8 +934,8 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     """
   end
 
-  attr :user, :map, required: true
-  attr :class, :string, default: "size-7 text-[10px]"
+  attr(:user, :map, required: true)
+  attr(:class, :string, default: "size-7 text-[10px]")
 
   defp gradient_avatar(assigns) do
     ~H"""
@@ -947,9 +948,9 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     """
   end
 
-  attr :user, :map, required: true
-  attr :class, :string, default: "size-8 text-[11px]"
-  attr :badge, :boolean, default: false, doc: "overlap a small gradient chevron badge"
+  attr(:user, :map, required: true)
+  attr(:class, :string, default: "size-8 text-[11px]")
+  attr(:badge, :boolean, default: false, doc: "overlap a small gradient chevron badge")
 
   defp dark_avatar(assigns) do
     ~H"""
@@ -985,10 +986,10 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     """
   end
 
-  attr :id, :string, required: true
-  attr :direction, :atom, required: true
-  attr :users, :list, required: true
-  attr :current, :map, required: true
+  attr(:id, :string, required: true)
+  attr(:direction, :atom, required: true)
+  attr(:users, :list, required: true)
+  attr(:current, :map, required: true)
 
   defp dark_menu(assigns) do
     ~H"""

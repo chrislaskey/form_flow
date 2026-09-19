@@ -23,19 +23,27 @@ defmodule Demo.Users do
   # reviewer; the admin, who builds the flows and reads every side, names
   # both, because FormFlow shows a viewer naming none only the flows that are
   # for everyone. The reader names none.
+  #
+  # `landing` is where switching to the user sends the visitor
+  # (`DemoWeb.UserSwitchController`): the page that perspective is for. The
+  # demo is unguided, and the page someone switched from is rarely a page the
+  # new perspective is admitted to, so landing beats staying put - the
+  # alternative is a refusal on nearly every switch.
   @users [
     %{
       id: "docs_reader",
       role: :reader,
       perspectives: [],
+      landing: "/docs",
       name: "Docs Reader",
       initials: "DR",
-      blurb: "Reads the README-style docs at /"
+      blurb: "Reads the README-style docs at /docs"
     },
     %{
       id: "dog_owner",
       role: :owner,
       perspectives: ["applicant"],
+      landing: "/demo/pet-licenses/applications",
       name: "User - Dog Owner",
       initials: "DO",
       blurb: "Applies for and renews a dog license"
@@ -44,6 +52,7 @@ defmodule Demo.Users do
       id: "cat_owner",
       role: :owner,
       perspectives: ["applicant"],
+      landing: "/demo/pet-licenses/applications",
       name: "User - Cat Owner",
       initials: "CO",
       blurb: "Applies for and renews a cat license"
@@ -52,6 +61,7 @@ defmodule Demo.Users do
       id: "reviewer",
       role: :reviewer,
       perspectives: ["reviewer"],
+      landing: "/demo/pet-licenses/reviews",
       name: "Reviewer - Pet Licenses",
       initials: "RE",
       blurb: "Reviews and decides license applications"
@@ -60,6 +70,7 @@ defmodule Demo.Users do
       id: "admin",
       role: :admin,
       perspectives: ["applicant", "reviewer"],
+      landing: "/demo/admin",
       name: "Admin",
       initials: "AD",
       blurb: "Builds the flows and forms"
