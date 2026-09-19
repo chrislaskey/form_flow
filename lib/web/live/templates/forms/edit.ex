@@ -278,6 +278,11 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     end
   end
 
+  # Save draft was refused by the definition gate (`validate_definition/2`).
+  # The banner clears itself the next time a save works.
+  def update(%{event: "refuse_save", message: message}, socket),
+    do: {:ok, assign(socket, error: message, notice: nil)}
+
   def update(%{event: "save", payload: payload}, socket) do
     %{form: form, version: version} = socket.assigns
 
@@ -1665,10 +1670,48 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     assign(socket, root: root, ancestors: ancestors)
   end
 
-  # The definition gate, run by DynamicForm on every submit. In form mode the
-  # entries are written into the document; in JSON mode a parse error renders
-  # inline on the field like any built-in validation. Either way the
-  # definition map rides the payload's extra into the "save" event above.
+  # The definition gate, run by DynamicForm on every submit, with the
+  # refusal reported to the page.
+  #
+  # A refused submit never reaches the "save" event, so without this the
+  # page said nothing at all - no "Saved.", no reason. Worst of all for the
+  # duplicate-name refusal below, whose error sits on `elements`: a nested
+  # form is not a field, so it has nowhere on the page to render inline.
+  defp validate_definition(payload, component_id) do
+    payload = validate_definition(payload)
+
+    if not payload.changeset.valid? do
+      Phoenix.LiveView.send_update(__MODULE__, %{
+        id: component_id,
+        event: "refuse_save",
+        message: refused_save_message(payload.changeset)
+      })
+    end
+
+    payload
+  end
+
+  # What the page says above the form when Save draft is refused. An error
+  # on a field is already marked there, so those only need pointing at; the
+  # duplicate names have no field of their own, so their sentence is carried
+  # up. The nested form's own "is invalid" sits on `elements` too, so the
+  # duplicate-name error is picked out by the `validation` it was added with.
+  defp refused_save_message(changeset) do
+    spelled_out =
+      for {:elements, {message, opts}} <- changeset.errors,
+          opts[:validation] == :duplicate_names,
+          do: message
+
+    case spelled_out do
+      [] -> "This draft wasn't saved. Fix what is marked on the form and save again."
+      messages -> "This draft wasn't saved. " <> Enum.join(messages, " ")
+    end
+  end
+
+  # In form mode the entries are written into the document; in JSON mode a
+  # parse error renders inline on the field like any built-in validation.
+  # Either way the definition map rides the payload's extra into the "save"
+  # event above.
   defp validate_definition(%{data: %{definition_editor: "form"}} = payload) do
     payload =
       DynamicForm.Payload.put_extra(payload, :definition, current_definition(payload, "form"))
@@ -1680,15 +1723,27 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         payload
 
       names ->
-        DynamicForm.Payload.add_error(
-          payload,
-          :elements,
-          "uses the same name more than once: #{Enum.join(names, ", ")}"
+        DynamicForm.Payload.add_error(payload, :elements, duplicate_names_message(names),
+          validation: :duplicate_names
         )
     end
   end
 
   defp validate_definition(payload), do: validate_json(payload)
+
+  # A whole sentence, because `refused_save_message/1` reads it out above
+  # the form - there is no field for it to sit under and take a subject from
+  defp duplicate_names_message([name]) do
+    "More than one element is named #{name}. " <> shared_names_note()
+  end
+
+  defp duplicate_names_message(names) do
+    "More than one element is named each of #{Enum.join(names, ", ")}. " <> shared_names_note()
+  end
+
+  defp shared_names_note do
+    "A group's members are named alongside the rest of the form, so every name has to be its own."
+  end
 
   defp validate_json(payload) do
     case Phoenix.json_library().decode(payload.data[:definition] || "") do
@@ -2024,7 +2079,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             data={@form_data}
             hide_submit
             on_change={&changed(&1, @id)}
-            on_submit={&validate_definition/1}
+            on_submit={&validate_definition(&1, @id)}
             on_success={&saved(&1, @id)}
             components={@components || CoreComponents}
           >

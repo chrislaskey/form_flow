@@ -230,34 +230,37 @@ defmodule FormFlow.Web.Components.TextTree do
     data = node["data"] || %{}
     flow_label = (subtree && subtree.flow.label) || data["subflow_label"] || "forms"
     form? = flow_label != "subflows"
-    kind = if form?, do: :forms, else: :subflows
 
-    type =
-      Enum.find_value(ctx.flow_type_options, fn
-        {label, value, ^kind} -> value == data["flow_type"] && label
-        {label, value, nil} -> value == data["flow_type"] && label
-        _other -> nil
-      end) || data["flow_type"]
-
-    perspectives =
-      case data["perspectives"] do
-        ids when form? and is_list(ids) and ids != [] ->
-          names =
-            Enum.map(ids, fn id ->
-              Enum.find_value(ctx.perspective_options, fn {label, value} ->
-                value == id && label
-              end) || id
-            end)
-
-          "Perspectives: " <> Enum.join(names, ", ")
-
-        _other ->
-          nil
-      end
-
-    [if(form?, do: "Form subflow", else: "Complex subflow"), type, perspectives]
+    [
+      if(form?, do: "Form subflow", else: "Complex subflow"),
+      flow_type_label(data, form?, ctx),
+      perspectives_label(data, form?, ctx)
+    ]
     |> Enum.reject(&(&1 in [nil, false, ""]))
     |> Enum.join(" · ")
+  end
+
+  # The option's own label for the subflow's flow type - the options of its
+  # kind, and those of no kind at all - falling back to the stored value
+  defp flow_type_label(data, form?, ctx) do
+    kind = if form?, do: :forms, else: :subflows
+
+    Enum.find_value(ctx.flow_type_options, fn
+      {label, value, ^kind} -> value == data["flow_type"] && label
+      {label, value, nil} -> value == data["flow_type"] && label
+      _other -> nil
+    end) || data["flow_type"]
+  end
+
+  # "Perspectives: Applicant, Reviewer" - a form subflow's, and only when it
+  # names any
+  defp perspectives_label(%{"perspectives" => [_first | _rest] = ids}, true, ctx),
+    do: "Perspectives: " <> Enum.map_join(ids, ", ", &perspective_label(&1, ctx))
+
+  defp perspectives_label(_data, _form?, _ctx), do: nil
+
+  defp perspective_label(id, ctx) do
+    Enum.find_value(ctx.perspective_options, fn {label, value} -> value == id && label end) || id
   end
 
   defp form_meta(node, ctx) do

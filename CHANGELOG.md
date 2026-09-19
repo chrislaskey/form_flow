@@ -271,6 +271,23 @@ entered out of turn is its flow type's answer, not the AND-join's, so the
 page is where the two meet. Each row also carries its position as
 `data-path` now.
 
+### A refused Save draft says so
+
+Saving a draft that the editor turns down said nothing at all: no "Saved.",
+no reason, the button simply did nothing. It now puts a line above the form.
+
+  * Where the trouble is marked on a field already, the line points at it:
+    *This draft wasn't saved. Fix what is marked on the form and save again.*
+  * Two elements sharing a name have no field to be marked on - the repeat
+    belongs to neither of them - so the line names them: *This draft wasn't
+    saved. More than one element is named phone. A group's members are named
+    alongside the rest of the form, so every name has to be its own.*
+
+`FormFlow.Web.Templates.Forms.Edit`'s `on_submit` gate reports the refusal
+to the page the way `on_success` already reports a save. The duplicate-name
+error carries `validation: :duplicate_names` so it can be told apart from
+the nested form's own error on the same key.
+
 ### The form builder can set a Yes/No element's default
 
 A `boolean` element's `defaultValue` is a control the form builder has now:

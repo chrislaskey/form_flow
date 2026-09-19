@@ -217,6 +217,80 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "is already used by another element"
     assert html =~ "can&#39;t be blank"
     refute html =~ "Saved."
+
+    # A refused save says so above the form, and names what has no field to
+    # be marked on - a repeated name belongs to no one entry
+    assert html =~ "This draft wasn&#39;t saved. More than one element is named email."
+
+    # Everything else is marked on the form already, so the banner points there
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Built",
+        "definition_editor" => "form",
+        "elements" => %{"0" => %{"type" => "text", "name" => ""}}
+      }
+    })
+
+    html = render(view)
+    refute html =~ "Saved."
+    assert html =~ "This draft wasn&#39;t saved. Fix what is marked on the form and save again."
+  end
+
+  test "a group member repeating a name outside its group is named in the refusal", %{conn: conn} do
+    {:ok, form} = Forms.create(%{name: "Shared names"})
+    [draft] = Forms.list_versions(form.id)
+
+    {:ok, view, _html} =
+      live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
+
+    # The entries' own key catches siblings; this one sits inside a group,
+    # so there is no field for the error and the page has to spell it out
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Shared names",
+        "definition_editor" => "form",
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "phone"},
+          "1" => %{
+            "type" => "panel",
+            "name" => "home_address",
+            "children" => %{"0" => %{"type" => "text", "name" => "phone"}}
+          }
+        }
+      }
+    })
+
+    html = render(view)
+    refute html =~ "Saved."
+    assert html =~ "This draft wasn&#39;t saved. More than one element is named phone."
+    assert html =~ "A group&#39;s members are named alongside the rest of the form"
+    assert Forms.get_version(draft.id).definition == %{}
+
+    # Saving once the name is its own clears the refusal
+    view
+    |> element("#forms-edit-form-form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Shared names",
+        "definition_editor" => "form",
+        "elements" => %{
+          "0" => %{"type" => "text", "name" => "phone"},
+          "1" => %{
+            "type" => "panel",
+            "name" => "home_address",
+            "children" => %{"0" => %{"type" => "text", "name" => "home_phone"}}
+          }
+        }
+      }
+    })
+
+    html = render(view)
+    assert html =~ "Saved."
+    refute html =~ "This draft wasn&#39;t saved."
   end
 
   test "an element's arrows move it up and down the builder", %{conn: conn} do
@@ -371,7 +445,7 @@ defmodule Demo.FormFlowFormsCrudTest do
         }
       })
 
-    assert html =~ "uses the same name more than once: city"
+    assert html =~ "This draft wasn&#39;t saved. More than one element is named city."
     refute html =~ "Saved."
   end
 
