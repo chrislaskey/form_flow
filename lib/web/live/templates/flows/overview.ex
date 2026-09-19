@@ -18,26 +18,24 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   node or a group's header navigates to that node's show page under this
   root, the same destinations the Show page's Open buttons use.
 
-  Five layouts, chosen by the `layout` query param and offered as a
+  Four layouts, chosen by the `layout` query param and offered as a
   segmented control in the header, between the health check and the page
-  tabs - **Balanced** | **Vertical** | **Horizontal** | **Flows** |
-  **Text** - so each is a URL someone can be sent:
+  tabs - **Horizontal** | **Vertical** | **Flows** | **Text** - so each is
+  a URL someone can be sent:
 
-    * `horizontal` - every level runs left to right, Start to End, each
-      subflow a box in that line holding its own left-to-right line
-    * `balanced` (the default, and what any other value falls back to) - a
-      level's steps still run left to right, but its Start stands above
-      them at the top-left and its End below at the bottom-right, so a
-      subflow is a box entered at its top and left at its bottom, and
-      nesting grows the drawing downwards rather than into one long line
+    * `horizontal` (the default, and what any other value falls back to) -
+      a level's steps run left to right, with its Start above them at the
+      top-left and its End below at the bottom-right, so a subflow is a box
+      entered at its top and left at its bottom, and nesting grows the
+      drawing downwards rather than into one long line
     * `vertical` - a level of subflows runs top to bottom, Start to End,
       every subflow's box entered at its top and left at its bottom; a
-      level of forms runs left to right as it does on `horizontal`. The
-      whole is a stack of wide boxes.
-    * `flows` - `balanced`, but every form subflow is a closed box naming
+      level of forms runs left to right in one line. The whole is a stack
+      of wide boxes.
+    * `flows` - `vertical`, but every form subflow is a closed box naming
       what it holds ("4 forms") instead of its steps, which are what take
-      the room; complex subflows stay open, so what is left is the flow of
-      flows
+      the room, and no level shows its Start or End; complex subflows stay
+      open, so what is left is the flow of flows, read top to bottom
     * `text` - no canvas: the flow as a nested list of plain HTML
       (`FormFlow.Web.Components.TextTree`), one item per step in order,
       each a link to its page
@@ -90,11 +88,10 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
      )}
   end
 
-  defp layout("horizontal"), do: :horizontal
   defp layout("vertical"), do: :vertical
   defp layout("flows"), do: :flows
   defp layout("text"), do: :text
-  defp layout(_other), do: :balanced
+  defp layout(_other), do: :horizontal
 
   @impl true
   def handle_event("form_flow:overview_mounted", _params, socket) do
@@ -147,9 +144,8 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
           <Health.health base={@base} flow={@flow} components={@components} />
           <Components.Tabs.tabs
             items={[
-              {:balanced, "Balanced", "#{@base}/flows/#{@flow.id}/overview"},
+              {:horizontal, "Horizontal", "#{@base}/flows/#{@flow.id}/overview"},
               {:vertical, "Vertical", "#{@base}/flows/#{@flow.id}/overview?layout=vertical"},
-              {:horizontal, "Horizontal", "#{@base}/flows/#{@flow.id}/overview?layout=horizontal"},
               {:flows, "Flows", "#{@base}/flows/#{@flow.id}/overview?layout=flows"},
               {:text, "Text", "#{@base}/flows/#{@flow.id}/overview?layout=text"}
             ]}

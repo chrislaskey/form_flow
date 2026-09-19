@@ -2,30 +2,30 @@
 
 ## v0.31.0
 
-### The overview offers five layouts
+### The overview offers four layouts
 
 A flow template's overview page (`/flows/:id/overview`) draws the whole
-flow in one of five layouts, chosen by a **Balanced** | **Vertical** |
-**Horizontal** | **Flows** | **Text** control in the header, between
-the health check and the page tabs, that sets the `layout` query param,
-so each is a URL someone can be sent:
+flow in one of four layouts, chosen by a **Horizontal** | **Vertical** |
+**Flows** | **Text** control in the header, between the health check and
+the page tabs, that sets the `layout` query param, so each is a URL
+someone can be sent:
 
-  * **Balanced** (`layout` unset, or anything else - the default) - a
-    level's steps run left to right, but its Start stands above them at
-    the top-left and its End below at the bottom-right. A subflow is then
-    a box entered at its top and left at its bottom, and nesting grows
-    the drawing downwards rather than into one long line.
+  * **Horizontal** (`layout` unset, or anything else - the default) - a
+    level's steps run left to right, with its Start above them at the
+    top-left and its End below at the bottom-right. A subflow is then a
+    box entered at its top and left at its bottom, and nesting grows the
+    drawing downwards rather than into one long line - which is what the
+    page drew before, every level one left-to-right line, and no longer
+    does.
   * **Vertical** (`layout=vertical`) - a level of subflows runs top to
     bottom, Start to End, every subflow's box entered at its top and left
-    at its bottom; a level of forms runs left to right as on the
-    horizontal layout. The whole is a stack of wide boxes.
-  * **Horizontal** (`layout=horizontal`) - what the page drew before:
-    every level runs left to right, Start to End, each subflow a box in
-    that line holding its own left-to-right line.
-  * **Flows** (`layout=flows`) - the balanced layout, but every form
+    at its bottom; a level of forms runs left to right in one line. The
+    whole is a stack of wide boxes.
+  * **Flows** (`layout=flows`) - the vertical layout, but every form
     subflow is a closed box saying what it holds ("4 forms") instead of
-    its steps, which are what take the room. Complex subflows stay open,
-    so what is left is the flow of flows.
+    its steps, which are what take the room, and no level shows its Start
+    or End. Complex subflows stay open, so what is left is the flow of
+    flows, read top to bottom.
   * **Text** (`layout=text`) - no canvas: the flow as a nested list of
     plain HTML (`FormFlow.Web.Components.TextTree`), one item per step in
     the order the edges give, a subflow's item holding its own list, each
@@ -41,14 +41,13 @@ reserves one (`data.lane`, `{y}` for a lane across or `{x}` for a lane
 down, each an offset from the source's handle; the old `detour` type and
 its `data.rise` are gone). Where a layout runs edges up and down, the
 nodes' handles turn to the vertical (`data.handles: "vertical"` on the
-canvas node): a Start's and an End's on the balanced layout, every node's
-in a stacked level on the vertical one. The flows layout closes every
-form subflow in the tree before laying it out as the balanced layout
-would; a closed subflow node carries `data.collapsed` and `data.contents`
-(its counts). `mountOverview/2` takes `layout` ("horizontal" | "balanced"
-| "vertical" | "flows"), `FormFlow.Web.Components.Overview` a `layout`
-attr, and the
-canvas element's id ends in the layout, so switching mounts a fresh one.
+canvas node): a Start's and an End's on the horizontal layout, every
+node's in a stacked level on the vertical one. The flows layout prunes
+the tree before laying it out as the vertical layout would; a closed
+subflow node carries `data.collapsed` and `data.contents` (its counts).
+`mountOverview/2` takes `layout` ("horizontal" | "vertical" | "flows"),
+`FormFlow.Web.Components.Overview` a `layout` attr, and the canvas
+element's id ends in the layout, so switching mounts a fresh one.
 `FormFlow.Web.Templates.Flows.Overview` reads `params["layout"]`, which
 the router now passes it.
 

@@ -1744,22 +1744,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert inner_html =~ "Draft form"
   end
 
-  test "the overview offers five layouts, chosen by the layout query param", %{conn: conn} do
+  test "the overview offers four layouts, chosen by the layout query param", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
     save_subflow_node(conn, root_id)
 
-    # Balanced by default: the toggle's Balanced is the page, the others
+    # Horizontal by default: the toggle's Horizontal is the page, the others
     # links, and the canvas mounts with that layout
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
-    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Balanced")
+    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Horizontal")
 
-    for {layout, label} <- [
-          {"vertical", "Vertical"},
-          {"horizontal", "Horizontal"},
-          {"flows", "Flows"},
-          {"text", "Text"}
-        ] do
+    for {layout, label} <- [{"vertical", "Vertical"}, {"flows", "Flows"}, {"text", "Text"}] do
       assert has_element?(
                view,
                ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview?layout=#{layout}"]),
@@ -1767,12 +1762,12 @@ defmodule Demo.FormFlowFlowsCrudTest do
              )
     end
 
-    assert has_element?(view, ~s(#flows-overview-overview-balanced[data-layout="balanced"]))
-    refute has_element?(view, "#flows-overview-overview-horizontal")
+    assert has_element?(view, ~s(#flows-overview-overview-horizontal[data-layout="horizontal"]))
+    refute has_element?(view, "#flows-overview-overview-vertical")
 
     # Another canvas layout when asked: the roles swap, and the canvas is
     # another element, so the bundle lays the tree out afresh
-    for layout <- ["horizontal", "vertical", "flows"] do
+    for layout <- ["vertical", "flows"] do
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=#{layout}")
 
       assert has_element?(
@@ -1784,17 +1779,17 @@ defmodule Demo.FormFlowFlowsCrudTest do
       assert has_element?(
                view,
                ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview"]),
-               "Balanced"
+               "Horizontal"
              )
 
       assert has_element?(view, ~s(#flows-overview-overview-#{layout}[data-layout="#{layout}"]))
-      refute has_element?(view, "#flows-overview-overview-balanced")
+      refute has_element?(view, "#flows-overview-overview-horizontal")
     end
 
-    # Anything else is balanced
+    # Anything else is horizontal
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=sideways")
 
-    assert has_element?(view, ~s(#flows-overview-overview-balanced[data-layout="balanced"]))
+    assert has_element?(view, ~s(#flows-overview-overview-horizontal[data-layout="horizontal"]))
   end
 
   test "the overview's text layout lists every level as plain HTML, no canvas", %{conn: conn} do
@@ -1899,7 +1894,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
-    |> element("#flows-overview-overview-balanced")
+    |> element("#flows-overview-overview-horizontal")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
     assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
@@ -1907,7 +1902,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
     view
-    |> element("#flows-overview-overview-balanced")
+    |> element("#flows-overview-overview-horizontal")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
     assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/form")
@@ -2097,7 +2092,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   # hook's container the way the bundle reads it
   defp overview_tree(view) do
     view
-    |> element("#flows-overview-overview-balanced")
+    |> element("#flows-overview-overview-horizontal")
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.attribute("data-tree")

@@ -280,7 +280,7 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
   // Edges leave a step's right side and enter its left - unless the
   // overview's layout has turned the step's handles to the vertical
   // (data.handles "vertical"): a Start stood above its level's row of steps
-  // and an End below it on the balanced layout, or every node of a level
+  // and an End below it on the horizontal layout, or every node of a level
   // stacked top to bottom on the vertical one. Then edges leave the bottom
   // and arrive at the top.
   const vertical = data.handles === "vertical";
@@ -879,22 +879,20 @@ function normalize(flow) {
 //
 // Three layouts, chosen by the page (`layout`):
 //
-//   * "horizontal" - every level runs left to right, Start to End, each
-//     subflow a box in that line holding its own left-to-right line
-//   * "balanced" (the page's default) - the steps of a level still run left
-//     to right, but its Start stands above them at the top-left and its End
-//     below at the bottom-right, so a subflow is a box entered at its top
-//     and left at its bottom, and nesting grows the drawing downwards
-//     instead of ever further to the right
+//   * "horizontal" (the page's default) - the steps of a level run left to
+//     right, with its Start above them at the top-left and its End below at
+//     the bottom-right, so a subflow is a box entered at its top and left at
+//     its bottom, and nesting grows the drawing downwards instead of ever
+//     further to the right
 //   * "vertical" - a level of subflows runs top to bottom, Start to End,
 //     every subflow's box entered at its top and left at its bottom; a level
-//     of forms runs left to right as on the horizontal layout. The whole is
-//     a stack of wide boxes.
-//   * "flows" - the balanced layout with every form subflow drawn closed: a
-//     box naming what it holds ("4 forms") instead of its steps, which are
-//     what take the room. Complex subflows stay open, so what is left is
-//     the flow of flows. The tree is pruned first (closeFormSubflows), so
-//     the layout itself knows nothing of this.
+//     of forms runs left to right in one line, Start to End. The whole is a
+//     stack of wide boxes.
+//   * "flows" - the vertical layout over a pruned tree (flowsTree): every
+//     form subflow drawn closed, a box naming what it holds ("4 forms")
+//     instead of its steps, which are what take the room, and no Start or
+//     End at any level. Complex subflows stay open, so what is left is the
+//     flow of flows, read top to bottom.
 
 // Space between layers (x) and between nodes in a layer (y), and the padding
 // a group keeps around the inner flow it contains
@@ -903,7 +901,7 @@ const NODE_GAP = 28;
 const GROUP_PADDING = 20;
 
 // The room one lane takes, beside a level's line of nodes (see ElbowEdge),
-// and the room the balanced layout keeps between a Start or End and its
+// and the room the horizontal layout keeps between a Start or End and its
 // row of steps
 const LANE_GAP = 24;
 const END_GAP = 40;
@@ -1128,27 +1126,48 @@ const READ_ONLY_EDGE = { selectable: false, focusable: false, deletable: false }
 // Both are dropped, so the layout starts from what it can see (D6).
 const WITHOUT_EDITOR_LAYOUT = { origin: [0, 0], measured: undefined };
 
-// The tree with every form subflow closed: its inner flow cut out, and the
-// node marked collapsed, with a count of what was cut. Complex subflows are
-// kept open, their own trees closed the same way. Used by the flows layout,
-// which lays out the pruned tree as the balanced layout would.
-function closeFormSubflows(tree) {
+// The tree as the flows layout draws it: every form subflow closed - its
+// inner flow cut out, the node marked collapsed with a count of what was
+// cut - and every level's Start and End dropped, with their edges. Complex
+// subflows are kept open, their own trees pruned the same way. The steps
+// Start led to come first in a level's nodes, so the layering starts from
+// them as it would have from Start.
+function flowsTree(tree) {
   if (!tree) return tree;
 
+  const nodes = tree.nodes ?? [];
+  const edges = tree.edges ?? [];
+  const isEnd = (node) => node.data?.kind === "start" || node.data?.kind === "end";
+  const startIds = new Set(nodes.filter((node) => node.data?.kind === "start").map((node) => node.id));
+  const dropped = new Set(nodes.filter(isEnd).map((node) => node.id));
+  const first = edges.filter((edge) => startIds.has(edge.source)).map((edge) => edge.target);
+
+  const kept = nodes
+    .filter((node) => !dropped.has(node.id))
+    .sort((a, b) => {
+      const rank = (node) => (first.includes(node.id) ? first.indexOf(node.id) : first.length);
+      return rank(a) - rank(b);
+    });
+
   const subflows = {};
-  const nodes = (tree.nodes ?? []).map((node) => {
+  const pruned = kept.map((node) => {
     const subtree = tree.subflows?.[node.id];
     if (!subtree && node.type !== "subflow") return node;
 
     if (isSubflowsLevel(subtree ?? { nodes: [] })) {
-      subflows[node.id] = closeFormSubflows(subtree);
+      subflows[node.id] = flowsTree(subtree);
       return node;
     }
 
     return { ...node, data: { ...node.data, collapsed: true, contents: countContents(subtree) } };
   });
 
-  return { ...tree, nodes, subflows };
+  return {
+    ...tree,
+    nodes: pruned,
+    edges: edges.filter((edge) => !dropped.has(edge.source) && !dropped.has(edge.target)),
+    subflows,
+  };
 }
 
 // How many subflows and forms a tree holds, every level down
@@ -1169,7 +1188,7 @@ function countContents(tree, counts = { subflows: 0, forms: 0 }) {
 // layout has sizes to work with. Parents precede their children, as
 // ReactFlow requires of parentId nesting. Handles are turned to the
 // vertical (StepNode, SubflowGroupNode) where the layout runs edges up and
-// down: a Start's and an End's on the balanced layout, every node's in a
+// down: a Start's and an End's on the horizontal layout, every node's in a
 // level the vertical layout stacks.
 function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
   if (!tree) return { nodes, edges };
@@ -1180,7 +1199,7 @@ function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
     const subflow = node.type === "subflow" || node.id in (tree.subflows ?? {});
     const subtree = tree.subflows?.[node.id];
     const end = node.data?.kind === "start" || node.data?.kind === "end";
-    const vertical = stacked || (layout === "balanced" && end);
+    const vertical = stacked || (layout === "horizontal" && end);
 
     const flat = {
       ...node,
@@ -1253,8 +1272,11 @@ function layoutLevel(tree, measured, positions, sizes, lanes, layout) {
     sizes.set(node.id, group);
   }
 
-  if (layout === "balanced") return placeBalanced(tree, size, positions, lanes);
-  if (layout === "vertical" && isSubflowsLevel(tree)) return placeVertical(tree, size, positions, lanes);
+  if (layout === "vertical") {
+    return isSubflowsLevel(tree)
+      ? placeVertical(tree, size, positions, lanes)
+      : placeLine(tree, size, positions, lanes);
+  }
 
   return placeHorizontal(tree, size, positions, lanes);
 }
@@ -1269,9 +1291,9 @@ function isSubflowsLevel(tree) {
   );
 }
 
-// The horizontal layout of one level: every node in a layer, layers left to
-// right from Start to End.
-function placeHorizontal(tree, size, positions, lanes) {
+// A level in one line: every node in a layer, layers left to right from
+// Start to End. How the vertical layout draws a level of forms.
+function placeLine(tree, size, positions, lanes) {
   const layers = layerNodes(tree);
   const { layerHeights, height } = measureLayers(layers, size);
 
@@ -1297,8 +1319,8 @@ function placeHorizontal(tree, size, positions, lanes) {
 
 // The vertical layout of a level of subflows: every node in a layer, layers
 // top to bottom from Start to End, each centred on the widest. Edges that
-// skip a layer take lanes to the left of the stack, as the horizontal
-// layout's take lanes above its row.
+// skip a layer take lanes to the left of the stack, as a line's take lanes
+// above it.
 function placeVertical(tree, size, positions, lanes) {
   const layers = layerNodes(tree);
   const layerWidths = layers.map(
@@ -1333,14 +1355,14 @@ function placeVertical(tree, size, positions, lanes) {
   return { width: width + band, height: y - LAYER_GAP };
 }
 
-// The balanced layout of one level: its steps in a row as the horizontal
-// layout would place them, but its Start above that row at the top-left
-// and its End below it at the bottom-right. A Start's edge drops straight
-// down and turns into the row's first layer; the last layer's edges run
-// right and turn down into End. Edges to a later layer, or into End from an
-// earlier one, take lanes - above the row for the former, below for the
-// latter - as the horizontal layout's detours do.
-function placeBalanced(tree, size, positions, lanes) {
+// The horizontal layout of one level: its steps in a row as placeLine would
+// place them, but its Start above that row at the top-left and its End
+// below it at the bottom-right. A Start's edge drops straight down and
+// turns into the row's first layer; the last layer's edges run right and
+// turn down into End. Edges to a later layer, or into End from an earlier
+// one, take lanes - above the row for the former, below for the latter -
+// as a line's detours do.
+function placeHorizontal(tree, size, positions, lanes) {
   const nodes = tree.nodes ?? [];
   const edges = tree.edges ?? [];
   const kindOf = new Map(nodes.map((node) => [node.id, node.data?.kind]));
@@ -1502,7 +1524,7 @@ function sideHandleY(id, size, positions) {
 // edges from crossing. Ties keep the stored order.
 //
 // The first layer is the Start nodes, or `roots` when the caller has taken
-// them out of the level (the balanced layout, which lays out the steps alone
+// them out of the level (the horizontal layout, which lays out the steps alone
 // and passes the ones Start leads to).
 function layerNodes(tree, roots = []) {
   const nodes = tree.nodes ?? [];
@@ -1591,17 +1613,16 @@ function layerNodes(tree, roots = []) {
 
 function FlowOverview({
   tree,
-  layout = "balanced",
+  layout = "horizontal",
   flowTypeOptions = [],
   formTypeOptions = [],
   perspectiveOptions = [],
   onOpenSubflow,
   onOpenForm,
 }) {
-  // The flows layout is the balanced one over a pruned tree: every form
-  // subflow closed
-  const placement = layout === "flows" ? "balanced" : layout;
-  const shown = useMemo(() => (layout === "flows" ? closeFormSubflows(tree) : tree), [tree, layout]);
+  // The flows layout is the vertical one over a pruned tree
+  const placement = layout === "flows" ? "vertical" : layout;
+  const shown = useMemo(() => (layout === "flows" ? flowsTree(tree) : tree), [tree, layout]);
 
   // Same combined state as the editor, for the same reason: dimension
   // changes arrive per node through onNodesChange, and the layout needs
@@ -1802,9 +1823,8 @@ export function mount(el, opts = {}) {
 /**
  * Renders the overview into `el`: the whole flow, every level at once,
  * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
- * shape. `opts.layout` is "horizontal", "balanced" (the default),
- * "vertical", or "flows" - see the overview section above for what each
- * draws. The option lists and the two open callbacks mean what they mean for
+ * shape. `opts.layout` is "horizontal" (the default), "vertical", or
+ * "flows" - see the overview section above for what each draws. The option lists and the two open callbacks mean what they mean for
  * mount/2; there is no onChange, since nothing here can change. Nor is
  * there a setter for the tree: the page never edits, so the only tree it
  * ever draws is the one it mounted with, and a fresh one arrives as a fresh
