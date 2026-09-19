@@ -14,8 +14,8 @@ defmodule DemoWeb.FormFlowLive.Users do
   `user_id`, `perspectives` and `instances` are the current user's
   (`Demo.Users`): a pet owner is an applicant, so FormFlow shows them the
   applicant subflows of a journey and hides the reviewer's, and the listing
-  is their own applications. An admin, who is admitted here too, lists
-  everyone's.
+  is their own applications. Only the pet owners reach this page - the gate
+  turns everyone else away, the admin included.
   """
 
   use DemoWeb, :live_view

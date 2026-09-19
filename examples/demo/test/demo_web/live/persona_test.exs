@@ -45,6 +45,23 @@ defmodule DemoWeb.PersonaTest do
       end
     end
 
+    @tag user: "admin"
+    test "offers the admin every side, though two of them refuse them", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
+
+      assert LazyHTML.attribute(menu, "href") == Enum.map(Experiences.menu(), & &1.path)
+
+      # The link is the point: it is how a visitor who starts as the admin
+      # finds the other sides at all, and the refusal behind it names whose
+      # page it is
+      {:ok, view, refused} = live(conn, ~p"/demo/pet-licenses/reviews")
+
+      refute has_element?(view, "#reviewers-pages")
+      assert refused =~ "Not authorized"
+    end
+
     @tag user: "dog_owner"
     test "offers a pet owner only the overview and the pet license applications", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
@@ -116,13 +133,14 @@ defmodule DemoWeb.PersonaTest do
              ]
     end
 
-    test "each path opens its own page, titled as the menu names it", %{conn: conn} do
-      for {path, region, title} <- [
-            {"/demo/admin", "#admin-pages", "Admin"},
-            {"/demo/pet-licenses/applications", "#users-pages", "Pet License Applications"},
-            {"/demo/pet-licenses/reviews", "#reviewers-pages", "Pet License Reviews"}
+    test "each path opens its own page, for the user it is for, titled as the menu names it" do
+      for {user, path, region, title} <- [
+            {"admin", "/demo/admin", "#admin-pages", "Admin"},
+            {"dog_owner", "/demo/pet-licenses/applications", "#users-pages",
+             "Pet License Applications"},
+            {"reviewer", "/demo/pet-licenses/reviews", "#reviewers-pages", "Pet License Reviews"}
           ] do
-        {:ok, view, _html} = live(conn, path)
+        {:ok, view, _html} = live(build_conn_as(user), path)
 
         assert has_element?(view, region)
         assert page_title(view) =~ title
@@ -193,29 +211,30 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "admin"
-    test "opens for the admin, as the user sees it", %{conn: conn} do
-      {:ok, view, admin_html} = live(conn, ~p"/demo/pet-licenses/applications")
-
-      assert has_element?(view, "#users-pages")
-
-      {:ok, _view, owner_html} =
-        live(build_conn_as("dog_owner"), ~p"/demo/pet-licenses/applications")
-
-      admin_page = page(admin_html, "#users-pages")
-
-      assert admin_page =~ ~r/\S/
-      assert admin_page == page(owner_html, "#users-pages")
-    end
-
-    @tag user: "docs_reader"
-    test "refuses a reader, and names the admin among those who can", %{conn: conn} do
+    test "refuses the admin too, and names the pet owners alone", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
 
       {:ok, admin} = Demo.Users.fetch("admin")
+      {:ok, owner} = Demo.Users.fetch("dog_owner")
 
       refute has_element?(view, "#users-pages")
       assert html =~ "Not authorized"
-      assert html =~ admin.name
+      assert html =~ "who cannot see the pet license applications"
+      assert allowed_names(html) =~ owner.name
+      refute allowed_names(html) =~ admin.name
+    end
+
+    @tag user: "docs_reader"
+    test "refuses a reader, and names the pet owners, not the admin", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
+
+      {:ok, owner} = Demo.Users.fetch("dog_owner")
+      {:ok, cat_owner} = Demo.Users.fetch("cat_owner")
+
+      refute has_element?(view, "#users-pages")
+      assert html =~ "Not authorized"
+      assert allowed_names(html) =~ owner.name
+      assert allowed_names(html) =~ cat_owner.name
     end
   end
 
@@ -228,18 +247,14 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "admin"
-    test "opens for the admin, as the reviewer sees it", %{conn: conn} do
-      {:ok, view, admin_html} = live(conn, ~p"/demo/pet-licenses/reviews")
+    test "refuses the admin too, and names the reviewer alone", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/reviews")
 
-      assert has_element?(view, "#reviewers-pages")
+      {:ok, reviewer} = Demo.Users.fetch("reviewer")
 
-      {:ok, _view, reviewer_html} =
-        live(build_conn_as("reviewer"), ~p"/demo/pet-licenses/reviews")
-
-      admin_page = page(admin_html, "#reviewers-pages")
-
-      assert admin_page =~ ~r/\S/
-      assert admin_page == page(reviewer_html, "#reviewers-pages")
+      refute has_element?(view, "#reviewers-pages")
+      assert html =~ "Not authorized"
+      assert allowed_names(html) == reviewer.name
     end
 
     @tag user: "dog_owner"
@@ -386,5 +401,16 @@ defmodule DemoWeb.PersonaTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> LazyHTML.text()
+  end
+
+  # Who the refusal says can see the page: the second bold name in its first
+  # line, the first being the reader's own
+  defp allowed_names(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("p span.font-semibold")
+    |> Enum.at(1)
+    |> LazyHTML.text()
+    |> String.trim()
   end
 end

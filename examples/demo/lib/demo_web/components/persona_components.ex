@@ -10,14 +10,14 @@ defmodule DemoWeb.PersonaComponents do
   there is one place to change perspective, and a refusal is a bad place to
   teach a second one.
 
-  The admin is admitted to every page, and the demo opens as the admin
-  (`Demo.Users.default/0`), so a visitor meets a refusal only after choosing
-  a narrower perspective — role-level permissions are something to opt into,
-  not the first thing the demo shows. What an admin sees on another role's
-  page is that role's page, unchanged: the `user_id` those pages hand
-  `FormFlow.Web.router` is the page's, not the persona's, so an admin reading
-  the pet license applications reads them as the user and the reviews as the
-  reviewer.
+  Every page is for the roles it names and no others, the admin included.
+  The admin used to be admitted everywhere, on the reasoning that the demo
+  opens as the admin and a first visit should not be a refusal. It cost
+  more than it bought: an admin on the reviews page read every applicant's
+  journey, correct in a real service and unexplained in a self-guided demo,
+  where the page gives no sign that what is being read is the reviewer's
+  view rather than the admin's own. One role, one set of pages, and the
+  switcher is how you see another side.
 
   A gate wraps a page's content, not its title — the title stays outside it,
   so someone turned away still sees which page they were turned away from.
@@ -30,14 +30,8 @@ defmodule DemoWeb.PersonaComponents do
   alias Demo.Users
   alias DemoWeb.UserSwitcher
 
-  # The roles every page admits, whatever it asks for.
-  @all_access [:admin]
-
-  @doc "Whether `user` holds one of `roles`, or a role that admits every page."
-  def allows?(user, roles), do: user.role in (@all_access ++ roles)
-
-  @doc "Every user a page for `roles` admits, in display order."
-  def allowed_users(roles), do: Users.with_roles(@all_access ++ roles)
+  @doc "Whether `user` holds one of `roles`."
+  def allows?(user, roles), do: user.role in roles
 
   @doc """
   A page's content, for the users whose role is in `roles`. Everyone else
@@ -69,7 +63,7 @@ defmodule DemoWeb.PersonaComponents do
   attr :page, :string, required: true
 
   def not_authorized(assigns) do
-    assigns = assign(assigns, :allowed, allowed_users(assigns.roles))
+    assigns = assign(assigns, :allowed, Users.with_roles(assigns.roles))
 
     ~H"""
     <div>
@@ -127,8 +121,10 @@ defmodule DemoWeb.PersonaComponents do
         <p class="text-sm text-base-content/70">
           {@blurb ||
             "The demo is viewed as one of #{@count} hardcoded users, with no sign-in.
-             It opens as the admin, who can see every page; the others see only
-             their own. Switch here or in the header; the page reloads as that user."}
+             Each one sees the pages their own role is for and no others, so
+             switching is how you read another side. It opens as the admin, who
+             builds the flows. Switch here or in the header; the page reloads as
+             that user."}
         </p>
       </div>
       <UserSwitcher.user_switcher id={"#{@id}-user-switcher"} current_user={@current_user} />

@@ -9,9 +9,10 @@ defmodule DemoWeb.Experiences do
 
   Each experience names the `roles` it is for. The page hands them to
   `DemoWeb.PersonaComponents.persona_gate/1`, and the header's menus list
-  only the experiences the current user is admitted to (`menu_for/1`), so
-  nobody is offered a link to a refusal. The overview has no roles: it is
-  where the sides are described, and everyone reads it.
+  what `menu_for/1` gives them: the experiences the current user is
+  admitted to, so nobody is offered a link to a refusal - except the admin,
+  who is offered every side (see `menu_for/1`). The overview has no roles:
+  it is where the sides are described, and everyone reads it.
 
   `title` is the page's name in the pet licensing service, which the header
   menus show. `kind` is which side of the demo it is — "User pages",
@@ -79,11 +80,24 @@ defmodule DemoWeb.Experiences do
   @doc "Everything the Demo app menu offers: the overview, then the experiences."
   def menu, do: [@overview | @experiences]
 
+  # The roles the menu offers every side to, admitted or not. The admin's,
+  # and only because the demo opens as the admin (`Demo.Users.default/0`):
+  # a visitor who starts there and is shown two of four pages has no way to
+  # learn the other two exist. The link leads to a refusal that names whose
+  # page it is and points at the switcher, which teaches the demo's one
+  # lesson better than a missing link does.
+  #
+  # This is about links, not access. `DemoWeb.PersonaComponents` admits the
+  # admin to the admin pages and no others, as it does everyone.
+  @offered_every_side [:admin]
+
   @doc """
   What the Demo app menu offers `user`: the overview, then the experiences
-  whose pages admit them. The full `menu/0` when there is no user.
+  whose pages admit them - every side for the roles in `@offered_every_side`,
+  and the full `menu/0` when there is no user.
   """
   def menu_for(nil), do: menu()
+  def menu_for(%{role: role}) when role in @offered_every_side, do: menu()
   def menu_for(user), do: Enum.filter(menu(), &admits?(&1, user))
 
   @doc "The roles the experience with `id` is for, as its page's gate wants them."

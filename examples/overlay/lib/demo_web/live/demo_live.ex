@@ -58,9 +58,10 @@ defmodule DemoWeb.DemoLive do
         <.pick_perspective
           id="perspective"
           current_user={@current_user}
-          blurb="Each page below is for particular users, and refuses the others.
-                 The demo opens as the admin, who can see every one of them;
-                 switch here or in the header to read a page as someone else."
+          blurb="Each page below is for particular users, and refuses the others -
+                 the admin included, who gets the admin pages and no more.
+                 The demo opens as the admin; switch here or in the header to
+                 read another side."
         />
 
         <.h3>Explore the demo app</.h3>

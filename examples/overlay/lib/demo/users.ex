@@ -5,7 +5,8 @@ defmodule Demo.Users do
   There is no sign-in. The current user's id lives in the session under
   `"demo_user_id"` (set by `DemoWeb.UserSwitchController`, read by
   `DemoWeb.UserHook`); visitors without one see the demo as `default/0`, the
-  admin, who is admitted everywhere — narrower perspectives are opt-in.
+  admin. Every user reaches the pages their own role is for and no others,
+  the admin included (`DemoWeb.PersonaComponents`).
   """
 
   # In reading order: reading, applying, then the two staff roles — the
@@ -20,9 +21,11 @@ defmodule Demo.Users do
   # attr: the ids the demo's flow types declare
   # (`DemoWeb.FormFlowLive.Types.perspectives/0`), so a user translates to
   # FormFlow one-to-one. A pet owner is an applicant and the reviewer a
-  # reviewer; the admin, who builds the flows and reads every side, names
-  # both, because FormFlow shows a viewer naming none only the flows that are
-  # for everyone. The reader names none.
+  # reviewer; the admin names both, since an admin who reached an instance
+  # page would be reading every side of it, and FormFlow shows a viewer
+  # naming none only the flows that are for everyone. The reader names none.
+  # The demo's gate keeps the admin to the admin pages, so nothing reads
+  # theirs today - they say what the user is, not what a page does.
   #
   # `journeys` is whose flow instances the user's pages list, turned into
   # the FormFlow pages' `instances` attr by `instances/1`. `:own` is the
@@ -94,9 +97,11 @@ defmodule Demo.Users do
 
   @session_key "demo_user_id"
 
-  # The perspective the demo opens on. The admin, because
-  # `DemoWeb.PersonaComponents` admits an admin to every page, so a visitor
-  # who has not chosen a perspective yet never lands on a refusal.
+  # The perspective the demo opens on. The admin, because the flows and forms
+  # are built there and that is where the demo's story starts. A visitor who
+  # deep-links to another side's page before switching meets a refusal, which
+  # names who the page is for and points at the switcher - the demonstration
+  # this demo is here to give.
   @default Enum.find(@users, &(&1.role == :admin)) ||
              raise("no admin user for Demo.Users.default/0 to return")
 
@@ -104,8 +109,8 @@ defmodule Demo.Users do
   def all, do: @users
 
   @doc """
-  The user a visitor sees the demo as before switching: the admin, who can
-  see every page.
+  The user a visitor sees the demo as before switching: the admin, whose
+  pages are where the flows and forms are built.
   """
   def default, do: @default
 
