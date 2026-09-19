@@ -239,8 +239,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> assign(:latest_json, definition_json(preview_definition(payload, socket, definition)))
       |> assign(:latest_data, payload.data)
       |> reset_form_data_on_move(moved?, payload)
-      |> switch_editor(payload, definition)
-      |> reset_form_data_on_switch(pending_type, payload)
+
+    # An editor switch rewrites the definition fields, and the payload it
+    # rewrote them from is what every later step reads. Handing the new
+    # payload on keeps one answer to "what does the form hold now": without
+    # it, reset_form_data_on_switch/3 rebuilds the data from the values the
+    # admin left behind in the editor they just closed.
+    {socket, payload} = switch_editor(socket, payload, definition)
+
+    socket = reset_form_data_on_switch(socket, pending_type, payload)
 
     {:ok, schedule_preview_refresh(socket)}
   end
@@ -587,13 +594,17 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # any of them writes it there; Copy and Build with AI additionally need it
   # to parse, since the field is hidden there and a syntax error would
   # surface on Save where nobody could see it.
+  #
+  # Returns the socket and the payload, whose `data` is the form data that
+  # was assigned - the same values, so whatever runs next reads the editor
+  # the admin switched to rather than the one they left.
   defp switch_editor(socket, payload, definition) do
     from = socket.assigns.definition_editor
     to = payload.data[:definition_editor]
 
     cond do
       to not in ["form", "json", "copy", "ai"] or to == from ->
-        socket
+        {socket, payload}
 
       refusal = switch_refusal(to, definition) ->
         refuse_switch(socket, payload, from, refusal)
@@ -604,7 +615,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           |> Map.put(:definition_editor, "form")
           |> Map.put(:elements, Builder.entries(definition))
 
-        assign(socket, definition_editor: "form", form_data: form_data)
+        {assign(socket, definition_editor: "form", form_data: form_data),
+         %{payload | data: form_data}}
 
       true ->
         form_data =
@@ -615,9 +627,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
           # behind would block Save with an error nobody could see
           |> Map.delete(:elements)
 
-        socket
-        |> assign(definition_editor: to, form_data: form_data)
-        |> assign_ai_placeholder(to, definition)
+        socket =
+          socket
+          |> assign(definition_editor: to, form_data: form_data)
+          |> assign_ai_placeholder(to, definition)
+
+        {socket, %{payload | data: form_data}}
     end
   end
 
@@ -661,7 +676,10 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       |> Map.put(:definition_editor, from)
       |> Map.delete(:elements)
 
-    assign(socket, definition_editor: from, form_data: form_data, editor_error: message)
+    socket =
+      assign(socket, definition_editor: from, form_data: form_data, editor_error: message)
+
+    {socket, %{payload | data: form_data}}
   end
 
   # The raw param, not the applied changeset data: a type the admin just
@@ -1022,6 +1040,15 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   # that moment the data becomes the pending values, and what the admin was
   # typing survives. Otherwise it holds still, which is what keeps
   # in-progress input alive.
+  #
+  # The type dropdown is one of the details, so a page that has sent the
+  # details to their own page (`edit_details?`) has no dropdown to switch.
+  # Its data has no `form_type` either, which `pending_type` - the form's
+  # saved type - would never match, so without this clause the rebuild would
+  # run on every change.
+  defp reset_form_data_on_switch(%{assigns: %{edit_details?: false}} = socket, _type, _payload),
+    do: socket
+
   defp reset_form_data_on_switch(socket, pending_type, payload) do
     if pending_type == socket.assigns.form_data[:form_type] do
       socket

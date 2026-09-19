@@ -2,33 +2,40 @@
 
 ## v0.31.0
 
-### The overview offers a mixed layout
+### The overview offers three layouts
 
 A flow template's overview page (`/flows/:id/overview`) draws the whole
-flow in one of two layouts, chosen by a **Horizontal View** | **Mixed
-View** control above the canvas that sets the `layout` query param, so
-each is a URL someone can be sent:
+flow in one of three layouts, chosen by a **Balanced View** | **Vertical
+View** | **Horizontal View** control in the header, between the health
+check and the page tabs, that sets the `layout` query param, so each is a
+URL someone can be sent:
 
-  * **Horizontal View** (`layout` unset, or anything but `mixed`) - what
-    the page drew before: every level runs left to right, Start to End,
-    each subflow a box in that line holding its own left-to-right line
-  * **Mixed View** (`layout=mixed`) - a level's steps still run left to
-    right, but its Start stands above them at the top-left and its End
-    below at the bottom-right. A subflow is then a box entered at its
-    top and left at its bottom, and nesting grows the drawing downwards
-    rather than into one long line.
+  * **Horizontal View** (`layout=horizontal`) - what the page drew before:
+    every level runs left to right, Start to End, each subflow a box in
+    that line holding its own left-to-right line
+  * **Balanced View** (`layout` unset, or anything else - the default) - a
+    level's steps still run left to right, but its Start stands above
+    them at the top-left and its End below at the bottom-right. A subflow
+    is then a box entered at its top and left at its bottom, and nesting
+    grows the drawing downwards rather than into one long line.
+  * **Vertical View** (`layout=vertical`) - a level of subflows runs top
+    to bottom, Start to End, every subflow's box entered at its top and
+    left at its bottom; a level of forms runs left to right as on the
+    horizontal view. The whole is a stack of wide boxes.
 
 In the bundle, the overview's edges that leave a Start, enter an End, or
 skip a layer are all one edge type, `elbow`: straight runs and right-angle
-turns, taking a lane above or below the row of steps when the layout
-reserves one (`data.lane`, an offset from the source's handle; the old
-`detour` type and its `data.rise` are gone). On the mixed layout a Start's
-and an End's handles turn to the vertical (`data.handles: "vertical"` on
-the canvas node). `mountOverview/2` takes `layout` ("horizontal" |
-"mixed"), `FormFlow.Web.Components.Overview` a `layout` attr, and the
-canvas element's id ends in the layout, so switching mounts a fresh one.
-`FormFlow.Web.Templates.Flows.Overview` reads `params["layout"]`, which the
-router now passes it.
+turns, taking a lane beside the level's line of nodes when the layout
+reserves one (`data.lane`, `{y}` for a lane across or `{x}` for a lane
+down, each an offset from the source's handle; the old `detour` type and
+its `data.rise` are gone). Where a layout runs edges up and down, the
+nodes' handles turn to the vertical (`data.handles: "vertical"` on the
+canvas node): a Start's and an End's on the balanced layout, every node's
+in a stacked level on the vertical one. `mountOverview/2` takes `layout`
+("horizontal" | "balanced" | "vertical"), `FormFlow.Web.Components.Overview`
+a `layout` attr, and the canvas element's id ends in the layout, so
+switching mounts a fresh one. `FormFlow.Web.Templates.Flows.Overview`
+reads `params["layout"]`, which the router now passes it.
 
 ### Save draft on a form instance
 
@@ -249,6 +256,29 @@ The derivation is unchanged, and deliberately: whether a step can be
 entered out of turn is its flow type's answer, not the AND-join's, so the
 page is where the two meet. Each row also carries its position as
 `data-path` now.
+
+### The form editor's radio carries the current definition across
+
+Switching between **Form builder**, **JSON**, **Copy existing form** and
+**Build with AI** on a draft's edit page moved the definition the previous
+editor held, and then put it back to what the page had loaded with. Editing
+the JSON and asking for the form builder showed the elements from page load,
+and typing in one of those stale entries wrote them over the edit.
+
+Two things had to change in `FormFlow.Web.Templates.Forms.Edit`:
+
+  * `switch_editor/3` now hands on the payload whose `data` it rewrote, so
+    the steps after it read the editor the admin switched to rather than the
+    one they left.
+  * `reset_form_data_on_switch/3` - which rebuilds the form's data around a
+    newly picked form type - no longer runs on a page that has sent the
+    details to their own page (`edit_details?`). There is no type dropdown
+    there, and the data has no `form_type` for the saved type to match, so
+    it had been rebuilding on every change.
+
+The second is what made this show up only on a form with a published
+version; a never-published draft, whose details are still on the page,
+switched editors correctly.
 
 ## v0.30.0
 

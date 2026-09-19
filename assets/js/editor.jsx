@@ -269,10 +269,12 @@ function StepNode({ id, data, selected, isConnectable, deletable }) {
   const typeLabel =
     formTypeOptions.find((option) => option.value === data.form_type)?.label ?? data.form_type;
 
-  // Edges leave a step's right side and enter its left - except on the
-  // overview's mixed layout, which stands a level's Start above its row of
-  // steps and its End below (data.handles "vertical"): there a Start's edges
-  // drop out of its bottom and an End's arrive at its top
+  // Edges leave a step's right side and enter its left - unless the
+  // overview's layout has turned the step's handles to the vertical
+  // (data.handles "vertical"): a Start stood above its level's row of steps
+  // and an End below it on the balanced layout, or every node of a level
+  // stacked top to bottom on the vertical one. Then edges leave the bottom
+  // and arrive at the top.
   const vertical = data.handles === "vertical";
 
   return (
@@ -867,15 +869,19 @@ function normalize(flow) {
 // from the sizes ReactFlow measured on a first, invisible render — never
 // guessed from CSS. See archive/plans/flow-overview.md for the decisions.
 //
-// Two layouts, chosen by the page (`layout`):
+// Three layouts, chosen by the page (`layout`):
 //
 //   * "horizontal" - every level runs left to right, Start to End, each
 //     subflow a box in that line holding its own left-to-right line
-//   * "mixed" - the steps of a level still run left to right, but its Start
-//     stands above them at the top-left and its End below at the
-//     bottom-right, so a subflow is a box entered at its top and left at its
-//     bottom, and nesting grows the drawing downwards instead of ever
-//     further to the right
+//   * "balanced" (the page's default) - the steps of a level still run left
+//     to right, but its Start stands above them at the top-left and its End
+//     below at the bottom-right, so a subflow is a box entered at its top
+//     and left at its bottom, and nesting grows the drawing downwards
+//     instead of ever further to the right
+//   * "vertical" - a level of subflows runs top to bottom, Start to End,
+//     every subflow's box entered at its top and left at its bottom; a level
+//     of forms runs left to right as on the horizontal layout. The whole is
+//     a stack of wide boxes.
 
 // Space between layers (x) and between nodes in a layer (y), and the padding
 // a group keeps around the inner flow it contains
@@ -883,9 +889,9 @@ const LAYER_GAP = 72;
 const NODE_GAP = 28;
 const GROUP_PADDING = 20;
 
-// The vertical room one lane takes, above or below a level's row of steps
-// (see ElbowEdge), and the room the mixed layout keeps between a Start or
-// End and that row
+// The room one lane takes, beside a level's line of nodes (see ElbowEdge),
+// and the room the balanced layout keeps between a Start or End and its
+// row of steps
 const LANE_GAP = 24;
 const END_GAP = 40;
 
@@ -906,9 +912,17 @@ function SubflowGroupNode({ id, data, isConnectable }) {
   const typeLabel =
     typeOptions.find((option) => option.value === data.flow_type)?.label ?? data.flow_type;
 
+  // Entered at the left and left at the right, or, in a level the vertical
+  // layout stacks top to bottom, entered at the top and left at the bottom
+  const vertical = data.handles === "vertical";
+
   return (
     <div className="ff-group">
-      <Handle type="target" position={Position.Left} isConnectable={isConnectable} />
+      <Handle
+        type="target"
+        position={vertical ? Position.Top : Position.Left}
+        isConnectable={isConnectable}
+      />
       <div className="ff-group__header">
         <div className="ff-group__title">
           <span aria-hidden="true">⧉</span>
@@ -931,7 +945,11 @@ function SubflowGroupNode({ id, data, isConnectable }) {
           Open →
         </button>
       </div>
-      <Handle type="source" position={Position.Right} isConnectable={isConnectable} />
+      <Handle
+        type="source"
+        position={vertical ? Position.Bottom : Position.Right}
+        isConnectable={isConnectable}
+      />
     </div>
   );
 }
@@ -953,13 +971,14 @@ const overviewNodeTypes = { step: StepNode, subflow: SubflowGroupNode };
 // nodes, so a curve behind an expanded subflow would simply vanish.
 //
 // Which sides it leaves and enters come from the handles: a step's right
-// and left, or a Start's bottom and an End's top on the mixed layout. The
-// layout says whether it takes a lane - `data.lane`, how far below the
-// source's handle the lane runs, negative for above, null for none - and
+// and left, or a node's bottom and top where a layout has turned them. The
+// layout says whether it takes a lane - `data.lane`: `{y}`, how far below
+// the source's handle a lane across runs, negative for above; `{x}`, how
+// far right of it a lane down runs, negative for left; null for none - and
 // reserves the room for it (layoutLevel); the edge itself knows nothing of
 // the nodes it passes. An edge that skips a layer - Application → Payment,
-// past Review - is the case a lane exists for: out of the source, up to the
-// lane, along, and down into the target.
+// past Review - is the case a lane exists for: out of the source, over to
+// the lane, along, and back in to the target.
 function ElbowEdge({
   id,
   sourceX,
@@ -976,14 +995,29 @@ function ElbowEdge({
   const fromBottom = sourcePosition === Position.Bottom;
   const intoTop = targetPosition === Position.Top;
 
-  // The vertical line each end's run turns on: a side handle's, one turn
-  // out; a top or bottom handle's, its own
+  // The line each end's run turns on before a lane across: a side handle's
+  // is one turn out, a top or bottom handle's its own
   const out = fromBottom ? sourceX : sourceX + EDGE_TURN;
   const into = intoTop ? targetX : targetX - EDGE_TURN;
 
   let points;
 
-  if (lane === null) {
+  if (lane?.x !== undefined) {
+    // A lane down: out of the handle one turn, over to the lane, along it,
+    // back over, and in
+    const laneX = sourceX + lane.x;
+    const outY = fromBottom ? sourceY + EDGE_TURN : sourceY;
+    const intoY = intoTop ? targetY - EDGE_TURN : targetY;
+
+    points = [
+      [sourceX, sourceY],
+      ...(fromBottom ? [[sourceX, outY]] : []),
+      [laneX, outY],
+      [laneX, intoY],
+      ...(intoTop ? [[targetX, intoY]] : []),
+      [targetX, targetY],
+    ];
+  } else if (lane === null) {
     if (fromBottom && intoTop) {
       const midY = (sourceY + targetY) / 2;
       points = [[sourceX, sourceY], [sourceX, midY], [targetX, midY], [targetX, targetY]];
@@ -995,7 +1029,7 @@ function ElbowEdge({
       points = [[sourceX, sourceY], [out, sourceY], [out, targetY], [targetX, targetY]];
     }
   } else {
-    const laneY = sourceY + lane;
+    const laneY = sourceY + lane.y;
 
     points = [
       [sourceX, sourceY],
@@ -1067,16 +1101,20 @@ const WITHOUT_EDITOR_LAYOUT = { origin: [0, 0], measured: undefined };
 
 // The tree as ReactFlow's flat lists, every node at the origin until the
 // layout has sizes to work with. Parents precede their children, as
-// ReactFlow requires of parentId nesting. On the mixed layout a Start's and
-// an End's handles are turned to the vertical (StepNode), since their
-// edges run down into the row of steps and down out of it.
+// ReactFlow requires of parentId nesting. Handles are turned to the
+// vertical (StepNode, SubflowGroupNode) where the layout runs edges up and
+// down: a Start's and an End's on the balanced layout, every node's in a
+// level the vertical layout stacks.
 function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
   if (!tree) return { nodes, edges };
+
+  const stacked = layout === "vertical" && isSubflowsLevel(tree);
 
   for (const node of tree.nodes ?? []) {
     const subflow = node.type === "subflow" || node.id in (tree.subflows ?? {});
     const subtree = tree.subflows?.[node.id];
     const end = node.data?.kind === "start" || node.data?.kind === "end";
+    const vertical = stacked || (layout === "balanced" && end);
 
     const flat = {
       ...node,
@@ -1093,9 +1131,9 @@ function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
         flow_label: subtree?.flow?.label ?? node.data?.subflow_label ?? "forms",
         empty: !subtree?.nodes?.length,
       };
-    } else if (end && layout === "mixed") {
-      flat.data = { ...node.data, handles: "vertical" };
     }
+
+    if (vertical) flat.data = { ...flat.data, handles: "vertical" };
 
     nodes.push(flat);
 
@@ -1114,8 +1152,8 @@ function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
 // Positions are relative to the level's own top-left corner — for a child
 // level that is what ReactFlow expects of a node with parentId. Writes
 // every node's position into `positions`, every group's size into `sizes`,
-// and, for every edge drawn as an elbow, its lane offset (or null for no
-// lane) into `lanes` (see ElbowEdge); returns the level's own size.
+// and, for every edge drawn as an elbow, its lane (or null for none) into
+// `lanes` (see ElbowEdge); returns the level's own size.
 function layoutLevel(tree, measured, positions, sizes, lanes, layout) {
   const nodes = tree.nodes ?? [];
   if (nodes.length === 0) return { width: 0, height: 0 };
@@ -1149,9 +1187,20 @@ function layoutLevel(tree, measured, positions, sizes, lanes, layout) {
     sizes.set(node.id, group);
   }
 
-  return layout === "mixed"
-    ? placeMixed(tree, size, positions, lanes)
-    : placeHorizontal(tree, size, positions, lanes);
+  if (layout === "balanced") return placeBalanced(tree, size, positions, lanes);
+  if (layout === "vertical" && isSubflowsLevel(tree)) return placeVertical(tree, size, positions, lanes);
+
+  return placeHorizontal(tree, size, positions, lanes);
+}
+
+// Whether a level holds subflows rather than forms - by the flow's label,
+// or, without one, by what its nodes are
+function isSubflowsLevel(tree) {
+  if (tree.flow?.label) return tree.flow.label === "subflows";
+
+  return (tree.nodes ?? []).some(
+    (node) => node.type === "subflow" || node.id in (tree.subflows ?? {}),
+  );
 }
 
 // The horizontal layout of one level: every node in a layer, layers left to
@@ -1174,20 +1223,58 @@ function placeHorizontal(tree, size, positions, lanes) {
 
   detours.forEach((edge, lane) => {
     const laneY = band - (lane + 0.5) * LANE_GAP;
-    lanes.set(edge.id, laneY - sideHandleY(edge.source, size, positions));
+    lanes.set(edge.id, { y: laneY - sideHandleY(edge.source, size, positions) });
   });
 
   return { width: row.right, height: height + band };
 }
 
-// The mixed layout of one level: its steps in a row as the horizontal
+// The vertical layout of a level of subflows: every node in a layer, layers
+// top to bottom from Start to End, each centred on the widest. Edges that
+// skip a layer take lanes to the left of the stack, as the horizontal
+// layout's take lanes above its row.
+function placeVertical(tree, size, positions, lanes) {
+  const layers = layerNodes(tree);
+  const layerWidths = layers.map(
+    (layer) => layer.reduce((sum, id) => sum + size.get(id).width, 0) + (layer.length - 1) * NODE_GAP,
+  );
+  const width = Math.max(...layerWidths);
+
+  const layerOf = new Map();
+  layers.forEach((ids, index) => ids.forEach((id) => layerOf.set(id, index)));
+
+  const detours = laneEdges(tree.edges, layerOf);
+  const band = detours.length * LANE_GAP;
+
+  let y = 0;
+  layers.forEach((layer, index) => {
+    let x = band + (width - layerWidths[index]) / 2;
+
+    for (const id of layer) {
+      positions.set(id, { x, y });
+      x += size.get(id).width + NODE_GAP;
+    }
+
+    y += Math.max(...layer.map((id) => size.get(id).height)) + LAYER_GAP;
+  });
+
+  detours.forEach((edge, lane) => {
+    const laneX = band - (lane + 0.5) * LANE_GAP;
+    const source = positions.get(edge.source);
+    lanes.set(edge.id, { x: laneX - (source.x + size.get(edge.source).width / 2) });
+  });
+
+  return { width: width + band, height: y - LAYER_GAP };
+}
+
+// The balanced layout of one level: its steps in a row as the horizontal
 // layout would place them, but its Start above that row at the top-left
 // and its End below it at the bottom-right. A Start's edge drops straight
 // down and turns into the row's first layer; the last layer's edges run
 // right and turn down into End. Edges to a later layer, or into End from an
 // earlier one, take lanes - above the row for the former, below for the
 // latter - as the horizontal layout's detours do.
-function placeMixed(tree, size, positions, lanes) {
+function placeBalanced(tree, size, positions, lanes) {
   const nodes = tree.nodes ?? [];
   const edges = tree.edges ?? [];
   const kindOf = new Map(nodes.map((node) => [node.id, node.data?.kind]));
@@ -1259,12 +1346,12 @@ function placeMixed(tree, size, positions, lanes) {
 
   above.forEach((edge, lane) => {
     const laneY = top - (lane + 0.5) * LANE_GAP;
-    lanes.set(edge.id, laneY - handleY(edge.source));
+    lanes.set(edge.id, { y: laneY - handleY(edge.source) });
   });
 
   below.forEach((edge, lane) => {
     const laneY = bottom + (lane + 0.5) * LANE_GAP;
-    lanes.set(edge.id, laneY - handleY(edge.source));
+    lanes.set(edge.id, { y: laneY - handleY(edge.source) });
   });
 
   // Every other edge out of a Start or into an End is an elbow too, with no
@@ -1349,7 +1436,7 @@ function sideHandleY(id, size, positions) {
 // edges from crossing. Ties keep the stored order.
 //
 // The first layer is the Start nodes, or `roots` when the caller has taken
-// them out of the level (the mixed layout, which lays out the steps alone
+// them out of the level (the balanced layout, which lays out the steps alone
 // and passes the ones Start leads to).
 function layerNodes(tree, roots = []) {
   const nodes = tree.nodes ?? [];
@@ -1438,7 +1525,7 @@ function layerNodes(tree, roots = []) {
 
 function FlowOverview({
   tree,
-  layout = "horizontal",
+  layout = "balanced",
   flowTypeOptions = [],
   formTypeOptions = [],
   perspectiveOptions = [],
@@ -1638,8 +1725,8 @@ export function mount(el, opts = {}) {
 /**
  * Renders the overview into `el`: the whole flow, every level at once,
  * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
- * shape. `opts.layout` is "horizontal" (the default) or "mixed" - see
- * the overview section above for what each draws. The option lists and the two open callbacks mean what they mean for
+ * shape. `opts.layout` is "horizontal", "balanced" (the default), or
+ * "vertical" - see the overview section above for what each draws. The option lists and the two open callbacks mean what they mean for
  * mount/2; there is no onChange, since nothing here can change. Nor is
  * there a setter for the tree: the page never edits, so the only tree it
  * ever draws is the one it mounted with, and a fresh one arrives as a fresh

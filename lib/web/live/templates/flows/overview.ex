@@ -18,18 +18,22 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   node or a group's header navigates to that node's show page under this
   root, the same destinations the Show page's Open buttons use.
 
-  Two layouts, chosen by the `layout` query param and offered as a segmented
-  control above the canvas - **Horizontal View** | **Mixed View** - so each
-  is a URL someone can be sent:
+  Three layouts, chosen by the `layout` query param and offered as a
+  segmented control in the header, between the health check and the page
+  tabs - **Balanced View** | **Vertical View** | **Horizontal View** - so
+  each is a URL someone can be sent:
 
-    * `horizontal` (the default, and what any other value falls back to) -
-      every level runs left to right, Start to End, each subflow a box in
-      that line holding its own left-to-right line
-    * `mixed` - a level's steps still run left to right, but its Start
-      stands above them at the top-left and its End below at the
-      bottom-right, so a subflow is a box entered at its top and left at
-      its bottom, and nesting grows the drawing downwards rather than into
-      one long line
+    * `horizontal` - every level runs left to right, Start to End, each
+      subflow a box in that line holding its own left-to-right line
+    * `balanced` (the default, and what any other value falls back to) - a
+      level's steps still run left to right, but its Start stands above
+      them at the top-left and its End below at the bottom-right, so a
+      subflow is a box entered at its top and left at its bottom, and
+      nesting grows the drawing downwards rather than into one long line
+    * `vertical` - a level of subflows runs top to bottom, Start to End,
+      every subflow's box entered at its top and left at its bottom; a
+      level of forms runs left to right as it does on `horizontal`. The
+      whole is a stack of wide boxes.
 
   The canvas is `phx-update="ignore"`, so switching layouts keys it on the
   layout: a different element mounts, and the bundle lays the tree out
@@ -78,8 +82,9 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
      )}
   end
 
-  defp layout("mixed"), do: :mixed
-  defp layout(_other), do: :horizontal
+  defp layout("horizontal"), do: :horizontal
+  defp layout("vertical"), do: :vertical
+  defp layout(_other), do: :balanced
 
   @impl true
   def handle_event("form_flow:overview_mounted", _params, socket) do
@@ -130,20 +135,20 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         <:crumb>Overview</:crumb>
         <:actions>
           <Health.health base={@base} flow={@flow} components={@components} />
+          <Components.Tabs.tabs
+            items={[
+              {:balanced, "Balanced View", "#{@base}/flows/#{@flow.id}/overview"},
+              {:vertical, "Vertical View", "#{@base}/flows/#{@flow.id}/overview?layout=vertical"},
+              {:horizontal, "Horizontal View",
+               "#{@base}/flows/#{@flow.id}/overview?layout=horizontal"}
+            ]}
+            active={@layout}
+            label="Layout"
+            class="ml-2"
+          />
           <Tabs.tabs base={@base} flow={@flow} active={:overview} class="ml-2" />
         </:actions>
       </Header.header>
-
-      <div class="mb-3 flex justify-end">
-        <Components.Tabs.tabs
-          items={[
-            {:horizontal, "Horizontal View", "#{@base}/flows/#{@flow.id}/overview"},
-            {:mixed, "Mixed View", "#{@base}/flows/#{@flow.id}/overview?layout=mixed"}
-          ]}
-          active={@layout}
-          label="Layout"
-        />
-      </div>
 
       <Overview.overview
         id={"#{@id}-overview-#{@layout}"}

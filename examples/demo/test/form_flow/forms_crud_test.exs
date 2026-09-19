@@ -450,6 +450,61 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Add element"
   end
 
+  test "a published form's draft carries the edited JSON into the form builder", %{conn: conn} do
+    # Once a form has been published its details move to their own page, so
+    # this draft's form has no type dropdown - the state that used to rebuild
+    # the form data from the editor the admin had just left, putting the
+    # definition the page loaded with back into the builder.
+    {:ok, form} =
+      Forms.create(%{
+        name: "Published",
+        definition: %{"elements" => [%{"type" => "text", "name" => "loaded_with"}]}
+      })
+
+    [first] = Forms.list_versions(form.id)
+    {:ok, _published} = Forms.update_status(first, :published)
+    {:ok, draft} = Forms.create_draft(form.id, based_on: first.id)
+
+    {:ok, view, _html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit")
+
+    # No details on the page means no type dropdown
+    refute has_element?(view, ~s(input[name="dynamic_form[name]"]))
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[elements][0][name]"][value="loaded_with"])
+           )
+
+    switch = fn params ->
+      view |> element("#forms-edit-form-form") |> render_change(%{"dynamic_form" => params})
+      render(view)
+    end
+
+    _html = switch.(%{"definition_editor" => "json"})
+
+    _html =
+      switch.(%{
+        "definition_editor" => "json",
+        "definition" => ~s({"elements": [{"type": "text", "name": "typed_in_json"}]})
+      })
+
+    _html =
+      switch.(%{
+        "definition_editor" => "form",
+        "definition" => ~s({"elements": [{"type": "text", "name": "typed_in_json"}]})
+      })
+
+    assert has_element?(
+             view,
+             ~s(input[name="dynamic_form[elements][0][name]"][value="typed_in_json"])
+           )
+
+    refute has_element?(
+             view,
+             ~s(input[name="dynamic_form[elements][0][name]"][value="loaded_with"])
+           )
+  end
+
   describe "Build with AI" do
     @elements ~s({"elements": [{"type": "text", "name": "dog_name", "title": "Dog's name"}]})
 
