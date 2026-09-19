@@ -2720,6 +2720,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       %{name: "placeholder", type: "text", label: "Placeholder"},
       %{name: "description", type: "text", label: "Help text"},
       %{name: "defaultValue", type: "text", label: "Default value"},
+      %{name: "defaultChecked", type: "boolean", label: "Default value"},
       %{name: "isRequired", type: "boolean", label: "Required"},
       %{
         name: "visibleIf",

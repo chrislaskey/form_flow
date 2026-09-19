@@ -9,10 +9,10 @@ defmodule FormFlow.Web.Components.Overview do
   it draws is a *tree* - `FormFlow.Web.Helpers.ReactFlow.to_tree_data/1` -
   with every subflow node expanded into a group holding its inner flow. The
   bundle lays it out; nothing here has a position. `layout` picks which of
-  the bundle's three layouts - `:horizontal`, every level left to right;
+  the bundle's four layouts - `:horizontal`, every level left to right;
   `:balanced`, each level's Start above its steps and End below;
-  `:vertical`, levels of subflows stacked top to bottom - and is passed
-  through as is.
+  `:vertical`, levels of subflows stacked top to bottom; `:flows`, balanced
+  with every form subflow closed - and is passed through as is.
 
   The hook is the only channel between Elixir and React, the container being
   `phx-update="ignore"`, and it runs one way. React pushes to Elixir with
@@ -47,7 +47,7 @@ defmodule FormFlow.Web.Components.Overview do
 
   attr(:layout, :atom,
     default: :balanced,
-    values: [:horizontal, :balanced, :vertical],
+    values: [:horizontal, :balanced, :vertical, :flows],
     doc: "how the bundle lays the tree out, see FormFlow.Web.Templates.Flows.Overview"
   )
 

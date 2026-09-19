@@ -18,10 +18,10 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   node or a group's header navigates to that node's show page under this
   root, the same destinations the Show page's Open buttons use.
 
-  Three layouts, chosen by the `layout` query param and offered as a
+  Five layouts, chosen by the `layout` query param and offered as a
   segmented control in the header, between the health check and the page
-  tabs - **Balanced View** | **Vertical View** | **Horizontal View** - so
-  each is a URL someone can be sent:
+  tabs - **Balanced** | **Vertical** | **Horizontal** | **Flows** |
+  **Text** - so each is a URL someone can be sent:
 
     * `horizontal` - every level runs left to right, Start to End, each
       subflow a box in that line holding its own left-to-right line
@@ -34,6 +34,13 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
       every subflow's box entered at its top and left at its bottom; a
       level of forms runs left to right as it does on `horizontal`. The
       whole is a stack of wide boxes.
+    * `flows` - `balanced`, but every form subflow is a closed box naming
+      what it holds ("4 forms") instead of its steps, which are what take
+      the room; complex subflows stay open, so what is left is the flow of
+      flows
+    * `text` - no canvas: the flow as a nested list of plain HTML
+      (`FormFlow.Web.Components.TextTree`), one item per step in order,
+      each a link to its page
 
   The canvas is `phx-update="ignore"`, so switching layouts keys it on the
   layout: a different element mounts, and the bundle lays the tree out
@@ -46,6 +53,7 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
   alias FormFlow.Web.Components
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Overview
+  alias FormFlow.Web.Components.TextTree
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
@@ -84,6 +92,8 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
 
   defp layout("horizontal"), do: :horizontal
   defp layout("vertical"), do: :vertical
+  defp layout("flows"), do: :flows
+  defp layout("text"), do: :text
   defp layout(_other), do: :balanced
 
   @impl true
@@ -137,10 +147,11 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
           <Health.health base={@base} flow={@flow} components={@components} />
           <Components.Tabs.tabs
             items={[
-              {:balanced, "Balanced View", "#{@base}/flows/#{@flow.id}/overview"},
-              {:vertical, "Vertical View", "#{@base}/flows/#{@flow.id}/overview?layout=vertical"},
-              {:horizontal, "Horizontal View",
-               "#{@base}/flows/#{@flow.id}/overview?layout=horizontal"}
+              {:balanced, "Balanced", "#{@base}/flows/#{@flow.id}/overview"},
+              {:vertical, "Vertical", "#{@base}/flows/#{@flow.id}/overview?layout=vertical"},
+              {:horizontal, "Horizontal", "#{@base}/flows/#{@flow.id}/overview?layout=horizontal"},
+              {:flows, "Flows", "#{@base}/flows/#{@flow.id}/overview?layout=flows"},
+              {:text, "Text", "#{@base}/flows/#{@flow.id}/overview?layout=text"}
             ]}
             active={@layout}
             label="Layout"
@@ -150,7 +161,18 @@ defmodule FormFlow.Web.Templates.Flows.Overview do
         </:actions>
       </Header.header>
 
+      <TextTree.text_tree
+        :if={@layout == :text}
+        tree={@tree}
+        base={@base}
+        root_id={@flow.id}
+        flow_type_options={@flow_type_options}
+        form_type_options={@form_type_options}
+        perspective_options={@perspective_options}
+      />
+
       <Overview.overview
+        :if={@layout != :text}
         id={"#{@id}-overview-#{@layout}"}
         tree={@tree}
         layout={@layout}

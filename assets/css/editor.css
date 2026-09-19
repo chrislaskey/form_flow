@@ -321,6 +321,13 @@
   margin-left: auto;
 }
 
+/* A closed subflow (the flows layout): a solid, header-only box, since
+   nothing is inside it */
+.ff-group--collapsed {
+  border-style: solid;
+  background: rgb(250 204 21 / 12%);
+}
+
 .ff-group__title {
   display: flex;
   align-items: center;

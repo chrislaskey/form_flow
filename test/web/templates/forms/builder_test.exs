@@ -40,6 +40,19 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
       assert intro["visibleIf"] == "{email} notempty"
     end
 
+    test "a boolean's defaultValue arrives as the tick box, a text element's as the text box" do
+      definition = %{
+        "elements" => [
+          %{"type" => "boolean", "name" => "same", "defaultValue" => true},
+          %{"type" => "text", "name" => "who", "defaultValue" => "Ada"}
+        ]
+      }
+
+      assert [same, who] = Builder.entries(definition)
+      assert same == %{"type" => "boolean", "name" => "same", "defaultChecked" => true}
+      assert who == %{"type" => "text", "name" => "who", "defaultValue" => "Ada"}
+    end
+
     test "a blank definition, or one without elements, has none" do
       assert Builder.entries(%{}) == []
       assert Builder.entries(%{"title" => "Untitled"}) == []
@@ -99,6 +112,22 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
                "elements" => [%{"type" => "comment", "name" => "notes"}]
              }
     end
+
+    test "a ticked Default value writes the boolean's defaultValue" do
+      entry = %{type: "boolean", name: "same", defaultChecked: true}
+
+      assert Builder.definition(%{}, [entry]) == %{
+               "elements" => [%{"type" => "boolean", "name" => "same", "defaultValue" => true}]
+             }
+    end
+
+    test "an unticked Default value writes nothing, as an unchecked Required does" do
+      entry = %{type: "boolean", name: "same", defaultChecked: false}
+
+      assert Builder.definition(%{}, [entry]) == %{
+               "elements" => [%{"type" => "boolean", "name" => "same"}]
+             }
+    end
   end
 
   describe "unsupported/1" do
@@ -130,6 +159,28 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
     test "a property outside its type is unsupported, even one the builder knows" do
       definition = %{"elements" => [%{"type" => "text", "name" => "email", "choices" => ["a"]}]}
       assert Builder.unsupported(definition) == [~s(Element "email" uses "choices".)]
+    end
+
+    test "a defaultValue is read by the control its type has for it" do
+      boolean = %{
+        "elements" => [%{"type" => "boolean", "name" => "same", "defaultValue" => true}]
+      }
+
+      assert Builder.unsupported(boolean) == []
+
+      worded = %{
+        "elements" => [%{"type" => "boolean", "name" => "same", "defaultValue" => "yes"}]
+      }
+
+      assert Builder.unsupported(worded) == [
+               ~s(Element "same" has a "defaultValue" the form builder cannot edit.)
+             ]
+
+      ticked = %{"elements" => [%{"type" => "text", "name" => "who", "defaultValue" => true}]}
+
+      assert Builder.unsupported(ticked) == [
+               ~s(Element "who" has a "defaultValue" the form builder cannot edit.)
+             ]
     end
 
     # Value, not shape. A groupType the renderer has no clause for raises

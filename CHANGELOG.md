@@ -2,26 +2,37 @@
 
 ## v0.31.0
 
-### The overview offers three layouts
+### The overview offers five layouts
 
 A flow template's overview page (`/flows/:id/overview`) draws the whole
-flow in one of three layouts, chosen by a **Balanced View** | **Vertical
-View** | **Horizontal View** control in the header, between the health
-check and the page tabs, that sets the `layout` query param, so each is a
-URL someone can be sent:
+flow in one of five layouts, chosen by a **Balanced** | **Vertical** |
+**Horizontal** | **Flows** | **Text** control in the header, between
+the health check and the page tabs, that sets the `layout` query param,
+so each is a URL someone can be sent:
 
-  * **Horizontal View** (`layout=horizontal`) - what the page drew before:
+  * **Balanced** (`layout` unset, or anything else - the default) - a
+    level's steps run left to right, but its Start stands above them at
+    the top-left and its End below at the bottom-right. A subflow is then
+    a box entered at its top and left at its bottom, and nesting grows
+    the drawing downwards rather than into one long line.
+  * **Vertical** (`layout=vertical`) - a level of subflows runs top to
+    bottom, Start to End, every subflow's box entered at its top and left
+    at its bottom; a level of forms runs left to right as on the
+    horizontal layout. The whole is a stack of wide boxes.
+  * **Horizontal** (`layout=horizontal`) - what the page drew before:
     every level runs left to right, Start to End, each subflow a box in
-    that line holding its own left-to-right line
-  * **Balanced View** (`layout` unset, or anything else - the default) - a
-    level's steps still run left to right, but its Start stands above
-    them at the top-left and its End below at the bottom-right. A subflow
-    is then a box entered at its top and left at its bottom, and nesting
-    grows the drawing downwards rather than into one long line.
-  * **Vertical View** (`layout=vertical`) - a level of subflows runs top
-    to bottom, Start to End, every subflow's box entered at its top and
-    left at its bottom; a level of forms runs left to right as on the
-    horizontal view. The whole is a stack of wide boxes.
+    that line holding its own left-to-right line.
+  * **Flows** (`layout=flows`) - the balanced layout, but every form
+    subflow is a closed box saying what it holds ("4 forms") instead of
+    its steps, which are what take the room. Complex subflows stay open,
+    so what is left is the flow of flows.
+  * **Text** (`layout=text`) - no canvas: the flow as a nested list of
+    plain HTML (`FormFlow.Web.Components.TextTree`), one item per step in
+    the order the edges give, a subflow's item holding its own list, each
+    name a link to the step's page. Start and End are not listed. A step
+    with several next steps lists them under "Then one of:"; a step
+    already listed ends the walk with "back to" it (a loop) or "continues
+    at" it (choices meeting again).
 
 In the bundle, the overview's edges that leave a Start, enter an End, or
 skip a layer are all one edge type, `elbow`: straight runs and right-angle
@@ -31,11 +42,15 @@ down, each an offset from the source's handle; the old `detour` type and
 its `data.rise` are gone). Where a layout runs edges up and down, the
 nodes' handles turn to the vertical (`data.handles: "vertical"` on the
 canvas node): a Start's and an End's on the balanced layout, every node's
-in a stacked level on the vertical one. `mountOverview/2` takes `layout`
-("horizontal" | "balanced" | "vertical"), `FormFlow.Web.Components.Overview`
-a `layout` attr, and the canvas element's id ends in the layout, so
-switching mounts a fresh one. `FormFlow.Web.Templates.Flows.Overview`
-reads `params["layout"]`, which the router now passes it.
+in a stacked level on the vertical one. The flows layout closes every
+form subflow in the tree before laying it out as the balanced layout
+would; a closed subflow node carries `data.collapsed` and `data.contents`
+(its counts). `mountOverview/2` takes `layout` ("horizontal" | "balanced"
+| "vertical" | "flows"), `FormFlow.Web.Components.Overview` a `layout`
+attr, and the
+canvas element's id ends in the layout, so switching mounts a fresh one.
+`FormFlow.Web.Templates.Flows.Overview` reads `params["layout"]`, which
+the router now passes it.
 
 ### Save draft on a form instance
 
@@ -256,6 +271,22 @@ The derivation is unchanged, and deliberately: whether a step can be
 entered out of turn is its flow type's answer, not the AND-join's, so the
 page is where the two meet. Each row also carries its position as
 `data-path` now.
+
+### The form builder can set a Yes/No element's default
+
+A `boolean` element's `defaultValue` is a control the form builder has now:
+a **Default value** tick box, beside Required, shown only for that type.
+Ticked writes `"defaultValue": true`; unticked writes nothing, the way an
+unchecked Required does. Before this, a definition with one stayed in the
+JSON editor and said so.
+
+`defaultValue` holds a word for a text element and `true` for a boolean one,
+and one field cannot be both a text box and a tick box - so the tick box is
+a field of its own, `defaultChecked`, the second name in
+`FormFlow.Web.Templates.Forms.Builder` that is the builder's rather than the
+definition's (`children` is the first). `allowed_properties/1` maps it back
+to `defaultValue`, so `unsupported/1` and the Build with AI prompt both
+still speak the definition's spelling.
 
 ### The form editor's radio carries the current definition across
 

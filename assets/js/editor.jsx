@@ -4,7 +4,15 @@
 //
 // The public surface is mount/unmount/injectStyles, called by the colocated
 // hook in FormFlow.Web.Templates.Forms.Index.
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
@@ -882,6 +890,11 @@ function normalize(flow) {
 //     every subflow's box entered at its top and left at its bottom; a level
 //     of forms runs left to right as on the horizontal layout. The whole is
 //     a stack of wide boxes.
+//   * "flows" - the balanced layout with every form subflow drawn closed: a
+//     box naming what it holds ("4 forms") instead of its steps, which are
+//     what take the room. Complex subflows stay open, so what is left is
+//     the flow of flows. The tree is pruned first (closeFormSubflows), so
+//     the layout itself knows nothing of this.
 
 // Space between layers (x) and between nodes in a layer (y), and the padding
 // a group keeps around the inner flow it contains
@@ -916,8 +929,12 @@ function SubflowGroupNode({ id, data, isConnectable }) {
   // layout stacks top to bottom, entered at the top and left at the bottom
   const vertical = data.handles === "vertical";
 
+  // A closed group (data.collapsed, on the flows layout) holds nothing and
+  // says instead what it would hold
+  const holds = data.collapsed ? describeContents(data.contents) : null;
+
   return (
-    <div className="ff-group">
+    <div className={`ff-group ${data.collapsed ? "ff-group--collapsed" : ""}`}>
       <Handle
         type="target"
         position={vertical ? Position.Top : Position.Left}
@@ -933,6 +950,7 @@ function SubflowGroupNode({ id, data, isConnectable }) {
           {typeLabel ? ` · ${typeLabel}` : ""}
         </div>
         {isFormSubflow && <NodePerspectives ids={data.perspectives} />}
+        {holds && <div className="ff-group__meta">{holds}</div>}
         {data.empty && <div className="ff-group__empty">No connected steps</div>}
         <button
           type="button"
@@ -952,6 +970,17 @@ function SubflowGroupNode({ id, data, isConnectable }) {
       />
     </div>
   );
+}
+
+// What a closed subflow holds, in words: "4 forms", "2 subflows · 8 forms",
+// or "No connected steps" - counted through every level under it
+function describeContents({ subflows, forms }) {
+  const parts = [];
+
+  if (subflows) parts.push(`${subflows} ${subflows === 1 ? "subflow" : "subflows"}`);
+  if (forms) parts.push(`${forms} ${forms === 1 ? "form" : "forms"}`);
+
+  return parts.length ? parts.join(" · ") : "No connected steps";
 }
 
 // "subflow", not "group", even though ReactFlow's word for a node holding
@@ -1099,6 +1128,43 @@ const READ_ONLY_EDGE = { selectable: false, focusable: false, deletable: false }
 // Both are dropped, so the layout starts from what it can see (D6).
 const WITHOUT_EDITOR_LAYOUT = { origin: [0, 0], measured: undefined };
 
+// The tree with every form subflow closed: its inner flow cut out, and the
+// node marked collapsed, with a count of what was cut. Complex subflows are
+// kept open, their own trees closed the same way. Used by the flows layout,
+// which lays out the pruned tree as the balanced layout would.
+function closeFormSubflows(tree) {
+  if (!tree) return tree;
+
+  const subflows = {};
+  const nodes = (tree.nodes ?? []).map((node) => {
+    const subtree = tree.subflows?.[node.id];
+    if (!subtree && node.type !== "subflow") return node;
+
+    if (isSubflowsLevel(subtree ?? { nodes: [] })) {
+      subflows[node.id] = closeFormSubflows(subtree);
+      return node;
+    }
+
+    return { ...node, data: { ...node.data, collapsed: true, contents: countContents(subtree) } };
+  });
+
+  return { ...tree, nodes, subflows };
+}
+
+// How many subflows and forms a tree holds, every level down
+function countContents(tree, counts = { subflows: 0, forms: 0 }) {
+  for (const node of tree?.nodes ?? []) {
+    if (node.type === "subflow" || node.id in (tree.subflows ?? {})) {
+      counts.subflows += 1;
+      countContents(tree.subflows?.[node.id], counts);
+    } else if (node.data?.kind === "form") {
+      counts.forms += 1;
+    }
+  }
+
+  return counts;
+}
+
 // The tree as ReactFlow's flat lists, every node at the origin until the
 // layout has sizes to work with. Parents precede their children, as
 // ReactFlow requires of parentId nesting. Handles are turned to the
@@ -1129,7 +1195,7 @@ function flattenTree(tree, layout, parentId = null, nodes = [], edges = []) {
       flat.data = {
         ...node.data,
         flow_label: subtree?.flow?.label ?? node.data?.subflow_label ?? "forms",
-        empty: !subtree?.nodes?.length,
+        empty: !node.data?.collapsed && !subtree?.nodes?.length,
       };
     }
 
@@ -1532,10 +1598,15 @@ function FlowOverview({
   onOpenSubflow,
   onOpenForm,
 }) {
+  // The flows layout is the balanced one over a pruned tree: every form
+  // subflow closed
+  const placement = layout === "flows" ? "balanced" : layout;
+  const shown = useMemo(() => (layout === "flows" ? closeFormSubflows(tree) : tree), [tree, layout]);
+
   // Same combined state as the editor, for the same reason: dimension
   // changes arrive per node through onNodesChange, and the layout needs
   // them all at once
-  const [state, setState] = useState(() => flattenTree(tree, layout));
+  const [state, setState] = useState(() => flattenTree(shown, placement));
 
   // "measured": every node has a size from ReactFlow; "placed": positions
   // and group sizes are set; "fitted": the viewport shows all of it. Nothing
@@ -1544,10 +1615,16 @@ function FlowOverview({
   const measured = useNodesInitialized();
   const { fitView } = useReactFlow();
 
+  // useNodesInitialized answers for ReactFlow's store, which can still hold
+  // the sizes of the *last* tree when a new one with the same ids has just
+  // been handed in. The layout reads sizes off the nodes here, so it waits
+  // until every one of them has been measured since flattenTree dropped them.
+  const sized = state.nodes.every((node) => node.measured?.width && node.measured?.height);
+
   useEffect(() => {
-    setState(flattenTree(tree, layout));
+    setState(flattenTree(shown, placement));
     setPhase("measuring");
-  }, [tree, layout]);
+  }, [shown, placement]);
 
   const onNodesChange = useCallback(
     (changes) =>
@@ -1565,7 +1642,7 @@ function FlowOverview({
       return;
     }
 
-    if (!measured) return;
+    if (!measured || !sized) return;
 
     setState((current) => {
       const sizesByNode = new Map(current.nodes.map((node) => [node.id, node.measured]));
@@ -1573,7 +1650,7 @@ function FlowOverview({
       const groupSizes = new Map();
       const lanes = new Map();
 
-      layoutLevel(tree, sizesByNode, positions, groupSizes, lanes, layout);
+      layoutLevel(shown, sizesByNode, positions, groupSizes, lanes, placement);
 
       return {
         nodes: current.nodes.map((node) => ({
@@ -1590,7 +1667,7 @@ function FlowOverview({
     });
 
     setPhase("placed");
-  }, [phase, measured, state.nodes.length, tree, layout]);
+  }, [phase, measured, sized, state.nodes.length, shown, placement]);
 
   // Fit once the groups have been re-measured at the sizes the layout gave
   // them — fitting earlier would frame the header-sized groups
@@ -1725,8 +1802,9 @@ export function mount(el, opts = {}) {
 /**
  * Renders the overview into `el`: the whole flow, every level at once,
  * read-only. `opts.tree` is FormFlow.Web.Helpers.ReactFlow.to_tree_data/1's
- * shape. `opts.layout` is "horizontal", "balanced" (the default), or
- * "vertical" - see the overview section above for what each draws. The option lists and the two open callbacks mean what they mean for
+ * shape. `opts.layout` is "horizontal", "balanced" (the default),
+ * "vertical", or "flows" - see the overview section above for what each
+ * draws. The option lists and the two open callbacks mean what they mean for
  * mount/2; there is no onChange, since nothing here can change. Nor is
  * there a setter for the tree: the page never edits, so the only tree it
  * ever draws is the one it mounted with, and a fresh one arrives as a fresh

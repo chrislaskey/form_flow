@@ -1744,46 +1744,47 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert inner_html =~ "Draft form"
   end
 
-  test "the overview offers three layouts, chosen by the layout query param", %{conn: conn} do
+  test "the overview offers five layouts, chosen by the layout query param", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
     save_subflow_node(conn, root_id)
 
-    # Balanced by default: the toggle's Balanced View is the page, the other
-    # two links, and the canvas mounts with that layout
+    # Balanced by default: the toggle's Balanced is the page, the others
+    # links, and the canvas mounts with that layout
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview")
 
-    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Balanced View")
+    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Balanced")
 
-    assert has_element?(
-             view,
-             ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview?layout=horizontal"]),
-             "Horizontal View"
-           )
-
-    assert has_element?(
-             view,
-             ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview?layout=vertical"]),
-             "Vertical View"
-           )
+    for {layout, label} <- [
+          {"vertical", "Vertical"},
+          {"horizontal", "Horizontal"},
+          {"flows", "Flows"},
+          {"text", "Text"}
+        ] do
+      assert has_element?(
+               view,
+               ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview?layout=#{layout}"]),
+               label
+             )
+    end
 
     assert has_element?(view, ~s(#flows-overview-overview-balanced[data-layout="balanced"]))
     refute has_element?(view, "#flows-overview-overview-horizontal")
 
-    # Another when asked: the roles swap, and the canvas is another element,
-    # so the bundle lays the tree out afresh
-    for layout <- ["horizontal", "vertical"] do
+    # Another canvas layout when asked: the roles swap, and the canvas is
+    # another element, so the bundle lays the tree out afresh
+    for layout <- ["horizontal", "vertical", "flows"] do
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=#{layout}")
 
       assert has_element?(
                view,
                ~s([aria-label="Layout"] [aria-current="page"]),
-               String.capitalize(layout) <> " View"
+               String.capitalize(layout)
              )
 
       assert has_element?(
                view,
                ~s([aria-label="Layout"] a[href="/demo/admin/flows/#{root_id}/overview"]),
-               "Balanced View"
+               "Balanced"
              )
 
       assert has_element?(view, ~s(#flows-overview-overview-#{layout}[data-layout="#{layout}"]))
@@ -1794,6 +1795,100 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=sideways")
 
     assert has_element?(view, ~s(#flows-overview-overview-balanced[data-layout="balanced"]))
+  end
+
+  test "the overview's text layout lists every level as plain HTML, no canvas", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+
+    # Start → Application → End at the root
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        %{
+          "id" => "2",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Application", "subflow_label" => "forms"}
+        },
+        step_attrs("3", "End", "end")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+    application = flow_node(root_id, "Application")
+
+    # Inside it: Start → Intake → Review → End, Review looping back to
+    # Intake, and a form step nothing points at
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        step_attrs("2", "Intake", "form"),
+        step_attrs("3", "Review", "form"),
+        step_attrs("4", "End", "end"),
+        step_attrs("5", "Draft form", "form")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"},
+        %{"id" => "e3-4", "source" => "3", "target" => "4"},
+        %{"id" => "e3-2", "source" => "3", "target" => "2"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/overview?layout=text")
+
+    assert has_element?(view, ~s([aria-label="Layout"] [aria-current="page"]), "Text")
+    refute html =~ "data-layout"
+
+    # The subflow links to its show page, each form to its form page, in
+    # order, under the root
+    intake = flow_node(application.subflow_id, "Intake")
+    review = flow_node(application.subflow_id, "Review")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/nodes/#{application.id}"]),
+             "Application"
+           )
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/nodes/#{intake.id}/form"]),
+             "Intake"
+           )
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/nodes/#{review.id}/form"]),
+             "Review"
+           )
+
+    assert html =~ "Form subflow"
+    [before_review, _] = String.split(html, "nodes/#{review.id}/form", parts: 2)
+    assert before_review =~ "nodes/#{intake.id}/form"
+
+    # Review offers two next steps: End, and back to Intake
+    assert html =~ "Then one of:"
+    assert html =~ "back to Intake"
+
+    # Start, End, and the unwired step are not listed
+    refute html =~ ">Start<"
+    refute html =~ ">End<"
+    refute html =~ "Draft form"
   end
 
   test "the overview's Open events navigate under the root, like the show page's", %{conn: conn} do

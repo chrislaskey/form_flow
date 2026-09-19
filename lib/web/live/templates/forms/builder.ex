@@ -8,6 +8,11 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   with the entry's fields named after the SurveyJS properties they set
   (`isRequired`, `visibleIf`, `rateMin`), so each one can be looked up in
   `DynamicForm.Instance.Question` or the SurveyJS documentation directly.
+  A boolean element's default is the exception it has to be: `defaultValue`
+  holds a word for a text element and `true` for a boolean one, and one
+  field cannot be both a text box and a tick box, so the tick box is a field
+  of its own named `defaultChecked` and `json_key/2` writes it back as
+  `defaultValue`.
   Two shapes differ from the JSON and are translated here: `choices` is
   typed one per line (`value | Label` for a choice whose stored value differs
   from its label), and numbers arrive as the decimals a number input casts
@@ -71,8 +76,12 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   # drives what the page shows for a type (`visible_if/1`), what an entry
   # writes back (`element/1` ignores anything else - a hidden field keeps
   # the value it had, and that value must not leak into the JSON), and what
-  # `unsupported/1` accepts. `children` is the builder's own name for a
-  # container's members; the JSON key depends on the type.
+  # `unsupported/1` accepts. Two keys are the builder's own names rather
+  # than the definition's, because the control differs from the property:
+  # `children` for a container's members (the JSON key depends on the type)
+  # and `defaultChecked` for a tick box's default (`defaultValue` in the
+  # JSON like every other default, but a tick box on the page rather than a
+  # text field). `json_key/2` maps both.
   @properties %{
     "title" => @types -- ["html"],
     "groupType" => ["panel"],
@@ -89,17 +98,24 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
     "placeholder" => ~w(text comment dropdown tagbox),
     "description" => @questions ++ ["paneldynamic"],
     "defaultValue" => ~w(text comment dropdown radiogroup),
+    "defaultChecked" => ["boolean"],
     "isRequired" => @questions ++ ["paneldynamic"],
     "visibleIf" => @types,
     "children" => @container_types
   }
 
   @numbers ~w(rateMin rateMax rateStep minPanelCount maxPanelCount)
-  @booleans ~w(isRequired)
+  @booleans ~w(isRequired defaultChecked)
   @strings ~w(title groupType inputType templateTitle addPanelText html placeholder description defaultValue visibleIf)
 
   # The JSON key a container keeps its members under
   @children_key %{"panel" => "elements", "paneldynamic" => "templateElements"}
+
+  # The definition's name for a property the builder calls something else,
+  # and the property's own name for everything else
+  defp json_key("children", type), do: @children_key[type]
+  defp json_key("defaultChecked", _type), do: "defaultValue"
+  defp json_key(property, _type), do: property
 
   @doc """
   The element types the builder offers, as dropdown options - every type at
@@ -148,9 +164,19 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
 
   defp put_properties(entry, element, properties) do
     Enum.reduce(properties, entry, fn property, acc ->
-      put_unless_nil(acc, property, element[property])
+      put_unless_nil(acc, property, entry_value(property, element))
     end)
   end
+
+  # A tick box's default is spelled `defaultValue` in the JSON like any
+  # other, so the two fields over that one key each take only the elements
+  # they are the control for
+  defp entry_value("defaultChecked", %{"type" => "boolean"} = element),
+    do: element["defaultValue"]
+
+  defp entry_value("defaultChecked", _element), do: nil
+  defp entry_value("defaultValue", %{"type" => "boolean"}), do: nil
+  defp entry_value(property, element), do: element[property]
 
   defp put_children(entry, element) do
     case Map.get(@children_key, element["type"]) do
@@ -193,7 +219,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
         Map.put(acc, @children_key[type], Enum.map(List.wrap(entry["children"]), &element/1))
 
       property, acc ->
-        put_unless_nil(acc, property, property_value(property, entry[property]))
+        put_unless_nil(acc, json_key(property, type), property_value(property, entry[property]))
     end)
   end
 
@@ -382,19 +408,17 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
     do: ["Element #{position} is not an object."]
 
   defp unsupported_properties(element, type, label) do
-    allowed = allowed_properties(type)
-
-    unknown_reasons(element, allowed, label) ++
-      shape_reasons(element, allowed, label) ++
+    unknown_reasons(element, allowed_properties(type), label) ++
+      shape_reasons(element, type, label) ++
       children_reasons(element, type)
   end
 
   @doc """
   The properties an element type may carry, **as the definition spells
-  them**: `properties/0`'s keys with `children` - the builder entry's own
-  name for a container's members - replaced by the JSON key that type writes
-  them under, `elements` for a group and `templateElements` for a nested
-  form.
+  them**: `properties/0`'s keys with the two the builder names for itself
+  replaced by the JSON key they are written under - `children` by
+  `elements` for a group and `templateElements` for a nested form,
+  `defaultChecked` by `defaultValue`.
 
   This is the list `unsupported/1` checks an element's keys against, and the
   list `FormFlow.Web.Templates.Forms.BuildWithAI` tells a model to use.
@@ -402,9 +426,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   an element written with `children` in it is one the builder cannot show.
   """
   def allowed_properties(type) do
-    for {property, types} <- @properties, type in types do
-      if property == "children", do: @children_key[type], else: property
-    end
+    for {property, types} <- @properties, type in types, do: json_key(property, type)
   end
 
   defp unknown_reasons(element, allowed, label) do
@@ -419,12 +441,20 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
       else: ["#{label} uses #{Enum.map_join(unknown, ", ", &inspect/1)}."]
   end
 
-  defp shape_reasons(element, allowed, label) do
-    for property <- allowed,
-        Map.has_key?(element, property),
-        not valid_shape?(property, element[property]) do
-      "#{label} has a #{inspect(property)} the form builder cannot edit."
-    end
+  # The shape is the control's question, so it is asked of the property as
+  # the builder names it, about the value under the key the definition
+  # spells it with
+  defp shape_reasons(element, type, label) do
+    @properties
+    |> Enum.filter(fn {_property, types} -> type in types end)
+    |> Enum.sort()
+    |> Enum.flat_map(fn {property, _types} ->
+      key = json_key(property, type)
+
+      if Map.has_key?(element, key) and not valid_shape?(property, element[key]),
+        do: ["#{label} has a #{inspect(key)} the form builder cannot edit."],
+        else: []
+    end)
   end
 
   defp children_reasons(element, type) do
@@ -459,8 +489,7 @@ defmodule FormFlow.Web.Templates.Forms.Builder do
   defp valid_shape?("groupType", value), do: value in @group_types
   defp valid_shape?("inputType", value), do: value in @input_types
 
-  defp valid_shape?(key, members) when key in ["elements", "templateElements"],
-    do: is_list(members)
+  defp valid_shape?("children", members), do: is_list(members)
 
   defp valid_shape?(property, value) when property in @numbers, do: is_number(value)
   defp valid_shape?(property, value) when property in @booleans, do: is_boolean(value)
