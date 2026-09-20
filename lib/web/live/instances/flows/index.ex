@@ -27,6 +27,22 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   sortable - it is a joined value, not a column Slab could compile into
   `ORDER BY`.
 
+  **User ID** is the opposite case and is drawn conditionally. It is the
+  journey's own `user_id` column, so Slab sorts it, and it holds the host's
+  own id for the user who started the journey - stamped at creation and
+  immutable (`FormFlow.Data.Instances.Flow`). It is drawn only when the host
+  passed an `instances` query, because the default listing is the viewer's
+  own journeys and the column would repeat the viewer's id on every row. The
+  rule is the attr, not the rows: a host query that happens to return one
+  user's journeys still gets the column, because the next one it returns may
+  be somebody else's.
+
+  The header says "User ID" because that is what the cell holds. The library
+  has no users and no names - `user_id` is any principal string the host
+  chose, system identities included - so a header promising a person would
+  be promising something the library cannot deliver. A host that wants "Sam
+  Torres" renders its own column.
+
   "The current user" means the router's `user_id` attr: by default the list
   is narrowed to instances that user created, and starting one stamps them as
   its creator. The host decides otherwise through the `instances` attr - a
@@ -185,6 +201,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     # `start: false` about every flow it names has no Start section, heading
     # and empty-state alert included: there is nothing there to explain.
     |> assign(:offers_starts?, Enum.any?(allowed, & &1.start))
+    # Whether to draw the User ID column. The default listing is the
+    # viewer's own journeys, where every row would repeat the viewer's own
+    # id; a host that passed its own `instances` query may be listing
+    # anyone's, and then whose journey a row is becomes the first thing a
+    # reader needs. The rule is the attr, not the rows: a host query that
+    # happens to return one user's journeys still gets the column, because
+    # the next journey it returns may be somebody else's.
+    |> assign(:user_id_column?, not is_nil(socket.assigns.instances))
     |> assign(:table_params, table_params(socket.assigns.params))
   end
 
@@ -298,8 +322,13 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
       <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
+      <%!-- "below" is only true where there is a Start section to point at:
+            a page that offers no starts says the half of the sentence that
+            is still true --%>
       <Core.alert :if={@empty?} components={@components}>
-        Nothing started yet - start a flow below.
+        {if @offers_starts?,
+          do: "Nothing started yet - start a flow below.",
+          else: "Nothing started yet."}
       </Core.alert>
 
       <%!-- Slab tints its tab labels and tab contents gray, with no attr
@@ -321,6 +350,21 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             >
               {flow_instance.template_flow.name || "Untitled flow"}
             </.link>
+          </:column>
+          <%!-- The host's own id for whoever started the journey, as it was
+                stamped at creation (`FormFlow.Data.Instances.Flow`). The
+                library has no users and no names: it shows the string it
+                was given, and the header says which string that is, so a
+                reader knows what they are looking at. A host that wants a
+                name renders its own column instead --%>
+          <:column
+            :let={flow_instance}
+            :if={@user_id_column?}
+            field={:user_id}
+            label="User ID"
+            sortable
+          >
+            <span class="text-sm">{flow_instance.user_id}</span>
           </:column>
           <:column :let={flow_instance} field={:status} sortable>
             <% {text, kind} = status_badge(flow_instance.status) %>

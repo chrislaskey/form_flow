@@ -1412,6 +1412,42 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "No longer taking new starts."
     end
 
+    test "with nothing started, the empty line points at no Start section", %{conn: conn} do
+      {:ok, _dog} = Flows.create(%{name: "Dog License", status: "open"})
+      offer = %{"offer" => "dog-license", "start" => false}
+
+      {:ok, _view, html} = isolated(conn, [], offer)
+
+      assert html =~ "Nothing started yet."
+      refute html =~ "start a flow below"
+
+      # The page that does offer one says so
+      {:ok, _view, html} = isolated(conn, [], %{"offer" => "dog-license"})
+      assert html =~ "start a flow below"
+    end
+
+    test "a host's own listing names the user of each journey; the default does not",
+         %{conn: conn} do
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+
+      {:ok, mine} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "dog_owner"})
+      {:ok, theirs} = Instances.Flows.create(%{template_flow_id: dog.id, user_id: "cat_owner"})
+
+      # The default listing is the viewer's own, so the column would repeat
+      # the viewer's id on every row
+      {:ok, _view, html} = isolated(conn, [])
+      refute html =~ "User ID"
+      assert html =~ mine.id
+      refute html =~ theirs.id
+
+      # A host query may hold anyone's, so the column is drawn and names them
+      {:ok, _view, html} = isolated(conn, [], %{"listing" => "everyone"})
+      assert html =~ "User ID"
+      assert html =~ mine.id
+      assert html =~ theirs.id
+      assert html =~ "cat_owner"
+    end
+
     test "a page offering no starts names no winding-down flow either", %{conn: conn} do
       {:ok, _winding} = Flows.create(%{name: "Dog License", status: "winding_down"})
 

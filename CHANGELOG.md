@@ -44,12 +44,29 @@ read-only with the same sentence a `read_only` status gives.
 
 `FormFlow.Web.Instances.Flows.Index` drops the "Start a new flow" heading,
 its description, and the "No flows are open." line when every flow the page
-names says `start: false`. There is nothing there to explain. A flow the
+names says `start: false`. There is nothing there to explain. The empty
+listing's line follows: it reads "Nothing started yet - start a flow
+below." where there is a Start section to point at, and "Nothing started
+yet." where there is not. A flow the
 page does offer that stopped taking starts still gets its "No longer taking
 new starts." line; one the page never offered does not.
 
 This is what makes a reviews page the applications page with one field
 changed - the demo's two pages now differ only in `Demo.Users.flows/1`.
+
+### The listing says whose journey each row is
+
+`FormFlow.Web.Instances.Flows.Index` draws a **User ID** column holding the
+journey's `user_id`, sortable, when the host passed an `instances` query. A
+reviewer's page lists everyone's journeys and could not tell them apart;
+now it can, and can sort by user.
+
+It is not drawn on the default listing, which is the viewer's own journeys
+- the column would repeat the viewer's own id on every row.
+
+The header says "User ID" because that is what the cell holds. The library
+has no users and no names, so rendering "Sam Torres" instead is the host's
+to do, in a column of its own.
 
 ### `FormFlow.Web.Instances.Forms.Shared.allows?/3`
 
