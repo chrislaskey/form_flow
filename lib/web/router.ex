@@ -249,11 +249,23 @@ defmodule FormFlow.Web.Router do
   attr(:flows, :any,
     default: nil,
     doc:
-      "the flow templates the listing is about, in display order - " <>
-        "`FormFlow.Data.Templates.Flow` structs or slugs, `nil` entries dropped. " <>
-        "The page offers them to start and refuses to start any other, its " <>
-        "instance pages refuse an instance of any other, and when `instances` " <>
-        "is `nil` the listing shows the user's own instances of them alone. `nil` offers and lists every root flow of the tenant. " <>
+      "the flow templates the listing is about, in display order - a list of " <>
+        "`FormFlow.Config.Flows.Allowed`, each naming one flow by `flow`, " <>
+        "`flow_id` or `flow_slug` and saying what this page lets a user do " <>
+        "with it: `start` a new journey, `continue` work inside one, both " <>
+        "`true` unless the host says otherwise. Build them with " <>
+        "`FormFlow.Config.Flows.Allowed.new/1`, which refuses a flow named " <>
+        "twice or not at all, and `start: true` beside `continue: false` - a " <>
+        "hand-written struct skips those checks. " <>
+        "Naming a flow is what lets this page see it: the instance pages " <>
+        "refuse an instance of a flow the list leaves out, and when " <>
+        "`instances` is `nil` the listing shows the user's own instances of " <>
+        "the named flows alone. `nil` - the attr unset - is every root flow " <>
+        "of the tenant, everything allowed, so a flow authored later appears " <>
+        "here on its own; a list names exactly the flows the page is about " <>
+        "and a new flow waits for the host. The page's answer and the flow's " <>
+        "status are both consulted and neither wins - a `winding_down` flow " <>
+        "is not offered however this attr reads. " <>
         "The router's `tenant_id` is " <>
         "applied on top. Ignored by the template pages"
   )

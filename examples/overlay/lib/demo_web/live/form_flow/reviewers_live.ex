@@ -15,6 +15,13 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
   than the default of the viewer's own (`Demo.Users.instances/1`), because
   a reviewer starts none: without it this page is an empty table.
 
+  `flows` names the two pet licenses with `start: false` on each
+  (`Demo.Users.flows/1`), so this page has no Start section at all — a
+  reviewer who could start an application would be filing one in their own
+  name. The applications page leaves the attr unset and is about every flow
+  the tenant holds; naming them here is also what keeps a flow the admin
+  authors at run time from quietly becoming a reviewer's work.
+
   Listing is not access control. FormFlow opens any journey by id for
   anyone who reaches its URL, so what keeps an applicant off this page is
   `persona_gate` and the `:reviewer` role, not the query.
@@ -58,6 +65,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
               user_id={@current_user.id}
               perspectives={@current_user.perspectives}
               instances={Demo.Users.instances(@current_user)}
+              flows={Demo.Users.flows(@current_user)}
               uri={@uri}
               params={@params}
               path={@path}

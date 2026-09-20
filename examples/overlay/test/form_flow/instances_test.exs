@@ -21,6 +21,7 @@ defmodule Demo.FormFlowInstancesTest do
   import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
+  alias FormFlow.Config.Flows.Allowed
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -112,8 +113,9 @@ defmodule Demo.FormFlowInstancesTest do
   # types and gate in place of the demo's — mounted without a route
   # (live_isolated/3). The session's "callback_data" is the page's
   # callback_data, and also picks the listing's `instances` ("listing" =>
-  # "everyone") and `flows` ("offer" => slug), the way a host page would
-  # build those attrs from what it knows.
+  # "everyone") and `flows` ("offer" => slug or "offer_id" => id, with
+  # "start" and "continue" for what the page allows), the way a host page
+  # would build those attrs from what it knows.
   defmodule TestPage do
     use Phoenix.LiveView
 
@@ -137,8 +139,22 @@ defmodule Demo.FormFlowInstancesTest do
     defp instances(%{"listing" => "everyone"}), do: Instances.Flows.list_query()
     defp instances(_callback_data), do: nil
 
-    defp flows(%{"offer" => slug}), do: [slug]
+    defp flows(%{"offer" => slug} = callback_data),
+      do: [allowed([flow_slug: slug], callback_data)]
+
+    defp flows(%{"offer_id" => id} = callback_data), do: [allowed([flow_id: id], callback_data)]
+
     defp flows(_callback_data), do: nil
+
+    defp allowed(handle, callback_data) do
+      Allowed.new(
+        handle ++
+          [
+            start: Map.get(callback_data, "start", true),
+            continue: Map.get(callback_data, "continue", true)
+          ]
+      )
+    end
 
     @impl true
     def render(assigns) do
@@ -627,19 +643,31 @@ defmodule Demo.FormFlowInstancesTest do
       # Folded shut, the card names the next step - and links it, because
       # this flow lets the user work it
       {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
-      assert has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']")
+
+      assert has_element?(
+               view,
+               "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']"
+             )
 
       # From the second form, the step behind is named instead, and a
       # submitted form goes to its answers as the unfolded list sends it
       complete(instance, [name.id])
       {:ok, view, _html} = live(conn, edit_path(instance, [address.id]))
-      assert has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{form_path(instance, [name.id])}']")
+
+      assert has_element?(
+               view,
+               "#instance-forms-edit-flow-progress-summary a[href='#{form_path(instance, [name.id])}']"
+             )
 
       # In order, the step ahead is named but is no link: the same answer
       # the unfolded list gives it
       %{instance: instance, forms: [name, address]} = flow_of_two("wizard_in_order")
       {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
-      refute has_element?(view, "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']")
+
+      refute has_element?(
+               view,
+               "#instance-forms-edit-flow-progress-summary a[href='#{edit_path(instance, [address.id])}']"
+             )
     end
 
     test "a lone form is no sequence, so nothing is drawn", %{conn: conn} do
@@ -1325,6 +1353,73 @@ defmodule Demo.FormFlowInstancesTest do
 
       assert html =~ dog_instance.id
       assert html =~ cat_instance.id
+    end
+
+    test "a flow named by id is the same flow named by slug", %{conn: conn} do
+      {:ok, dog} = Flows.create(%{name: "Dog License", status: "open"})
+      {:ok, cat} = Flows.create(%{name: "Cat License", status: "open"})
+
+      {:ok, view, _html} = isolated(conn, [], %{"offer_id" => dog.id})
+
+      assert has_element?(view, start_button(dog))
+      refute has_element?(view, start_button(cat))
+    end
+  end
+
+  describe "the flows attr says what a page allows" do
+    test "start: false lists the flow, draws no Start section, and still opens journeys",
+         %{conn: conn} do
+      %{flow: flow, instance: instance, form: only} = flow_of_one(nil, name: "Dog License")
+      offer = %{"offer" => "dog-license", "start" => false}
+
+      {:ok, view, html} = isolated(conn, [], offer)
+
+      refute has_element?(view, start_button(flow))
+      refute html =~ "Start a new flow"
+      refute html =~ "No flows are open."
+      assert html =~ instance.id
+
+      # The journey itself is still workable: continue defaults to true
+      {:ok, _view, html} = isolated(conn, [instance.id, "forms", only.id, "edit"], offer)
+      refute html =~ "not available"
+      assert html =~ "Only"
+    end
+
+    test "continue: false opens a journey read-only and refuses the edit page", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one(nil, name: "Dog License")
+      read_only = %{"offer" => "dog-license", "start" => false, "continue" => false}
+
+      {:ok, _view, html} = isolated(conn, [instance.id], read_only)
+      assert html =~ "Dog License"
+
+      {:ok, view, html} = isolated(conn, [instance.id, "forms", only.id, "edit"], read_only)
+      assert html =~ "This flow is read-only now; your answers are kept as they are."
+      refute has_element?(view, "fieldset")
+      assert Instances.Flows.form_instances(instance) == []
+
+      # The answers page still renders: seeing is what naming the flow allows
+      {:ok, _view, html} = isolated(conn, [instance.id, "forms", only.id], read_only)
+      refute html =~ "not available"
+    end
+
+    test "the flow's status is asked as well as the page's answer", %{conn: conn} do
+      {:ok, winding} =
+        Flows.create(%{name: "Dog License", status: "winding_down"})
+
+      {:ok, view, html} = isolated(conn, [], %{"offer" => "dog-license"})
+
+      refute has_element?(view, start_button(winding))
+      assert html =~ "No longer taking new starts."
+    end
+
+    test "a page offering no starts names no winding-down flow either", %{conn: conn} do
+      {:ok, _winding} = Flows.create(%{name: "Dog License", status: "winding_down"})
+
+      {:ok, _view, html} =
+        isolated(conn, [], %{"offer" => "dog-license", "start" => false})
+
+      refute html =~ "Start a new flow"
+      refute html =~ "No longer taking new starts."
     end
   end
 

@@ -81,6 +81,7 @@ defmodule Demo.FormFlowFlowStatusTest do
   import Ecto.Query, only: [from: 2]
   import Phoenix.LiveViewTest
 
+  alias FormFlow.Config.Flows.Allowed
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
@@ -385,7 +386,9 @@ defmodule Demo.FormFlowFlowStatusTest do
       refute html =~ "Dog License 2025"
 
       {:ok, _view, html} =
-        live_isolated(conn, UnlistedPage, session: %{"path" => [], "flows" => [winding.slug]})
+        live_isolated(conn, UnlistedPage,
+          session: %{"path" => [], "flows" => [Allowed.new(flow_slug: winding.slug)]}
+        )
 
       assert html =~ "Dog License 2025"
       assert html =~ "No longer taking new starts."

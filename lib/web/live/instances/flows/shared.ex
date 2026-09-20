@@ -172,9 +172,14 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
     end
   end
 
-  @doc "Whether the flow's status lets this viewer continue work in it."
+  @doc """
+  Whether this page and the flow's status let this viewer continue work in
+  it (`FormFlow.Web.Instances.Forms.Shared.allows?/3`) - a page whose
+  `flows` attr says `continue: false` about the flow draws the journey
+  read-only, as a `read_only` status does.
+  """
   def continue_allowed?(%Templates.Flow{} = flow, assigns),
-    do: FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns)
+    do: Forms.Shared.allows?(flow, :continue, assigns)
 
   def continue_allowed?(_none, _assigns), do: false
 

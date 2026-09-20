@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.32.0
+
+### The `flows` attr says what a page allows, one struct per flow
+
+**Breaking.** `FormFlow.Web.router/1`'s `flows` attr no longer takes bare
+slugs or bare `FormFlow.Data.Templates.Flow` structs. It takes two values
+and nothing else: unset, which is every root flow of the tenant with
+everything allowed, or a list of the new
+`FormFlow.Config.Flows.Allowed`.
+
+```elixir
+# before
+flows={["dog-license", "cat-license"]}
+
+# after
+alias FormFlow.Config.Flows.Allowed
+
+flows={[
+  Allowed.new(flow_slug: "dog-license"),
+  Allowed.new(flow_slug: "cat-license")
+]}
+```
+
+Each struct names one flow by `flow`, `flow_id` or `flow_slug` - exactly
+one, so a binary is never read two ways - and says what this page lets a
+user do with it: `start` a new journey, `continue` work inside one, both
+`true` by default. `Allowed.new/1` is the way in. It refuses a flow named
+twice or not at all, and it refuses `start: true` beside `continue: false`
+- a page that begins a journey and then will not open it writes a row to
+the database and lands the user on a refusal.
+
+There is no `see` field. Naming a flow in the list is what lets the page
+see it, as the attr already did: an instance page refuses an instance of a
+flow the list leaves out.
+
+The page's answer and the flow's status are both consulted, and neither
+wins. A `winding_down` flow is not offered however the attr reads, and a
+page saying `continue: false` about an `open` flow draws its journeys
+read-only with the same sentence a `read_only` status gives.
+
+### A page that offers no starts has no Start section
+
+`FormFlow.Web.Instances.Flows.Index` drops the "Start a new flow" heading,
+its description, and the "No flows are open." line when every flow the page
+names says `start: false`. There is nothing there to explain. A flow the
+page does offer that stopped taking starts still gets its "No longer taking
+new starts." line; one the page never offered does not.
+
+This is what makes a reviews page the applications page with one field
+changed - the demo's two pages now differ only in `Demo.Users.flows/1`.
+
+### `FormFlow.Web.Instances.Forms.Shared.allows?/3`
+
+New, and the one place the rule lives: the page's answer
+(`page_allows?/3`, reading the attr) and the flow's status
+(`FormFlow.Web.Instances.Shared.status_allows?/3`), both of which an action
+needs. `status_allows?/3` is unchanged and still answers the narrower
+question on its own.
+
+`resolve_flows/2` now answers with `%Allowed{}` structs carrying their
+loaded `:flow`, rather than bare flows. The instance pages no longer query
+at all to decide scope: the flow is in hand, so the attr's entries are
+matched against it by whichever handle they set.
+
 ## v0.31.0
 
 ### A flow instance page hides what another perspective has to open first

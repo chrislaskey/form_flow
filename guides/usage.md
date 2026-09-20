@@ -62,12 +62,20 @@ Three attrs shape what a page lists and offers, each defaulting to no
 narrowing. They are listing conveniences, not access control — `on_mount`
 is the gate.
 
-* **`flows`** — which flow templates the page is about, as
-  `FormFlow.Data.Templates.Flow` structs or slugs. The page offers them to
-  start and refuses to start any other; its instance pages refuse an
-  instance of any other; and, when `instances` is left to its default, the
-  listing shows the user's own instances of them alone. Omitted, the page
-  is about every root flow of the tenant.
+* **`flows`** — which flow templates the page is about, and what it lets a
+  user do with each: a list of `FormFlow.Config.Flows.Allowed`, built with
+  `Allowed.new(flow_slug: "dog-license")`. Each names one flow — by `flow`,
+  `flow_id` or `flow_slug`, exactly one of the three — and answers two
+  questions about it: `start` a new journey here, and `continue` work
+  inside one. Both are `true` unless you say otherwise; `start: true` with
+  `continue: false` is refused, since the page would begin a journey it
+  then will not open. Naming a flow is what lets the page see it at all:
+  its instance pages refuse an instance of a flow the list leaves out, and
+  when `instances` is left to its default, the listing shows the user's own
+  instances of the named flows alone. Omitted, the page is about every root
+  flow of the tenant, everything allowed — so a flow authored later turns
+  up on its own. The flow's status is asked as well, and an action needs
+  both: a `winding_down` flow is not offered however this attr reads.
 * **`instances`** — whose instances the listing shows, as an Ecto query
   over `FormFlow.Data.Instances.Flow`. Omitted, the current user's own.
   `FormFlow.Data.Instances.Flows.list_query/1` builds one: with no options
@@ -156,7 +164,10 @@ subflows, Intake for the applicant and Review for the reviewer.
 
 ### One flow at one URL
 
-The applicant's page is about Dog License and nothing else.
+The applicant's page is about Dog License and nothing else. Every page below
+aliases the struct the `flows` attr takes:
+
+    alias FormFlow.Config.Flows.Allowed
 
     live "/users/applications/*path", MyAppWeb.ApplicationsLive
 
@@ -165,7 +176,7 @@ The applicant's page is about Dog License and nothing else.
       base="/users/applications"
       user_id={@current_user.id}
       perspectives="applicant"
-      flows={["dog-license"]}
+      flows={[Allowed.new(flow_slug: "dog-license")]}
       pre_release_user_ids={MyApp.Licensing.pre_release_user_ids()}
       flow_types={Types.flow_types()}
       form_types={Types.form_types()}
@@ -190,16 +201,22 @@ their part of each.
       user_id={@current_user.id}
       perspectives="reviewer"
       instances={FormFlow.Data.Instances.Flows.list_query()}
-      flows={[]}
+      flows={[Allowed.new(flow_slug: "dog-license", start: false)]}
       flow_types={Types.flow_types()}
       form_types={Types.form_types()}
       on_mount={&MyApp.FormFlow.Gate.staff_only/2}
     />
 
-`instances` with no options is every instance of every user; `flows={[]}`
-offers nothing to start, since applicants start applications and reviewers
-do not. `/staff/reviews/:id` shows the reviewer Review and hides Intake; the
-same instance seen from the applicant's page shows the reverse.
+`instances` with no options is every instance of every user. `flows` names
+the same flow the applicant's page names, with `start: false`, since
+applicants start applications and reviewers do not — so this page has no
+Start section at all. `/staff/reviews/:id` shows the reviewer Review and
+hides Intake; the same instance seen from the applicant's page shows the
+reverse.
+
+Name the flows a reviewer reviews rather than leaving the attr off. A flow
+authored next year should reach a reviewer because you said so, not because
+somebody saved a draft.
 
 The listing itself does not yet filter by the viewer's perspective — an
 instance still in Intake is listed here too, with nothing for the reviewer
@@ -240,8 +257,8 @@ keeps about what users may do with it.
 | `archived` | no | no | no |
 
 A flow is born a **draft**: built, checked, and never offered — a user with
-`flows={["dog-license-2027"]}` sees nothing of it, not even an instance
-they somehow have. An admin opens it from the flow's show page (the status
+`flows={[Allowed.new(flow_slug: "dog-license-2027")]}` sees nothing of it,
+not even an instance they somehow have. An admin opens it from the flow's show page (the status
 badge in the header opens a dialog), from the flows index (the row's ⋮
 menu), or from the edit page (the Status field under the canvas, saved with
 everything else). **Pre-release** is a draft that some people may use:
@@ -275,9 +292,12 @@ So the year rolls over like this:
    License 2027", slug `dog-license-2027`. The copy is a draft, whole —
    steps, connections, subflows, its own forms — with fresh ids.
 2. Edit the copy, publish its forms, read its health.
-3. Point the applicants' page at it — `flows={["dog-license-2027"]}` — or,
-   if the page names both years, leave 2026 in the list: a user with a 2026
-   instance still sees it there.
+3. Point the applicants' page at it —
+   `flows={[Allowed.new(flow_slug: "dog-license-2027")]}` — or, if the page
+   names both years, leave 2026 in the list: a user with a 2026 instance
+   still sees it there. `Allowed.new(flow_slug: "dog-license-2026",
+   start: false)` says the same thing the `winding_down` status says, from
+   the page's side rather than the flow's.
 4. Open 2027. Move 2026 to winding down on the deadline, or the day the
    new one opens.
 

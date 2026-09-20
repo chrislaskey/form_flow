@@ -31,14 +31,18 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   is narrowed to instances that user created, and starting one stamps them as
   its creator. The host decides otherwise through the `instances` attr - a
   reviewer's page passes `Instances.Flows.list_query()` bare to list
-  everyone's. Which flow templates the page is about is the `flows` attr:
-  the flows it offers to start, refusing to start any other, and - when the
-  host names some in particular and leaves `instances` to its default - the
-  flows whose instances the default listing shows, so a page for Dog License
-  lists the user's Dog License instances and not their renewals. `nil` is
-  every root flow of the tenant, offered and listed alike; a host that wants
-  to list one thing and start another passes `instances` itself. The
-  router's `tenant_id` is applied on top of both. This is a listing
+  everyone's. Which flow templates the page is about is the `flows` attr - a
+  list of `FormFlow.Config.Flows.Allowed`: the flows it offers to start,
+  refusing to start any other, and - when the host names some in particular
+  and leaves `instances` to its default - the flows whose instances the
+  default listing shows, so a page for Dog License lists the user's Dog
+  License instances and not their renewals. An entry saying `start: false`
+  is listed and never offered, and a page saying it about every entry has no
+  Start section at all - which is what makes a reviews page the applications
+  page with one field changed. `nil` is every root flow of the tenant,
+  offered and listed alike; a host that wants to list one thing and start
+  another passes `instances` itself. The router's `tenant_id` is applied on
+  top of both. This is a listing
   convenience, not access control: the page asks the host's `on_mount`
   before it draws, like every other user-facing page, and auth stays the
   host's job (see `FormFlow.Web.Router`).
@@ -132,7 +136,8 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   defp load(socket) do
     %{user_id: user_id, tenant_id: tenant_id} = socket.assigns
 
-    page_flows = Shared.resolve_flows(socket.assigns.flows, tenant_id)
+    allowed = Shared.resolve_flows(socket.assigns.flows, tenant_id)
+    page_flows = Enum.map(allowed, & &1.flow)
 
     # The flow's status is applied on top of everything, like the tenant:
     # instances of a flow nobody may see (a draft) are listed for nobody,
@@ -148,22 +153,38 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     |> assign(:query, query)
     |> assign(:empty?, not Repo.exists?(query))
     |> assign(:page_flows, page_flows)
+    # Both answers, as everywhere: this page has to offer the flow
+    # (`FormFlow.Config.Flows.Allowed`'s `start`) and the flow's status has
+    # to take a start
     |> assign(
       :offered_flows,
-      Enum.filter(
-        page_flows,
-        &FormFlow.Web.Instances.Shared.status_allows?(&1, :start, socket.assigns)
+      for(
+        %{flow: flow} = entry <- allowed,
+        entry.start,
+        FormFlow.Web.Instances.Shared.status_allows?(flow, :start, socket.assigns),
+        do: flow
       )
     )
-    # A flow the host named that stopped taking starts is worth a line; one
-    # the page merely lists among every root of the tenant is not
+    # A flow the host named and offers to start that stopped taking starts is
+    # worth a line; one the page merely lists among every root of the tenant
+    # is not, and neither is one this page never offered
     |> assign(
       :winding_down_flows,
       if(is_list(socket.assigns.flows),
-        do: Enum.filter(page_flows, &(&1.status == "winding_down")),
+        do:
+          for(
+            %{flow: flow} = entry <- allowed,
+            entry.start,
+            flow.status == "winding_down",
+            do: flow
+          ),
         else: []
       )
     )
+    # Whether this page offers to start anything at all. A page that says
+    # `start: false` about every flow it names has no Start section, heading
+    # and empty-state alert included: there is nothing there to explain.
+    |> assign(:offers_starts?, Enum.any?(allowed, & &1.start))
     |> assign(:table_params, table_params(socket.assigns.params))
   end
 
@@ -206,14 +227,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   # message this page does not understand.
   def handle_event("start", %{"flow-id" => _flow_id}, socket), do: {:noreply, socket}
 
-  # The status is the pages' rule, and it is asked again here, at the
-  # click, from the row as it now is - the page offered the flow when it
-  # drew, and it may have stopped taking starts since. The data layer does
-  # what it is asked (`FormFlow.Data.Instances.Flows.create/2`).
+  # The page's answer and the status are asked again here, at the click,
+  # from the row as it now is - the page offered the flow when it drew, and
+  # it may have stopped taking starts since. The data layer does what it is
+  # asked (`FormFlow.Data.Instances.Flows.create/2`).
   defp start(socket, flow_id) do
     flow = Templates.Flows.get_row(flow_id)
 
-    if flow && FormFlow.Web.Instances.Shared.status_allows?(flow, :start, socket.assigns) do
+    if flow && Shared.allows?(flow, :start, socket.assigns) do
       attrs = %{
         template_flow_id: flow_id,
         user_id: socket.assigns.user_id,
@@ -330,12 +351,18 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         </Slab.table>
       </div>
 
+      <%!-- A page that offers no starts drops the section whole: no heading,
+            and no sentence about flows it was never going to offer --%>
       <SectionHeading.section_heading
+        :if={@offers_starts?}
         title="Start a new flow"
         description="The flows open to start here. Starting one adds it to the list above."
         class="mt-8 mb-3"
       />
-      <Core.alert :if={@offered_flows == [] and @winding_down_flows == []} components={@components}>
+      <Core.alert
+        :if={@offers_starts? and @offered_flows == [] and @winding_down_flows == []}
+        components={@components}
+      >
         No flows are open.
       </Core.alert>
       <div

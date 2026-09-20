@@ -9,6 +9,12 @@ defmodule Demo.Users do
   the admin included (`DemoWeb.PersonaComponents`).
   """
 
+  alias FormFlow.Config.Flows.Allowed
+
+  # The flows a reviewer reviews, by slug - the two pet licenses seeded into
+  # every demo database (`flows/1`).
+  @pet_licenses ["dog-license", "cat-license"]
+
   # In reading order: reading, applying, then the two staff roles — the
   # reviewer works applications, the admin builds the flows. The demo opens
   # as the admin (`default/0`), which is the last of them rather than the
@@ -36,6 +42,12 @@ defmodule Demo.Users do
   # own. Listing only: FormFlow opens any journey by id for anyone who
   # reaches its URL, and `DemoWeb.PersonaComponents.persona_gate/1` is what
   # keeps a visitor off the page to begin with.
+  #
+  # `journeys` decides the `flows` attr too (`flows/1`): a user who applies
+  # gets every flow the tenant holds, so an admin can author one and then go
+  # and start it, and a user who works other people's applications gets the
+  # two pet licenses with `start: false`, which takes the Start section off
+  # the reviews page.
   #
   # `landing` is where switching to the user sends the visitor
   # (`DemoWeb.UserSwitchController`): the page that perspective is for. The
@@ -127,6 +139,29 @@ defmodule Demo.Users do
   """
   def instances(%{journeys: :own}), do: nil
   def instances(%{journeys: :everyone}), do: FormFlow.Data.Instances.Flows.list_query()
+
+  @doc """
+  The flows this user's pages are about, in the shape the FormFlow pages'
+  `flows` attr wants: `nil` for a user who applies, and a
+  `FormFlow.Config.Flows.Allowed` per pet license, none of them startable,
+  for a user who works other people's applications.
+
+  `nil` is every root flow, which is the demo's own story: the admin builds
+  a flow, switches to a pet owner, and finds it there to start. Naming the
+  licenses on the applications page would break that walk-through, and this
+  demo is here to give it.
+
+  The reviews page names them, because it says something about them - a
+  reviewer starts no applications of their own, so each license is
+  `start: false` and the page has no Start section at all. Naming is also
+  what keeps a flow the admin authors at run time from quietly becoming a
+  reviewer's work: the reviews page says what a reviewer reviews, and adding
+  a license is an edit here.
+  """
+  def flows(%{journeys: :own}), do: nil
+
+  def flows(%{journeys: :everyone}),
+    do: Enum.map(@pet_licenses, &Allowed.new(flow_slug: &1, start: false))
 
   @doc "Looks a user up by id."
   def fetch(id), do: Enum.find_value(@users, :error, &if(&1.id == id, do: {:ok, &1}))

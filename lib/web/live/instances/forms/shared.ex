@@ -70,6 +70,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   import Phoenix.Component, only: [assign: 2, assign: 3]
   import Phoenix.LiveView, only: [start_async: 3]
 
+  alias FormFlow.Config.Flows.Allowed
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances
@@ -481,12 +482,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
       flow && not FormFlow.Web.Instances.Shared.status_allows?(flow, :see, socket.assigns) ->
         assign(socket, :mount_error, "This flow is not available right now.")
 
-      flow &&
-          not FormFlow.Web.Instances.Shared.status_allows?(
-            flow,
-            Keyword.get(opts, :allows, :see),
-            socket.assigns
-          ) ->
+      flow && not allows?(flow, Keyword.get(opts, :allows, :see), socket.assigns) ->
         assign(
           socket,
           :mount_error,
@@ -511,41 +507,119 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   defp instance_flow(_assigns), do: nil
 
-  # The page's `flows` attr is its scope: an instance is in it when its flow
-  # is one of the flows the attr names. No attr, or no instance in scope
-  # (the listing), and every instance is.
-  defp flow_in_scope?(%{flow_instance: %{template_flow_id: flow_id}, flows: flows} = assigns)
-       when is_list(flows) do
-    Enum.any?(resolve_flows(flows, Map.get(assigns, :tenant_id)), &(&1.id == flow_id))
+  # The page's `flows` attr is its scope: an instance is in it when the attr
+  # names its flow. Membership is what answers `:see` - there is no `see`
+  # field on `FormFlow.Config.Flows.Allowed` because this is it. No attr, or
+  # no instance in scope (the listing), and every instance is.
+  defp flow_in_scope?(%{flow_instance: %{}, flows: flows} = assigns) when is_list(flows) do
+    assigns |> instance_flow() |> page_allows?(:see, assigns)
   end
 
   defp flow_in_scope?(_assigns), do: true
 
   @doc """
-  The page's `flows` attr resolved to `FormFlow.Data.Templates.Flow` structs:
-  structs pass through, slugs are looked up in the tenant, `nil` entries and
-  flows of another tenant are dropped. `nil` - the host named none in
-  particular - is every root flow of the tenant. These are
-  the flows the page is about: what the listing offers to start, and the only
-  flows whose instances the instance pages render.
+  Whether a viewer may `:start`, `:continue`, or `:see` this flow here: the
+  page's own answer (`page_allows?/3`) and the flow's status
+  (`FormFlow.Web.Instances.Shared.status_allows?/3`), both of which an
+  action needs.
+
+  The two say different kinds of thing and neither wins: the status is the
+  flow's own lifecycle, the same wherever it is drawn, and the attr is this
+  page's decision about it. A host that wants a read-only page for a flow
+  that is otherwise open writes `continue: false`; a flow that went
+  `read_only` is read-only on every page, whatever they say.
+  """
+  def allows?(flow, action, assigns) do
+    page_allows?(flow, action, assigns) and
+      FormFlow.Web.Instances.Shared.status_allows?(flow, action, assigns)
+  end
+
+  @doc """
+  Whether the page's `flows` attr allows `action` on this flow: the attr
+  names the flow, and the `FormFlow.Config.Flows.Allowed` naming it says so
+  (`:see` being answered by naming it at all). A host naming no flows
+  allows everything; a flow of another tenant is named by nobody.
+
+  This is half the rule. The flow's status is the other half
+  (`FormFlow.Web.Instances.Shared.status_allows?/3`), and an action needs
+  both - a `winding_down` flow the page says `start: true` about is still
+  not offered.
+
+  No query: the flow is in hand, so the attr's entries are matched against
+  it by whichever handle they set.
+  """
+  def page_allows?(flow, action, assigns)
+
+  def page_allows?(_flow, _action, assigns) when not is_map_key(assigns, :flows), do: true
+
+  def page_allows?(%Templates.Flow{} = flow, action, %{flows: flows} = assigns)
+      when is_list(flows) do
+    case page_allowed(flow, assigns) do
+      %Allowed{} = allowed -> Allowed.allows?(allowed, action)
+      nil -> false
+    end
+  end
+
+  def page_allows?(%Templates.Flow{}, _action, %{flows: nil}), do: true
+
+  # No flow to match: the instance's template is gone. A page that named
+  # flows in particular refuses rather than guesses; a page that named none
+  # had nothing to match it against anyway.
+  def page_allows?(nil, _action, %{flows: flows}) when is_list(flows), do: false
+  def page_allows?(nil, _action, _assigns), do: true
+
+  # The attr's entry for this flow, or `nil` when it names no such flow. The
+  # router's tenant is applied first, as it is everywhere else: a slug is
+  # unique per tenant, so an entry naming one never reaches another's flow.
+  defp page_allowed(%Templates.Flow{} = flow, %{flows: flows} = assigns) do
+    if in_tenant?(flow, Map.get(assigns, :tenant_id)) do
+      Enum.find(flows, &Allowed.names?(&1, flow))
+    end
+  end
+
+  @doc """
+  The page's `flows` attr resolved to `FormFlow.Config.Flows.Allowed` structs
+  with their `:flow` loaded: an entry naming a flow by `flow_id` or
+  `flow_slug` is looked up in the tenant, and an entry whose flow is not
+  found or belongs to another tenant is dropped. `nil` - the host named none
+  in particular - is every root flow of the tenant, each fully allowed.
+
+  These are the flows the page is about, each with what the page lets a user
+  do with it. Only the listing needs them loaded; the instance pages match
+  the flow they already hold (`page_allows?/3`).
   """
   def resolve_flows(nil, tenant_id) do
-    Templates.Flows.list(tenant_id: tenant_id)
+    Enum.map(Templates.Flows.list(tenant_id: tenant_id), &%Allowed{flow: &1})
   end
 
   def resolve_flows(flows, tenant_id) when is_list(flows) do
     flows
-    |> Enum.map(fn
-      %Templates.Flow{} = flow -> flow
-      slug when is_binary(slug) -> Templates.Flows.get_by_slug(slug, tenant_id: tenant_id)
-      nil -> nil
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> in_tenant(tenant_id)
+    |> Enum.map(&load_flow(&1, tenant_id))
+    |> Enum.filter(&in_tenant?(&1.flow, tenant_id))
   end
 
-  defp in_tenant(flows, nil), do: flows
-  defp in_tenant(flows, tenant_id), do: Enum.filter(flows, &(&1.tenant_id == tenant_id))
+  defp load_flow(%Allowed{} = allowed, tenant_id) do
+    case Allowed.handle(allowed) do
+      {:flow, %Templates.Flow{}} ->
+        allowed
+
+      {:flow_id, id} ->
+        %{allowed | flow: Templates.Flows.get_row(id)}
+
+      {:flow_slug, slug} ->
+        %{allowed | flow: Templates.Flows.get_by_slug(slug, tenant_id: tenant_id)}
+    end
+  end
+
+  defp load_flow(other, _tenant_id) do
+    raise ArgumentError,
+          "the `flows` attr takes FormFlow.Config.Flows.Allowed structs; got #{inspect(other)}"
+  end
+
+  defp in_tenant?(nil, _tenant_id), do: false
+  defp in_tenant?(%Templates.Flow{}, nil), do: true
+  defp in_tenant?(%Templates.Flow{tenant_id: tenant_id}, tenant_id), do: true
+  defp in_tenant?(%Templates.Flow{}, _tenant_id), do: false
 
   defp host_on_mount(socket, on_ok) do
     %{context: context, on_mount: gate, callback_data: callback_data} = socket.assigns
@@ -604,8 +678,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   def reopen(%{flow_instance: flow_instance, form_instance: form_instance} = assigns) do
     flow = Templates.Flows.get_row(flow_instance.template_flow_id)
 
-    if match?(%Templates.Flow{}, flow) and
-         FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns) do
+    if match?(%Templates.Flow{}, flow) and allows?(flow, :continue, assigns) do
       case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
              user_id: assigns.user_id,
              tenant_id: assigns.tenant_id
@@ -660,12 +733,11 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
        editable?(type, context, assigns)}
   end
 
-  # Whether the flow's status lets this viewer continue - start, edit,
-  # reopen, submit - at any position
-  # (`FormFlow.Web.Instances.Shared.status_allows?/3`); a flow the tree no
-  # longer resolves lets nobody
+  # Whether this page and the flow's status let this viewer continue -
+  # start, edit, reopen, submit - at any position (`allows?/3`); a flow the
+  # tree no longer resolves lets nobody
   defp continue_allowed?(%Context{flow: %Templates.Flow{} = flow}, assigns),
-    do: FormFlow.Web.Instances.Shared.status_allows?(flow, :continue, assigns)
+    do: allows?(flow, :continue, assigns)
 
   defp continue_allowed?(_context, _assigns), do: false
 

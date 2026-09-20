@@ -31,6 +31,24 @@ defmodule Demo.UsersTest do
     end
   end
 
+  test "the applicants get every flow, the reviewer the two licenses and no Start" do
+    assert Users.flows(fetch("dog_owner")) == nil
+    assert Users.flows(fetch("cat_owner")) == nil
+    assert Users.flows(fetch("docs_reader")) == nil
+
+    for id <- ["reviewer", "admin"] do
+      allowed = Users.flows(fetch(id))
+
+      assert Enum.map(allowed, & &1.flow_slug) == ["dog-license", "cat-license"],
+             "#{id} should be about the two pet licenses"
+
+      for entry <- allowed do
+        refute entry.start, "#{id} should start no journeys of their own"
+        assert entry.continue, "#{id} should work inside the journeys they list"
+      end
+    end
+  end
+
   test "every user says whose journeys their pages list" do
     for user <- Users.all() do
       assert user.journeys in [:own, :everyone],
