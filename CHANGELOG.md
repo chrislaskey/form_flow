@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.34.0
+
+### `reopened_at` on a form instance
+
+`form_flow_instance_forms` gains `reopened_at`, the sibling of
+`completed_at`: stamped when a completed form is reopened - by a user
+(`FormFlow.Data.Instances.Forms.update_status/4` with `:in_progress`) or
+by a publish policy that reopens (`reopen_carry`, `reopen_reset`) - and
+cleared by the next submit. Like `status` and `completed_at` it is a fact
+at a moment, never castable, written only by the completion machinery.
+
+A form in progress with `reopened_at` set is a reopened form; before this
+the only record of that was the event trail (a `reopened` event newer than
+the last `status_changed`), which a listing of many journeys would have to
+read whole to know. The pages keep reading the trail for now; the column
+is what a per-journey listing will read (`archive/plans/perspective-status-on-the-index.md`, §10.3).
+
+**Schema.** `V01` gains the column on both adapters. A database migrated
+before this release has to be recreated (the library is pre-release and
+`V01` is the schema).
+
+### Breaking: the flow instance badge is a perspective status, not a "standing"
+
+The badge after a flow instance's name - Your turn, Needs your attention,
+Waiting on others, Completed - is the status of the instance **for one
+perspective**: the same journey reads Your turn to the reviewer and
+Waiting on others to the applicant. The code called it a "standing", a
+word coined for the purpose that appeared nowhere on screen
+(`archive/plans/perspective-gaps.md` §7). It is now a **perspective
+status**, and where the row it sits on already says whose it is, just
+`status`, the way a form instance's and a journey's statuses are named.
+
+```elixir
+# before
+FormFlow.Web.Instances.Components.Flows.Status.standing(rows, flow_instance)
+<Status.badge standing={@standing} />
+
+# after
+FormFlow.Web.Instances.Components.Flows.Status.status(rows, flow_instance)
+<Status.badge status={@perspective_status} />
+```
+
+`Status.status/2` is the sibling of
+`FormFlow.Web.Instances.Components.Forms.Status.status/2`, the same
+question asked of one form. The `:standing` assign on the flow instance
+pages is `:perspective_status`. The four values are unchanged.
+
+The word had one other, unrelated use: the health page's line of counts
+had the element id `#flows-health-standing`. It is `#flows-health-summary`
+now, "summary" being what the page already called it.
 ## v0.33.0
 
 ### Prefill a form with a user's answers from another flow

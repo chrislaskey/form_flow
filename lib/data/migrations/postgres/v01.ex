@@ -340,6 +340,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:data, :map, null: false, default: %{})
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
+      add(:reopened_at, :utc_datetime_usec)
       add(:draft, :map)
 
       add(

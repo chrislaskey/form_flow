@@ -1817,6 +1817,25 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "reopening a form stamps reopened_at" do
+    test "set by a reopen, cleared by the next submit" do
+      %{instance: instance, form: only} = flow_of_one()
+
+      completed = complete(instance, [only.id], %{"name" => "Ada"})
+      assert completed.reopened_at == nil
+
+      {:ok, reopened} = Instances.Forms.update_status(instance, [only.id], :in_progress)
+      assert %DateTime{} = reopened.reopened_at
+      assert reopened.completed_at == nil
+
+      {:ok, resubmitted} =
+        Instances.Forms.update_status(instance, [only.id], :completed, data: %{"name" => "Ada"})
+
+      assert resubmitted.reopened_at == nil
+      assert %DateTime{} = resubmitted.completed_at
+    end
+  end
+
   describe "an instance's event trail" do
     test "list_events/2 reads it oldest first, and filters by kind" do
       %{instance: instance, forms: [name, _address]} = flow_of_two()
@@ -2275,7 +2294,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute html =~ ~s(value="Submitted")
       refute html =~ ~s(value="Prefilled")
 
-      # The status badge is the form's standing, not the button: Reopened
+      # The status badge is the form's status word, not the button: Reopened
       assert html =~ "Reopened"
 
       # Show renders the answers, never the draft

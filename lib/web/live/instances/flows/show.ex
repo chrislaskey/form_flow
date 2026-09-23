@@ -6,8 +6,8 @@ defmodule FormFlow.Web.Instances.Flows.Show do
 
   ## What the page draws
 
-  The header names the flow and, after its name, the viewer's **standing** -
-  Your turn, Needs your attention, Waiting on others, Completed
+  The header names the flow and, after its name, its **status for the
+  viewer** - Your turn, Needs your attention, Waiting on others, Completed
   (`FormFlow.Web.Instances.Components.Flows.Status`). Its actions are the
   two views as tabs, **Overview | History**
   (`FormFlow.Web.Instances.Components.Flows.Tabs`), and **Download all**,
@@ -99,7 +99,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   change.
 
   What the page shares with `FormFlow.Web.Instances.Flows.History` - the
-  loading, the rows, the trail, the standing - is
+  loading, the rows, the trail, the perspective status - is
   `FormFlow.Web.Instances.Flows.Shared`.
   """
 
@@ -262,7 +262,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     <div>
       <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name}>
         <:status>
-          <Status.badge standing={@standing} components={@components} />
+          <Status.badge status={@perspective_status} components={@components} />
         </:status>
         <:actions>
           <%!-- One PDF of every completed form in flow order does not exist

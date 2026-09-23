@@ -369,7 +369,7 @@ defmodule FormFlow.Data.Instances.Flows do
   journey's own.
 
   Two queries, whatever the count of forms: the trail is read whole, so a
-  page listing it or deriving a standing from it asks once.
+  page listing it or deriving a perspective status from it asks once.
   """
   @spec list_events(Instances.Flow.t()) :: [
           %{event: Event.t() | Instances.Form.Event.t(), form_instance: Instances.Form.t() | nil}

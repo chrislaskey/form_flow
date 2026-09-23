@@ -674,7 +674,8 @@ defmodule FormFlow.Data.Templates.Forms do
         data: data,
         draft: transform_draft(instance.draft, published, policy),
         status: "in_progress",
-        completed_at: nil
+        completed_at: nil,
+        reopened_at: DateTime.utc_now()
       },
       dropped
     )
@@ -686,7 +687,13 @@ defmodule FormFlow.Data.Templates.Forms do
       published,
       policy,
       "reopened",
-      %{data: %{}, draft: nil, status: "in_progress", completed_at: nil},
+      %{
+        data: %{},
+        draft: nil,
+        status: "in_progress",
+        completed_at: nil,
+        reopened_at: DateTime.utc_now()
+      },
       instance.data
     )
   end

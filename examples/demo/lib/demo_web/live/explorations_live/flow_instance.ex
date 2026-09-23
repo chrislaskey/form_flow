@@ -182,10 +182,10 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   # What the whole flow says of itself to this viewer, beyond In progress /
   # Completed - derived here from the forms; nothing stores it today
-  defp standing(:started), do: {"Your turn", "badge-info"}
-  defp standing(:waiting), do: {"With the reviewer", "badge-neutral"}
-  defp standing(:reopened), do: {"Needs your attention", "badge-warning"}
-  defp standing(:decided), do: {"Approved", "badge-success"}
+  defp perspective_status(:started), do: {"Your turn", "badge-info"}
+  defp perspective_status(:waiting), do: {"With the reviewer", "badge-neutral"}
+  defp perspective_status(:reopened), do: {"Needs your attention", "badge-warning"}
+  defp perspective_status(:decided), do: {"Approved", "badge-success"}
 
   # Every form's events across the flow instance, merged, newest first -
   # the History view. Today each form has its own trail; nothing merges them.
@@ -429,7 +429,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
       id: :evolve,
       title: "X1 · S1 + S4 + L4 + T1 - picked, built 2026-09-17",
       note:
-        "The smallest step from today that carries the whole idea: the standing badge after the title, tabs and Download all right, the F1 card with Continue, a card per subflow with its ring and count, the next-up row raised. Built as drawn on the real page, with S4's cards in place of S3's segment bars."
+        "The smallest step from today that carries the whole idea: the perspective status badge after the title, tabs and Download all right, the F1 card with Continue, a card per subflow with its ring and count, the next-up row raised. Built as drawn on the real page, with S4's cards in place of S3's segment bars."
     },
     %{
       id: :tasklist,
@@ -449,7 +449,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
   # each with what exists today and what it would take
   @needs [
     %{
-      title: "A standing beyond In progress / Completed",
+      title: "A perspective status beyond In progress / Completed",
       today:
         "The flow instance row has `status`, in_progress or completed; the forms' statuses are derived per position.",
       needs:
@@ -505,8 +505,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
     },
     %{
       title: "Last activity per row",
-      today:
-        "The newest event's user and time are read on the form pages (`Status.badge/1`).",
+      today: "The newest event's user and time are read on the form pages (`Status.badge/1`).",
       needs:
         "The same on the listing rows without an N+1: one query for the newest event per position."
     },
@@ -528,7 +527,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
       today:
         "Nothing removes an application the applicant started; the reviewer's listing shows every instance with nothing to distinguish them.",
       needs:
-        "A withdraw action with an event, if the host wants it. And the per-viewer standing above is the \"Your part\" column the reviewer's listing needs (instances refresh plan §2.6)."
+        "A withdraw action with an event, if the host wants it. And the per-viewer perspective status above is the \"Your part\" column the reviewer's listing needs (instances refresh plan §2.6)."
     }
   ]
 
@@ -561,7 +560,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
       groups: scenario_groups(scenario),
       flow: flow(scenario),
       events: events(scenario),
-      standing: standing(scenario)
+      perspective_status: perspective_status(scenario)
     )
   end
 
@@ -648,7 +647,12 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <div :for={d <- @summaries} class="space-y-3">
             <.direction_title d={d} />
             <.frame label={frame_label(@groups)}>
-              <.summary variant={d.id} groups={@groups} flow={@flow} standing={@standing} />
+              <.summary
+                variant={d.id}
+                groups={@groups}
+                flow={@flow}
+                perspective_status={@perspective_status}
+              />
             </.frame>
           </div>
         </.section>
@@ -661,7 +665,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <div :for={d <- @lists} class="space-y-3">
             <.direction_title d={d} />
             <.frame label={frame_label(@groups)}>
-              <.flow_header standing={@standing} />
+              <.flow_header perspective_status={@perspective_status} />
               <.groups groups={@groups} heading={:counts} rows={d.id} />
             </.frame>
           </div>
@@ -679,7 +683,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
                 variant={d.id}
                 groups={@groups}
                 flow={@flow}
-                standing={@standing}
+                perspective_status={@perspective_status}
                 scenario={@scenario}
               />
             </.frame>
@@ -694,7 +698,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <div :for={d <- @tab_dirs} class="space-y-3">
             <.direction_title d={d} />
             <.frame label={frame_label(@groups)}>
-              <.flow_header standing={@standing}>
+              <.flow_header perspective_status={@perspective_status}>
                 <:actions>
                   <.flow_tabs active={d.id} class="mr-2" />
                   <button type="button" class="btn btn-ghost">Download all</button>
@@ -722,7 +726,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
                 variant={d.id}
                 groups={@groups}
                 flow={@flow}
-                standing={@standing}
+                perspective_status={@perspective_status}
                 scenario={@scenario}
               />
             </.frame>
@@ -827,7 +831,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   # -- The header (T2, for the flow instance) ------------------------------------
 
-  attr :standing, :any, default: nil, doc: "{text, badge class} after the title, or nil"
+  attr :perspective_status, :any, default: nil, doc: "{text, badge class} after the title, or nil"
   slot :actions
 
   defp flow_header(assigns) do
@@ -844,7 +848,10 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
         </nav>
         <h2 class="mt-1 flex flex-wrap items-center gap-x-2 text-2xl font-semibold leading-tight">
           <span>Dog License</span>
-          <.standing_badge :if={@standing} standing={@standing} />
+          <.perspective_status_badge
+            :if={@perspective_status}
+            perspective_status={@perspective_status}
+          />
         </h2>
       </div>
       <div :if={@actions != []} class="flex flex-wrap items-center gap-2 xl:shrink-0 xl:flex-nowrap">
@@ -854,11 +861,11 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
     """
   end
 
-  attr :standing, :any, required: true
+  attr :perspective_status, :any, required: true
   attr :class, :any, default: nil
 
-  defp standing_badge(assigns) do
-    {text, class} = assigns.standing
+  defp perspective_status_badge(assigns) do
+    {text, class} = assigns.perspective_status
     assigns = assign(assigns, text: text, kind: class)
 
     ~H"""
@@ -990,11 +997,11 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
   attr :variant, :atom, required: true
   attr :groups, :list, required: true
   attr :flow, :map, required: true
-  attr :standing, :any, required: true
+  attr :perspective_status, :any, required: true
 
   defp summary(%{variant: :card_counts} = assigns) do
     ~H"""
-    <.flow_header standing={@standing} />
+    <.flow_header perspective_status={@perspective_status} />
     <.overall_card groups={@groups} />
     <.groups groups={@groups} heading={:counts} rows={:today} />
     """
@@ -1002,7 +1009,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp summary(%{variant: :rings} = assigns) do
     ~H"""
-    <.flow_header standing={@standing}>
+    <.flow_header perspective_status={@perspective_status}>
       <:actions><.overall_rect groups={@groups} /></:actions>
     </.flow_header>
     <.groups groups={@groups} heading={:rings} rows={:today} />
@@ -1011,7 +1018,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp summary(%{variant: :segments} = assigns) do
     ~H"""
-    <.flow_header standing={@standing} />
+    <.flow_header perspective_status={@perspective_status} />
     <.overall_card groups={@groups} />
     <.groups groups={@groups} heading={:segments} rows={:today} />
     """
@@ -1019,7 +1026,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp summary(%{variant: :cards} = assigns) do
     ~H"""
-    <.flow_header standing={@standing}>
+    <.flow_header perspective_status={@perspective_status}>
       <:actions><.overall_rect groups={@groups} /></:actions>
     </.flow_header>
     <div class="space-y-4">
@@ -1431,12 +1438,12 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
   attr :variant, :atom, required: true
   attr :groups, :list, required: true
   attr :flow, :map, required: true
-  attr :standing, :any, required: true
+  attr :perspective_status, :any, required: true
   attr :scenario, :atom, required: true
 
   defp whole(%{variant: :stages} = assigns) do
     ~H"""
-    <.flow_header standing={@standing} />
+    <.flow_header perspective_status={@perspective_status} />
     <.stage_tracker groups={@groups} flow={@flow} class="mb-6" />
     <.groups groups={@groups} heading={:counts} rows={:today} />
     """
@@ -1444,14 +1451,14 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp whole(%{variant: :split} = assigns) do
     ~H"""
-    <.flow_header standing={@standing} />
+    <.flow_header perspective_status={@perspective_status} />
     <.split groups={@groups} flow={@flow} rows={:nextup} />
     """
   end
 
   defp whole(%{variant: :banner} = assigns) do
     ~H"""
-    <.flow_header standing={@standing} />
+    <.flow_header perspective_status={@perspective_status} />
     <.banner scenario={@scenario} groups={@groups} class="mb-6" />
     <.groups groups={@groups} heading={:counts} rows={:today} />
     """
@@ -1687,12 +1694,12 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
   attr :variant, :atom, required: true
   attr :groups, :list, required: true
   attr :flow, :map, required: true
-  attr :standing, :any, required: true
+  attr :perspective_status, :any, required: true
   attr :scenario, :atom, required: true
 
   defp combo(%{variant: :evolve} = assigns) do
     ~H"""
-    <.flow_header standing={@standing}>
+    <.flow_header perspective_status={@perspective_status}>
       <:actions>
         <.flow_tabs active={:overview} class="mr-2" />
         <button type="button" class="btn btn-ghost">Download all</button>
@@ -1708,7 +1715,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp combo(%{variant: :tasklist} = assigns) do
     ~H"""
-    <.flow_header standing={@standing}>
+    <.flow_header perspective_status={@perspective_status}>
       <:actions>
         <.flow_tabs active={:overview} class="mr-2" />
         <button type="button" class="btn btn-ghost">Download all</button>
@@ -1723,7 +1730,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
 
   defp combo(%{variant: :cards} = assigns) do
     ~H"""
-    <.flow_header standing={@standing}>
+    <.flow_header perspective_status={@perspective_status}>
       <:actions>
         <.overall_rect groups={@groups} />
         <.flow_tabs active={:overview} class="ml-2" />

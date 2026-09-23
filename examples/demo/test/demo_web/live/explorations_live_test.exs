@@ -21,7 +21,7 @@ defmodule DemoWeb.ExplorationsLiveTest do
     {:ok, view, html} = live(conn, ~p"/explorations/flow-instance")
     assert html =~ "Your turn"
 
-    for {id, standing} <- [
+    for {id, status} <- [
           waiting: "With the reviewer",
           reopened: "Needs your attention",
           decided: "Approved",
@@ -32,7 +32,7 @@ defmodule DemoWeb.ExplorationsLiveTest do
         |> element("input[type=radio][value=#{id}]")
         |> render_click()
 
-      assert html =~ standing, "scenario #{id} did not draw #{standing}"
+      assert html =~ status, "scenario #{id} did not draw #{status}"
       assert html =~ "What would need building"
     end
   end

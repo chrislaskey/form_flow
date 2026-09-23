@@ -16,12 +16,14 @@ defmodule FormFlow.Data.Instances.Forms do
       definition the user saw, so creating rows any earlier would pin
       versions for forms the user may never reach and miss improvements
       published in the meantime. On a completed instance it *reopens*
-      (back to `in_progress`, `completed_at` cleared, `reopened` event),
-      keeping the answers for editing. Already in progress: a no-op.
+      (back to `in_progress`, `completed_at` cleared, `reopened_at` stamped,
+      `reopened` event), keeping the answers for editing. Already in
+      progress: a no-op.
     * `update_status(journey, path, :completed, data: answers)` - submit:
-      the answers land in `data`, `status`/`completed_at` are stamped, and
-      a `status_changed` event is written. Completion is what unlocks
-      successor positions in `FormFlow.Data.Instances.FlowProgress`.
+      the answers land in `data`, `status`/`completed_at` are stamped,
+      `reopened_at` is cleared, and a `status_changed` event is written.
+      Completion is what unlocks successor positions in
+      `FormFlow.Data.Instances.FlowProgress`.
       Completing a completed instance is a no-op - reopen first.
 
   Beside the lifecycle, `save_draft/4` keeps the user's place: it stores the
@@ -306,7 +308,12 @@ defmodule FormFlow.Data.Instances.Forms do
   # the form the page would then draw over them on a reopen
   defp complete(instance, opts) do
     Repo.transaction(fn ->
-      changes = %{status: "completed", completed_at: DateTime.utc_now(), draft: nil}
+      changes = %{
+        status: "completed",
+        completed_at: DateTime.utc_now(),
+        reopened_at: nil,
+        draft: nil
+      }
 
       changes =
         case Keyword.fetch(opts, :data) do
@@ -325,7 +332,7 @@ defmodule FormFlow.Data.Instances.Forms do
 
   defp reopen(instance, opts) do
     Repo.transaction(fn ->
-      changes = %{status: "in_progress", completed_at: nil}
+      changes = %{status: "in_progress", completed_at: nil, reopened_at: DateTime.utc_now()}
 
       with {:ok, reopened} <- Repo.update(Ecto.Changeset.change(instance, changes)),
            {:ok, _event} <- insert_event(reopened, "reopened", opts) do

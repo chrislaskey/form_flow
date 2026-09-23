@@ -25,18 +25,18 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
       begins, as `{flow, rows}`
     * `trail` - everything that has happened in the instance, oldest first
       (`FormFlow.Data.Instances.Flows.list_events/1`), read once and
-      shared between the rows' last-event lines, the standing, and the
-      History page
-    * `standing` - the viewer's standing
-      (`FormFlow.Web.Instances.Components.Flows.Status.standing/2`)
+      shared between the rows' last-event lines, the perspective status,
+      and the History page
+    * `perspective_status` - the status of the instance for this viewer
+      (`FormFlow.Web.Instances.Components.Flows.Status.status/2`)
     * `next_up` - the row that wants the viewer now: a reopened form, else
       one in progress, else the first they may start; nil when none
     * `continue_allowed?`, `part_done?`, `stranded`, `mount_error`,
       `navigate_to`
 
   The rows are only the forms the viewer may see - a form of a flow that is
-  not for them is not a row at all - so every count, the standing, and
-  next up are the viewer's, as the page under them is.
+  not for them is not a row at all - so every count, the perspective
+  status, and next up are the viewer's, as the page under them is.
 
   ## Two rules decide which forms are rows
 
@@ -115,7 +115,7 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
           rows: [],
           groups: [],
           trail: [],
-          standing: nil,
+          perspective_status: nil,
           next_up: nil,
           stranded: []
         )
@@ -159,7 +159,7 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
             rows: rows,
             groups: groups(rows),
             trail: trail,
-            standing: Status.standing(rows, flow_instance),
+            perspective_status: Status.status(rows, flow_instance),
             next_up: next_up(rows, continue_allowed?),
             continue_allowed?: continue_allowed?,
             part_done?: part_done?(rows, flow_instance),

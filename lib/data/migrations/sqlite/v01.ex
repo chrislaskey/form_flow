@@ -160,6 +160,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:data, :map, null: false)
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
+      add(:reopened_at, :utc_datetime_usec)
       add(:draft, :map)
 
       add(

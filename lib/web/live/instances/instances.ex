@@ -26,7 +26,8 @@ defmodule FormFlow.Web.Instances do
   status and its last event (`FormFlow.Web.Instances.Components.Forms.Status`).
   The two flow instance pages are likewise its two views - Overview,
   History (`FormFlow.Web.Instances.Components.Flows.Tabs`) - beside the
-  viewer's standing in it (`FormFlow.Web.Instances.Components.Flows.Status`).
+  instance's status for the viewer - its perspective status
+  (`FormFlow.Web.Instances.Components.Flows.Status`).
   What the two share - the instance, its forms, the viewer's rows, the
   trail - is `FormFlow.Web.Instances.Flows.Shared`.
 

@@ -302,6 +302,7 @@ defmodule Demo.FormFlowFormsTest do
       assert reopened.template_form_version_id == v2.id
       assert reopened.status == "in_progress"
       assert reopened.completed_at == nil
+      assert %DateTime{} = reopened.reopened_at
       assert reopened.data == %{}
       assert [%{event: "reopened", snapshot: %{"name" => "Grace"}}] = events_for(completed)
     end

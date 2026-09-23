@@ -9,7 +9,7 @@ defmodule FormFlow.Web.Instances.Flows.History do
   It is the second view of the flow instance beside
   `FormFlow.Web.Instances.Flows.Show`, and the header offers the two as
   tabs, Overview | History (`FormFlow.Web.Instances.Components.Flows.Tabs`),
-  with the viewer's standing after the flow's name as the Overview has it.
+  with the perspective status after the flow's name as the Overview has it.
   It loads what the Overview loads (`FormFlow.Web.Instances.Flows.Shared`),
   asks the host's `on_mount` the same way, and changes nothing: the trail
   is audit, not state, and this page only reads it.
@@ -100,7 +100,7 @@ defmodule FormFlow.Web.Instances.Flows.History do
     <div>
       <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name}>
         <:status>
-          <Status.badge standing={@standing} components={@components} />
+          <Status.badge status={@perspective_status} components={@components} />
         </:status>
         <:actions>
           <Tabs.tabs base={@base} flow_instance_id={@flow_instance.id} active={:history} />

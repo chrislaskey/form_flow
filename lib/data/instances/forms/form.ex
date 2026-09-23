@@ -76,6 +76,7 @@ defmodule FormFlow.Data.Instances.Form do
     field(:data, :map, default: %{})
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
+    field(:reopened_at, :utc_datetime_usec)
     field(:draft, :map)
 
     belongs_to(:instance_flow, Instances.Flow, foreign_key: :instance_flow_id)
@@ -90,8 +91,8 @@ defmodule FormFlow.Data.Instances.Form do
   @doc """
   Builds a changeset for an instance form.
 
-  `status` and `completed_at` are not castable - they are stamped by
-  completion machinery, never supplied by callers (the same discipline as
+  `status`, `completed_at`, and `reopened_at` are not castable - they are
+  stamped by completion machinery, never supplied by callers (the same discipline as
   `FormFlow.Data.Instances.Flow`). `user_id` and `tenant_id` are castable
   at creation and immutable afterwards. Updates go through the optimistic
   lock: two editors of one instance's `data` surface `Ecto.StaleEntryError`

@@ -260,7 +260,7 @@ defmodule FormFlow.Web.Templates.Flows.Health do
       <%!-- How it stands: the open entries by level, the ignored ones, and
             how many checks found nothing - each a dot in the list's colours,
             grey when there are none --%>
-      <p id={"#{@id}-standing"} class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <p id={"#{@id}-summary"} class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <.count dot={dot(:error)} count={@health.counts.error} noun="error" />
         <.count dot={dot(:warning)} count={@health.counts.warning} noun="warning" />
         <.count dot={dot(:info)} count={@health.counts.info} noun="info" />
