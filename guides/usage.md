@@ -328,19 +328,47 @@ callback that keys on `context.form_node.slug` sees the copy's prefix
 after the `_`, or on `context.form.slug` when the step reuses a catalog
 form, which is the same lineage in both years.
 
-Prefilling this year from last year is a form type's job, and the copy
-leaves it the join: every form a copy owns records the lineage it was
-rolled over from in `copied_from_form_id`, so a type walks from this
-year's `context.form` to last year's lineage, from the lineage's
-`owner_flow_id` to last year's flow, and with
-`FormFlow.Data.Instances.Flows.list/1` (`user_id:`, `tenant_id:`,
-`flow:`) to the user's journeys in it, newest first — then to the form
-they submitted at that lineage, whose answers it offers under the user's
-own from `initial_data/2`. A host that stamps journeys complete
-(`FormFlow.Data.Instances.Flows.complete/2`) narrows that listing with
-`status: "completed"`. The demo's `DemoWeb.FormFlowLive.Renewal` is the
-worked example. A step that reuses a catalog form has nothing to join:
-the same lineage serves both years.
+### Prefilling this year from last year
+
+Every form type the library ships carries one setting: **Prefill with
+answers from**, on the form's own settings page, naming a form of another
+flow. Set it on 2027's identity form to 2026's, and the form opens filled
+in with what *this same user* answered there, in their most recent journey
+of that flow. The answers go under anything they have typed here, merged
+by question name, so a prefill never replaces an answer, and a question
+only one of the two forms asks is left alone. A user with no earlier
+journey — and a viewer with no `user_id` — gets the empty form an unset
+setting gives, with no explanation: nothing crosses between people, and
+nothing is said about a year that is not there.
+
+It is a setting an admin makes rather than something read off the copy, on
+purpose. A copy records *that* it happened (`copied_from_form_id`), not
+that anybody wanted last year's answers carried forward. An admin copies a
+flow for a new year, for a regional variant, or to try something out, and
+only the first of those means "prefill from the original".
+
+So **copying a flow clears it**. 2028 copied from 2027 arrives with the
+field empty rather than still pointing at 2026 — which would resolve
+perfectly, at the wrong year. The duplicate dialog lists what it is about
+to clear before you confirm. A pointer at a step of the flow's *own* tree
+is not cleared: the copy re-points it at the copied steps, where it stays
+right.
+
+`FormFlow.Data.Templates.Flows.copy/2` requires `flow_types:` and
+`form_types:` for this, and raises without them. Which settings clear is
+read off the types, and a copy that silently kept one is not a thing you
+can find afterwards.
+
+A pointer that stops resolving — the flow deleted, the step removed, or no
+Start reaching it — is one of
+`FormFlow.Data.Templates.Flows.Health`'s checks. A pointer that is merely
+*old* is not, and cannot be: an old pointer that resolves is not wrong.
+Clearing on copy is what handles that one.
+
+A host's own form type offers the same field by putting
+`FormFlow.Config.Forms.Type.Default.properties/0` after its own. A setting
+of its own can clear on copy too — `clear_on_copy: true` on a
+`FormFlow.Config.Property`.
 
 ## Taking the answers away
 

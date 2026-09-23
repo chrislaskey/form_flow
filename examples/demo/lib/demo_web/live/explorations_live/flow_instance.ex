@@ -487,7 +487,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
       today:
         "Subflows are the stages by construction; the decision is an answer inside the reviewer's License Decision form.",
       needs:
-        "Reading a form's answer as the flow's outcome - a `related_form` walk the Renewal type already makes, or a flow type callback naming the decision form and field. Then the Approved badge, the Decision stage, and Download license have something to show."
+        "Reading a form's answer as the flow's outcome - a `related_form` walk, or a flow type callback naming the decision form and field. Then the Approved badge, the Decision stage, and Download license have something to show."
     },
     %{
       title: "Flow-level history",

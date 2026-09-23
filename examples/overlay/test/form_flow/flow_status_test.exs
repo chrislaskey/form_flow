@@ -267,7 +267,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     test "a copy is a draft whatever the source is, with its own created event" do
       {:ok, source} = Flows.create(%{name: "Dog License", status: "open"})
 
-      {:ok, copy} = Flows.copy(source, name: "Dog License 2027", user_id: "demo-admin")
+      {:ok, copy} = Flows.copy(source, [name: "Dog License 2027", user_id: "demo-admin"] ++ host_types())
 
       assert copy.status == "draft"
       assert [%{event: "created", user_id: "demo-admin"}] = events(copy)

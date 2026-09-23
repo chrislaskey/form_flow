@@ -26,6 +26,15 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       testable on hand-built trees, and what a later caller checking
       unsaved canvas contents would build one for.
 
+  One check looks outside the tree: a `:related_form_in_any_flow` property
+  names a flow of its own. What those flows hold is therefore an argument,
+  `named_flows:` - `%{flow_id => %{all: MapSet, connected: MapSet}}`, the
+  form positions each named flow has and the ones a Start reaches in it,
+  with a flow the map does not mention taken as gone. `check/2` with an id
+  builds it, loading each distinct flow named once and nothing at all for a
+  tree that names none. `check/2` with a tree does not look outside it
+  unless given one, so the tree form stays free of the database.
+
   Both take `flow_types:` and `form_types:`, the host's lists (the same the
   pages are given), defaulting to the library's. The type checks read them:
   a type a template names that the list no longer has, a property a type
@@ -45,6 +54,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:subflow_missing` | error | a connected subflow step points at no flow, or at one that could not be resolved |
   | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value - the Review type's "Form to review", say |
   | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches - either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
+  | `:related_form_in_any_flow_missing` | error | a `:related_form_in_any_flow` property names a flow that is gone, a position that flow no longer has, or one no Start reaches in it - either way the property resolves to nothing at runtime |
   | `:related_form_shared` | error | a catalog form - one lineage shared by every step reusing it - has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
   | `:unconnected` | warning | a node no Start reaches; users can never get there |
   | `:dead_end` | warning | a node Start reaches that nothing follows, so End never waits for it |
@@ -238,9 +248,16 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
   def check(id, opts) when is_binary(id) do
     case Flows.resolve_tree(id) do
-      nil -> nil
-      %{flow: %Flow{owner_flow_id: root_id}} when is_binary(root_id) -> check(root_id, opts)
-      tree -> tree |> preload_versions() |> check(opts)
+      nil ->
+        nil
+
+      %{flow: %Flow{owner_flow_id: root_id}} when is_binary(root_id) ->
+        check(root_id, opts)
+
+      tree ->
+        tree
+        |> preload_versions()
+        |> check(Keyword.put_new_lazy(opts, :named_flows, fn -> named_flows(tree) end))
     end
   end
 
@@ -249,7 +266,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
       flow_types: Keyword.get(opts, :flow_types, FormFlow.Config.Flows.Type.defaults()),
       form_types: Keyword.get(opts, :form_types, FormFlow.Config.Forms.Type.defaults()),
       form_paths: form_paths(tree, [], :all),
-      connected_form_paths: form_paths(tree, [], :connected)
+      connected_form_paths: form_paths(tree, [], :connected),
+      named_flows: Keyword.get(opts, :named_flows)
     }
 
     # Every check evaluated yields one result: an entry, or :pass
@@ -1024,10 +1042,91 @@ defmodule FormFlow.Data.Templates.Flows.Health do
             not MapSet.member?(opts.connected_form_paths, split_path(value)) ->
           entry.(:error, :related_form_missing, related_form_text(property, value, opts))
 
+        property.type == :related_form_in_any_flow ->
+          in_any_flow_result(property, value, opts, entry)
+
         true ->
           :pass
       end
     end)
+  end
+
+  # A pointer into another flow, checked against that flow rather than this
+  # one. The three ways it stops resolving have three fixes, so the message
+  # says which; a value that names no flow at all is a fourth, and can only
+  # have been written by hand.
+  # Nothing to check against: the caller passed no `named_flows:`, so this
+  # check was not asked to look outside the tree
+  defp in_any_flow_result(_property, _value, %{named_flows: nil}, _entry), do: :pass
+
+  defp in_any_flow_result(property, value, opts, entry) do
+    missing = fn text -> entry.(:error, :related_form_in_any_flow_missing, text) end
+
+    case Property.parse_flow_position(value) do
+      nil ->
+        missing.("points “#{property.name}” at something that is not a form of any flow")
+
+      {flow_id, path} ->
+        case opts.named_flows[flow_id] do
+          nil ->
+            missing.("points “#{property.name}” at a flow that no longer exists")
+
+          paths ->
+            cond do
+              MapSet.member?(paths.connected, path) -> :pass
+              MapSet.member?(paths.all, path) -> missing.(no_start_reaches_it(property))
+              true -> missing.(gone_from_its_flow(property))
+            end
+        end
+    end
+  end
+
+  defp no_start_reaches_it(property),
+    do: "points “#{property.name}” at a form no Start reaches in the flow it names"
+
+  defp gone_from_its_flow(property),
+    do: "points “#{property.name}” at a form the flow it names no longer has"
+
+  # The `named_flows:` argument, built from the database: every flow a
+  # `:related_form_in_any_flow` value in this tree names, loaded once each.
+  # A flow that is gone is left out, which is how the check reads it. The
+  # values are found by their shape rather than by resolving each
+  # template's type, so this stays one sweep and asks the host's lists
+  # nothing; a value of some other property that happens to name a flow
+  # costs one load and is not reported on.
+  defp named_flows(tree) do
+    for flow_id <- named_flow_ids(tree),
+        target = Flows.resolve_tree(flow_id),
+        into: %{} do
+      {flow_id,
+       %{all: form_paths(target, [], :all), connected: form_paths(target, [], :connected)}}
+    end
+  end
+
+  defp named_flow_ids(nil), do: []
+
+  defp named_flow_ids(tree) do
+    values =
+      Enum.flat_map(
+        [tree.flow | forms_of(tree)],
+        &Map.values(property_values_of(&1))
+      )
+
+    ids =
+      for value <- values, {flow_id, _path} <- [Property.parse_flow_position(value)], do: flow_id
+
+    Enum.uniq(ids ++ Enum.flat_map(tree.nodes, &named_flow_ids(tree.subflows[&1.id])))
+  end
+
+  defp forms_of(tree), do: for(%{form: %{id: _id} = form} <- tree.nodes, do: form)
+
+  defp property_values_of(%{properties: properties}) do
+    properties = properties || %{}
+
+    Map.merge(
+      Map.get(properties, "flow_type_property_values", %{}),
+      Map.get(properties, "form_type_property_values", %{})
+    )
   end
 
   # The runtime resolves a related form among the connected positions only,

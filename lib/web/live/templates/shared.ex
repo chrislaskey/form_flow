@@ -23,6 +23,10 @@ defmodule FormFlow.Web.Templates.Shared do
   @prefix "property_"
   @path_separator "/"
 
+  # The two property types whose choices the library supplies rather than
+  # the type declaring them (`FormFlow.Config.Property`)
+  @form_pointers [:related_form, :related_form_in_any_flow]
+
   @doc "The type among `types` with `id`, or nil."
   def type(types, id), do: Enum.find(types, &(&1.id == id))
 
@@ -62,61 +66,115 @@ defmodule FormFlow.Web.Templates.Shared do
   end
 
   @doc """
-  The types with every `:related_form` property's options filled in: the
-  forms of the root flow `root_id` that come before the node `node_id` -
-  the one embedding what is being edited - in the order a user works them,
-  as `{qualified label, path}`. A related form is a choice whose choices the
-  flow supplies, so filling them here lets the rest of the page treat it as
-  any other choice type.
+  The types with every form-pointing property's options filled in, so the
+  rest of the page can treat both as any other choice type. `opts` says
+  where to look:
 
-  The property's description gains a note when there is something to say: no
-  node in scope (a catalog form, a root flow) means no earlier forms to offer;
-  and a saved value (`property_values`, the template's) that none of the
-  options match - the flow was rearranged, or the value was edited by hand -
-  is a choice the admin has to make again, since the field can't show it.
+    * `:root_id` and `:node_id` - a `:related_form`'s options are the forms
+      of the root flow `root_id` that come before the node `node_id`, the
+      one embedding what is being edited, in the order a user works them,
+      as `{qualified label, path}`.
+    * `:tenant_id` - a `:related_form_in_any_flow`'s options are every form
+      position of every root flow of the tenant, the flow's name in front
+      ("Dog License 2026 / Documents / Proof of address"), as
+      `{label, FormFlow.Config.Property.flow_position/2}`. Where the form
+      being edited sits does not come into it: the value names its flow
+      outright, so a catalog form's field offers the same choices as any
+      other's.
+    * `:property_values` - the template's stored values, read for the stale
+      note below.
+
+  A property's description gains a note when there is something to say: no
+  node in scope (a catalog form, a root flow) means no earlier forms to
+  offer; and a saved value that none of the options match - the flow was
+  rearranged, the flow it named was deleted, or the value was edited by
+  hand - is a choice the admin has to make again, since the field can't
+  show it.
+
+  Both option lists cost a tree resolve, so each is built only when some
+  type declares a property of that kind.
   """
-  def fill_related_forms(types, root_id, node_id, property_values \\ %{}) do
-    if Enum.any?(types, fn type -> Enum.any?(type.properties, &(&1.type == :related_form)) end) do
-      options = related_forms(root_id, node_id)
+  def fill_related_forms(types, opts) do
+    property_values = Keyword.get(opts, :property_values) || %{}
 
-      for type <- types do
-        %{
-          type
-          | properties:
-              Enum.map(type.properties, &fill_related_form(&1, options, property_values))
-        }
-      end
-    else
-      types
+    options = %{
+      related_form:
+        if(declares?(types, :related_form),
+          do: earlier_forms_of(opts[:root_id], opts[:node_id]),
+          else: []
+        ),
+      related_form_in_any_flow:
+        if(declares?(types, :related_form_in_any_flow),
+          do: forms_of_every_flow(opts[:tenant_id]),
+          else: []
+        )
+    }
+
+    for type <- types do
+      %{
+        type
+        | properties: Enum.map(type.properties, &fill_related_form(&1, options, property_values))
+      }
     end
   end
 
   @no_earlier_forms "No earlier forms to choose from - open this form from its flow."
+  @no_forms_anywhere "No flow has a form to choose yet."
   @stale_choice "The saved choice is no longer in this flow - choose again."
+  @stale_choice_anywhere "The saved choice is no longer there - choose again."
 
-  defp fill_related_form(%Property{type: :related_form} = property, options, property_values) do
+  defp declares?(types, type),
+    do:
+      Enum.any?(types, fn %{properties: properties} ->
+        Enum.any?(properties, &(&1.type == type))
+      end)
+
+  defp fill_related_form(%Property{type: type} = property, options, property_values)
+       when type in @form_pointers do
+    choices = options[type]
+
     notes = [
       property.description,
-      if(options == [], do: @no_earlier_forms),
-      if(stale?(options, property_values[property.id]), do: @stale_choice)
+      if(choices == [], do: nothing_to_choose(type)),
+      if(stale?(choices, property_values[property.id]), do: stale_note(type))
     ]
 
-    %{property | options: options, description: Enum.join(Enum.reject(notes, &is_nil/1), " ")}
+    %{property | options: choices, description: Enum.join(Enum.reject(notes, &is_nil/1), " ")}
   end
 
   defp fill_related_form(property, _options, _property_values), do: property
 
+  defp nothing_to_choose(:related_form), do: @no_earlier_forms
+  defp nothing_to_choose(:related_form_in_any_flow), do: @no_forms_anywhere
+
+  defp stale_note(:related_form), do: @stale_choice
+  defp stale_note(:related_form_in_any_flow), do: @stale_choice_anywhere
+
   defp stale?(_options, blank) when blank in [nil, ""], do: false
   defp stale?(options, value), do: not List.keymember?(options, value, 1)
 
-  defp related_forms(nil, _node_id), do: []
-  defp related_forms(_root_id, nil), do: []
+  defp earlier_forms_of(nil, _node_id), do: []
+  defp earlier_forms_of(_root_id, nil), do: []
 
-  defp related_forms(root_id, node_id) do
+  defp earlier_forms_of(root_id, node_id) do
     root_id
     |> Templates.Flows.resolve_tree()
     |> FlowProgress.forms([])
     |> earlier_forms(node_id)
+  end
+
+  # Every form position of every root flow of the tenant, in the order the
+  # flows were created and, inside each, the order a user works them. A
+  # position no Start reaches is not offered: that is where the value is
+  # resolved from at runtime, so offering one would be offering a choice
+  # health reports the moment it is saved.
+  defp forms_of_every_flow(tenant_id) do
+    for flow <- Templates.Flows.list(tenant_id: tenant_id),
+        tree = Templates.Flows.resolve_tree(flow.id),
+        form <- FlowProgress.forms(tree, []) do
+      {"#{flow.name} / #{FlowProgress.qualified_label(form)}",
+       Property.flow_position(flow.id, form.path)}
+    end
   end
 
   @doc """
@@ -198,20 +256,21 @@ defmodule FormFlow.Web.Templates.Shared do
   @doc """
   The `DynamicForm` question type a property renders as. Every property type
   is a `DynamicForm` type of the same name, except `:number`, which is a
-  `text` question with a number `input_type/1`, and `:related_form`, a
-  `dropdown` of the flow's earlier forms.
+  `text` question with a number `input_type/1`, and the two form pointers,
+  each a `dropdown` of the forms it offers.
   """
   def field_type(%Property{type: :number}), do: "text"
-  def field_type(%Property{type: :related_form, options: []}), do: "text"
-  def field_type(%Property{type: :related_form}), do: "dropdown"
+
+  def field_type(%Property{type: type, options: []}) when type in @form_pointers, do: "text"
+  def field_type(%Property{type: type}) when type in @form_pointers, do: "dropdown"
 
   def field_type(%Property{type: type}), do: Atom.to_string(type)
 
   @doc """
-  Whether a property's field renders read-only: a related form with no
-  earlier forms to offer, which shows its note instead of an empty select.
+  Whether a property's field renders read-only: a form pointer with nothing
+  to offer, which shows its note instead of an empty select.
   """
-  def read_only?(%Property{type: :related_form, options: []}), do: true
+  def read_only?(%Property{type: type, options: []}) when type in @form_pointers, do: true
   def read_only?(%Property{}), do: false
 
   @doc "The HTML input type a property's field passes through, or nil."
@@ -219,7 +278,7 @@ defmodule FormFlow.Web.Templates.Shared do
   def input_type(%Property{}), do: nil
 
   @doc "A property's choices for its field - nil for a type without any."
-  def field_options(%Property{type: :related_form, options: []}), do: nil
+  def field_options(%Property{type: type, options: []}) when type in @form_pointers, do: nil
 
   def field_options(%Property{options: options} = property) do
     if Property.choice?(property), do: options || [], else: nil
@@ -263,12 +322,13 @@ defmodule FormFlow.Web.Templates.Shared do
   def display_value(%Property{type: :boolean}, value),
     do: if(value in [true, "true"], do: "Yes", else: "No")
 
-  # A related form's value is a path; one the flow no longer has is the one
-  # error there is, however it came about
-  def display_value(%Property{type: :related_form, options: options}, value) do
+  # A form pointer's value names a position; one no longer offered is the
+  # one error there is, however it came about
+  def display_value(%Property{type: type, options: options}, value)
+      when type in @form_pointers do
     case List.keyfind(options || [], value, 1) do
-      {label, _path} -> label
-      nil -> "Missing - no longer in this flow"
+      {label, _position} -> label
+      nil -> missing_label(type)
     end
   end
 
@@ -282,6 +342,9 @@ defmodule FormFlow.Web.Templates.Shared do
       to_string(value)
     end
   end
+
+  defp missing_label(:related_form), do: "Missing - no longer in this flow"
+  defp missing_label(:related_form_in_any_flow), do: "Missing - no longer in any flow"
 
   @doc """
   The perspectives the type with `id` declares (`FormFlow.Config.Flows.Type`'s
@@ -355,6 +418,52 @@ defmodule FormFlow.Web.Templates.Shared do
       {:error, _reason} ->
         {:error, "Could not copy the flow. Please try again."}
     end
+  end
+
+  @doc """
+  What copying `flow` will leave empty: one `{property name, count}` per
+  property marked `clear_on_copy` (`FormFlow.Config.Property`) that has a
+  value somewhere in the tree, counting the flows and forms holding one.
+  `[]` for most copies, since most flows set none.
+
+  The copy dialog lists this before the admin confirms. Nothing else will
+  tell them: a carried-forward pointer into another flow goes on resolving
+  perfectly, at the wrong flow, which is why the copy clears it and why the
+  clearing has to be said out loud.
+  """
+  def cleared_by_copy(%Templates.Flow{} = flow, flow_types, form_types) do
+    case Templates.Flows.resolve_tree(flow.id) do
+      nil ->
+        []
+
+      tree ->
+        tree |> cleared_names(flow_types, form_types) |> Enum.frequencies() |> Enum.sort()
+    end
+  end
+
+  defp cleared_names(nil, _flow_types, _form_types), do: []
+
+  defp cleared_names(tree, flow_types, form_types) do
+    forms = for %{form: %{id: _id} = form} <- tree.nodes, do: form
+
+    own =
+      cleared_names_of(tree.flow, flow_types, "flow_type", "flow_type_property_values") ++
+        Enum.flat_map(
+          forms,
+          &cleared_names_of(&1, form_types, "form_type", "form_type_property_values")
+        )
+
+    own ++ Enum.flat_map(tree.nodes, &cleared_names(tree.subflows[&1.id], flow_types, form_types))
+  end
+
+  defp cleared_names_of(%{properties: properties}, types, type_key, values_key) do
+    properties = properties || %{}
+    values = properties[values_key] || %{}
+    type = type(types, effective_type(types, properties[type_key]))
+
+    for %Property{clear_on_copy: true} = property <- (type && type.properties) || [],
+        values[property.id] not in [nil, "", []],
+        do: property.name
   end
 
   @doc """

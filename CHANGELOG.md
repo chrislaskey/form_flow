@@ -1,5 +1,117 @@
 # Changelog
 
+## v0.33.0
+
+### Prefill a form with a user's answers from another flow
+
+Every form type the library ships now carries one property: **"Prefill
+with answers from"** (`"prefill_with_answers_from"`), naming a form of
+another flow. Set on a form, that form opens filled in with what the same
+user answered at the named form, in their most recent journey of the flow
+holding it - under anything they have typed, merged by question name.
+Unset, which is how every form starts, nothing is prefilled and nothing
+changes.
+
+A renewal is what it is for: 2027's licence prefilled from 2026's. It is a
+property rather than a `"renewal"` form type, because a renewal form is
+often a review form too, and a type is a kind while this is a question.
+
+The walk lives in `FormFlow.Config.Forms.Type.Default`, so a host's own
+type inherits it, and offers the field by putting
+`FormFlow.Config.Forms.Type.Default.properties/0` after its own.
+
+### A new property type, and a flag for values that point out of a flow
+
+`FormFlow.Config.Property` gains:
+
+* `:related_form_in_any_flow` - a dropdown of every form position of every
+  root flow of the tenant, beside the existing `:related_form`, which
+  offers only the forms earlier in the same flow. Its value names the flow
+  as well as the position: `flow_position/2` writes it,
+  `parse_flow_position/1` reads it back.
+* `clear_on_copy` - whether copying the flow drops the value. `false` by
+  default, `true` on the new property above.
+
+### Breaking: `Flows.copy/2` requires the host's types
+
+`FormFlow.Data.Templates.Flows.copy/2` raises `ArgumentError` without both
+`flow_types:` and `form_types:`. They were optional, passed to have the
+copy's health cached.
+
+```elixir
+# before
+Flows.copy(flow, name: "Dog License 2027")
+
+# after
+Flows.copy(flow, [name: "Dog License 2027"] ++ [flow_types: flow_types, form_types: form_types])
+```
+
+The copy reads them for two things now. One is the cached health status,
+as before. The other is new: a property marked `clear_on_copy` arrives in
+the copy with no value. 2028 copied from 2027 must not keep pointing at
+2026 - it would resolve perfectly, at the wrong year - and there is
+nothing to re-point it to, since the copy did not touch the flow it names.
+
+Defaulting to the library's types would be right for every property the
+library declares and silently wrong for a host's own, and unlike the
+cached status - which any visit to the health page recomputes - dropping
+a value is a one-time write decision. So the types are required.
+
+A form or flow whose stored type is not in the list keeps every value: the
+copy cannot know what an unknown type declares. A pasted step keeps every
+value too - a pointer out of the flow is right wherever the step lands.
+
+### Breaking: `Templates.Shared.fill_related_forms/4` takes a keyword list
+
+`FormFlow.Web.Templates.Shared.fill_related_forms/4` is now
+`fill_related_forms/2`. It fills the options of both form-pointing property
+types, and the second needs the tenant.
+
+```elixir
+# before
+fill_related_forms(types, root_id, node_id, property_values)
+
+# after
+fill_related_forms(types,
+  root_id: root_id,
+  node_id: node_id,
+  tenant_id: tenant_id,
+  property_values: property_values
+)
+```
+
+### Health reports a pointer that no longer resolves
+
+A new code, `:related_form_in_any_flow_missing` (error): a
+`:related_form_in_any_flow` property names a flow that is gone, a position
+that flow no longer has, or one no Start reaches in it. The message says
+which, because the fix differs.
+
+This is the one check that looks outside the tree, so what the named flows
+hold is an argument: `FormFlow.Data.Templates.Flows.Health.check/2` takes
+`named_flows:`. Called with a flow id it builds it, loading each distinct
+flow named once and nothing for a tree that names none. Called with a tree
+it does not look outside unless given one, so the tree form still touches
+no database.
+
+Health cannot report a pointer that is merely *old*: an old pointer that
+resolves is not wrong. Clearing on copy is what handles that.
+
+### The duplicate dialog says what it will clear
+
+The copy dialog on the flow Show page and the flows index lists the
+settings the copy will leave empty, from the new
+`FormFlow.Web.Templates.Shared.cleared_by_copy/3`. Nothing else would tell
+an admin: the cleared value is the one failure the health page cannot see.
+
+### Removed: the demo's renewal form type
+
+`DemoWeb.FormFlowLive.Renewal` and the `"demo_renewal"` type are gone,
+with the `guides/usage.md` paragraph that taught the same walk by hand.
+They prefilled by following `copied_from_form_id` - reading intent out of
+copy provenance, which records that a copy happened, not that anybody
+wanted last year's answers carried into this form.
+
 ## v0.32.0
 
 ### The `flows` attr says what a page allows, one struct per flow

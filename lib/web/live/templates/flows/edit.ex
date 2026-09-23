@@ -273,9 +273,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     context
     |> Shared.flow_types_for(assigns)
     |> Shared.fill_related_forms(
-      root && root.id,
-      node && node.id,
-      FormFlow.Config.Flows.Type.property_values(context.subflow)
+      root_id: root && root.id,
+      node_id: node && node.id,
+      tenant_id: context.tenant_id,
+      property_values: FormFlow.Config.Flows.Type.property_values(context.subflow)
     )
   end
 

@@ -9,6 +9,7 @@ defmodule Demo.FormFlowHealthTest do
 
   use Demo.DataCase, async: false
 
+  alias FormFlow.Config.Property
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Forms
@@ -253,17 +254,124 @@ defmodule Demo.FormFlowHealthTest do
     assert after_publish == error - 1
   end
 
-  test "a copy starts never checked, with the source's ignores re-pointed; given the host's types, it is checked once" do
+  describe "a pointer into another flow, looked up for real" do
+    test "a position the named flow has, and a Start reaches, raises nothing" do
+      last_year = flow_of_one_form("Dog License 2026")
+      this_year = prefilling_flow(position(last_year))
+
+      assert Enum.all?(
+               Health.check(this_year.flow.id, host_types()).entries,
+               &(&1.code != :related_form_in_any_flow_missing)
+             )
+    end
+
+    test "a flow that is gone is reported, and the message says so" do
+      last_year = flow_of_one_form("Dog License 2026")
+      this_year = prefilling_flow(position(last_year))
+
+      {:ok, _deleted} = Flows.delete(Flows.get(last_year.flow.id))
+
+      assert [entry] = pointer_entries(this_year)
+      assert entry.level == :error
+      assert entry.message =~ "at a flow that no longer exists"
+    end
+
+    test "a position the named flow no longer has is reported" do
+      last_year = flow_of_one_form("Dog License 2026")
+
+      this_year =
+        prefilling_flow(Property.flow_position(last_year.flow.id, [Ecto.UUID.generate()]))
+
+      assert [entry] = pointer_entries(this_year)
+      assert entry.message =~ "no longer has"
+    end
+
+    defp pointer_entries(%{flow: flow}) do
+      flow.id
+      |> Health.check(host_types())
+      |> Map.fetch!(:entries)
+      |> Enum.filter(&(&1.code == :related_form_in_any_flow_missing))
+    end
+
+    defp position(%{flow: flow, form_node: node}),
+      do: Property.flow_position(flow.id, [node.id])
+
+    # Start → one form step → End, so the step is connected and its type's
+    # properties are checked
+    defp flow_of_one_form(name) do
+      {:ok, flow} = Flows.create(%{name: name, label: "forms", nodes: Flows.starter_nodes()})
+      flow = Flows.get(flow.id)
+
+      {:ok, _} =
+        Flows.update(flow, %{
+          nodes:
+            node_attrs(flow.nodes) ++
+              [
+                %{
+                  properties: %{
+                    "type" => "step",
+                    "data" => %{"label" => "Owner", "kind" => "form"}
+                  }
+                }
+              ]
+        })
+
+      flow = Flows.get(flow.id)
+      owner = Enum.find(flow.nodes, & &1.form_id)
+      start = Enum.find(flow.nodes, &("Start" in &1.labels))
+      stop = Enum.find(flow.nodes, &("End" in &1.labels))
+
+      {:ok, _} =
+        Flows.update(flow, %{
+          nodes: node_attrs(flow.nodes),
+          relationships: [
+            %{source_id: start.id, target_id: owner.id, label: "CONNECTS_TO"},
+            %{source_id: owner.id, target_id: stop.id, label: "CONNECTS_TO"}
+          ]
+        })
+
+      %{flow: Flows.get(flow.id), form_node: owner}
+    end
+
+    # The same flow, with its one form set to prefill from `value`
+    defp prefilling_flow(value) do
+      built = flow_of_one_form("Dog License 2027")
+
+      {:ok, _} =
+        Forms.update(Forms.get(built.form_node.form_id), %{
+          properties: %{
+            "form_type" => "default",
+            "form_type_property_values" => %{"prefill_with_answers_from" => value}
+          }
+        })
+
+      built
+    end
+
+    # Nodes as a save re-sends them: the form a step already points at rides
+    # in the properties, which is where a save reads it from
+    defp node_attrs(nodes) do
+      for node <- nodes do
+        properties =
+          if node.form_id,
+            do: Map.put(node.properties, "form_id", node.form_id),
+            else: node.properties
+
+        %{id: node.id, labels: node.labels, properties: properties}
+      end
+    end
+  end
+
+  test "a copy carries the source's ignores re-pointed, and is checked as it is made" do
     flow = starter_flow()
     health = Health.refresh(flow.id)
     [unconnected] = Health.at(health, :warning)
     {:ok, _root} = Health.ignore(health, unconnected, "demo-admin")
 
-    # The source's status describes a check the copy has not had, so it does
-    # not come along — nor is a check with the library's default types run,
-    # since the host's could differ. The ignore does, naming the copied node.
-    {:ok, copy} = Flows.copy(Flows.get(flow.id))
-    assert Health.status(copy) == nil
+    # The source's own status describes a check the copy has not had, so it
+    # does not come along; the copy is checked with the types the caller had
+    # to pass. The ignore comes along, naming the copied node.
+    {:ok, copy} = Flows.copy(Flows.get(flow.id), host_types())
     assert copy.properties["slug"] == copy.slug
 
     assert [record] = copy.properties["_health_metadata"]["ignored_entries"]
@@ -274,18 +382,22 @@ defmodule Demo.FormFlowHealthTest do
     assert Enum.any?(copy.nodes, &(&1.id == copied_node_id))
 
     # Checked, the copy counts the ignore as the source did
-    assert %{counts: %{warning: 0, ignored: 1}} = Health.refresh(copy.id)
-
-    {:ok, typed} =
-      Flows.copy(Flows.get(flow.id),
-        flow_types: FormFlow.Config.Flows.Type.defaults(),
-        form_types: FormFlow.Config.Forms.Type.defaults()
-      )
-
-    assert %{level: :error, counts: %{error: 1, warning: 0, ignored: 1}} = Health.status(typed)
+    assert %{level: :error, counts: %{error: 1, warning: 0, ignored: 1}} = Health.status(copy)
 
     # The source keeps its own
     assert %{counts: %{ignored: 1}} = Health.status(Flows.get(flow.id))
+  end
+
+  test "a copy refuses to run without both of the host's type lists" do
+    flow = starter_flow()
+
+    assert_raise ArgumentError, ~r/needs both flow_types: and form_types:/, fn ->
+      Flows.copy(Flows.get(flow.id))
+    end
+
+    assert_raise ArgumentError, fn ->
+      Flows.copy(Flows.get(flow.id), form_types: FormFlow.Config.Forms.Type.defaults())
+    end
   end
 
   # A root flow with one step on the catalog form, wired from Start to End

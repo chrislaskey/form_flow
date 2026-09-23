@@ -142,11 +142,11 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   # The page's form types, with each related-form property's choices filled
   # in for this form's place in its flow. Empty means no dropdown.
   defp form_types(assigns, form) do
-    Templates.Shared.fill_related_forms(
-      assigns.form_types,
-      assigns.root_id,
-      assigns.node_id,
-      FormFlow.Config.Forms.Type.property_values(form)
+    Templates.Shared.fill_related_forms(assigns.form_types,
+      root_id: assigns.root_id,
+      node_id: assigns.node_id,
+      tenant_id: form.tenant_id,
+      property_values: FormFlow.Config.Forms.Type.property_values(form)
     )
   end
 

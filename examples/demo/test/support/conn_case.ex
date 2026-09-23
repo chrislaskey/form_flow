@@ -28,6 +28,7 @@ defmodule DemoWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import DemoWeb.ConnCase
+      import Demo.DataCase, only: [host_types: 0]
     end
   end
 

@@ -137,6 +137,7 @@ defmodule FormFlow.Data.Templates.Flows do
 
   import Ecto.Query
 
+  alias FormFlow.Config.Property
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
@@ -978,25 +979,52 @@ defmodule FormFlow.Data.Templates.Flows do
   The source's cached health status does not come along - it describes a
   check the copy has not had - but its ignored entries do, re-pointed at
   the copied nodes: the copy has the source's shape, so the same findings
-  are fine on purpose. Given both `flow_types:` and `form_types:` - the
-  host's lists - the copy is checked once and its status cached
-  (`FormFlow.Data.Templates.Flows.Health.refresh/2`); given one or neither
-  it is not, since a check with the library's default types for either list
-  could cache a type warning the host's lists would not raise.
+  are fine on purpose. The copy is then checked once and its status cached
+  (`FormFlow.Data.Templates.Flows.Health.refresh/2`).
+
+  **`flow_types:` and `form_types:` are required** - the host's lists, the
+  same the pages are given - and a call without both raises
+  `ArgumentError`. They are what the copy reads two things from: the cached
+  health status, and which property values to drop. A property marked
+  `clear_on_copy` (`FormFlow.Config.Property`) arrives in the copy with no
+  value, and that is the whole rule the copy knows - it asks nothing about
+  what the property means. A form or flow whose stored type is not in the
+  list keeps every value: the copy cannot know what an unknown type
+  declares, and guessing is worse than a stale pointer.
+
+  A `:related_form` value is not cleared. It points inside its own flow, so
+  it is re-pointed at the copied nodes instead and stays right.
+
+  The types are required rather than defaulted because dropping a value is
+  a one-time write decision, unlike the cached status, which any later
+  visit to the health page recomputes. Falling back to the library's
+  defaults would be right for every property the library declares and
+  silently wrong for a host's own, and what it would leave behind - a
+  pointer at last year's flow, resolving perfectly - is the one failure
+  health cannot see.
   """
   def copy(%Flow{} = flow, opts \\ []) do
+    {flow_types, form_types} = required_types(opts)
     destination = copy_destination(flow, opts)
 
-    with {:ok, copy_id} <- Repo.transaction(fn -> copy_tree(flow, destination) end) do
-      case {opts[:flow_types], opts[:form_types]} do
-        {flow_types, form_types} when is_list(flow_types) and is_list(form_types) ->
-          Health.refresh(copy_id, flow_types: flow_types, form_types: form_types)
-
-        _one_or_none ->
-          :ok
-      end
+    with {:ok, copy_id} <-
+           Repo.transaction(fn -> copy_tree(flow, destination, flow_types, form_types) end) do
+      Health.refresh(copy_id, flow_types: flow_types, form_types: form_types)
 
       {:ok, get(copy_id)}
+    end
+  end
+
+  defp required_types(opts) do
+    case {opts[:flow_types], opts[:form_types]} do
+      {flow_types, form_types} when is_list(flow_types) and is_list(form_types) ->
+        {flow_types, form_types}
+
+      _one_or_none ->
+        raise ArgumentError,
+              "copy/2 needs both flow_types: and form_types:, the host's lists. The copy " <>
+                "reads them to decide which property values to drop, and a copy that " <>
+                "silently keeps one it should have cleared cannot be found afterwards."
     end
   end
 
@@ -1028,7 +1056,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # new id across the whole tree, then copy the flow, everything it owns,
   # and the relationships against the plan, rolling back on the first
   # refused insert. Returns the copy's id.
-  defp copy_tree(flow, destination) do
+  defp copy_tree(flow, destination, flow_types, form_types) do
     root = root_flow(flow)
     root_tree = resolve_tree(root.id)
     tree = if root.id == flow.id, do: root_tree, else: resolve_tree(flow.id)
@@ -1041,7 +1069,9 @@ defmodule FormFlow.Data.Templates.Flows do
       slug_prefixes: destination.prefixes,
       source_prefixes: flow_prefixes(root_tree, flow.id),
       destination_prefix: [],
-      user_id: destination.user_id
+      user_id: destination.user_id,
+      flow_types: flow_types,
+      form_types: form_types
     }
 
     copied = %{flows: %{}, forms: %{}}
@@ -1168,7 +1198,13 @@ defmodule FormFlow.Data.Templates.Flows do
         source_prefixes: flow_prefixes(resolve_tree(source_root.id), source_flow.id),
         destination_prefix: destination_prefix(resolve_tree(destination_root.id), flow.id),
         # A paste is part of a save, which has no author of its own yet
-        user_id: nil
+        user_id: nil,
+        # A paste keeps every property value. A value cleared on copy points
+        # out of the flow holding it and is therefore still right wherever
+        # the step lands; and pasting one step is not the new year that
+        # makes last year's source the wrong one.
+        flow_types: nil,
+        form_types: nil
       }
 
       {entity, _copied} =
@@ -1783,7 +1819,10 @@ defmodule FormFlow.Data.Templates.Flows do
         Flow.changeset(%Flow{id: copy_id}, %{
           name: name || source.name,
           label: source.label,
-          properties: rewrite_paths(properties, context),
+          properties:
+            properties
+            |> clear_on_copy(context.flow_types, "flow_type", "flow_type_property_values")
+            |> rewrite_paths(context),
           tenant_id: context.tenant_id,
           slug: slug,
           owner_flow_id: owner_id
@@ -1893,14 +1932,19 @@ defmodule FormFlow.Data.Templates.Flows do
 
   defp copy_form_lineage(nil, _domain_id, _context), do: nil
 
+  # A catalog form is not copied, so nothing of its is cleared either: one
+  # lineage serves every flow reusing it, and clearing a value here would
+  # empty it for the flows the copy did not touch
   defp copy_form_lineage(%Templates.Form{owner_flow_id: nil} = catalog, _domain_id, _context),
     do: catalog.id
 
   defp copy_form_lineage(%Templates.Form{} = owned, domain_id, context) do
-    case Templates.Forms.copy(owned,
-           owner_flow_id: domain_id,
-           properties: rewrite_paths(owned.properties, context)
-         ) do
+    properties =
+      owned.properties
+      |> clear_on_copy(context.form_types, "form_type", "form_type_property_values")
+      |> rewrite_paths(context)
+
+    case Templates.Forms.copy(owned, owner_flow_id: domain_id, properties: properties) do
       {:ok, copy} -> copy.id
       {:error, changeset} -> Repo.rollback(changeset)
     end
@@ -1918,6 +1962,31 @@ defmodule FormFlow.Data.Templates.Flows do
   # segment is an id. Lists are left alone: the health records inside a
   # root's properties hold paths as lists, and Health.for_copy/2 is what
   # re-points those.
+  # The values of the properties the template's type marks `clear_on_copy`
+  # (`FormFlow.Config.Property`), dropped - the whole rule the copy knows
+  # about them. A type the host's list no longer has keeps every value:
+  # what it declares cannot be read, and guessing is worse than a stale
+  # pointer. A template that never chose a type is the first of the list,
+  # the type every page resolves an unset one to.
+  defp clear_on_copy(properties, nil, _type_key, _values_key), do: properties || %{}
+
+  defp clear_on_copy(properties, types, type_key, values_key) do
+    properties = properties || %{}
+    values = properties[values_key] || %{}
+
+    with %{properties: declared} <- stored_type(types, properties[type_key]),
+         cleared when cleared != values <- Map.drop(values, cleared_ids(declared)) do
+      Map.put(properties, values_key, cleared)
+    else
+      _nothing_to_clear -> properties
+    end
+  end
+
+  defp stored_type(types, nil), do: List.first(types)
+  defp stored_type(types, id), do: Enum.find(types, &(&1.id == id))
+
+  defp cleared_ids(declared), do: for(%Property{clear_on_copy: true} = p <- declared, do: p.id)
+
   defp rewrite_paths(properties, context) when is_map(properties) do
     Map.new(properties, fn {key, value} -> {key, rewrite_paths(value, context)} end)
   end

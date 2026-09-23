@@ -109,6 +109,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
        copying: nil,
        copy_name: nil,
        copy_slug: nil,
+       copy_cleared: [],
        copy_error: nil,
        changing_status: nil,
        status_pending: nil,
@@ -172,6 +173,12 @@ defmodule FormFlow.Web.Templates.Flows.Index do
            copying: flow,
            copy_name: Shared.copy_name(flow),
            copy_slug: Flows.copy_slug(flow),
+           copy_cleared:
+             Shared.cleared_by_copy(
+               flow,
+               socket.assigns.host_types[:flow_types],
+               socket.assigns.host_types[:form_types]
+             ),
            copy_error: nil,
            error: nil
          )}
@@ -336,6 +343,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         flow={@copying}
         name={@copy_name}
         slug={@copy_slug}
+        cleared={@copy_cleared}
         error={@copy_error}
         target={@myself}
         components={@components}

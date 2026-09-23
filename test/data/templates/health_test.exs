@@ -285,6 +285,104 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert message == "“Check” points “Form to review” at a form that is no longer in this flow"
   end
 
+  describe "a related form in another flow" do
+    setup do
+      other = Ecto.UUID.generate()
+      reachable = Ecto.UUID.generate()
+      stranded = Ecto.UUID.generate()
+
+      named_flows = %{
+        other => %{
+          all: MapSet.new([[reachable], [stranded]]),
+          connected: MapSet.new([[reachable]])
+        }
+      }
+
+      prefilling = fn value ->
+        chain([
+          form_node("Renew",
+            form:
+              published_form("Renew", %{
+                "form_type_property_values" => %{"prefill_with_answers_from" => value}
+              })
+          )
+        ])
+      end
+
+      %{
+        other: other,
+        reachable: reachable,
+        stranded: stranded,
+        named_flows: named_flows,
+        prefilling: prefilling
+      }
+    end
+
+    test "pointing at a position that flow has, and a Start reaches, is fine", context do
+      value = Property.flow_position(context.other, [context.reachable])
+
+      assert Health.ok?(
+               Health.check(context.prefilling.(value), named_flows: context.named_flows)
+             )
+    end
+
+    test "the three ways it stops resolving each say which", context do
+      check = fn value ->
+        Health.check(context.prefilling.(value), named_flows: context.named_flows).entries
+      end
+
+      # The flow itself is gone
+      assert [%Entry{code: :related_form_in_any_flow_missing, level: :error, message: gone}] =
+               check.(Property.flow_position(Ecto.UUID.generate(), [context.reachable]))
+
+      assert gone == "“Renew” points “Prefill with answers from” at a flow that no longer exists"
+
+      # The flow is there; the position is not
+      assert [%Entry{code: :related_form_in_any_flow_missing, message: removed}] =
+               check.(Property.flow_position(context.other, [Ecto.UUID.generate()]))
+
+      assert removed ==
+               "“Renew” points “Prefill with answers from” at a form the flow it names no longer has"
+
+      # The position is there; no Start reaches it, which is where the
+      # runtime looks
+      assert [%Entry{code: :related_form_in_any_flow_missing, message: unreachable}] =
+               check.(Property.flow_position(context.other, [context.stranded]))
+
+      assert unreachable ==
+               "“Renew” points “Prefill with answers from” at a form no Start reaches in the flow it names"
+
+      # A value no flow can be read out of at all - written by hand
+      assert [%Entry{code: :related_form_in_any_flow_missing, message: nonsense}] =
+               check.("not-a-position")
+
+      assert nonsense ==
+               "“Renew” points “Prefill with answers from” at something that is not a form of any flow"
+    end
+
+    test "the check stands down when it was not given the flows to check against", context do
+      value = Property.flow_position(Ecto.UUID.generate(), [Ecto.UUID.generate()])
+
+      assert Health.ok?(Health.check(context.prefilling.(value)))
+    end
+
+    test "a catalog form may hold one - it means the same in every flow", context do
+      value = Property.flow_position(context.other, [context.reachable])
+
+      tree =
+        chain([
+          form_node("Renew",
+            form:
+              catalog_form("Renew", %{
+                "form_type_property_values" => %{"prefill_with_answers_from" => value}
+              })
+          )
+        ])
+
+      assert Health.ok?(Health.check(tree, named_flows: context.named_flows))
+    end
+  end
+
   test "a shared form pointing at a step is an error of its own; the type alone is fine" do
     about = form_node("About")
 
@@ -589,7 +687,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       assert Entry.fix(code) != Entry.fix(:not_a_code)
     end
 
-    assert length(Entry.codes()) == 15
+    assert length(Entry.codes()) == 16
   end
 
   test "the checks emit every listed code, and no code the list lacks" do
@@ -624,6 +722,19 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
           })
       )
 
+    # A pointer into another flow, checked against the `named_flows` below -
+    # empty, so the flow it names is one nothing knows about
+    prefilling =
+      form_node("Renewing",
+        form:
+          published_form("Renewing", %{
+            "form_type_property_values" => %{
+              "prefill_with_answers_from" =>
+                Property.flow_position(Ecto.UUID.generate(), [Ecto.UUID.generate()])
+            }
+          })
+      )
+
     dangling = subflow_node("Dangling", Ecto.UUID.generate())
     dead = form_node("Dead")
 
@@ -631,7 +742,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     stop = end_node()
 
     %{nodes: nodes, relationships: edges} =
-      chain([unpublished, drafted, no_form, stale_type, review, pointing, shared])
+      chain([unpublished, drafted, no_form, stale_type, review, pointing, shared, prefilling])
 
     review_flow = %FormFlow.Config.Flows.Type{
       id: "review_flow",
@@ -653,7 +764,9 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     emitted =
       trees
-      |> Enum.flat_map(fn tree -> tree |> Health.check(flow_types: [review_flow]) |> codes() end)
+      |> Enum.flat_map(fn tree ->
+        tree |> Health.check(flow_types: [review_flow], named_flows: %{}) |> codes()
+      end)
       |> MapSet.new()
 
     assert MapSet.equal?(emitted, MapSet.new(Entry.codes()))

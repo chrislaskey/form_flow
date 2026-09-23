@@ -61,6 +61,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        copying?: false,
        copy_name: nil,
        copy_slug: nil,
+       copy_cleared: [],
        copy_error: nil,
        changing_status?: false,
        status_pending: nil,
@@ -120,9 +121,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
     context
     |> Shared.flow_types_for(assigns)
     |> Shared.fill_related_forms(
-      root && root.id,
-      node && node.id,
-      FormFlow.Config.Flows.Type.property_values(context.subflow)
+      root_id: root && root.id,
+      node_id: node && node.id,
+      tenant_id: context.tenant_id,
+      property_values: FormFlow.Config.Flows.Type.property_values(context.subflow)
     )
   end
 
@@ -249,6 +251,12 @@ defmodule FormFlow.Web.Templates.Flows.Show do
        copying?: true,
        copy_name: Shared.copy_name(socket.assigns.flow),
        copy_slug: Flows.copy_slug(socket.assigns.flow),
+       copy_cleared:
+         Shared.cleared_by_copy(
+           socket.assigns.flow,
+           socket.assigns.flow_types,
+           socket.assigns.form_types
+         ),
        copy_error: nil
      )}
   end
@@ -376,6 +384,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
         flow={@flow}
         name={@copy_name}
         slug={@copy_slug}
+        cleared={@copy_cleared}
         error={@copy_error}
         target={@myself}
         components={@components}

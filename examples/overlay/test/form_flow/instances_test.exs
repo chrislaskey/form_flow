@@ -22,6 +22,7 @@ defmodule Demo.FormFlowInstancesTest do
   import Phoenix.LiveViewTest
 
   alias FormFlow.Config.Flows.Allowed
+  alias FormFlow.Config.Property
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
@@ -1085,37 +1086,30 @@ defmodule Demo.FormFlowInstancesTest do
       assert html =~ "Grace"
       refute html =~ "Demo User"
     end
+  end
 
-    test "the renewal type starts the form with last year's answers, under the user's own",
+  describe "prefilling with answers from another flow" do
+    test "the form starts with this user's own answers at the form the property names",
          %{conn: conn} do
-      # Last year: a flow owning its one form, the form typed for renewal
+      # Last year: a flow with one form
       {:ok, last_year} =
         Flows.create(%{name: "Dog License 2026", slug: "dla2026", status: "open"})
 
-      owner =
-        build_form_node(last_year, "Owner",
-          form_type: "demo_renewal",
-          owner_flow_id: last_year.id
-        )
-
+      owner = build_form_node(last_year, "Owner", owner_flow_id: last_year.id)
       edge(last_year, build_node(last_year, ["Start"], "Start"), owner)
 
-      # This year is its copy, opened; the copied form points back at last year's
-      {:ok, copy} = Flows.copy(Flows.get(last_year.id), name: "Dog License 2027", slug: "dla2027")
-      {:ok, this_year} = Flows.update_status(copy, "open")
-      [copied_owner] = Enum.filter(Flows.get(this_year.id).nodes, & &1.form_id)
-      assert Forms.get(copied_owner.form_id).copied_from_form_id == owner.form_id
+      # This year points at it because an admin said so — no copy, no lineage
+      this_year = renewing_flow(Property.flow_position(last_year.id, [owner.id]))
+      this_instance = start_flow(this_year.flow)
 
-      # Nobody has filed yet: the form starts empty
-      this_instance = start_flow(this_year)
-      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      # Nobody has filed last year yet: the form starts empty
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [this_year.form.id]))
       refute html =~ "Rex"
 
-      # Last year the user filed. Someone else filed too, and the user also
-      # started a second journey they never submitted — neither is theirs
-      # to renew from
-      last_instance = start_flow(last_year)
-      complete(last_instance, [owner.id], %{"name" => "Rex"})
+      # The user filed last year. Someone else filed too, and the user also
+      # started a later journey they never submitted — neither is theirs to
+      # renew from
+      complete(start_flow(last_year), [owner.id], %{"name" => "Rex"})
 
       {:ok, theirs} =
         Instances.Flows.create(%{template_flow_id: last_year.id, user_id: "someone-else"})
@@ -1124,48 +1118,41 @@ defmodule Demo.FormFlowInstancesTest do
       abandoned = start_flow(last_year)
       {:ok, _started} = Instances.Forms.update_status(abandoned, [owner.id], :in_progress)
 
-      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [this_year.form.id]))
       assert html =~ "Rex"
       refute html =~ "Fido"
 
       # An answer given this year wins over last year's
-      complete(this_instance, [copied_owner.id], %{"name" => "Rex II"})
+      complete(this_instance, [this_year.form.id], %{"name" => "Rex II"})
 
       {:ok, _reopened} =
-        Instances.Forms.update_status(this_instance, [copied_owner.id], :in_progress)
+        Instances.Forms.update_status(this_instance, [this_year.form.id], :in_progress)
 
-      {:ok, _view, html} = live(conn, edit_path(this_instance, [copied_owner.id]))
+      {:ok, _view, html} = live(conn, edit_path(this_instance, [this_year.form.id]))
       assert html =~ "Rex II"
     end
 
-    test "the renewal type reaches back past a skipped year, and has nothing to join on a catalog form",
-         %{conn: conn} do
-      {:ok, first} = Flows.create(%{name: "Dog License 2026", slug: "dla2026", status: "open"})
-      owner = build_form_node(first, "Owner", form_type: "demo_renewal", owner_flow_id: first.id)
-      edge(first, build_node(first, ["Start"], "Start"), owner)
-      complete(start_flow(first), [owner.id], %{"name" => "Rex"})
+    test "a pointer that resolves to nothing prefills nothing, and says nothing", %{conn: conn} do
+      gone = Property.flow_position(Ecto.UUID.generate(), [Ecto.UUID.generate()])
+      renewal = renewing_flow(gone)
 
-      # 2027 is copied from 2026 and never filed; 2028 is copied from 2027
-      {:ok, second} = Flows.copy(Flows.get(first.id), name: "Dog License 2027", slug: "dla2027")
-      {:ok, third} = Flows.copy(Flows.get(second.id), name: "Dog License 2028", slug: "dla2028")
-      {:ok, third} = Flows.update_status(third, "open")
-      [third_owner] = Enum.filter(Flows.get(third.id).nodes, & &1.form_id)
+      {:ok, view, html} = live(conn, edit_path(start_flow(renewal.flow), [renewal.form.id]))
 
-      {:ok, _view, html} = live(conn, edit_path(start_flow(third), [third_owner.id]))
-      assert html =~ "Rex"
+      # The form opens as any other unanswered form does: no prefill, no
+      # word of one — the admin hears about it from the health page instead
+      assert html =~ "Name"
+      refute html =~ "Missing"
+      refute html =~ "Prefill with answers from"
+      assert has_element?(view, "button[type=\'submit\']")
+    end
 
-      # A catalog form is the same lineage in every year: no provenance, no prefill
-      %{flow: catalog_flow, instance: instance, form: shared} =
-        flow_of_one(nil, form_type: "demo_renewal", name: "Cat License")
+    test "an unset property is one query short of nothing: the form starts empty", %{conn: conn} do
+      %{instance: instance, form: only} = flow_of_one()
 
-      complete(instance, [shared.id], %{"name" => "Tom"})
-      {:ok, cat_copy} = Flows.copy(Flows.get(catalog_flow.id), name: "Cat License 2027")
-      {:ok, cat_copy} = Flows.update_status(cat_copy, "open")
-      [copied_shared] = Enum.filter(Flows.get(cat_copy.id).nodes, & &1.form_id)
-      assert copied_shared.form_id == shared.form_id
+      {:ok, _view, html} = live(conn, edit_path(instance, [only.id]))
 
-      {:ok, _view, html} = live(conn, edit_path(start_flow(cat_copy), [copied_shared.id]))
-      refute html =~ "Tom"
+      assert html =~ "Name"
+      refute html =~ "Rex"
     end
   end
 
@@ -2601,6 +2588,23 @@ defmodule Demo.FormFlowInstancesTest do
 
   defp build_form_node(flow, label, opts \\ []) do
     build_node(flow, ["Form"], label, %{form_id: published_form(label, opts).id})
+  end
+
+  # An open flow of one form typed "default" with `value` set as the form it
+  # prefills from — this year's licence, pointing at last year's
+  defp renewing_flow(value) do
+    {:ok, flow} = Flows.create(%{name: "Dog License 2027", slug: "dla2027", status: "open"})
+
+    form =
+      build_form_node(flow, "Owner",
+        owner_flow_id: flow.id,
+        form_type: "default",
+        property_values: %{"prefill_with_answers_from" => value}
+      )
+
+    edge(flow, build_node(flow, ["Start"], "Start"), form)
+
+    %{flow: flow, form: form}
   end
 
   defp subflow_node(flow, subflow, label) do

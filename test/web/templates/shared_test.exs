@@ -72,6 +72,16 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.read_only?(%Property{source | options: []})
     refute Shared.read_only?(@size)
 
+    # The pointer into another flow renders the same way
+    anywhere = %Property{id: "from", name: "From", type: :related_form_in_any_flow}
+
+    assert Shared.field_type(%Property{anywhere | options: [{"2026 / Owner", "flow:f/n"}]}) ==
+             "dropdown"
+
+    assert Shared.field_type(%Property{anywhere | options: []}) == "text"
+    assert Shared.read_only?(%Property{anywhere | options: []})
+    assert is_nil(Shared.field_options(%Property{anywhere | options: []}))
+
     assert Shared.field_type(@count) == "text"
     assert Shared.input_type(@count) == "number"
     assert is_nil(Shared.input_type(@name))
@@ -163,6 +173,17 @@ defmodule FormFlow.Web.Templates.SharedTest do
     assert Shared.display_value(source, "intake") == "Intake"
     assert Shared.display_value(source, "gone") == "Missing - no longer in this flow"
     assert Shared.display_value(@name, "Ada") == "Ada"
+
+    # A pointer into another flow is missing from every flow, not just this one
+    anywhere = %Property{
+      id: "from",
+      name: "From",
+      type: :related_form_in_any_flow,
+      options: [{"Dog License 2026 / Owner", "flow:f/n"}]
+    }
+
+    assert Shared.display_value(anywhere, "flow:f/n") == "Dog License 2026 / Owner"
+    assert Shared.display_value(anywhere, "flow:gone/n") == "Missing - no longer in any flow"
   end
 
   test "effective_type/2 is the stored id, or the first type an unset one amounts to" do

@@ -25,6 +25,13 @@ defmodule FormFlow.Config.Forms.Type do
   Two ship with the library, both in `defaults/0`: `"default"`, the form as
   designed, and `"review"` (`FormFlow.Web.Components.Forms.Types.Review`),
   which shows an earlier form's answers beside it.
+
+  Both carry the property every form type inherits with the default
+  behaviour - "Prefill with answers from", which starts a form filled in
+  with the same user's answers at a form of another flow. It is declared by
+  `FormFlow.Config.Forms.Type.Default.properties/0`, where the walk that
+  reads it lives, so a host's own type offers it by putting those after its
+  own.
   """
 
   alias FormFlow.Context
@@ -59,14 +66,17 @@ defmodule FormFlow.Config.Forms.Type do
         id: "default",
         module: FormFlow.Config.Forms.Type.Default,
         name: "Default",
-        description: "The form as designed, nothing more."
+        description: "The form as designed, nothing more.",
+        properties: FormFlow.Config.Forms.Type.Default.properties()
       },
       %__MODULE__{
         id: "review",
         module: FormFlow.Web.Components.Forms.Types.Review,
         name: "Review",
         description: "Shows an earlier form's answers beside this one, for checking them.",
-        properties: FormFlow.Web.Components.Forms.Types.Review.properties()
+        properties:
+          FormFlow.Web.Components.Forms.Types.Review.properties() ++
+            FormFlow.Config.Forms.Type.Default.properties()
       }
     ]
   end

@@ -645,7 +645,7 @@ defmodule Demo.FormFlowFormsTest do
       {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("W-2 Details")]})
       [source_node] = Flows.get(flow.id).nodes
 
-      {:ok, copy} = Flows.copy(Flows.get(flow.id))
+      {:ok, copy} = Flows.copy(Flows.get(flow.id), host_types())
       [copied_node] = copy.nodes
 
       assert copied_node.form_id != source_node.form_id
@@ -670,7 +670,7 @@ defmodule Demo.FormFlowFormsTest do
 
       {:ok, _} = Flows.update(flow, %{nodes: [node_attrs]})
 
-      {:ok, copy} = Flows.copy(Flows.get(flow.id))
+      {:ok, copy} = Flows.copy(Flows.get(flow.id), host_types())
       [copied_node] = copy.nodes
 
       assert copied_node.form_id == catalog_form.id

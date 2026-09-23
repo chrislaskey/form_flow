@@ -8,6 +8,13 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   "to the clipboard" - while the code, the events, and this module keep the
   word `copy` (see `FormFlow.Web.Templates.Flows.Show`).
 
+  Under that sentence, when there is any, the dialog lists the settings the
+  copy will leave empty (`FormFlow.Web.Templates.Shared.cleared_by_copy/3`):
+  a setting that points out of this flow is cleared rather than carried
+  forward, and a copy that says nothing about it would arrive still
+  pointing at the flow it was copied from - resolving perfectly, at the
+  wrong flow. Most copies clear nothing and the list is not drawn.
+
   The caller owns the flow around it: opening, the `copy` event the form
   submits to `target` with `name` and `slug`, the `cancel_copy` event the
   Cancel button sends, and the error it hands back when the copy is refused -
@@ -24,6 +31,12 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   attr(:slug, :string, required: true, doc: "the copy's slug as prefilled")
   attr(:target, :any, required: true, doc: "the LiveComponent receiving copy and cancel_copy")
   attr(:error, :string, default: nil, doc: "why the last attempt was refused")
+
+  attr(:cleared, :list,
+    default: [],
+    doc: "what the copy will leave empty, from Shared.cleared_by_copy/3"
+  )
+
   attr(:components, :atom, default: nil)
 
   def copy_dialog(assigns) do
@@ -35,6 +48,13 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
           A duplicate of “{@flow.name}” with its steps, connections, subflows, and forms.
           Forms from the catalog stay shared; the rest is the copy's own.
         </p>
+
+        <div :if={@cleared != []} class="mb-3 text-xs text-zinc-500">
+          <p>Left empty in the copy, for an administrator to set again:</p>
+          <ul class="mt-1 list-disc pl-4">
+            <li :for={{name, count} <- @cleared}>{name} - set in {places(count)}</li>
+          </ul>
+        </div>
 
         <form phx-submit="copy" phx-target={@target} class="space-y-3">
           <Core.input components={@components} type="text" name="name" label="Name" value={@name} />
@@ -68,4 +88,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
     </div>
     """
   end
+
+  defp places(1), do: "1 place"
+  defp places(count), do: "#{count} places"
 end

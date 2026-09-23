@@ -8,6 +8,10 @@ defmodule FormFlow.Config.Forms.Type.Default do
         Map.merge(%{"email" => user_email(context)}, FormFlow.Config.Forms.Type.Default.initial_data(context, callback_data))
       end
 
+  `properties/0` is the other half of what a custom type reaches for: the
+  properties every form type inherits - "Prefill with answers from" - which
+  a type declaring its own puts after them.
+
   Delegates to the private internal implementation in
   `FormFlow.Web.Components.Forms.Types.Default`
   """
@@ -16,6 +20,7 @@ defmodule FormFlow.Config.Forms.Type.Default do
 
   alias FormFlow.Web.Components.Forms.Types
 
+  defdelegate properties(), to: Types.Default
   defdelegate initial_data(context, callback_data), to: Types.Default
   defdelegate edit_component(assigns), to: Types.Default
   defdelegate show_component(assigns), to: Types.Default

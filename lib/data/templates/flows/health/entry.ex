@@ -55,6 +55,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
     :subflow_missing,
     :property_missing,
     :related_form_missing,
+    :related_form_in_any_flow_missing,
     :related_form_shared,
     :unconnected,
     :dead_end,
@@ -160,6 +161,13 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
       "reads its answers would find none."
   end
 
+  def explanation(:related_form_in_any_flow_missing) do
+    "The property names a form of another flow, and that form cannot be found: the flow was " <>
+      "deleted, the step was removed from it, or no Start reaches the step any more. The " <>
+      "form is looked up among the steps a user can reach, so whatever reads its answers " <>
+      "would find none - a renewal form, for one, would start empty instead of filled in."
+  end
+
   def explanation(:related_form_shared) do
     "A form from the catalog is one form shared by every flow that uses it, with one place " <>
       "to keep its settings. This one points at a step by its position in a flow, which can " <>
@@ -225,6 +233,11 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
 
   def fix(:related_form_missing),
     do: "Point the property at a form Start reaches, or connect or add the form it names."
+
+  def fix(:related_form_in_any_flow_missing),
+    do:
+      "Point the property at a form of a flow that still has it, or clear it if there is " <>
+        "nothing to prefill from."
 
   def fix(:related_form_shared),
     do:
