@@ -73,6 +73,47 @@ defmodule Demo.FormFlowMigrationTest do
              Repo.query("DELETE FROM form_flow_template_form_versions WHERE id = ?", [version_id])
   end
 
+  test "a journey's open positions accept rows: one per path, none outliving the journey" do
+    {:ok, flow_id} = insert_flow()
+    {:ok, journey_id} = insert_journey(flow_id)
+    node_id = Ecto.UUID.generate()
+    path = Jason.encode!([node_id])
+
+    assert {:ok, _} = insert_next_position(journey_id, path, node_id)
+
+    # One row per position per journey
+    assert {:error, _} = insert_next_position(journey_id, path, node_id)
+
+    # The journey's own cache columns take the same position and its counts
+    assert {:ok, _} =
+             Repo.query(
+               """
+               UPDATE form_flow_instance_flows
+               SET next_path = ?, next_node_id = ?, completed_forms = 0, forms_total = 3,
+                   next_computed_at = ?
+               WHERE id = ?
+               """,
+               [path, node_id, @timestamp, journey_id]
+             )
+
+    # The rows go before the journey - RESTRICT, like every other child
+    assert {:error, _} =
+             Repo.query("DELETE FROM form_flow_instance_flows WHERE id = ?", [journey_id])
+
+    {:ok, _} =
+      Repo.query("DELETE FROM form_flow_instance_next_positions WHERE instance_flow_id = ?", [
+        journey_id
+      ])
+
+    {:ok, _} =
+      Repo.query("DELETE FROM form_flow_instance_flow_events WHERE instance_flow_id = ?", [
+        journey_id
+      ])
+
+    assert {:ok, _} =
+             Repo.query("DELETE FROM form_flow_instance_flows WHERE id = ?", [journey_id])
+  end
+
   test "catalog names are unique; owned forms may repeat them" do
     {:ok, _} = insert_template("Enrollment")
 
@@ -119,6 +160,33 @@ defmodule Demo.FormFlowMigrationTest do
       )
 
     with {:ok, _} <- result, do: {:ok, id}
+  end
+
+  defp insert_journey(flow_id) do
+    id = Ecto.UUID.generate()
+
+    result =
+      Repo.query(
+        """
+        INSERT INTO form_flow_instance_flows
+          (id, template_flow_id, status, metadata, inserted_at, updated_at)
+        VALUES (?, ?, 'in_progress', '{}', ?, ?)
+        """,
+        [id, flow_id, @timestamp, @timestamp]
+      )
+
+    with {:ok, _} <- result, do: {:ok, id}
+  end
+
+  defp insert_next_position(journey_id, path, node_id) do
+    Repo.query(
+      """
+      INSERT INTO form_flow_instance_next_positions
+        (id, instance_flow_id, path, node_id, inserted_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      """,
+      [Ecto.UUID.generate(), journey_id, path, node_id, @timestamp, @timestamp]
+    )
   end
 
   defp insert_flow do

@@ -195,7 +195,9 @@ defmodule FormFlow.Web.Instances.Flows.Show do
     if Shared.continue_allowed?(flow, socket.assigns) do
       case Instances.Forms.update_status(socket.assigns.flow_instance, path, :in_progress,
              user_id: socket.assigns.user_id,
-             tenant_id: socket.assigns.tenant_id
+             tenant_id: socket.assigns.tenant_id,
+             flow_types: socket.assigns.flow_types,
+             callback_data: socket.assigns.callback_data
            ) do
         {:ok, _reopened} -> {:noreply, socket |> Shared.load() |> assign_page_state()}
         {:error, _reason} -> {:noreply, assign(socket, :error, "Could not reopen the form.")}

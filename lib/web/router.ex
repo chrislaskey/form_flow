@@ -270,6 +270,23 @@ defmodule FormFlow.Web.Router do
         "applied on top. Ignored by the template pages"
   )
 
+  attr(:actionable_only, :boolean,
+    default: false,
+    doc:
+      "`true` lists only the flow instances the viewer can act on: those whose " <>
+        "flow is open at a form the viewer's `perspectives` are for, read from " <>
+        "the cache `FormFlow.Data.Instances.Flows.update_next_positions/2` keeps " <>
+        "(`FormFlow.Data.Instances.Flows.narrow_next_position/3`). Which forms " <>
+        "are the viewer's is asked of the flows this page names (`flows`, or " <>
+        "every root of the tenant when unset), so a host whose `instances` " <>
+        "query reaches journeys of a flow the page does not name lists none " <>
+        "of them - name the flow, or leave this `false`. A reviews " <>
+        "page says it; an applications page, which lists everything the user " <>
+        "started and says whose turn each is, leaves it `false`. Applied to " <>
+        "the host's `instances` query as the tenant is. Ignored by the " <>
+        "template pages"
+  )
+
   attr(:download_path, :string,
     default: nil,
     doc:
@@ -566,6 +583,7 @@ defmodule FormFlow.Web.Router do
               on_mount={@on_mount}
               instances={@instances}
               flows={@flows}
+              actionable_only={@actionable_only}
               pre_release_user_ids={@pre_release_user_ids}
               download_path={@download_path}
               uri={@uri}

@@ -167,6 +167,31 @@ defmodule FormFlow.Config.Flows.TypesTest do
     end
   end
 
+  describe "for_flow/2" do
+    alias FormFlow.Data.Templates.Flow
+
+    test "the flow's stored type among the types of its kind" do
+      flow = %Flow{label: "forms", properties: %{"flow_type" => "wizard_any_order"}}
+
+      assert %Type{id: "wizard_any_order"} = Type.for_flow(Type.defaults(), flow)
+    end
+
+    test "unset or unrecognized resolves to the first type of the kind" do
+      assert %Type{id: "wizard_in_order"} = Type.for_flow(Type.defaults(), %Flow{label: "forms"})
+
+      assert %Type{id: "in_order"} =
+               Type.for_flow(Type.defaults(), %Flow{
+                 label: "subflows",
+                 properties: %{"flow_type" => "gone"}
+               })
+    end
+
+    test "no types of the kind, or no flow, resolves to the library's default" do
+      assert %Type{module: Type.Default} = Type.for_flow([], %Flow{label: "forms"})
+      assert %Type{module: Type.Default} = Type.for_flow(Type.defaults(), nil)
+    end
+  end
+
   describe "defaults/0 and for_kind/2" do
     test "four built-ins, each kind's fallback first" do
       assert [

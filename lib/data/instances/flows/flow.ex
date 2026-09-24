@@ -12,12 +12,32 @@ defmodule FormFlow.Data.Instances.Flow do
   to journeys in flight (form instances already carry their own immutable
   pin at the form-version level, which is where attestation lives).
 
-  Traversal state is deliberately not stored - no per-node rows, no
-  progress columns. It is derived by `FormFlow.Data.Instances.FlowProgress`
-  from the live tree and the journey's form instances, so a template edit
-  can never desync it. `status` and `completed_at` are stamps, not caches:
-  facts at a moment, written by `FormFlow.Data.Instances.Flows.complete/2` -
-  they claim only their moment and are never recomputed.
+  Traversal state is deliberately not stored as the truth - no per-node
+  rows, no *authoritative* progress columns. It is derived by
+  `FormFlow.Data.Instances.FlowProgress` from the live tree and the
+  journey's form instances, so a template edit can never desync it.
+  `status` and `completed_at` are stamps, not caches: facts at a moment,
+  written by `FormFlow.Data.Instances.Flows.complete/2` - they claim only
+  their moment and are never recomputed.
+
+  Five columns are a **cache of that derivation**, written by
+  `FormFlow.Data.Instances.Flows.update_next_positions/2` alone and never
+  cast: `next_path` and `next_node_id`, the first position the flow is open
+  at in flow order (`FlowProgress.next_path_position/2` - the path, and its
+  last segment for a listing's `in ^ids` filter), `completed_forms` and
+  `forms_total`, how many form positions of the whole tree have a completed
+  instance and how many there are, and `next_computed_at`, when they were
+  last written. `next_path` is null when nothing is actionable - the
+  journey completed or blocked - and all five are null on a journey no
+  refresh has reached. They are what the last refresh derived; the
+  derivation stays the truth, and the flow instance page derives live and
+  rewrites them when it finds them stale.
+
+  Every position the flow is open at - not only the first - has a row in
+  `FormFlow.Data.Instances.Flow.NextPosition`, the child table a listing
+  filters through. The same refresh writes both in one transaction, so
+  the row's `next_path` and the table's first row in flow order never
+  disagree.
 
   A journey carries two opaque host identities: `user_id`, the creating
   user - any principal string, system identities included - and
@@ -49,6 +69,15 @@ defmodule FormFlow.Data.Instances.Flow do
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
 
+    # The cache of where the flow is open - see the moduledoc
+    field(:next_path, {:array, :string})
+    field(:next_node_id, :string)
+    field(:completed_forms, :integer)
+    field(:forms_total, :integer)
+    field(:next_computed_at, :utc_datetime_usec)
+
+    has_many(:next_positions, __MODULE__.NextPosition, foreign_key: :instance_flow_id)
+
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -67,7 +96,10 @@ defmodule FormFlow.Data.Instances.Flow do
   Builds a changeset for a journey.
 
   `status` and `completed_at` are not castable - completion machinery
-  stamps them (see moduledoc). `template_flow_id`, `user_id`, and `tenant_id` are
+  stamps them (see moduledoc) - and neither are the five cache columns,
+  which `FormFlow.Data.Instances.Flows.update_next_positions/2` writes
+  through a plain change of its own, as `complete/2` writes the stamps.
+  `template_flow_id`, `user_id`, and `tenant_id` are
   castable at creation and immutable afterwards: a journey can never
   re-point at a different tree (its form instances' paths reference that
   tree's nodes), and provenance never changes.

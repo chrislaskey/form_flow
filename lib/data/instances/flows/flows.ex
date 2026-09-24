@@ -9,12 +9,24 @@ defmodule FormFlow.Data.Instances.Flows do
   event), the completion stamp, the derived-progress helpers, stranded
   listing, and the one operation that must exist concretely from day one -
   explicit deletion, because nothing on the instance side ever cascades.
+
+  Beside those, the one cache the instance side keeps: **where the flow is
+  open** for a journey, written by `update_next_positions/2` onto the
+  journey row (`next_path`, `next_node_id`, the two counts, and
+  `next_computed_at`) and into `FormFlow.Data.Instances.Flow.NextPosition`,
+  one row per open position, and read by a listing through
+  `narrow_next_position/2`. The derivation stays the truth
+  (`FormFlow.Data.Instances.FlowProgress`); the cache is what a page can
+  filter and count by in SQL without opening every journey.
   """
 
   import Ecto.Query
 
+  alias FormFlow.Config.Flows.Perspective
+  alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Flow.Event
+  alias FormFlow.Data.Instances.Flow.NextPosition
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
@@ -144,6 +156,14 @@ defmodule FormFlow.Data.Instances.Flows do
   `list_pre_release/1` for a flow's; the marker is inside the map, so there
   is no `where` for it to hand a listing query. `metadata` is otherwise
   the host's map; `"form_flow"` is the one key FormFlow claims in it.
+
+  The journey's first open position is written as it is created
+  (`update_next_positions/2`, in the same transaction): the positions Start
+  reaches, and counts of `0` of the tree's forms - so a journey is in every
+  queue it belongs in from its first moment. `opts[:flow_types]` and
+  `opts[:callback_data]` reach that refresh; `refresh: false` skips it, for
+  a bulk importer that will call `update_next_positions/2` on the
+  `Templates.Flow` once at the end.
   """
   def create(attrs \\ %{}, opts \\ []) do
     flow_id = attrs[:template_flow_id] || attrs["template_flow_id"]
@@ -152,7 +172,8 @@ defmodule FormFlow.Data.Instances.Flows do
       attrs = mark_pre_release(attrs, flow_id && Repo.get(Templates.Flow, flow_id))
 
       with {:ok, instance} <- Repo.insert(Instances.Flow.changeset(%Instances.Flow{}, attrs)),
-           {:ok, _event} <- insert_event(instance, "created", opts) do
+           {:ok, _event} <- insert_event(instance, "created", opts),
+           {:ok, instance} <- refresh_next_positions(instance, opts) do
         instance
       else
         {:error, changeset} -> Repo.rollback(changeset)
@@ -185,6 +206,12 @@ defmodule FormFlow.Data.Instances.Flows do
   Completing a completed journey is a no-op. The flow's status is not
   consulted: this is an administrative stamp on the journey, not a user
   continuing it, and a host closing out a read-only year may well call it.
+
+  The stamp refreshes the journey's open positions in the same transaction
+  (`update_next_positions/2`): a completed journey has none, whatever its
+  forms say, so it leaves every queue. `opts[:flow_types]`,
+  `opts[:callback_data]`, and `refresh: false` reach the refresh as they
+  do from `create/2`.
   """
   def complete(instance, opts \\ [])
 
@@ -195,12 +222,23 @@ defmodule FormFlow.Data.Instances.Flows do
       changes = %{status: "completed", completed_at: DateTime.utc_now()}
 
       with {:ok, completed} <- Repo.update(Ecto.Changeset.change(instance, changes)),
-           {:ok, _event} <- insert_event(completed, "status_changed", opts) do
+           {:ok, _event} <- insert_event(completed, "status_changed", opts),
+           {:ok, completed} <- refresh_next_positions(completed, opts) do
         completed
       else
         {:error, changeset} -> Repo.rollback(changeset)
       end
     end)
+  end
+
+  # The refresh a write of this module runs after itself, unless the caller
+  # said `refresh: false`
+  defp refresh_next_positions(journey, opts) do
+    if Keyword.get(opts, :refresh, true) do
+      update_next_positions(journey, Keyword.take(opts, [:tree, :flow_types, :callback_data]))
+    else
+      {:ok, journey}
+    end
   end
 
   @doc """
@@ -240,19 +278,377 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
+  Writes where the flow is open for a journey - the cache
+  `FormFlow.Data.Instances.Flow` and `FormFlow.Data.Instances.Flow.NextPosition`
+  hold - from a fresh derivation: every form position the flow lets a user
+  work now, in flow order. Plural, because it writes every such position,
+  not one.
+
+  Given a `FormFlow.Data.Instances.Flow`, one journey; returns
+  `{:ok, journey}` with the columns as written. Given a
+  `FormFlow.Data.Templates.Flow`, every open journey of that root
+  (`status == "in_progress"`; a completed journey's positions are none and
+  its counts final) - one subflow edit reaches every journey of the root at
+  the same moment, as `list_stranded/2` says of stranding; returns
+  `{:ok, count}` of journeys rewritten. The flow may be a subflow; its
+  root is found through `owner_flow_id`, so no caller has to remember
+  which it holds. The flow editor calls this clause, synchronously, after
+  a save that changed the structure of a flow - its steps, its edges, or
+  a flow's type - and not after one that changed a name or a flow's
+  perspectives, which move no position. It runs in chunks of a few
+  hundred journeys against one tree, reading only narrow form instance
+  rows; a host with a job runner may call it from a job, and a seed that
+  passed `refresh: false` per row calls it once at the end.
+
+  A position is open when the flow's order rule says so at every level:
+  the form's own "forms" flow type says the form is editable
+  (`c:FormFlow.Config.Flows.Type.editable?/2` - the flow's order rule, which
+  for the library's in-order types is `FlowProgress.actionable?/1` and for
+  its any-order types is "not yet completed"), and every "subflows" flow
+  above it says the step holding it may be entered
+  (`c:FormFlow.Config.Flows.Type.enterable?/2`). The types are asked with
+  **no viewer** in the context - no `user_id`, no `tenant_id`, no
+  `perspectives`; everything the flow itself carries, its own
+  `flow_perspectives` included, is filled in as the pages fill it - and
+  `visible?/2` is never asked: whose position a node is stays a read-time
+  question (`narrow_next_position/2`), so nothing here holds a perspective
+  and an admin adding one moves nothing. The journey's `next_path` is the
+  first open position; the table gets a row for each.
+
+  `completed_forms` counts the tree's form positions whose instance is
+  completed and `forms_total` counts them all - the whole tree, every
+  perspective's forms included.
+
+  `opts`:
+
+    * `:tree` - the resolved tree (`FormFlow.Data.Templates.Flows.resolve_tree/1`),
+      when the caller has it; loaded otherwise
+    * `:flow_types` - the host's `FormFlow.Config.Flows.Type` list, the
+      pages' `flow_types` attr; `FormFlow.Config.Flows.Type.defaults/0`
+      when absent - which is right for a host that added no type, and
+      wrong for one that did, so a host's own callers pass theirs
+    * `:callback_data` - handed to the type callbacks; `%{}` when absent
+
+  Only the journey's active form instances are read, and only their
+  `id`, `path`, `status`, and `superseded_at` - never `data`. The journey
+  row and the child table's rows are written in one transaction, so the
+  two cannot disagree. `FormFlow.Data.Instances.Forms.update_status/4`,
+  `create/2`, and `complete/2` call this themselves after every change
+  they make, so a page never has to; `refresh: false` on any of them skips
+  it, and the caller then owes the cache a call here - a seed passes it
+  per row and calls the `Templates.Flow` clause once at the end.
+  """
+  def update_next_positions(journey_or_flow, opts \\ [])
+
+  def update_next_positions(%Instances.Flow{} = journey, opts) do
+    tree =
+      Keyword.get_lazy(opts, :tree, fn ->
+        Templates.Flows.resolve_tree(journey.template_flow_id)
+      end)
+
+    instances = narrow_form_instances(journey)
+    derived = derive_next_positions(tree, instances, journey, opts)
+
+    Repo.transaction(fn ->
+      case write_next_positions(journey, derived) do
+        {:ok, journey} -> journey
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  # A few hundred journeys per chunk: one read of their form instances,
+  # one transaction of writes
+  @sweep_chunk 200
+
+  # The sweep: every open journey of the root, in chunks, against one tree.
+  # Per chunk one read of the form instances, one UPDATE per journey (each
+  # needs its own values - there is no single value for `update_all` to
+  # set), one DELETE and one insert_all for the child table, in one
+  # transaction. The UPDATE per journey is the floor: one round trip per
+  # open journey, cheap on SQLite and not on Postgres over a network - see
+  # the plan's §5.4 for the measurement.
+  def update_next_positions(%Templates.Flow{} = flow, opts) do
+    root_id = flow.owner_flow_id || flow.id
+    tree = Keyword.get_lazy(opts, :tree, fn -> Templates.Flows.resolve_tree(root_id) end)
+
+    from(i in Instances.Flow,
+      where: i.template_flow_id == ^root_id and i.status == "in_progress",
+      order_by: [asc: i.inserted_at, asc: i.id]
+    )
+    |> Repo.all()
+    |> Enum.chunk_every(@sweep_chunk)
+    |> Enum.reduce_while({:ok, 0}, fn journeys, {:ok, count} ->
+      case sweep_chunk(journeys, tree, opts) do
+        :ok -> {:cont, {:ok, count + length(journeys)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp sweep_chunk(journeys, tree, opts) do
+    ids = Enum.map(journeys, & &1.id)
+
+    instances_by_journey =
+      from(f in Instances.Form,
+        where: f.instance_flow_id in ^ids and is_nil(f.superseded_at),
+        select: %Instances.Form{
+          id: f.id,
+          instance_flow_id: f.instance_flow_id,
+          path: f.path,
+          status: f.status
+        }
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.instance_flow_id)
+
+    derived =
+      for journey <- journeys do
+        instances = Map.get(instances_by_journey, journey.id, [])
+        {journey, derive_next_positions(tree, instances, journey, opts)}
+      end
+
+    Repo.transaction(fn -> write_chunk(ids, derived) end)
+    |> case do
+      {:ok, _result} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # The child table's side batches: one DELETE for the chunk, one
+  # insert_all of every new row - rows nothing points at, holding nothing
+  # the sweep does not own. The journey rows are one UPDATE each.
+  defp write_chunk(ids, derived) do
+    Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id in ^ids))
+
+    now = DateTime.utc_now()
+    rows = Enum.flat_map(derived, fn {journey, d} -> next_position_rows(journey, d, now) end)
+    if rows != [], do: Repo.insert_all(NextPosition, rows)
+
+    Enum.each(derived, fn {journey, d} ->
+      case update_journey_columns(journey, d, now) do
+        {:ok, _journey} -> :ok
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  # The form instance columns the derivation reads, and no answers: a
+  # journey of eighty forms is eighty narrow rows, not eighty maps of data
+  defp narrow_form_instances(%Instances.Flow{id: id}) do
+    Repo.all(
+      from(f in Instances.Form,
+        where: f.instance_flow_id == ^id and is_nil(f.superseded_at),
+        select: %Instances.Form{id: f.id, path: f.path, status: f.status}
+      )
+    )
+  end
+
+  # What the refresh writes: `next_path` is the first open position and
+  # `open_paths` every one of them, in flow order; a completed journey has
+  # neither (see `complete/2`)
+  defp derive_next_positions(tree, instances, %Instances.Flow{} = journey, opts) do
+    forms = FlowProgress.forms(tree, instances)
+    steps = FlowProgress.subflows(tree, instances)
+    flow_types = Keyword.get(opts, :flow_types) || FormFlow.Config.Flows.Type.defaults()
+    callback_data = Keyword.get(opts, :callback_data) || %{}
+
+    open_paths =
+      if journey.status == "completed" do
+        []
+      else
+        for form <- forms,
+            open?(form, forms, steps, tree, journey, flow_types, callback_data),
+            do: form.path
+      end
+
+    %{
+      next_path: List.first(open_paths),
+      open_paths: open_paths,
+      completed_forms: Enum.count(forms, &(&1.status == :completed)),
+      forms_total: length(forms)
+    }
+  end
+
+  # The flow's order rule at every level, with no viewer asked about: each
+  # step above the form may be entered, and the form itself may be edited
+  #
+  # The context is the one the flow instance's page builds for the same
+  # form (`FormFlow.Web.Instances.Flows.Shared`) less the viewer's three
+  # fields: `flow_perspectives`, the flow's own data, is filled in so a
+  # type reading it answers the same here and there.
+  defp open?(form, forms, steps, tree, journey, flow_types, callback_data) do
+    type = FormFlow.Config.Flows.Type.for_flow(flow_types, form.flow)
+
+    context = %Context{
+      flow: tree.flow,
+      subflow: form.flow,
+      subflow_node: List.last(form.ancestors),
+      form_node: form.node,
+      flow_type_property_values: FormFlow.Config.Flows.Type.property_values(form.flow),
+      flow_perspectives: Perspective.for_flow(form.flow, type.perspectives),
+      flow_instance: journey,
+      form_progress: form,
+      flow_progress: FlowProgress.forms_in_flow(forms, form.path),
+      flow_instance_progress: forms,
+      flow_instance_subflows: steps
+    }
+
+    steps_enterable?(context, form, steps, flow_types, callback_data) and
+      type.module.editable?(context, callback_data)
+  end
+
+  defp steps_enterable?(context, form, steps, flow_types, callback_data) do
+    Enum.all?(1..length(form.ancestors)//1, fn depth ->
+      case FlowProgress.find_subflow(steps, Enum.take(form.path, depth)) do
+        nil ->
+          false
+
+        step ->
+          step_context = %{
+            context
+            | subflow: step.flow,
+              subflow_node: step.node,
+              subflow_progress: step,
+              complex_progress: FlowProgress.subflows_in_flow(steps, step.path),
+              flow_type_property_values: FormFlow.Config.Flows.Type.property_values(step.flow)
+          }
+
+          FormFlow.Config.Flows.Type.for_flow(flow_types, step.flow).module.enterable?(
+            step_context,
+            callback_data
+          )
+      end
+    end)
+  end
+
+  # The journey's five columns and its rows in the child table, replaced
+  # whole
+  defp write_next_positions(%Instances.Flow{} = journey, derived) do
+    now = DateTime.utc_now()
+
+    Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
+
+    rows = next_position_rows(journey, derived, now)
+    if rows != [], do: Repo.insert_all(NextPosition, rows)
+
+    update_journey_columns(journey, derived, now)
+  end
+
+  # One row per open position. `node_id` is the path's last segment, put
+  # here and nowhere else - the two are one fact, and this is the only
+  # writer of the table. The database's `null: false` and the unique
+  # `(instance_flow_id, path)` index are the guards.
+  defp next_position_rows(%Instances.Flow{} = journey, derived, now) do
+    for path <- derived.open_paths do
+      %{
+        id: Ecto.UUID.generate(),
+        instance_flow_id: journey.id,
+        path: path,
+        node_id: List.last(path),
+        tenant_id: journey.tenant_id,
+        inserted_at: now,
+        updated_at: now
+      }
+    end
+  end
+
+  # The columns are set on the row by id rather than through a changeset of
+  # the struct in hand: a caller's struct may be older than the row (a page
+  # holds the journey it loaded while its forms move), and a changeset
+  # compares against the struct, skipping a column whose new value the
+  # stale struct happens to hold already. `updated_at` is left alone - it
+  # is when the journey itself changed, not when its cache did.
+  defp update_journey_columns(%Instances.Flow{} = journey, derived, now) do
+    changes = [
+      next_path: derived.next_path,
+      next_node_id: derived.next_path && List.last(derived.next_path),
+      completed_forms: derived.completed_forms,
+      forms_total: derived.forms_total,
+      next_computed_at: now
+    ]
+
+    case Repo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id), set: changes) do
+      {1, _} -> {:ok, struct(journey, changes)}
+      {0, _} -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Whether a journey's cached open positions may be out of date: no refresh
+  has reached it yet (`next_computed_at` nil), or a flow of its tree was
+  saved after the last one (`FormFlow.Data.Templates.Flows.tree_updated_at/1`
+  is newer). A sweep (`update_next_positions/2` on the `Templates.Flow`)
+  leaves nothing stale; this is for the rows a sweep has not reached - a
+  listing draws such a row's cached value with a quiet mark, and the flow
+  instance's page, which derives live anyway, rewrites it
+  (read-repair). `tree_updated_at` is the tree's, or nil when unknown, in
+  which case only a missing refresh counts as stale.
+  """
+  def next_positions_stale?(%Instances.Flow{next_computed_at: nil}, _tree_updated_at), do: true
+  def next_positions_stale?(%Instances.Flow{}, nil), do: false
+
+  def next_positions_stale?(%Instances.Flow{next_computed_at: computed_at}, tree_updated_at) do
+    DateTime.compare(computed_at, tree_updated_at) == :lt
+  end
+
+  @doc """
+  `query` - one over `FormFlow.Data.Instances.Flow` - narrowed to journeys
+  whose flow is open at one of the nodes in `node_ids`: a row in
+  `FormFlow.Data.Instances.Flow.NextPosition` whose `node_id` is among
+  them. Written as `id in (subquery)` over the child table rather than a
+  join, so a journey open at three of the nodes is one row and Slab's
+  count needs no `distinct`; and rather than a correlated `exists`, so it
+  names no binding and can be stacked twice or on a host's query that
+  names its own.
+
+  `tenant_id`, when given, filters the child table's own copy of the
+  tenant too, so the `(tenant_id, node_id)` index drives the subquery
+  and the cost follows the journeys that match, not the journeys of the
+  tenant. The listing page passes the router's; `nil` - a host with no
+  tenants - drives off the bare `node_id` index instead.
+
+  Which nodes those are is the caller's business: a reviews page asks the
+  flow type's `visible?/2` for every form node of its trees and passes the
+  reviewer's, so the table holds no perspective and this helper names none
+  (`FormFlow.Web.Instances.Flows.Index`). `[]` matches nothing.
+  """
+  def narrow_next_position(query, node_ids, tenant_id \\ nil) when is_list(node_ids) do
+    open_at =
+      from(p in NextPosition, where: p.node_id in ^node_ids, select: p.instance_flow_id)
+      |> narrow_position_tenant(tenant_id)
+
+    from(i in query, where: i.id in subquery(open_at))
+  end
+
+  defp narrow_position_tenant(query, nil), do: query
+
+  defp narrow_position_tenant(query, tenant_id),
+    do: from(p in query, where: p.tenant_id == ^tenant_id)
+
+  @doc """
   The journey's stranded form instances: active (not superseded) instances
   whose `path` matches no position in the current tree. Accepts a
   `Templates.Flow` to sweep every journey of that root at once - one edit
   to a subflow strands instances across every journey of the root
   simultaneously, and batch reconciliation builds on this.
+
+  `opts[:tree]` is the journey's resolved tree and `opts[:form_instances]`
+  its form instances, for a caller that has already loaded them - the flow
+  instance pages have both in hand - so neither is read again. Either one
+  left out is loaded here.
   """
   def list_stranded(instance_or_flow, opts \\ [])
 
-  def list_stranded(%Instances.Flow{} = instance, _opts) do
-    instances = form_instances(instance)
+  def list_stranded(%Instances.Flow{} = instance, opts) do
+    instances = Keyword.get_lazy(opts, :form_instances, fn -> form_instances(instance) end)
 
-    statuses =
-      FlowProgress.derive(Templates.Flows.resolve_tree(instance.template_flow_id), instances)
+    tree =
+      Keyword.get_lazy(opts, :tree, fn ->
+        Templates.Flows.resolve_tree(instance.template_flow_id)
+      end)
+
+    statuses = FlowProgress.derive(tree, instances)
 
     stranded_paths =
       for {path, :stranded} <- statuses, into: MapSet.new() do
@@ -265,16 +661,19 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   def list_stranded(%Templates.Flow{} = flow, opts) do
+    opts = Keyword.put_new_lazy(opts, :tree, fn -> Templates.Flows.resolve_tree(flow.id) end)
+
     Repo.all(from(i in Instances.Flow, where: i.template_flow_id == ^flow.id))
-    |> Enum.flat_map(&list_stranded(&1, opts))
+    |> Enum.flat_map(&list_stranded(&1, Keyword.delete(opts, :form_instances)))
   end
 
   @doc """
-  Deletes a journey, its event trail, and its attached form instances,
-  deliberately and in order: journey events first, then each form instance
-  through `FormFlow.Data.Instances.Forms.delete_instance/2` (its events
-  first - the `restrict` FKs forbid any other order), then the journey row.
-  This is the only deletion path - there is no cascade.
+  Deletes a journey, its event trail, its attached form instances, and its
+  open positions, deliberately and in order: journey events first, then
+  each form instance through `FormFlow.Data.Instances.Forms.delete_instance/2`
+  (its events first - the `restrict` FKs forbid any other order), then the
+  rows of `FormFlow.Data.Instances.Flow.NextPosition`, then the journey
+  row. This is the only deletion path - there is no cascade.
 
   The copies a review's events hold of another instance's answers are not
   redacted along the way (`redact: false`): every copy a journey's instances
@@ -287,6 +686,8 @@ defmodule FormFlow.Data.Instances.Flows do
       instance
       |> form_instances()
       |> Enum.each(&delete_form_instance!(&1, Keyword.put(opts, :redact, false)))
+
+      Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^instance.id))
 
       case Repo.delete(instance) do
         {:ok, deleted} -> deleted

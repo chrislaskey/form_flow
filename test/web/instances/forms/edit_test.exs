@@ -31,6 +31,7 @@ defmodule FormFlow.Web.Instances.Forms.EditTest do
             name: "Default"
           },
           callback_data: %{},
+          flow_types: [],
           user_id: "user-1",
           base: "",
           error: nil

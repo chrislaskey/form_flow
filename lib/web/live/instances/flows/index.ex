@@ -67,6 +67,39 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   reads `sort` and `page` straight from the URL, so two Slab tables on one
   page would share - and fight over - the same params.
 
+  ## Where each journey stands
+
+  Three columns read the cache of where a journey's flow is open
+  (`FormFlow.Data.Instances.Flows.update_next_positions/2`: `next_path`
+  and the counts on the row, one `FormFlow.Data.Instances.Flow.NextPosition`
+  per open position), never the derivation - a page of ten rows costs no
+  tree per row:
+
+    * **Status** - the perspective status, not sortable since no column
+      holds it
+      (`FormFlow.Web.Instances.Components.Flows.Status`): Completed when
+      the journey is; Your turn when one of its open positions is a form
+      the viewer's perspectives are for; Waiting on others otherwise. The
+      flow instance's page says the finer things - a reopened form, or
+      "Nothing is for you" - because it derives live; this page says
+      Waiting. A journey no refresh has reached yet shows its own status
+      word, In progress, since nothing finer is known of it.
+    * **Next** - the first open position, named as the flow instance's
+      page names it ("Documents / Proof of address"), and nothing once the
+      journey is done or blocked. Continue links straight to it when it is
+      the viewer's; to the journey's page otherwise.
+    * **Flow progress** - how many of the flow's forms are done, every
+      perspective's included, so a reviewer sees how far the whole
+      application is.
+
+  Which forms are the viewer's comes from the flow type's `visible?/2`,
+  asked once per form node of each of the page's flows on every load
+  (`FormFlow.Web.Instances.Flows.Shared.visible_node_ids/2`) - in memory,
+  never stored, so an admin adding a perspective is right on the next
+  load. `actionable_only` turns that set into the listing's filter: only
+  journeys open at one of the viewer's nodes are listed, which is what a
+  reviews page is (`FormFlow.Data.Instances.Flows.narrow_next_position/2`).
+
   ## The states it draws
 
   No instance is in scope here, so the page asks the narrower
@@ -93,8 +126,11 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.SectionHeading
+  alias FormFlow.Web.Instances.Components.Flows.Progress
+  alias FormFlow.Web.Instances.Components.Flows.Status
   alias FormFlow.Web.Instances.Components.Header
   alias FormFlow.Web.Instances.Forms.Shared
   alias FormFlow.Web.Instances.Paths
@@ -114,6 +150,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       |> assign_new(:on_mount, fn -> nil end)
       |> assign_new(:instances, fn -> nil end)
       |> assign_new(:flows, fn -> nil end)
+      |> assign_new(:actionable_only, fn -> false end)
       |> assign_new(:pre_release_user_ids, fn -> [] end)
       |> assign_new(:download_path, fn -> nil end)
       |> assign_new(:uri, fn -> nil end)
@@ -155,12 +192,28 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     allowed = Shared.resolve_flows(socket.assigns.flows, tenant_id)
     page_flows = Enum.map(allowed, & &1.flow)
 
-    # The flow's status is applied on top of everything, like the tenant:
-    # instances of a flow nobody may see (a draft) are listed for nobody,
-    # and only a flow taking starts is offered
-    # (`FormFlow.Data.Templates.Flow.allows?/2`)
+    # The page's trees, once per load: three queries each. They name the
+    # viewer's form nodes and the labels of the Next column. A journey of
+    # a flow the page is not about - a host's `instances` query reaching
+    # past its `flows` - draws neither, and with `actionable_only` is not
+    # listed at all: the filter knows only the named flows' nodes.
+    trees = Map.new(page_flows, &{&1.id, Templates.Flows.resolve_tree(&1.id)})
+
+    viewer_node_ids =
+      Enum.reduce(trees, MapSet.new(), fn {_flow_id, tree}, ids ->
+        MapSet.union(
+          ids,
+          FormFlow.Web.Instances.Flows.Shared.visible_node_ids(tree, socket.assigns)
+        )
+      end)
+
+    # The viewer's filter first, then the flow's status and the tenant on
+    # top of everything, like today: instances of a flow nobody may see (a
+    # draft) are listed for nobody, and only a flow taking starts is
+    # offered (`FormFlow.Data.Templates.Flow.allows?/2`)
     query =
       (socket.assigns.instances || own_query(user_id, socket.assigns.flows, page_flows))
+      |> narrow_actionable(socket.assigns.actionable_only, viewer_node_ids, tenant_id)
       |> Instances.Flows.narrow_tenant(tenant_id)
       |> Instances.Flows.narrow_allowed(:see)
       |> hide_pre_release(socket.assigns)
@@ -169,6 +222,12 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     |> assign(:query, query)
     |> assign(:empty?, not Repo.exists?(query))
     |> assign(:page_flows, page_flows)
+    |> assign(:viewer_node_ids, viewer_node_ids)
+    |> assign(:next_labels, next_labels(trees))
+    |> assign(
+      :trees_updated_at,
+      Map.new(trees, fn {id, tree} -> {id, Templates.Flows.tree_updated_at(tree)} end)
+    )
     # Both answers, as everywhere: this page has to offer the flow
     # (`FormFlow.Config.Flows.Allowed`'s `start`) and the flow's status has
     # to take a start
@@ -211,6 +270,83 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     |> assign(:user_id_column?, not is_nil(socket.assigns.instances))
     |> assign(:table_params, table_params(socket.assigns.params))
   end
+
+  # Only the journeys open at one of the viewer's nodes, when the page says
+  # so; an empty set then lists nothing, which is the truth for a viewer
+  # none of the page's forms are for
+  defp narrow_actionable(query, false, _node_ids, _tenant_id), do: query
+
+  defp narrow_actionable(query, true, node_ids, tenant_id),
+    do: Instances.Flows.narrow_next_position(query, MapSet.to_list(node_ids), tenant_id)
+
+  # Every form position of the page's flows, labelled as the flow
+  # instance's page labels it, keyed by flow then path - what the Next
+  # column draws for a journey's `next_path`
+  defp next_labels(trees) do
+    Map.new(trees, fn {flow_id, tree} ->
+      {flow_id,
+       Map.new(FlowProgress.forms(tree, []), &{&1.path, FlowProgress.qualified_label(&1)})}
+    end)
+  end
+
+  # The name of a journey's next position, or nil when it has none or the
+  # page has no tree for its flow
+  defp next_label(%Instances.Flow{next_path: nil}, _labels), do: nil
+
+  defp next_label(%Instances.Flow{} = flow_instance, labels) do
+    get_in(labels, [flow_instance.template_flow_id, flow_instance.next_path])
+  end
+
+  # Whether the row's cached position may be out of date: a flow of its
+  # tree was saved after the last refresh, and no sweep has reached it
+  # (`FormFlow.Data.Instances.Flows.next_positions_stale?/2`). Drawn as a
+  # quiet mark beside the value; the journey's page repairs it on open.
+  defp stale?(%Instances.Flow{} = flow_instance, trees_updated_at) do
+    Instances.Flows.next_positions_stale?(
+      flow_instance,
+      Map.get(trees_updated_at, flow_instance.template_flow_id)
+    )
+  end
+
+  # Whether a journey's flow is open at a form of the viewer's - one of its
+  # cached open positions is among the viewer's nodes
+  defp viewers_turn?(%Instances.Flow{next_positions: positions}, node_ids)
+       when is_list(positions),
+       do: Enum.any?(positions, &MapSet.member?(node_ids, &1.node_id))
+
+  defp viewers_turn?(_flow_instance, _node_ids), do: false
+
+  # The perspective status a listing can say from the cache: Completed,
+  # Your turn, or Waiting on others - never Needs your attention, which
+  # wants the trail (`FormFlow.Web.Instances.Components.Flows.Status`).
+  # `nil` for a journey no refresh has reached, so the row falls back to
+  # the journey's own status word.
+  defp perspective_status(%Instances.Flow{status: "completed"}, _node_ids), do: :completed
+  defp perspective_status(%Instances.Flow{next_computed_at: nil}, _node_ids), do: nil
+
+  defp perspective_status(flow_instance, node_ids) do
+    if viewers_turn?(flow_instance, node_ids), do: :your_turn, else: :waiting
+  end
+
+  # Where Continue goes: straight to the next position when it is the
+  # viewer's, else the journey's page
+  defp continue_path(base, %Instances.Flow{} = flow_instance, node_ids) do
+    if flow_instance.next_path && MapSet.member?(node_ids, flow_instance.next_node_id) do
+      Paths.form_path(base, flow_instance.id, flow_instance.next_path)
+    else
+      Paths.flow_path(base, flow_instance.id)
+    end
+  end
+
+  # The ring's numbers from the cached counts: done in the brand colour,
+  # nothing tinted - the cache does not say what is under way
+  defp ring_assigns(%Instances.Flow{completed_forms: done, forms_total: total})
+       when is_integer(done) and is_integer(total) and total > 0 do
+    percent = round(done / total * 100)
+    %{percent: percent, behind: percent, each: 0}
+  end
+
+  defp ring_assigns(_flow_instance), do: nil
 
   # A pre-release flow's instances are listed for its pre-release users alone
   defp hide_pre_release(query, %{user_id: user_id, pre_release_user_ids: ids}) do
@@ -265,7 +401,13 @@ defmodule FormFlow.Web.Instances.Flows.Index do
         tenant_id: socket.assigns.tenant_id
       }
 
-      case Instances.Flows.create(attrs) do
+      # The types along, so the journey's first open position is written
+      # as it is created and it is in every queue from its first moment
+      # (`FormFlow.Data.Instances.Flows.update_next_positions/2`)
+      case Instances.Flows.create(attrs,
+             flow_types: socket.assigns.flow_types,
+             callback_data: socket.assigns.callback_data
+           ) do
         {:ok, flow_instance} ->
           to = Paths.flow_path(socket.assigns.base, flow_instance.id)
           {:noreply, push_navigate(socket, to: to)}
@@ -324,11 +466,14 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
       <%!-- "below" is only true where there is a Start section to point at:
             a page that offers no starts says the half of the sentence that
-            is still true --%>
+            is still true. A page listing only what the viewer can act on
+            says that nothing is, which is not the same as nothing started --%>
       <Core.alert :if={@empty?} components={@components}>
-        {if @offers_starts?,
-          do: "Nothing started yet - start a flow below.",
-          else: "Nothing started yet."}
+        {cond do
+          @actionable_only -> "Nothing is waiting for you."
+          @offers_starts? -> "Nothing started yet - start a flow below."
+          true -> "Nothing started yet."
+        end}
       </Core.alert>
 
       <%!-- Slab tints its tab labels and tab contents gray, with no attr
@@ -339,7 +484,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           id="flow-instances-table"
           query={@query}
           repo={Repo.repo()}
-          preload={[:template_flow]}
+          preload={[:template_flow, :next_positions]}
           uri={@uri}
           params={@table_params}
         >
@@ -366,9 +511,42 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           >
             <span class="text-sm">{flow_instance.user_id}</span>
           </:column>
-          <:column :let={flow_instance} field={:status} sortable>
-            <% {text, kind} = status_badge(flow_instance.status) %>
-            <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+          <%!-- The perspective status, from the cache; the journey's own
+                word for a journey the cache has not reached. Not sortable:
+                it is the viewer's reading of two columns and a set, not a
+                column of its own --%>
+          <:column :let={flow_instance} label="Status">
+            <%= case perspective_status(flow_instance, @viewer_node_ids) do %>
+              <% nil -> %>
+                <% {text, kind} = status_badge(flow_instance.status) %>
+                <Core.badge components={@components} kind={kind}>{text}</Core.badge>
+              <% status -> %>
+                <Status.badge status={status} components={@components} />
+            <% end %>
+          </:column>
+          <%!-- The first position the flow is open at, as the journey's
+                page names it; nothing once the journey is done or blocked --%>
+          <:column :let={flow_instance} label="Next">
+            <span class="text-sm">{next_label(flow_instance, @next_labels)}</span>
+            <span
+              :if={flow_instance.next_computed_at && stale?(flow_instance, @trees_updated_at)}
+              class="text-xs text-zinc-400"
+              title="The flow was edited after this was last computed; opening the flow instance brings it up to date."
+            >
+              (may have changed)
+            </span>
+          </:column>
+          <%!-- The whole flow's forms, every perspective's: how far the
+                application is, not how far the viewer is --%>
+          <:column :let={flow_instance} field={:completed_forms} label="Flow progress" sortable>
+            <%= if ring = ring_assigns(flow_instance) do %>
+              <span class="inline-flex items-center gap-2">
+                <Progress.ring percent={ring.percent} behind={ring.behind} each={ring.each} size={:sm} />
+                <span class="text-xs text-zinc-500 tabular-nums">
+                  {flow_instance.completed_forms} of {flow_instance.forms_total}
+                </span>
+              </span>
+            <% end %>
           </:column>
           <:column :let={flow_instance} field={:inserted_at} label="Started" sortable>
             <span class="text-xs text-zinc-500">
@@ -380,16 +558,25 @@ defmodule FormFlow.Web.Instances.Flows.Index do
               {Calendar.strftime(flow_instance.updated_at, "%Y-%m-%d %H:%M")}
             </span>
           </:column>
+          <%!-- View goes to the journey's page; Continue straight to the
+                next position when it is the viewer's --%>
           <:column :let={flow_instance} label="Actions">
-            <.link
-              navigate={Paths.flow_path(@base, flow_instance.id)}
-              class="text-cyan-600 hover:underline"
-            >
-              {if flow_instance.status == "completed" or
-                    not Templates.Flow.allows?(flow_instance.template_flow, :continue),
-                  do: "View",
-                  else: "Continue"}
-            </.link>
+            <%= if flow_instance.status == "completed" or
+                     not Templates.Flow.allows?(flow_instance.template_flow, :continue) do %>
+              <.link
+                navigate={Paths.flow_path(@base, flow_instance.id)}
+                class="text-cyan-600 hover:underline"
+              >
+                View
+              </.link>
+            <% else %>
+              <.link
+                navigate={continue_path(@base, flow_instance, @viewer_node_ids)}
+                class="text-cyan-600 hover:underline"
+              >
+                Continue
+              </.link>
+            <% end %>
           </:column>
           <:pagination per_page={10} />
         </Slab.table>

@@ -205,7 +205,9 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
            Instances.Forms.update_status(flow_instance, form_instance.path, :completed,
              data: payload.data,
              user_id: socket.assigns.user_id,
-             snapshot: snapshot
+             snapshot: snapshot,
+             flow_types: socket.assigns.flow_types,
+             callback_data: callback_data
            ) do
       fresh = fresh_context(socket.assigns, completed)
       notify(form_type, fresh, callback_data)

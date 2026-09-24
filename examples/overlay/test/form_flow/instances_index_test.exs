@@ -28,7 +28,10 @@ defmodule Demo.FormFlowInstancesIndexTest do
   import Phoenix.LiveViewTest
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Repo, as: FormFlowRepo
+  alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Forms
 
   test "lists the current user's flow instances, newest first", %{conn: conn} do
     older = start_flow("Older", "dog_owner")
@@ -99,36 +102,216 @@ defmodule Demo.FormFlowInstancesIndexTest do
     assert path =~ ~r|^/demo/pet-licenses/applications/[0-9a-f-]{36}$|
   end
 
+  describe "where each journey stands" do
+    test "the badge says whose turn it is, from the cache", %{conn: conn} do
+      %{journey: yours} = licensing("Dog License")
+      %{journey: theirs, intake: intake} = licensing("Cat License")
+      complete(theirs, intake)
+      %{journey: done} = licensing("Fish License")
+      {:ok, _done} = Instances.Flows.complete(done)
+
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
+
+      assert has_element?(view, row_badge(yours), "Your turn")
+      assert has_element?(view, row_badge(theirs), "Waiting on others")
+      assert has_element?(view, row_badge(done), "Completed")
+    end
+
+    test "Next names the first open position and Flow progress counts the whole flow",
+         %{conn: conn} do
+      %{journey: journey, intake: intake} = licensing("Dog License")
+
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
+
+      assert has_element?(view, row(journey), "Application / Intake")
+      assert has_element?(view, row(journey), "0 of 2")
+
+      complete(journey, intake)
+
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
+
+      assert has_element?(view, row(journey), "Review / Review")
+      assert has_element?(view, row(journey), "1 of 2")
+    end
+
+    test "Continue goes straight to the next position when it is the viewer's", %{conn: conn} do
+      %{journey: journey, intake: intake} = licensing("Dog License")
+
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
+
+      assert has_element?(
+               view,
+               "a[href='/demo/pet-licenses/applications/#{journey.id}/forms/#{Enum.join(intake, "/")}']",
+               "Continue"
+             )
+
+      # Once the next position is the reviewer's, Continue goes to the journey
+      complete(journey, intake)
+
+      {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
+
+      assert has_element?(view, row_link(journey), "Continue")
+    end
+  end
+
   describe "a user who works other people's journeys" do
     @describetag user: "reviewer"
 
-    test "lists them, where a user who works their own would see nothing",
-         %{conn: conn} do
-      theirs = start_flow("Dog License", "dog_owner")
+    test "lists only the journeys open at one of their forms", %{conn: conn} do
+      # Fresh: the applicant's turn. Submitted: the reviewer's. Reviewed: the
+      # applicant's again, for the closing feedback.
+      %{journey: fresh, root: root, intake: intake} = licensing("Dog License")
+      submitted = another_journey(root)
+      complete(submitted, intake)
+      %{journey: reviewed, intake: intake, review: review} = licensing("Cat License")
+      complete(reviewed, intake)
+      complete(reviewed, review)
 
       {:ok, view, html} = live(conn, "/demo/pet-licenses/reviews")
 
       assert has_element?(view, @table)
-      assert html =~ theirs.id
-      assert has_element?(view, "a[href='/demo/pet-licenses/reviews/#{theirs.id}']")
+      assert html =~ submitted.id
+      assert has_element?(view, "a[href='/demo/pet-licenses/reviews/#{submitted.id}']")
+      refute html =~ fresh.id
+      refute html =~ reviewed.id
+
+      # And the one listed is theirs to act on
+      assert has_element?(view, row_badge(submitted, "reviews"), "Your turn")
     end
 
-    test "an empty table is still empty when nobody has started anything",
+    test "a journey of a flow with nothing for them is not listed, where the applicant sees it",
+         %{conn: conn} do
+      # No reviewer step at all: the flow is never open at a reviewer's form
+      theirs = start_flow("Dog License", "dog_owner")
+
+      {:ok, view, html} = live(conn, "/demo/pet-licenses/reviews")
+
+      refute has_element?(view, @table)
+      refute html =~ theirs.id
+      assert html =~ "Nothing is waiting for you."
+    end
+
+    test "an empty queue says nothing is waiting, not that nothing started",
          %{conn: conn} do
       {:ok, view, html} = live(conn, "/demo/pet-licenses/reviews")
 
       refute has_element?(view, @table)
-      assert html =~ "Nothing started yet"
+      assert html =~ "Nothing is waiting for you."
+      refute html =~ "Nothing started yet"
     end
   end
 
   defp row_link(instance), do: "a[href='/demo/pet-licenses/applications/#{instance.id}']"
+
+  # A row, found through the link every row carries
+  defp row(instance), do: "tr:has(#{row_link(instance)})"
+
+  defp row_badge(instance, section \\ "applications"),
+    do: "tr:has(a[href='/demo/pet-licenses/#{section}/#{instance.id}']) span"
 
   defp start_flow(name, user_id) do
     {:ok, flow} = Flows.create(%{name: name, status: "open"})
     {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: user_id})
 
     instance
+  end
+
+  # Start → Application (for applicants: Intake) → Review (for reviewers:
+  # Review) → End, named `name` so the reviews page's `flows` finds it by
+  # slug, and a journey of it started by the dog owner
+  defp licensing(name) do
+    {:ok, root} = Flows.create(%{name: name, label: "subflows", status: "open"})
+
+    application = owned_forms_flow(root, "Application", ["applicant"], "Intake")
+    review = owned_forms_flow(root, "Review", ["reviewer"], "Review")
+
+    first_node = build_node(root, ["Start"], "Start")
+
+    application_node =
+      build_node(root, ["Subflow"], "Application", %{subflow_id: application.flow.id})
+
+    review_node = build_node(root, ["Subflow"], "Review", %{subflow_id: review.flow.id})
+    last_node = build_node(root, ["End"], "End")
+
+    edge(root, first_node, application_node)
+    edge(root, application_node, review_node)
+    edge(root, review_node, last_node)
+
+    %{
+      root: root,
+      journey: another_journey(root),
+      intake: [application_node.id, application.form.id],
+      review: [review_node.id, review.form.id]
+    }
+  end
+
+  defp another_journey(root) do
+    {:ok, journey} = Instances.Flows.create(%{template_flow_id: root.id, user_id: "dog_owner"})
+
+    journey
+  end
+
+  defp owned_forms_flow(root, name, perspectives, form_label) do
+    {:ok, flow} =
+      Flows.create(%{
+        name: name,
+        label: "forms",
+        owner_flow_id: root.id,
+        properties: %{"perspectives" => perspectives}
+      })
+
+    first_node = build_node(flow, ["Start"], "Start")
+    form = build_form_node(flow, form_label)
+    last_node = build_node(flow, ["End"], "End")
+
+    edge(flow, first_node, form)
+    edge(flow, form, last_node)
+
+    %{flow: flow, form: form}
+  end
+
+  # Starts and submits the form at `path`
+  defp complete(journey, path) do
+    {:ok, _opened} = Instances.Forms.update_status(journey, path, :in_progress)
+    {:ok, completed} = Instances.Forms.update_status(journey, path, :completed, data: %{})
+
+    completed
+  end
+
+  defp build_node(flow, labels, label, attrs \\ %{}) do
+    attrs =
+      Map.merge(
+        %{flow_id: flow.id, labels: labels, properties: %{"data" => %{"label" => label}}},
+        attrs
+      )
+
+    {:ok, node} = FormFlowRepo.insert(Flow.Node.changeset(%Flow.Node{}, attrs))
+
+    node
+  end
+
+  defp edge(flow, source, target) do
+    {:ok, _relationship} =
+      FormFlowRepo.insert(
+        Flow.Relationship.changeset(%Flow.Relationship{}, %{
+          flow_id: flow.id,
+          source_id: source.id,
+          target_id: target.id,
+          label: "CONNECTS_TO"
+        })
+      )
+  end
+
+  # A published form with one text question, "name"
+  defp build_form_node(flow, label) do
+    {:ok, form} = Forms.create(%{name: "#{label} #{System.unique_integer([:positive])}"})
+    [draft] = form.versions
+
+    definition = %{"elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]}
+    {:ok, draft} = Forms.update_draft(draft, %{definition: definition})
+    {:ok, _published} = Forms.update_status(draft, :published)
+
+    build_node(flow, ["Form"], label, %{form_id: form.id})
   end
 
   # Whether the rows appear in the order listed. Ids reach the page through

@@ -109,11 +109,29 @@ defmodule FormFlow.Data.Instances.Forms do
       creates it
     * `:snapshot` - free-form event payload
 
+    * `:refresh` - `false` skips the refresh of the journey's open positions
+      (below); `true`, the default, runs it
+    * `:flow_types`, `:callback_data`, `:tree` - reach that refresh
+      (`FormFlow.Data.Instances.Flows.update_next_positions/2`): the host's
+      flow types decide the order rule, so a page passes its own
+
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
   position with no instance), `{:error, :unknown_position}` (no such node -
   the flow may have been edited), `{:error, :not_a_form_position}`,
   `{:error, :no_published_version}` (the form was never published), or an
   error changeset.
+
+  Every change this makes - a start, a submit, a reopen - moves where the
+  journey's flow is open, so each is followed, in the same transaction, by
+  `FormFlow.Data.Instances.Flows.update_next_positions/2` for the journey:
+  the cache a reviews page filters by. A no-op (the position already in
+  that status) refreshes nothing. `refresh: false` turns the refresh off,
+  and the caller then owes the cache a call of its own - a seed or a bulk
+  importer passes it per row and calls
+  `update_next_positions(%Templates.Flow{})` once at the end, which is
+  cheaper than one tree per row. A caller that forgets leaves a reviewer's
+  queue missing a row with nothing on screen to say so, which is why the
+  default is to refresh.
 
   The flow's status is not consulted: whether a user may still continue -
   start, reopen, submit - is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
@@ -124,9 +142,36 @@ defmodule FormFlow.Data.Instances.Forms do
 
   def update_status(%Instances.Flow{} = journey, path, status, opts)
       when is_list(path) and path != [] and status in [:in_progress, :completed] do
-    journey
-    |> find_instance(path)
-    |> apply_status(status, journey, path, opts)
+    Repo.transaction(fn ->
+      journey
+      |> find_instance(path)
+      |> apply_status(status, journey, path, opts)
+      |> then_refresh(journey, opts)
+      |> case do
+        {:ok, instance} -> instance
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  # A change refreshes the journey's open positions; a no-op and an error
+  # pass through
+  defp then_refresh({:ok, instance}, journey, opts) do
+    with {:ok, _journey} <- refresh_next_positions(journey, opts), do: {:ok, instance}
+  end
+
+  defp then_refresh({:unchanged, instance}, _journey, _opts), do: {:ok, instance}
+  defp then_refresh({:error, reason}, _journey, _opts), do: {:error, reason}
+
+  defp refresh_next_positions(journey, opts) do
+    if Keyword.get(opts, :refresh, true) do
+      Instances.Flows.update_next_positions(
+        journey,
+        Keyword.take(opts, [:tree, :flow_types, :callback_data])
+      )
+    else
+      {:ok, journey}
+    end
   end
 
   defp find_instance(journey, path) do
@@ -142,6 +187,8 @@ defmodule FormFlow.Data.Instances.Forms do
   defp apply_status(nil, :in_progress, journey, path, opts), do: create_at(journey, path, opts)
   defp apply_status(nil, :completed, _journey, _path, _opts), do: {:error, :not_found}
 
+  # The two no-ops answer `:unchanged`, so the caller knows there is nothing
+  # to refresh
   defp apply_status(
          %Instances.Form{status: "in_progress"} = instance,
          :in_progress,
@@ -149,7 +196,7 @@ defmodule FormFlow.Data.Instances.Forms do
          _path,
          _opts
        ),
-       do: {:ok, instance}
+       do: {:unchanged, instance}
 
   defp apply_status(%Instances.Form{} = instance, :in_progress, _journey, _path, opts),
     do: reopen(instance, opts)
@@ -161,7 +208,7 @@ defmodule FormFlow.Data.Instances.Forms do
          _path,
          _opts
        ),
-       do: {:ok, instance}
+       do: {:unchanged, instance}
 
   defp apply_status(%Instances.Form{} = instance, :completed, _journey, _path, opts),
     do: complete(instance, opts)

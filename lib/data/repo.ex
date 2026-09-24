@@ -12,6 +12,7 @@ defmodule FormFlow.Data.Repo do
   def update(changeset), do: repo().update(changeset)
   def delete(struct), do: repo().delete(struct)
   def delete_all(query), do: repo().delete_all(query)
+  def insert_all(schema, entries), do: repo().insert_all(schema, entries)
   def update_all(query, updates), do: repo().update_all(query, updates)
   def exists?(query), do: repo().exists?(query)
   def aggregate(query, aggregate), do: repo().aggregate(query, aggregate)

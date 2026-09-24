@@ -808,15 +808,121 @@ defmodule FormFlow.Data.Templates.Flows do
   `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`, or
   `nil` for an unknown id.
 
+  Three queries whatever the size of the tree, not five per flow in it:
+  every flow of a tree is owned by its root (`owner_flow_id`), so one query
+  names all its flows, one all their nodes (with each node's form), and one
+  all their relationships; the tree is assembled from those in memory. A
+  subflow's id resolves the same way - its root is read through its
+  `owner_flow_id` in the same query - and gives the tree from that flow
+  down. Each flow in the tree carries its `nodes` and `relationships`, and
+  each subflow node its `subflow`, exactly as `get/1` loads them.
+
   A seen-set guards against reference cycles (a cyclic reference resolves
   to no subtree); a repeated *sibling* reference - the diamond - still
   resolves at each position, as it must: each position is a distinct
   traversal.
   """
-  def resolve_tree(flow_id), do: do_resolve_tree(flow_id, MapSet.new())
+  def resolve_tree(flow_id) do
+    case Ecto.UUID.cast(flow_id) do
+      {:ok, id} ->
+        flows = load_tree_flows(id)
+        build_tree(id, flows, MapSet.new())
 
-  defp do_resolve_tree(flow_id, seen) do
-    case get(flow_id) do
+      :error ->
+        nil
+    end
+  end
+
+  # Every flow of the tree `flow_id` belongs to, keyed by id: the flow, its
+  # root, and everything the root owns - one query whichever of the two
+  # `flow_id` names, since a subflow's siblings are owned by the root and
+  # not by it. A save refuses a step pointing outside the tree
+  # (`replace_contents/2`), so this is the whole tree; a flow reached
+  # through a reference the set does not hold (one written before that
+  # rule) is loaded the same way and added, so no subtree goes missing.
+  defp load_tree_flows(flow_id) do
+    root = from(f in Flow, where: f.id == ^flow_id, select: f.owner_flow_id)
+
+    from(f in Flow,
+      where:
+        f.id == ^flow_id or f.owner_flow_id == ^flow_id or f.id in subquery(root) or
+          f.owner_flow_id in subquery(root)
+    )
+    |> Repo.all()
+    |> load_contents()
+    |> load_referenced_flows()
+    |> put_subflows()
+  end
+
+  # Nodes (with their forms) and relationships for a list of flows, in the
+  # order they were stored - the order `Flow`'s preloads promise - put on
+  # each flow; keyed by flow id
+  defp load_contents([]), do: %{}
+
+  defp load_contents(flows) do
+    flow_ids = Enum.map(flows, & &1.id)
+
+    # The form joined rather than preloaded, so it costs no query of its own
+    nodes =
+      from(n in Node,
+        left_join: form in assoc(n, :form),
+        where: n.flow_id in ^flow_ids,
+        order_by: [asc: n.inserted_at, asc: n.id],
+        preload: [form: form]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.flow_id)
+
+    relationships =
+      from(r in Relationship,
+        where: r.flow_id in ^flow_ids,
+        order_by: [asc: r.inserted_at, asc: r.id]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.flow_id)
+
+    Map.new(flows, fn %Flow{} = flow ->
+      {flow.id,
+       %{
+         flow
+         | nodes: Map.get(nodes, flow.id, []),
+           relationships: Map.get(relationships, flow.id, [])
+       }}
+    end)
+  end
+
+  # Flows a step points at that the ownership query did not bring: loaded
+  # and added until every reference resolves or names a flow that is gone
+  defp load_referenced_flows(flows) do
+    missing =
+      for {_id, flow} <- flows,
+          node <- flow.nodes,
+          node.subflow_id,
+          not Map.has_key?(flows, node.subflow_id),
+          uniq: true,
+          do: node.subflow_id
+
+    found = if missing == [], do: [], else: Repo.all(from(f in Flow, where: f.id in ^missing))
+
+    case found do
+      [] -> flows
+      found -> found |> load_contents() |> Map.merge(flows) |> load_referenced_flows()
+    end
+  end
+
+  # Each subflow node pointing at the flow it embeds, as `get/1`'s preload
+  # leaves it
+  defp put_subflows(flows) do
+    Map.new(flows, fn {id, flow} ->
+      {id, %{flow | nodes: Enum.map(flow.nodes, &put_subflow(&1, flows))}}
+    end)
+  end
+
+  defp put_subflow(%Node{subflow_id: nil} = node, _flows), do: node
+  defp put_subflow(%Node{subflow_id: id} = node, flows), do: %Node{node | subflow: flows[id]}
+
+  defp build_tree(flow_id, flows, seen) do
+    case flows[flow_id] do
       nil ->
         nil
 
@@ -828,11 +934,34 @@ defmodule FormFlow.Data.Templates.Flows do
               node.subflow_id,
               not MapSet.member?(seen, node.subflow_id),
               into: %{} do
-            {node.id, do_resolve_tree(node.subflow_id, seen)}
+            {node.id, build_tree(node.subflow_id, flows, seen)}
           end
 
         %{flow: flow, nodes: flow.nodes, relationships: flow.relationships, subflows: subflows}
     end
+  end
+
+  @doc """
+  When any flow of a resolved tree (`resolve_tree/1`) was last saved: the
+  newest `updated_at` over the root and every subflow under it. The root's
+  own timestamp is not the answer - `update/2` writes the flow it was
+  given, so editing a subflow moves that subflow's `updated_at` and leaves
+  the root's alone. What a cached derivation of a journey is dated
+  against: a `next_computed_at` older than this may be stale
+  (`FormFlow.Data.Instances.Flows.update_next_positions/2`). Read off the
+  rows the tree already holds, so it costs no query. `nil` for a `nil`
+  tree.
+  """
+  def tree_updated_at(nil), do: nil
+
+  def tree_updated_at(%{flow: %Flow{updated_at: updated_at}, subflows: subflows}) do
+    subflows
+    |> Map.values()
+    |> Enum.map(&tree_updated_at/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(updated_at, fn candidate, newest ->
+      if DateTime.compare(candidate, newest) == :gt, do: candidate, else: newest
+    end)
   end
 
   @doc """

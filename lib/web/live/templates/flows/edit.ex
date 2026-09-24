@@ -544,6 +544,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       # root is read again for the status it now carries
       FormFlow.Data.Templates.Flows.Health.refresh(flow, socket.assigns.host_types)
       flow = Flows.get(flow.id)
+      sweep_error = sweep_next_positions(socket.assigns.flow, flow, socket.assigns)
       root = socket.assigns.root && Flows.get(socket.assigns.root.id)
       data = ReactFlow.to_data(flow)
 
@@ -563,7 +564,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           pending_status: flow.status,
           form_data: form_data(flow, node, socket.assigns.flow_types),
           instance_counts: Shared.instance_counts(flow),
-          error: nil
+          error: sweep_error
         )
         |> push_event("form_flow:set_flow", %{flow: data})
 
@@ -580,6 +581,47 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
            Shared.save_error(changeset, "Could not save the flow. Please try again.")
          )}
     end
+  end
+
+  # A save that changed the structure of the flow - its steps, its edges,
+  # or its type - can move where every open journey of the root is open,
+  # so the cache of that is recomputed for all of them, here, and the page
+  # waits (`FormFlow.Data.Instances.Flows.update_next_positions/2`). A save
+  # that changed only a name, a slug, a description, a status, or the
+  # flow's perspectives moves no position and sweeps nothing: the
+  # perspective mapping is read live. Structure is compared as what the
+  # derivation reads of it: each step's id and what it points at, each
+  # edge's ends, and the flow's type.
+  #
+  # The save is already committed when this runs, so a sweep that does not
+  # finish is reported beside "Saved." rather than raised: the page keeps
+  # the admin's work, and the message says how the cache catches up - the
+  # journey's page repairs a stale row on open, and a second save sweeps
+  # again. Returns the message, or nil.
+  defp sweep_next_positions(%Flow{} = before, %Flow{} = after_save, assigns) do
+    if structure(before, assigns.flow_types) != structure(after_save, assigns.flow_types) do
+      case FormFlow.Data.Instances.Flows.update_next_positions(after_save,
+             flow_types: assigns.flow_types,
+             callback_data: assigns.callback_data
+           ) do
+        {:ok, _count} ->
+          nil
+
+        {:error, _reason} ->
+          "The flow was saved, but recomputing where its open flow instances stand did not " <>
+            "finish. Opening a flow instance brings it up to date, and saving again retries."
+      end
+    end
+  end
+
+  # The type as the module that answers for it, not the stored id: a save
+  # that writes the default's id where none was stored changes no rule
+  defp structure(%Flow{} = flow, flow_types) do
+    %{
+      nodes: flow.nodes |> Enum.map(&{&1.id, &1.form_id, &1.subflow_id}) |> Enum.sort(),
+      relationships: flow.relationships |> Enum.map(&{&1.source_id, &1.target_id}) |> Enum.sort(),
+      flow_type: FormFlow.Config.Flows.Type.for_flow(flow_types, flow).module
+    }
   end
 
   # The flow's stored `properties` map with the form's pending values applied

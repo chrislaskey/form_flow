@@ -33,6 +33,24 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
+    test "the next-position cache columns are not castable - the refresh alone writes them" do
+      changeset =
+        Instances.Flow.changeset(%Instances.Flow{}, %{
+          template_flow_id: @flow_id,
+          next_path: ["node-1"],
+          next_node_id: "node-1",
+          completed_forms: 2,
+          forms_total: 5,
+          next_computed_at: DateTime.utc_now()
+        })
+
+      assert changeset.valid?
+
+      for field <- [:next_path, :next_node_id, :completed_forms, :forms_total, :next_computed_at] do
+        assert Ecto.Changeset.get_field(changeset, field) == nil
+      end
+    end
+
     test "template_flow_id, user_id, and tenant_id are immutable after creation" do
       persisted =
         %Instances.Flow{template_flow_id: @flow_id, user_id: "user-42", tenant_id: "tenant-1"}

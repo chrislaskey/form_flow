@@ -172,11 +172,11 @@ defmodule DemoWeb.DocsLive.DataModelingLive.SqlExamples do
       SELECT * FROM form_flow_template_flow_relationships WHERE flow_id = '3f2c...';
       """,
       note: """
-      That pair is what FormFlow.Data.Templates.Flows.get/1 issues. When a node embeds a subflow, FormFlow.Data.Templates.Flows.resolve_tree/1 runs the pair again for that flow, carrying a set of the flow ids it has already visited, and assembles the tree as it goes.
+      That pair is what FormFlow.Data.Templates.Flows.get/1 issues. A whole tree is the same pair with `flow_id IN (...)` over every flow of the tree, which FormFlow.Data.Templates.Flows.resolve_tree/1 reads in one query first — every subflow is owned by its root (`owner_flow_id`), so one `WHERE id = root OR owner_flow_id = root` names them all — and then assembles in Elixir, carrying a set of the flow ids it has already visited.
 
-      This works because of the size and shape of the data. A flow is tens of rows, not thousands, and templates are one or two levels deep in practice, so the extra round trips are cheap. In exchange you get an exact cycle guard instead of a depth cap — a flow that embeds one of its own ancestors resolves to nothing, while the same flow embedded twice side by side is correctly resolved at both positions, a distinction a depth cap cannot draw.
+      This works because of the size and shape of the data. A tree is hundreds of rows, not hundreds of thousands, so three queries for the whole of it are cheap. In exchange you get an exact cycle guard instead of a depth cap — a flow that embeds one of its own ancestors resolves to nothing, while the same flow embedded twice side by side is correctly resolved at both positions, a distinction a depth cap cannot draw.
 
-      The limit is honest enough: the round trips grow with the number of flows in the tree. A template with many subflows nested many levels deep is where this shape gets slow, and no amount of SQL tuning fixes it, because the recursion is not in the SQL.
+      The limit is honest enough: the rows read grow with the size of the tree, and the recursion is not in the SQL, so a question like "everything reachable from here, filtered" is still answered by reading the tree whole.
 
       That is what the Neo4j mapping above is for. The day flows get big enough for it to matter, "everything reachable from here, filtered, in one hop" is a question to hand to option three.
       """

@@ -78,8 +78,30 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     in flight - and `:restrict`ed: journeys can never be orphaned by
   #     template deletion. `user_id` is the creating user and `tenant_id`
   #     the host tenant it belongs to, both opaque host identities, stamped
-  #     at creation and immutable. Traversal state is never stored; it is
-  #     derived (FormFlow.Data.Instances.FlowProgress).
+  #     at creation and immutable. Traversal state is never stored as the
+  #     truth; it is derived (FormFlow.Data.Instances.FlowProgress).
+  #   * `instance_flows.next_path` + `next_node_id` + `completed_forms` +
+  #     `forms_total` + `next_computed_at` - a cache of that derivation, not
+  #     a second truth: where the flow is open (the first actionable
+  #     position, as a path and as its last node id for the filter), how
+  #     many form positions of the tree have a completed instance, how many
+  #     there are, and when they were last written. Written only by
+  #     FormFlow.Data.Instances.Flows.update_next_positions/2, in the same
+  #     transaction as `instance_next_positions`, so the two cannot
+  #     disagree. NULL until the first refresh; NULL `next_path` once
+  #     nothing is actionable. Not indexed: a listing filters through
+  #     `instance_next_positions`, never these - the row holds one
+  #     position where the table holds all of them.
+  #   * `instance_next_positions` - one row per position a journey's flow is
+  #     open at, the child table of that same cache: an in-order flow has one
+  #     row per journey, an any-order flow one per unfinished form. `path`
+  #     is the position, `node_id` its last segment for the filter,
+  #     `tenant_id` a copy of the journey's so the `(tenant_id, node_id)`
+  #     index can drive a tenant's filter; the bare `(node_id)` index
+  #     drives a host with no tenants. The journey's `next_path` is the first of these
+  #     in flow order. `:restrict` from the rows to the journey: deletion
+  #     goes through FormFlow.Data.Instances.Flows.delete_instance/2, which
+  #     removes them ahead of the journey row.
   #   * `instance_forms.user_id` + `tenant_id` - the same two stamps on a form
   #     instance: the user who started it and the tenant it belongs to.
   #   * `instance_forms.instance_flow_id` + `path` - the visit identity of an
@@ -306,6 +328,14 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
 
+      # The cache of where the flow is open (see the header): written by
+      # the refresh alone, never cast
+      add(:next_path, {:array, :text})
+      add(:next_node_id, :text)
+      add(:completed_forms, :integer)
+      add(:forms_total, :integer)
+      add(:next_computed_at, :utc_datetime_usec)
+
       timestamps(type: :utc_datetime_usec)
     end
 
@@ -450,6 +480,52 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(
       index(:form_flow_instance_flow_events, [:instance_flow_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists table(:form_flow_instance_next_positions,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        ),
+        null: false
+      )
+
+      add(:path, {:array, :text}, null: false)
+      add(:node_id, :text, null: false)
+      add(:tenant_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(
+      index(:form_flow_instance_next_positions, [:instance_flow_id], prefix: context.prefix)
+    )
+
+    # The composite drives a tenant's listing, which filters the tenant
+    # inside the subquery; the bare one drives a host with no tenants and
+    # the questions asked across them
+    create_if_not_exists(
+      index(:form_flow_instance_next_positions, [:tenant_id, :node_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(
+      index(:form_flow_instance_next_positions, [:node_id], prefix: context.prefix)
+    )
+
+    # One row per position per journey; the generated name is 61 bytes,
+    # inside Postgres's 63-byte limit
+    create_if_not_exists(
+      unique_index(:form_flow_instance_next_positions, [:instance_flow_id, :path],
+        prefix: context.prefix
+      )
     )
 
     create_if_not_exists table(:form_flow_template_flow_nodes,
@@ -607,6 +683,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   def down(context) do
     drop_if_exists(table(:form_flow_template_flow_relationships, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_flow_nodes, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_instance_next_positions, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_flow_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_form_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_forms, prefix: context.prefix))

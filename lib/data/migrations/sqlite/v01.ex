@@ -136,6 +136,14 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
 
+      # The cache of where the flow is open (see the Postgres file): written
+      # by the refresh alone, never cast
+      add(:next_path, {:array, :string})
+      add(:next_node_id, :string)
+      add(:completed_forms, :integer)
+      add(:forms_total, :integer)
+      add(:next_computed_at, :utc_datetime_usec)
+
       timestamps(type: :utc_datetime_usec)
     end
 
@@ -234,6 +242,31 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_instance_flow_events, [:instance_flow_id]))
 
+    create_if_not_exists table(:form_flow_instance_next_positions, primary_key: false) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :instance_flow_id,
+        references(:form_flow_instance_flows, type: :uuid, on_delete: :restrict),
+        null: false
+      )
+
+      add(:path, {:array, :string}, null: false)
+      add(:node_id, :string, null: false)
+      add(:tenant_id, :string)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(index(:form_flow_instance_next_positions, [:instance_flow_id]))
+    create_if_not_exists(index(:form_flow_instance_next_positions, [:tenant_id, :node_id]))
+    create_if_not_exists(index(:form_flow_instance_next_positions, [:node_id]))
+
+    # One row per position per journey
+    create_if_not_exists(
+      unique_index(:form_flow_instance_next_positions, [:instance_flow_id, :path])
+    )
+
     create_if_not_exists table(:form_flow_template_flow_nodes, primary_key: false) do
       add(:id, :uuid, primary_key: true)
 
@@ -313,6 +346,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
   def down(_context) do
     drop_if_exists(table(:form_flow_template_flow_relationships))
     drop_if_exists(table(:form_flow_template_flow_nodes))
+    drop_if_exists(table(:form_flow_instance_next_positions))
     drop_if_exists(table(:form_flow_instance_flow_events))
     drop_if_exists(table(:form_flow_instance_form_events))
     drop_if_exists(table(:form_flow_instance_forms))

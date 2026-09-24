@@ -122,6 +122,7 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
 
       flow_instance ->
         tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
+        flow_instance = repair_next_positions(flow_instance, tree, socket.assigns)
         instances = Instances.Flows.form_instances(flow_instance)
         forms = FlowProgress.forms(tree, instances)
         steps = FlowProgress.subflows(tree, instances)
@@ -163,13 +164,62 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
             next_up: next_up(rows, continue_allowed?),
             continue_allowed?: continue_allowed?,
             part_done?: part_done?(rows, flow_instance),
-            stranded: Instances.Flows.list_stranded(flow_instance),
+            stranded:
+              Instances.Flows.list_stranded(flow_instance, tree: tree, form_instances: instances),
             mount_error: nil,
             navigate_to: nil
           )
 
         Forms.Shared.on_mount(socket)
     end
+  end
+
+  # Read-repair: this page derives live, so a journey whose cached open
+  # positions may be out of date - no refresh yet, or a flow of its tree
+  # saved since the last one (`Instances.Flows.next_positions_stale?/2`) -
+  # is rewritten the first time anyone opens it, whether or not a sweep
+  # ever reaches it. A fresh row costs one comparison and nothing else.
+  defp repair_next_positions(flow_instance, tree, assigns) do
+    if Instances.Flows.next_positions_stale?(flow_instance, Templates.Flows.tree_updated_at(tree)) do
+      case Instances.Flows.update_next_positions(flow_instance,
+             tree: tree,
+             flow_types: assigns.flow_types,
+             callback_data: assigns.callback_data
+           ) do
+        {:ok, repaired} -> repaired
+        {:error, _reason} -> flow_instance
+      end
+    else
+      flow_instance
+    end
+  end
+
+  @doc """
+  The form nodes of a tree the viewer's perspectives are for - every form
+  position whose flow type says `visible?/2` of it, asked with the page's
+  `perspectives`, `flow_types`, and `callback_data`, and no instance in
+  scope - as a set of node ids. The set the listing page filters journeys
+  by (`FormFlow.Data.Instances.Flows.narrow_next_position/2`) and draws
+  the perspective status badge from; computed in memory on every load
+  and never cached, because it goes stale the moment an admin adds a
+  perspective to a flow, and it is a few hundred calls over a tree already
+  in hand. A node's perspective is a property of the flow holding it, so
+  every position of a node is one perspective's: the set needs no paths.
+  `nil` in, an empty set out.
+  """
+  @spec visible_node_ids(map() | nil, map()) :: MapSet.t()
+  def visible_node_ids(nil, _assigns), do: MapSet.new()
+
+  def visible_node_ids(tree, assigns) do
+    forms = FlowProgress.forms(tree, [])
+    steps = FlowProgress.subflows(tree, [])
+
+    for form <- forms,
+        context = form_context(form, forms, steps, tree, nil, assigns),
+        type = Forms.Shared.flow_type(context, assigns),
+        Forms.Shared.visible?(type, context, assigns),
+        into: MapSet.new(),
+        do: form.node.id
   end
 
   @doc """

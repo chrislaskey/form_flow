@@ -1,5 +1,133 @@
 # Changelog
 
+## v0.35.0
+
+### Where a journey's flow is open, cached: the reviewer's queue in one query
+
+A reviews page lists **only the journeys the reviewer can act on** - the
+applicant has finished, the review has not - without opening every
+journey. Until now, where a journey stood could only be derived from the
+live tree and its form instances (`FormFlow.Data.Instances.FlowProgress`),
+which reads everything about one journey; a listing of thousands could
+not filter by it in SQL, and a `Slab.table` in query mode filters,
+sorts, and counts by SQL alone. The full design is
+`archive/plans/next-position.md`; what departed from it and why is
+`archive/plans/next-position-implementation.md`.
+
+**The cache.** Every journey row (`form_flow_instance_flows`) gains five
+columns, written by one refresh and never cast: `next_path` and
+`next_node_id`, the first position the flow is open at in flow order
+(`FlowProgress.next_path_position/2` - as a path, and as its last node
+for a listing's `in ^ids` filter), `completed_forms` and `forms_total`,
+how many form positions of the whole tree have a completed instance and
+how many there are, and `next_computed_at`. Beside them, a child table,
+`form_flow_instance_next_positions` (`FormFlow.Data.Instances.Flow.NextPosition`),
+holds **one row per position the flow is open at** - one for an in-order
+flow, one per unfinished form for a flow worked in any order, none once
+nothing is actionable - so a queue is right whatever the flow type and
+however many branches are open at once. Neither holds a perspective:
+whose position a node is stays a read-time question, so an admin adding
+a perspective moves nothing. The derivation stays the truth; this is a
+cache of it, dated by `next_computed_at`.
+
+**The refresh.** `FormFlow.Data.Instances.Flows.update_next_positions/2`,
+one name with two clauses. Given an `Instances.Flow`, it rewrites that
+journey: the five columns and the table's rows in one transaction, from
+the journey's active form instances read as narrow rows (never `data`).
+Given a `Templates.Flow` - a root or a subflow, whose root it finds - it
+sweeps every open journey of the root in chunks of a few hundred against
+one tree, and returns `{:ok, count}`.
+
+A position is open when the flow's **order rule** says so at every
+level: the form's own "forms" flow type's `editable?/2` and, for every
+"subflows" flow above it, `enterable?/2` - asked with **no viewer** in
+the context and never `visible?/2`. For the library's in-order types that
+is `FlowProgress.actionable?/1`, the edges alone; for its any-order types
+it is "not yet completed". So the refresh takes `flow_types:` (the
+defaults when absent) and `callback_data:`; the pages pass theirs.
+
+`FormFlow.Data.Instances.Forms.update_status/4` runs the refresh itself
+after every change it makes - a start, a submit, a reopen - in the same
+transaction, and skips it for a no-op. `Instances.Flows.create/2` writes
+the first open position as the journey is created, and `complete/2`
+empties the cache with the stamp: a completed journey is open nowhere,
+whatever its forms say. All three take `refresh: false` to skip, for a
+seed or bulk importer that calls the `Templates.Flow` clause once at the
+end; a caller that passes it owes the cache that call.
+`delete_instance/2` removes the rows ahead of the journey row.
+
+**The listing** (`FormFlow.Web.Instances.Flows.Index`) reads the cache
+and never derives. Its Status column is now the **perspective status**
+(`FormFlow.Web.Instances.Components.Flows.Status`): Completed, Your turn
+when an open position is a form the viewer's perspectives are for,
+Waiting on others otherwise - the journey's own word, In progress, for a
+row no refresh has reached. A **Next** column names the first open
+position as the journey's page names it ("Documents / Proof of address"),
+and Continue links straight to it when it is the viewer's. A **Flow
+progress** column draws the whole flow's count, every perspective's
+forms included, sortable. Which forms are the viewer's is asked of the
+flow types once per form node of the page's flows on every load
+(`FormFlow.Web.Instances.Flows.Shared.visible_node_ids/2`), in memory and
+never stored.
+
+`FormFlow.Web.router/1` gains **`actionable_only`** (default `false`):
+`true` lists only the journeys open at one of the viewer's forms -
+`FormFlow.Data.Instances.Flows.narrow_next_position/3`, the composable
+helper (`id in (subquery)` over the child table, so a journey open at
+three of the nodes is one row and Slab's count needs no `distinct`; the
+tenant filtered inside the subquery, so the child table's
+`(tenant_id, node_id)` index drives it), applied with the node set of
+the flows the page names. The demo's reviews page sets it and is a
+queue; its empty state says "Nothing is waiting for you." The
+applications page leaves it off and lists everything with the badge.
+
+**The sweep.** The flow editor calls the `Templates.Flow` clause,
+synchronously, after a save that changed the flow's **structure** - its
+steps, its edges, or its type as the module answering for it - and not
+after one that changed a name, a slug, a status, or the flow's
+perspectives. Measured on an 80-form flow, both databases local: about
+three seconds at 5,000 open journeys, seventy at 100,000 - linear, one
+derivation and one `UPDATE` per journey
+(`archive/plans/next-position-implementation.md` §5.4 and R1-measured).
+A flow with that many live journeys is where §9.4 of the plan - copy and
+wind down rather than edit - or an async sweep becomes the question.
+
+**Staleness.** `Instances.Flows.next_positions_stale?/2`: a row no
+refresh has reached, or one older than the newest save anywhere in its
+tree (`Templates.Flows.tree_updated_at/1` - a subflow's save moves the
+subflow's timestamp, not the root's). The listing draws such a row's
+value with a quiet "(may have changed)"; the flow instance's page, which
+derives live anyway, rewrites it when opened.
+
+**Schema.** `V01` gains the columns and the child table, indexed on
+`(instance_flow_id)`, `(tenant_id, node_id)`, `(node_id)`, and uniquely
+on `(instance_flow_id, path)`, on both adapters. The journey row's new
+columns are not indexed: a listing filters through the table, never
+through them. A database migrated before this release has to be
+recreated (the library is pre-release and `V01` is the schema).
+
+### The tree loads in three queries
+
+`FormFlow.Data.Templates.Flows.resolve_tree/1` read each flow of a tree
+with `Repo.get` and four preloads - five queries per flow, forty for a
+tree of eight. Every subflow is owned by its root (`owner_flow_id`), so
+the tree's flows are one query, their nodes (with each node's form,
+joined) a second, and their relationships a third, whatever the depth;
+the tree is assembled in memory. Same shape out; no caller changes. A
+subflow's id resolves the same way, its root read through the same
+query. Every page that derives progress gets faster.
+
+`FormFlow.Data.Instances.Flows.list_stranded/2` takes `tree:` and
+`form_instances:` from a caller that has them, instead of reading both
+again; the flow instance's page passes its own.
+
+### Also
+
+* `FormFlow.Config.Flows.Type.for_flow/2` is the one place a flow's type
+  is resolved among a list - stored id, then the first of the kind, then
+  the library's default - and what the pages and the refresh both use.
+* `FormFlow.Data.Repo` wraps `insert_all/2`.
+
 ## v0.34.0
 
 ### `reopened_at` on a form instance

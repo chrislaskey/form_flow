@@ -1,0 +1,212 @@
+defmodule Demo.FormFlowNextPositionsPagesTest do
+  @moduledoc """
+  The pages' side of the next-position cache
+  (`archive/plans/next-position.md` §5.4): the flow editor sweeps every
+  open journey after a save that changed the flow's structure and after no
+  other, the flow instance's page repairs a stale row when it is opened,
+  and the listing marks a row a sweep has not reached.
+  """
+
+  use DemoWeb.ConnCase, async: false
+
+  import Ecto.Query
+  import Phoenix.LiveViewTest
+
+  alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.Flow.NextPosition
+  alias FormFlow.Data.Repo, as: FormFlowRepo
+  alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Forms
+
+  describe "the editor's save" do
+    @describetag user: "admin"
+
+    test "sweeps the open journeys after a structural save, and not after a rename",
+         %{conn: conn} do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+      flow = Flows.get(flow.id)
+      start = Enum.find(flow.nodes, &("Start" in &1.labels))
+      stop = Enum.find(flow.nodes, &("End" in &1.labels))
+      computed_at = journey.next_computed_at
+
+      {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
+
+      # A rename: the same steps and edges, a new name
+      view
+      |> element("#flows-edit-editor")
+      |> render_hook("form_flow:flow_changed", canvas(flow, [start, name, address, stop]))
+
+      view
+      |> element("#flows-edit-flow-form-form")
+      |> render_change(%{"dynamic_form" => %{"name" => "Renamed"}})
+
+      view |> element("button", "Save") |> render_click()
+      assert render(view) =~ "Saved."
+
+      assert reload(journey).next_computed_at == computed_at
+
+      # A structural save: Address is removed
+      view
+      |> element("#flows-edit-editor")
+      |> render_hook("form_flow:flow_changed", canvas(flow, [start, name, stop]))
+
+      view |> element("button", "Save") |> render_click()
+      assert render(view) =~ "Saved."
+
+      swept = reload(journey)
+      assert DateTime.compare(swept.next_computed_at, computed_at) == :gt
+      assert swept.forms_total == 1
+      assert swept.next_path == [name.id]
+    end
+  end
+
+  describe "the flow instance's page" do
+    @describetag user: "dog_owner"
+
+    test "repairs a row no refresh has reached, and one older than the flow's last save",
+         %{conn: conn} do
+      %{flow: flow, journey: journey, forms: [name, _address]} = flow_of_two()
+
+      # Never refreshed
+      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [next_path: nil, next_node_id: nil, next_computed_at: nil]
+      )
+
+      FormFlowRepo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
+
+      {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      repaired = reload(journey)
+      assert repaired.next_path == [name.id]
+      assert %DateTime{} = repaired.next_computed_at
+      assert [_row] = rows_of(journey)
+
+      # Refreshed before the flow was last saved: the cached value is wrong
+      # and the timestamps say so
+      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [next_path: ["gone"], next_node_id: "gone"]
+      )
+
+      # Saved a moment after the refresh - in the past, so the repair that
+      # follows is newer than it
+      later = DateTime.add(repaired.next_computed_at, 1, :millisecond)
+      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
+
+      {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      assert reload(journey).next_path == [name.id]
+
+      # A fresh row is left alone
+      fresh = reload(journey)
+      {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+      assert reload(journey).next_computed_at == fresh.next_computed_at
+    end
+  end
+
+  describe "the listing" do
+    @describetag user: "dog_owner"
+
+    test "marks a row the flow was edited after, quietly, and not a fresh one", %{conn: conn} do
+      %{flow: flow, journey: journey} = flow_of_two()
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
+      refute html =~ "may have changed"
+
+      later = DateTime.add(journey.next_computed_at, 60, :second)
+      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
+      assert html =~ "may have changed"
+    end
+  end
+
+  # ── fixtures ────────────────────────────────────────────────────────────
+
+  # The canvas as the hook reports it, kept to these nodes and wired in
+  # their order: what the editor loaded (`ReactFlow.to_data/1`), with the
+  # dropped steps and every edge gone, and the kept ones joined up again
+  defp canvas(flow, nodes) do
+    kept = MapSet.new(nodes, & &1.id)
+    data = FormFlow.Web.Helpers.ReactFlow.to_data(Flows.get(flow.id))
+
+    %{
+      "nodes" => Enum.filter(data.nodes, &MapSet.member?(kept, &1["id"])),
+      "edges" =>
+        nodes
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [a, b] ->
+          %{"id" => "#{a.id}-#{b.id}", "source" => a.id, "target" => b.id}
+        end)
+    }
+  end
+
+  # Start → Name → Address → End, open, and a journey of it
+  defp flow_of_two do
+    {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
+
+    first_node = build_node(flow, ["Start"], "Start")
+    name = build_form_node(flow, "Name")
+    address = build_form_node(flow, "Address")
+    last_node = build_node(flow, ["End"], "End")
+
+    edge(flow, first_node, name)
+    edge(flow, name, address)
+    edge(flow, address, last_node)
+
+    {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
+
+    %{flow: flow, journey: journey, forms: [name, address]}
+  end
+
+  defp reload(journey), do: Instances.Flows.get(journey.id)
+
+  defp rows_of(journey),
+    do: FormFlowRepo.all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
+
+  # `kind` rides in the data as the editor puts it there: a canvas save
+  # derives a node's labels from it (`FormFlow.Data.Templates.Flow.Node`)
+  defp build_node(flow, [kind] = labels, label, attrs \\ %{}) do
+    data = %{"label" => label, "kind" => String.downcase(kind)}
+
+    attrs =
+      Map.merge(
+        %{flow_id: flow.id, labels: labels, properties: %{"data" => data}},
+        attrs
+      )
+
+    {:ok, node} = FormFlowRepo.insert(Flow.Node.changeset(%Flow.Node{}, attrs))
+
+    node
+  end
+
+  defp edge(flow, source, target) do
+    {:ok, _relationship} =
+      FormFlowRepo.insert(
+        Flow.Relationship.changeset(%Flow.Relationship{}, %{
+          flow_id: flow.id,
+          source_id: source.id,
+          target_id: target.id,
+          label: "CONNECTS_TO"
+        })
+      )
+  end
+
+  # A published form with one text question, "name", owned by the flow so
+  # the canvas save keeps it as the step's own
+  defp build_form_node(flow, label) do
+    {:ok, form} =
+      Forms.create(%{
+        name: "#{label} #{System.unique_integer([:positive])}",
+        owner_flow_id: flow.id
+      })
+
+    [draft] = form.versions
+
+    definition = %{"elements" => [%{"type" => "text", "name" => "name", "title" => "Name"}]}
+    {:ok, draft} = Forms.update_draft(draft, %{definition: definition})
+    {:ok, _published} = Forms.update_status(draft, :published)
+
+    build_node(flow, ["Form"], label, %{form_id: form.id})
+  end
+end

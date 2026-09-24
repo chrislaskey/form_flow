@@ -78,15 +78,6 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
 
-  # What a flow is governed by when its context has no types at all - a
-  # "forms" flow always has the page's flow types, so this is reached only by
-  # a host passing [] or a stranded position answered for by a "subflows"
-  # root.
-  @default_type %FormFlow.Config.Flows.Type{
-    module: FormFlow.Config.Flows.Type.Default,
-    name: "Default"
-  }
-
   # What a form is governed by when the page has no form types at all - a
   # host passing [].
   @default_form_type %FormFlow.Config.Forms.Type{
@@ -425,20 +416,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   The `FormFlow.Config.Flows.Type` governing the flow at the context's
-  `:subflow`: its stored `properties["flow_type"]` looked up among the
-  page's `flow_types` of the flow's kind
-  (`FormFlow.Web.Templates.Shared.flow_types_for/2`) - a "forms" flow's or,
-  for a step context (`step_context/2`), a "subflows" flow's. An unset or
-  unrecognized value resolves to the first type of the kind - the defaults
-  list the in-order wizard and In order first, so they stay the baseline -
-  and a context with no types to the library's default, so a flow always has
-  a type to ask.
+  `:subflow` among the page's `flow_types`
+  (`FormFlow.Config.Flows.Type.for_flow/2`) - a "forms" flow's or, for a
+  step context (`step_context/2`), a "subflows" flow's.
   """
-  def flow_type(%Context{subflow: flow} = context, assigns) do
-    types = FormFlow.Web.Templates.Shared.flow_types_for(context, assigns)
-    id = flow && flow.properties["flow_type"]
-
-    Enum.find(types, &(&1.id == id)) || List.first(types) || @default_type
+  def flow_type(%Context{subflow: flow}, assigns) do
+    FormFlow.Config.Flows.Type.for_flow(assigns.flow_types, flow)
   end
 
   @doc """
@@ -681,7 +664,9 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     if match?(%Templates.Flow{}, flow) and allows?(flow, :continue, assigns) do
       case Instances.Forms.update_status(flow_instance, form_instance.path, :in_progress,
              user_id: assigns.user_id,
-             tenant_id: assigns.tenant_id
+             tenant_id: assigns.tenant_id,
+             flow_types: assigns.flow_types,
+             callback_data: assigns.callback_data
            ) do
         {:ok, reopened} -> {:ok, reopened}
         {:error, _changeset} -> {:error, "Could not reopen the form."}
@@ -691,10 +676,12 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     end
   end
 
-  defp start_instance(flow_instance, path, %{user_id: user_id, tenant_id: tenant_id}) do
+  defp start_instance(flow_instance, path, assigns) do
     case Instances.Forms.update_status(flow_instance, path, :in_progress,
-           user_id: user_id,
-           tenant_id: tenant_id
+           user_id: assigns.user_id,
+           tenant_id: assigns.tenant_id,
+           flow_types: assigns.flow_types,
+           callback_data: assigns.callback_data
          ) do
       {:ok, form_instance} ->
         {:ok, form_instance}

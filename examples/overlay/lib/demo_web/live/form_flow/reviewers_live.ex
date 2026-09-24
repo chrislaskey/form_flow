@@ -22,6 +22,14 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
   the tenant holds; naming them here is also what keeps a flow the admin
   authors at run time from quietly becoming a reviewer's work.
 
+  `actionable_only` is what makes this a queue rather than a list: only the
+  journeys whose flow is open at one of the reviewer's forms - the applicant
+  has finished, the review has not - are listed. An application the
+  applicant is still filling in, or one waiting on its closing feedback, is
+  not a reviewer's to act on and is not here. FormFlow reads that off the
+  cache each form submit keeps (`FormFlow.Data.Instances.Flows.update_next_positions/2`),
+  so the queue costs one indexed query however many applications there are.
+
   Listing is not access control. FormFlow opens any journey by id for
   anyone who reaches its URL, so what keeps an applicant off this page is
   `persona_gate` and the `:reviewer` role, not the query.
@@ -66,6 +74,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
               perspectives={@current_user.perspectives}
               instances={Demo.Users.instances(@current_user)}
               flows={Demo.Users.flows(@current_user)}
+              actionable_only
               uri={@uri}
               params={@params}
               path={@path}

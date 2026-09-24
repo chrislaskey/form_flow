@@ -14,7 +14,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
 
     * **Postgres column types.** An Ecto field type is not a column type, so
       `@postgres_types` names what `Ecto.Adapters.Postgres` turns each one
-      into, and `@migration_types` overrides the three columns where
+      into, and `@migration_types` overrides the columns where
       `FormFlow.Data.Migrations.Postgres.V01` declares a wider type than the
       schema's field implies. The demo itself runs SQLite; the types drawn
       here are the ones a Postgres host gets.
@@ -49,14 +49,15 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
     %{schema: Instances.Flow, position: %{x: 840, y: 700}},
     %{schema: Instances.Form, position: %{x: 0, y: 700}},
     %{schema: Instances.Form.Event, position: %{x: 0, y: 1120}},
-    %{schema: Instances.Flow.Event, position: %{x: 840, y: 1010}}
+    %{schema: Instances.Flow.Event, position: %{x: 840, y: 1010}},
+    %{schema: Instances.Flow.NextPosition, position: %{x: 420, y: 700}}
   ]
 
   # The five a reader should find first: a flow template, the nodes in it, a
   # form template, and the two tables those turn into once a user fills one
-  # out. The other five support them — a form's versions, a flow's audit log
-  # and each instance's, and the relationships between nodes. The page marks
-  # these with a star.
+  # out. The other six support them — a form's versions, a flow's audit log
+  # and each instance's, the relationships between nodes, and the positions a
+  # journey's flow is open at. The page marks these with a star.
   @primary [
     Templates.Flow,
     Templates.Flow.Node,
@@ -83,7 +84,11 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
   @migration_types %{
     {"form_flow_template_forms", "description"} => "text",
     {"form_flow_template_flow_nodes", "labels"} => "text[]",
-    {"form_flow_instance_forms", "path"} => "text[]"
+    {"form_flow_instance_forms", "path"} => "text[]",
+    {"form_flow_instance_flows", "next_path"} => "text[]",
+    {"form_flow_instance_flows", "next_node_id"} => "text",
+    {"form_flow_instance_next_positions", "path"} => "text[]",
+    {"form_flow_instance_next_positions", "node_id"} => "text"
   }
 
   # Every foreign key's ON DELETE, transcribed from
@@ -105,6 +110,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
     {"form_flow_template_flow_relationships", "target_id"} => :cascade,
     {"form_flow_instance_flows", "template_flow_id"} => :restrict,
     {"form_flow_instance_flow_events", "instance_flow_id"} => :restrict,
+    {"form_flow_instance_next_positions", "instance_flow_id"} => :restrict,
     {"form_flow_instance_forms", "template_form_version_id"} => :restrict,
     {"form_flow_instance_forms", "instance_flow_id"} => :restrict,
     {"form_flow_instance_form_events", "instance_form_id"} => :restrict,

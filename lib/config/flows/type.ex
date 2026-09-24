@@ -135,6 +135,30 @@ defmodule FormFlow.Config.Flows.Type do
   def for_kind(_types, _label), do: []
 
   @doc """
+  The type governing `flow` among `types`: its stored
+  `properties["flow_type"]` looked up among the types of the flow's kind
+  (`for_kind/2`). An unset or unrecognized value resolves to the first type
+  of the kind - `defaults/0` lists the in-order wizard and In order first,
+  so they stay the baseline - and a flow with no types of its kind, or no
+  flow at all, to the library's default, so a flow always has a type to
+  ask. What the pages and the next-position refresh
+  (`FormFlow.Data.Instances.Flows.update_next_positions/2`) both resolve
+  a type with, so they cannot disagree about which module answers.
+  """
+  @spec for_flow([t()], Flow.t() | nil) :: t()
+  def for_flow(types, flow) do
+    kind = for_kind(types, flow && flow.label)
+    id = flow && flow.properties["flow_type"]
+
+    Enum.find(kind, &(&1.id == id)) || List.first(kind) || default()
+  end
+
+  # What a flow is governed by when there are no types of its kind at all -
+  # a host passing [], or no flow to ask about. A function, not an
+  # attribute: the struct is being defined in this same module.
+  defp default, do: %__MODULE__{module: __MODULE__.Default, name: "Default"}
+
+  @doc """
   What an admin entered for the flow's type's `:properties`, keyed by
   property key - stored on the flow under
   `properties["flow_type_property_values"]`. Empty when the type
