@@ -25,6 +25,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
   use Phoenix.Component
 
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
 
   attr(:flow, :map, required: true, doc: "the root flow being copied")
   attr(:name, :string, required: true, doc: "the copy's name as prefilled")
@@ -41,51 +42,49 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
 
   def copy_dialog(assigns) do
     ~H"""
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-1 text-sm font-semibold text-zinc-900">Duplicate this flow?</p>
-        <p class="mb-3 text-xs text-zinc-500">
-          A duplicate of “{@flow.name}” with its steps, connections, subflows, and forms.
-          Forms from the catalog stay shared; the rest is the copy's own.
-        </p>
+    <Dialog.dialog width={:medium}>
+      <p class="mb-1 text-sm font-semibold text-zinc-900">Duplicate this flow?</p>
+      <p class="mb-3 text-xs text-zinc-500">
+        A duplicate of “{@flow.name}” with its steps, connections, subflows, and forms.
+        Forms from the catalog stay shared; the rest is the copy's own.
+      </p>
 
-        <div :if={@cleared != []} class="mb-3 text-xs text-zinc-500">
-          <p>Left empty in the copy, for an administrator to set again:</p>
-          <ul class="mt-1 list-disc pl-4">
-            <li :for={{name, count} <- @cleared}>{name} - set in {places(count)}</li>
-          </ul>
+      <div :if={@cleared != []} class="mb-3 text-xs text-zinc-500">
+        <p>Left empty in the copy, for an administrator to set again:</p>
+        <ul class="mt-1 list-disc pl-4">
+          <li :for={{name, count} <- @cleared}>{name} - set in {places(count)}</li>
+        </ul>
+      </div>
+
+      <form phx-submit="copy" phx-target={@target} class="space-y-3">
+        <Core.input components={@components} type="text" name="name" label="Name" value={@name} />
+
+        <div>
+          <Core.input components={@components} type="text" name="slug" label="Slug" value={@slug} />
+          <span class="mt-1 block text-xs text-zinc-500">
+            A stable name for looking the copy up in code - lowercase letters, numbers, _ and -.
+            Left blank, the flow's slug with a free suffix; a blank name is the one offered.
+          </span>
         </div>
 
-        <form phx-submit="copy" phx-target={@target} class="space-y-3">
-          <Core.input components={@components} type="text" name="name" label="Name" value={@name} />
+        <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-          <div>
-            <Core.input components={@components} type="text" name="slug" label="Slug" value={@slug} />
-            <span class="mt-1 block text-xs text-zinc-500">
-              A stable name for looking the copy up in code - lowercase letters, numbers, _ and -.
-              Left blank, the flow's slug with a free suffix; a blank name is the one offered.
-            </span>
-          </div>
-
-          <Core.error :if={@error} components={@components}>{@error}</Core.error>
-
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              type="button"
-              phx-click="cancel_copy"
-              phx-target={@target}
-              class="btn"
-            >
-              Cancel
-            </Core.button>
-            <Core.button components={@components} type="submit" variant="primary">
-              Duplicate flow
-            </Core.button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            type="button"
+            phx-click="cancel_copy"
+            phx-target={@target}
+            class="btn"
+          >
+            Cancel
+          </Core.button>
+          <Core.button components={@components} type="submit" variant="primary">
+            Duplicate flow
+          </Core.button>
+        </div>
+      </form>
+    </Dialog.dialog>
     """
   end
 

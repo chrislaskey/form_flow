@@ -100,6 +100,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
@@ -970,109 +971,94 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         </DynamicForm.form>
       </div>
 
-      <div
-        :if={@pending_navigation}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-4 text-sm text-zinc-700">
-            This flow has unsaved changes. Save before continuing?
-          </p>
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              phx-click="cancel_navigation"
-              phx-target={@myself}
-              class="btn"
-            >
-              Keep editing
-            </Core.button>
-            <Core.button
-              components={@components}
-              phx-click="save_and_continue"
-              phx-target={@myself}
-              variant="primary"
-            >
-              Save &amp; Continue
-            </Core.button>
-          </div>
+      <Dialog.dialog :if={@pending_navigation} width={:small}>
+        <p class="mb-4 text-sm text-zinc-700">
+          This flow has unsaved changes. Save before continuing?
+        </p>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            phx-click="cancel_navigation"
+            phx-target={@myself}
+            class="btn"
+          >
+            Keep editing
+          </Core.button>
+          <Core.button
+            components={@components}
+            phx-click="save_and_continue"
+            phx-target={@myself}
+            variant="primary"
+          >
+            Save &amp; Continue
+          </Core.button>
         </div>
-      </div>
+      </Dialog.dialog>
 
       <%!-- A structural save with journeys in flight: what it will do to
             them, how long the page will wait, and the way round it --%>
-      <div
-        :if={@confirming_save?}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-2 text-sm font-medium text-zinc-900">
-            {Shared.count(open_journeys(assigns), "flow instance")} still in progress.
-          </p>
-          <p class="mb-2 text-sm text-zinc-700">
-            This save changes the shape of the flow - its steps, how they connect, or
-            how it is worked. Those flow instances are part-way through the old shape.
-            Answers already given are kept, but where each one stands is recomputed, and
-            a step somebody was about to reach can move or disappear.
-          </p>
-          <p :if={Shared.sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
-            Recomputing them takes {Shared.sweep_estimate(open_journeys(assigns))}, and this page
-            waits for it.
-          </p>
-          <p class="mb-4 text-sm text-zinc-700">
-            Consider copying the flow instead: change the copy, and set this one to
-            <em>Winding down</em>
-            so the flow instances already started finish against the shape they started on.
-          </p>
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              phx-click="cancel_save"
-              phx-target={@myself}
-              class="btn"
-            >
-              Keep editing
-            </Core.button>
-            <Core.button
-              components={@components}
-              phx-click="confirm_save"
-              phx-target={@myself}
-              class="btn btn-error"
-            >
-              Save anyway
-            </Core.button>
-          </div>
+      <Dialog.dialog :if={@confirming_save?} width={:medium}>
+        <p class="mb-2 text-sm font-medium text-zinc-900">
+          {Shared.count(open_journeys(assigns), "flow instance")} still in progress.
+        </p>
+        <p class="mb-2 text-sm text-zinc-700">
+          This save changes the shape of the flow - its steps, how they connect, or
+          how it is worked. Those flow instances are part-way through the old shape.
+          Answers already given are kept, but where each one stands is recomputed, and
+          a step somebody was about to reach can move or disappear.
+        </p>
+        <p :if={Shared.sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
+          Recomputing them takes {Shared.sweep_estimate(open_journeys(assigns))}, and this page
+          waits for it.
+        </p>
+        <p class="mb-4 text-sm text-zinc-700">
+          Consider copying the flow instead: change the copy, and set this one to
+          <em>Winding down</em>
+          so the flow instances already started finish against the shape they started on.
+        </p>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            phx-click="cancel_save"
+            phx-target={@myself}
+            class="btn"
+          >
+            Keep editing
+          </Core.button>
+          <Core.button
+            components={@components}
+            phx-click="confirm_save"
+            phx-target={@myself}
+            class="btn btn-error"
+          >
+            Save anyway
+          </Core.button>
         </div>
-      </div>
+      </Dialog.dialog>
 
-      <div
-        :if={@confirming_discard?}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-4 text-sm text-zinc-700">
-            Discard changes? This can't be undone.
-          </p>
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              phx-click="cancel_discard"
-              phx-target={@myself}
-              class="btn"
-            >
-              Keep editing
-            </Core.button>
-            <Core.button
-              components={@components}
-              phx-click="confirm_discard"
-              phx-target={@myself}
-              class="btn btn-error btn-ghost"
-            >
-              Discard changes
-            </Core.button>
-          </div>
+      <Dialog.dialog :if={@confirming_discard?} width={:small}>
+        <p class="mb-4 text-sm text-zinc-700">
+          Discard changes? This can't be undone.
+        </p>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            phx-click="cancel_discard"
+            phx-target={@myself}
+            class="btn"
+          >
+            Keep editing
+          </Core.button>
+          <Core.button
+            components={@components}
+            phx-click="confirm_discard"
+            phx-target={@myself}
+            class="btn btn-error btn-ghost"
+          >
+            Discard changes
+          </Core.button>
         </div>
-      </div>
+      </Dialog.dialog>
     </div>
     """
   end

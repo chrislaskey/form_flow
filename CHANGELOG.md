@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.41.0
+
+### One dialog, and the publish question fits inside it
+
+Every confirmation in the library had copied the same overlay and the same
+white panel: nine of them, five widths, and `p-4` in all nine.
+`FormFlow.Web.Components.Dialog` (new) is that panel, and it is the only
+place those classes now live. Its `width` is a size rather than a
+measurement - `:small`, `:medium`, `:large` - so the nine land on three
+widths, each a maximum the panel shrinks below on a narrow screen. The
+padding inside went up to `p-6`, the corners to `rounded-xl`, and a panel
+too tall for the window scrolls inside itself. It never scrolls sideways.
+
+The publish dialog needed that last rule most. Its two answers were a
+`radiogroup` whose labels were whole sentences, and the sentences ran out
+past the panel's border rather than wrapping. They are now
+`FormFlow.Web.Templates.Components.ChoiceCard` cards - the same control the
+form Edit page picks its editor with - a short name on the first line and
+what it does on the second. The `<:field>` body takes the control over
+while `DynamicForm` keeps the label, the errors, and the changeset, so the
+answer reaches `reopen_submitted` exactly as it did.
+
+The question over the cards used to read "There are 1 flows that are
+in-progress that have completed this particular form." It now reads
+"1 flow still in progress already has this form submitted. What should we
+do?" - `FormFlow.Web.Templates.Shared.count/2`, as the rest of the library
+counts things.
+
 ## v0.40.0
 
 ### Two fixes on the way to a form

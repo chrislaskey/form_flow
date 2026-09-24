@@ -26,6 +26,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
   use Phoenix.Component
 
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.Templates.Shared
 
   attr(:flow, :map, required: true, doc: "the root flow whose status is changing")
@@ -49,72 +50,70 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
 
   def status_dialog(assigns) do
     ~H"""
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-1 font-semibold text-zinc-900">Change the status of “{@flow.name}”</p>
-        <p class="mb-3 text-sm text-zinc-500">
-          What users may do with this flow. Any status can move to any other; every
-          change is logged with who made it.
-        </p>
+    <Dialog.dialog width={:medium}>
+      <p class="mb-1 font-semibold text-zinc-900">Change the status of “{@flow.name}”</p>
+      <p class="mb-3 text-sm text-zinc-500">
+        What users may do with this flow. Any status can move to any other; every
+        change is logged with who made it.
+      </p>
 
-        <form phx-change="status_picked" phx-submit="save_status" phx-target={@target} class="space-y-3">
+      <form phx-change="status_picked" phx-submit="save_status" phx-target={@target} class="space-y-3">
+        <Core.input
+          components={@components}
+          type="select"
+          id="status-dialog-status"
+          name="status"
+          label="Status"
+          value={@status}
+          options={Shared.status_options()}
+        />
+
+        <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div class="font-medium text-zinc-800">{Shared.status_label(@status)}</div>
+          <p class="mt-0.5 text-sm text-zinc-600">{Shared.status_summary(@status)}</p>
+          <p :if={Shared.instance_counts_sentence(@counts)} class="mt-0.5 text-sm text-zinc-600">
+            {Shared.instance_counts_sentence(@counts)}
+          </p>
+        </div>
+
+        <div
+          :if={offer_delete?(@flow, @status, @pre_release_count)}
+          id="status-dialog-pre-release"
+          class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+        >
+          <p class="font-medium text-zinc-800">{started_sentence(@pre_release_count)}</p>
           <Core.input
             components={@components}
-            type="select"
-            id="status-dialog-status"
-            name="status"
-            label="Status"
-            value={@status}
-            options={Shared.status_options()}
+            type="checkbox"
+            id="status-dialog-delete-pre-release"
+            name="delete_pre_release"
+            label="Delete them"
+            value={@delete_pre_release?}
           />
+          <p class="text-sm text-zinc-600">
+            The trial run, marked when it was started. Deleting it is logged and cannot be undone;
+            left alone, it stays among the real instances.
+          </p>
+        </div>
 
-          <div class="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div class="font-medium text-zinc-800">{Shared.status_label(@status)}</div>
-            <p class="mt-0.5 text-sm text-zinc-600">{Shared.status_summary(@status)}</p>
-            <p :if={Shared.instance_counts_sentence(@counts)} class="mt-0.5 text-sm text-zinc-600">
-              {Shared.instance_counts_sentence(@counts)}
-            </p>
-          </div>
+        <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-          <div
-            :if={offer_delete?(@flow, @status, @pre_release_count)}
-            id="status-dialog-pre-release"
-            class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            type="button"
+            phx-click="cancel_status"
+            phx-target={@target}
+            class="btn"
           >
-            <p class="font-medium text-zinc-800">{started_sentence(@pre_release_count)}</p>
-            <Core.input
-              components={@components}
-              type="checkbox"
-              id="status-dialog-delete-pre-release"
-              name="delete_pre_release"
-              label="Delete them"
-              value={@delete_pre_release?}
-            />
-            <p class="text-sm text-zinc-600">
-              The trial run, marked when it was started. Deleting it is logged and cannot be undone;
-              left alone, it stays among the real instances.
-            </p>
-          </div>
-
-          <Core.error :if={@error} components={@components}>{@error}</Core.error>
-
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              type="button"
-              phx-click="cancel_status"
-              phx-target={@target}
-              class="btn"
-            >
-              Cancel
-            </Core.button>
-            <Core.button components={@components} type="submit" variant="primary">
-              Save status
-            </Core.button>
-          </div>
-        </form>
-      </div>
-    </div>
+            Cancel
+          </Core.button>
+          <Core.button components={@components} type="submit" variant="primary">
+            Save status
+          </Core.button>
+        </div>
+      </form>
+    </Dialog.dialog>
     """
   end
 

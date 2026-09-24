@@ -161,6 +161,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.Components.Forms.Capture
   alias FormFlow.Web.Components.Forms.PrefillDialog
   alias FormFlow.Web.Components.Forms.PrefillMenu
@@ -856,38 +857,33 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         components: @components
       })}
 
-      <div
-        :if={@confirming_discard?}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="w-96 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-4 text-sm text-zinc-700">
-            Discard changes? The form goes back to what was last submitted, or empties if it
-            never was. A saved draft is removed too. This can't be undone.
-          </p>
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              type="button"
-              phx-click="cancel_discard"
-              phx-target={@myself}
-              class="btn"
-            >
-              Keep editing
-            </Core.button>
-            <Core.button
-              id={"#{@id}-confirm-discard"}
-              components={@components}
-              type="button"
-              phx-click="confirm_discard"
-              phx-target={@myself}
-              class="btn btn-error btn-ghost"
-            >
-              Discard changes
-            </Core.button>
-          </div>
+      <Dialog.dialog :if={@confirming_discard?} width={:medium}>
+        <p class="mb-4 text-sm text-zinc-700">
+          Discard changes? The form goes back to what was last submitted, or empties if it
+          never was. A saved draft is removed too. This can't be undone.
+        </p>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            type="button"
+            phx-click="cancel_discard"
+            phx-target={@myself}
+            class="btn"
+          >
+            Keep editing
+          </Core.button>
+          <Core.button
+            id={"#{@id}-confirm-discard"}
+            components={@components}
+            type="button"
+            phx-click="confirm_discard"
+            phx-target={@myself}
+            class="btn btn-error btn-ghost"
+          >
+            Discard changes
+          </Core.button>
         </div>
-      </div>
+      </Dialog.dialog>
 
       <PrefillDialog.prefill_dialog
         :if={@prefill_dialog}

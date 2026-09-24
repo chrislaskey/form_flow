@@ -1528,7 +1528,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert html =~
                "1 submitted form(s) in flows still in progress, across these flows: Dog License (1)."
 
-      assert html =~ "There are 1 flows that are in-progress"
+      assert html =~ "1 flow still in progress already has this form submitted"
     end
 
     test "a reopening publish through the page sweeps the next-position cache", %{conn: conn} do

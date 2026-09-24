@@ -21,7 +21,9 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
   use Phoenix.Component
 
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.CoreComponents
+  alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Shared
 
   attr(:id, :string, required: true, doc: "the DynamicForm component id")
@@ -68,86 +70,114 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
     assigns = assign(assigns, :submitted, assigns.counts.submitted)
 
     ~H"""
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="max-h-[90vh] w-[28rem] overflow-y-auto rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-1 font-semibold text-zinc-900">Publish this draft?</p>
+    <Dialog.dialog width={:large}>
+      <p class="mb-3 text-lg font-semibold text-zinc-900">Publish this draft?</p>
 
-        <p :if={@saved_note} class="my-3 text-sm text-amber-600">
-          <span class="font-bold">Warning!</span> Publishing only uses the last saved definition - unsaved edits are not included.
-          Save first.
-        </p>
+      <p :if={@saved_note} class="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+        <span class="font-bold">Warning!</span>
+        Publishing only uses the last saved definition - unsaved edits are not included. Save first.
+      </p>
 
-        <p class="mb-1 text-sm text-zinc-500">{impact_sentence()}</p>
+      <p class="mb-2 text-sm text-zinc-500">{impact_sentence()}</p>
 
-        <%!-- Which flows the submitted forms are in: publishing a shared form
-              reaches every flow using it, and this is the moment to learn that --%>
-        <p class="mb-3 text-sm text-zinc-500">
-          {submitted_sentence(@submitted, @counts_by_flow)}
-        </p>
+      <%!-- Which flows the submitted forms are in: publishing a shared form
+            reaches every flow using it, and this is the moment to learn that --%>
+      <p class="mb-5 text-sm text-zinc-500">
+        {submitted_sentence(@submitted, @counts_by_flow)}
+      </p>
 
-        <DynamicForm.form
-          :if={@submitted > 0}
-          id={@id}
-          submit_text="Publish"
-          on_success={@on_success}
-          components={@components || CoreComponents}
-          hide_submit
+      <DynamicForm.form
+        :if={@submitted > 0}
+        id={@id}
+        submit_text="Publish"
+        on_success={@on_success}
+        components={@components || CoreComponents}
+        hide_submit
+      >
+        <%!-- Cards rather than a row of radios, as the editor choice on the
+              form Edit page is: each answer takes a sentence to say what it
+              does to people mid-flow, and a plain radio's label had nowhere
+              to put it but on one long line that ran past the border. The
+              `<:field>` body takes over the control while DynamicForm keeps
+              the label, the errors, and the changeset. --%>
+        <:field
+          :let={field}
+          type="radiogroup"
+          name="reopen_submitted"
+          label={question(@submitted)}
+          required
+          default="false"
+          options={[{"Leave them as they are", "false"}, {"Reopen them", "true"}]}
         >
-          <:field
-            type="radiogroup"
-            name="reopen_submitted"
-            label={"There are #{@submitted} flows that are in-progress that have completed this particular form. What should we do?"}
-            required
-            default="false"
-            options={[
-              {"Leave submitted forms as they are - people who already submitted this form keep the version they submitted and the form is not reopened.",
-               "false"},
-              {"Reopen submitted forms - the #{@submitted} users who haven't completed the full flow, but have already submitted an answer to this particular form will have it reopened, with their existing answers prefilled. Those users must check and submit again.",
-               "true"}
-            ]}
-            metadata={%{"style" => "vertical"}}
-          />
-        </DynamicForm.form>
+          <div class="grid grid-cols-1 gap-2">
+            <ChoiceCard.choice_card
+              id={"#{field.id}-false"}
+              name={field.name}
+              value="false"
+              checked={to_string(field.value) != "true"}
+              label="Leave submitted forms as they are"
+            >
+              People who already submitted this form keep the version they submitted, and the
+              form is not reopened.
+            </ChoiceCard.choice_card>
+            <ChoiceCard.choice_card
+              id={"#{field.id}-true"}
+              name={field.name}
+              value="true"
+              checked={to_string(field.value) == "true"}
+              label="Reopen submitted forms"
+            >
+              Anyone who submitted this form but has not finished the flow gets it back, with
+              their answers prefilled. They must check and submit again.
+            </ChoiceCard.choice_card>
+          </div>
+        </:field>
+      </DynamicForm.form>
 
-        <%!-- Inform, do not steer: reopening is how a wrong question on a
-              live form gets fixed. Say what it costs when it costs enough
-              to say. --%>
-        <p
-          :if={@submitted > 0 && Shared.sweep_estimate(@sweep_size)}
-          class="mt-2 text-sm text-zinc-500"
+      <%!-- Inform, do not steer: reopening is how a wrong question on a
+            live form gets fixed. Say what it costs when it costs enough
+            to say. --%>
+      <p
+        :if={@submitted > 0 && Shared.sweep_estimate(@sweep_size)}
+        class="mt-3 text-sm text-zinc-500"
+      >
+        Reopening also recomputes where every flow instance still in progress in those
+        flows is open. That takes {Shared.sweep_estimate(@sweep_size)}, and this page waits.
+      </p>
+
+      <div class="mt-6 flex justify-end gap-2">
+        <Core.button
+          components={@components}
+          phx-click="cancel_publish"
+          phx-target={@target}
+          class="btn"
         >
-          Reopening also recomputes where every flow instance still in progress in those
-          flows is open. That takes {Shared.sweep_estimate(@sweep_size)}, and this page waits.
-        </p>
-
-        <div class="mt-2 flex justify-end gap-2">
-          <Core.button
-            components={@components}
-            phx-click="cancel_publish"
-            phx-target={@target}
-            class="rounded-md border border-zinc-300 px-2 py-1 text-sm hover:border-zinc-400"
-          >
-            Cancel
-          </Core.button>
-          <DynamicForm.submit_button :if={@submitted > 0} form={"#{@id}-form"}>
-            Publish
-          </DynamicForm.submit_button>
-          <%!-- Nothing to ask: the button publishes on its own --%>
-          <Core.button
-            :if={@submitted == 0}
-            id={"#{@id}-publish-now"}
-            components={@components}
-            phx-click="publish_now"
-            phx-target={@target}
-            class="btn btn-primary btn-sm"
-          >
-            Publish
-          </Core.button>
-        </div>
+          Cancel
+        </Core.button>
+        <DynamicForm.submit_button :if={@submitted > 0} form={"#{@id}-form"}>
+          Publish
+        </DynamicForm.submit_button>
+        <%!-- Nothing to ask: the button publishes on its own --%>
+        <Core.button
+          :if={@submitted == 0}
+          id={"#{@id}-publish-now"}
+          components={@components}
+          phx-click="publish_now"
+          phx-target={@target}
+          variant="primary"
+        >
+          Publish
+        </Core.button>
       </div>
-    </div>
+    </Dialog.dialog>
     """
   end
+
+  # The question over the two cards. A count of forms read as a count of
+  # flows here, and "There are 1 flows" was what it said out loud.
+  defp question(submitted),
+    do:
+      "#{Shared.count(submitted, "flow")} still in progress already has this form submitted. What should we do?"
 
   # One string, not template text, so the sentence never wraps mid-phrase
   defp impact_sentence do

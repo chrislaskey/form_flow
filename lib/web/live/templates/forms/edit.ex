@@ -149,6 +149,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.Components.Forms.PrefillDialog
   alias FormFlow.Web.Components.Forms.PrefillMenu
   alias FormFlow.Web.Components.Forms.PrefillPicker
@@ -2708,30 +2709,25 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
             a crumb discards an edit. Save is the editor form's own submit
             button, reached by id from out here, so saving from this dialog
             is the same save as the header's. --%>
-      <div
-        :if={@pending_prefill_path}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      >
-        <div class="w-80 rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-          <p class="mb-4 text-sm text-zinc-700">
-            This draft has unsaved changes. Save before filling the preview in?
-          </p>
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              type="button"
-              phx-click="cancel_prefill_navigation"
-              phx-target={@myself}
-              class="btn"
-            >
-              Keep editing
-            </Core.button>
-            <Core.button components={@components} form={"#{@id}-form-form"} variant="primary">
-              Save &amp; Continue
-            </Core.button>
-          </div>
+      <Dialog.dialog :if={@pending_prefill_path} width={:small}>
+        <p class="mb-4 text-sm text-zinc-700">
+          This draft has unsaved changes. Save before filling the preview in?
+        </p>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            type="button"
+            phx-click="cancel_prefill_navigation"
+            phx-target={@myself}
+            class="btn"
+          >
+            Keep editing
+          </Core.button>
+          <Core.button components={@components} form={"#{@id}-form-form"} variant="primary">
+            Save &amp; Continue
+          </Core.button>
         </div>
-      </div>
+      </Dialog.dialog>
     </div>
     """
   end

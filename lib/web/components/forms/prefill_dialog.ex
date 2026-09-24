@@ -48,6 +48,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillDialog do
   use Phoenix.Component
 
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.Dialog
 
   attr(:action, :atom, required: true, doc: ":create or :update")
   attr(:name, :string, default: "", doc: "the name as prefilled")
@@ -64,65 +65,63 @@ defmodule FormFlow.Web.Components.Forms.PrefillDialog do
 
   def prefill_dialog(assigns) do
     ~H"""
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="w-[34rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
-        <p class="mb-2 font-semibold text-xl text-zinc-900">
-          {if @action == :create, do: "New prefill", else: "Edit this prefill"}
-        </p>
-        <p class="mb-3 text-zinc-500">
-          Prefills are shared for all users. Be thoughtful about what data is stored in them. 
-        </p>
-        <%!-- Captured answers are what the browser would submit, which is
-              not quite what is on screen - said here, before the write --%>
-        <p :if={@captured} class="mb-3 text-sm text-zinc-500">
-          These answers are the preview as it stands - what the browser would submit. An
-          unchecked box or a disabled field is missing from them, and a question hidden by a
-          condition is in them. Review before saving.
-        </p>
-        <form phx-submit="save_prefill" phx-target={@target} class="space-y-3">
+    <Dialog.dialog width={:large}>
+      <p class="mb-2 font-semibold text-xl text-zinc-900">
+        {if @action == :create, do: "New prefill", else: "Edit this prefill"}
+      </p>
+      <p class="mb-3 text-zinc-500">
+        Prefills are shared for all users. Be thoughtful about what data is stored in them. 
+      </p>
+      <%!-- Captured answers are what the browser would submit, which is
+            not quite what is on screen - said here, before the write --%>
+      <p :if={@captured} class="mb-3 text-sm text-zinc-500">
+        These answers are the preview as it stands - what the browser would submit. An
+        unchecked box or a disabled field is missing from them, and a question hidden by a
+        condition is in them. Review before saving.
+      </p>
+      <form phx-submit="save_prefill" phx-target={@target} class="space-y-3">
+        <Core.input
+          components={@components}
+          type="text"
+          name="name"
+          label="Name"
+          value={@name}
+          required
+        />
+
+        <div>
           <Core.input
             components={@components}
-            type="text"
-            name="name"
-            label="Name"
-            value={@name}
-            required
+            type="textarea"
+            name="data"
+            label="Answers"
+            value={@data}
+            rows="12"
+            class="w-full textarea bg-white border border-zinc-300 font-mono text-sm"
           />
+          <span class="mt-1 block text-sm text-zinc-500">
+            Format is JSON object of question names to values, e.g. <code class="font-mono">{~s({"full_name": "Alex Doe", "species": "dog"})}</code>
+          </span>
+        </div>
 
-          <div>
-            <Core.input
-              components={@components}
-              type="textarea"
-              name="data"
-              label="Answers"
-              value={@data}
-              rows="12"
-              class="w-full textarea bg-white border border-zinc-300 font-mono text-sm"
-            />
-            <span class="mt-1 block text-sm text-zinc-500">
-              Format is JSON object of question names to values, e.g. <code class="font-mono">{~s({"full_name": "Alex Doe", "species": "dog"})}</code>
-            </span>
-          </div>
+        <Core.error :if={@error} components={@components}>{@error}</Core.error>
 
-          <Core.error :if={@error} components={@components}>{@error}</Core.error>
-
-          <div class="flex justify-end gap-2">
-            <Core.button
-              components={@components}
-              type="button"
-              phx-click="cancel_prefill"
-              phx-target={@target}
-              class="btn"
-            >
-              Cancel
-            </Core.button>
-            <Core.button components={@components} type="submit" variant="primary">
-              {if @action == :create, do: "Create prefill", else: "Save prefill"}
-            </Core.button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div class="flex justify-end gap-2">
+          <Core.button
+            components={@components}
+            type="button"
+            phx-click="cancel_prefill"
+            phx-target={@target}
+            class="btn"
+          >
+            Cancel
+          </Core.button>
+          <Core.button components={@components} type="submit" variant="primary">
+            {if @action == :create, do: "Create prefill", else: "Save prefill"}
+          </Core.button>
+        </div>
+      </form>
+    </Dialog.dialog>
     """
   end
 end
