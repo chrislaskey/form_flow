@@ -435,7 +435,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstanceTest do
       assert FormInstance.document(context) == {:error, :no_definition}
     end
 
-    test "parses the pinned version when the caller has not already" do
+    test "parses the instance's version when the caller has not already" do
       context =
         struct(context(%{"full_name" => "Ada"}),
           form_version: %Templates.Form.Version{definition: @definition}

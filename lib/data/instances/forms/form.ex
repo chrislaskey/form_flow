@@ -2,21 +2,21 @@ defmodule FormFlow.Data.Instances.Form do
   @moduledoc """
   `FormFlow.Data.Instances.Form` Ecto Schema for one form instance - one user's completion of a form.
 
-  The load-bearing column is the pin: `template_form_version_id` names the
+  The load-bearing column is `template_form_version_id`: it names the
   exact definition this instance renders against - never "latest", never the
   live template (hard rule 1 in `archive/form-versioning.md`). Publishing a
-  new version moves pins only through explicit publish-time policies
+  new version moves instances only through explicit publish-time policies
   (`FormFlow.Data.Templates.Forms.update_status/3`), each move recorded as an
   append-only `FormFlow.Data.Instances.Form.Event`.
 
   There is deliberately no lineage (`form_id`) column beside the
-  pin: the lineage is derived through the pinned version, so it can never
+  version: the lineage is derived through the version, so it can never
   desync, and the rare admin queries that want it join for free.
 
   `data` holds the answers, keyed by field name, and holds *only* answers -
   progress, section state, and system markers never live inside it (hard
   rule 5). What each question's label *said* at completion time is always
-  recoverable through the pin - the pinned definition is immutable.
+  recoverable through the version - a published definition is immutable.
   (Denormalizing labels onto the instance at completion - a labels
   snapshot - is a deliberately deferred optimization; see
   `archive/plans/instances-next.md`.)

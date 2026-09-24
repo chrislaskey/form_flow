@@ -116,7 +116,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        error: nil,
        notice: nil,
        pending_navigation: nil,
-       confirming_discard?: false
+       confirming_discard?: false,
+       confirming_save?: false
      )}
   end
 
@@ -402,12 +403,30 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
+  # A structural save of a flow with journeys in flight asks first: it moves
+  # where those journeys stand, it sweeps them synchronously (the page
+  # waits), and copying the flow is usually the better move. Only this
+  # button asks. "Save & Continue" is already a prompt - a second modal on
+  # top of the first would be two questions for one decision - and the
+  # navigation it answers is the admin leaving, where the flow's own state
+  # is the thing being rescued.
   @impl true
   def handle_event("save", _params, socket) do
-    case persist_current(socket) do
-      {:ok, socket, _id_map} -> {:noreply, assign(socket, :notice, "Saved.")}
-      {:error, socket} -> {:noreply, socket}
+    if confirm_save?(socket.assigns) do
+      {:noreply, assign(socket, :confirming_save?, true)}
+    else
+      {:noreply, save_now(socket)}
     end
+  end
+
+  @impl true
+  def handle_event("cancel_save", _params, socket) do
+    {:noreply, assign(socket, :confirming_save?, false)}
+  end
+
+  @impl true
+  def handle_event("confirm_save", _params, socket) do
+    {:noreply, socket |> assign(:confirming_save?, false) |> save_now()}
   end
 
   @impl true
@@ -614,6 +633,82 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
+  defp save_now(socket) do
+    case persist_current(socket) do
+      {:ok, socket, _id_map} -> assign(socket, :notice, "Saved.")
+      {:error, socket} -> socket
+    end
+  end
+
+  # Whether this save has to ask first: it changes the structure, and the
+  # root has journeys in flight for that change to move. Both halves have
+  # to be true. A rename, a slug, a description, a status, a perspective, or
+  # a node dragged to a new place asks nothing, however many journeys are
+  # open; and a flow nobody has started is the admin's to reshape freely,
+  # which is the whole point of building one before it opens.
+  defp confirm_save?(assigns) do
+    open_journeys(assigns) > 0 and structural_save?(assigns)
+  end
+
+  # The pending canvas read as `structure/2` reads a saved flow - the same
+  # three facts, from the node and edge maps the canvas holds rather than
+  # from rows. `ReactFlow.to_flow_attrs/1` is what the save itself would
+  # pass to `Flows.update/2`, so this asks of the pending state exactly what
+  # the post-save comparison asks of the result, and the two cannot drift.
+  defp structural_save?(assigns) do
+    canvas_structure(assigns.current, assigns) != canvas_structure(assigns.data, assigns) or
+      pending_type_module(assigns) != structure(assigns.flow, assigns.flow_types).flow_type
+  end
+
+  defp canvas_structure(data, assigns) do
+    attrs = ReactFlow.to_flow_attrs(data)
+
+    %{
+      nodes:
+        attrs.nodes
+        |> Enum.map(&{&1.id, &1.properties["form_id"], &1.properties["subflow_id"]})
+        |> Enum.sort(),
+      relationships:
+        attrs.relationships |> Enum.map(&{&1.source_id, &1.target_id}) |> Enum.sort(),
+      flow_types: assigns.flow_types
+    }
+  end
+
+  # The module the type picker's pending value resolves to, compared with the
+  # saved flow's the same way `structure/2` compares them: an unset value
+  # resolving to the same module as the stored one is no change
+  defp pending_type_module(%{flow: %Flow{} = flow} = assigns) do
+    pending = %{flow | properties: Map.put(flow.properties || %{}, "flow_type", assigns.pending_type)}
+
+    FormFlow.Config.Flows.Type.for_flow(assigns.flow_types, pending).module
+  end
+
+  # The journeys a structural save would move: the **root's**, since every
+  # journey is a traversal of the whole tree and a subflow's save reshapes
+  # part of it. Editing a subflow, the counts on the page are the root's
+  # too.
+  defp open_journeys(assigns) do
+    case assigns.root || assigns.flow do
+      %Flow{owner_flow_id: nil} = root ->
+        Map.get(Flows.instance_counts(root), "in_progress", 0)
+
+      _owned ->
+        0
+    end
+  end
+
+  # Roughly how long the sweep will hold the page: ~0.7 ms per open journey,
+  # measured at 5,000 and 100,000 on both adapters (the implementation
+  # notes, R1-measured). Nothing is said below two seconds - a number that
+  # small is noise, and saying "about 0 seconds" reads as a bug.
+  defp sweep_estimate(journeys) do
+    case round(journeys * 0.7 / 1000) do
+      seconds when seconds < 2 -> nil
+      seconds when seconds < 90 -> "about #{seconds} seconds"
+      seconds -> "about #{round(seconds / 60)} minutes"
+    end
+  end
+
   # The type as the module that answers for it, not the stored id: a save
   # that writes the default's id where none was stored changes no rule
   defp structure(%Flow{} = flow, flow_types) do
@@ -626,7 +721,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   # The flow's stored `properties` map with the form's pending values applied
   # - an unset type removes the key and the property values with it, so "no
-  # choice" stays "use the configured default" rather than pinning whatever
+  # choice" stays "use the configured default" rather than storing whatever
   # the default happened to be at save time. A type's property values are
   # replaced whole, so switching types leaves nothing of the old one behind -
   # and a type with nothing entered stores no values key at all.
@@ -908,6 +1003,52 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
               variant="primary"
             >
               Save &amp; Continue
+            </Core.button>
+          </div>
+        </div>
+      </div>
+
+      <%!-- A structural save with journeys in flight: what it will do to
+            them, how long the page will wait, and the way round it --%>
+      <div
+        :if={@confirming_save?}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      >
+        <div class="w-[28rem] rounded-md border border-zinc-300 bg-white p-4 shadow-lg">
+          <p class="mb-2 text-sm font-medium text-zinc-900">
+            {Shared.count(open_journeys(assigns), "flow instance")} still in progress.
+          </p>
+          <p class="mb-2 text-sm text-zinc-700">
+            This save changes the shape of the flow - its steps, how they connect, or
+            how it is worked. Those flow instances are part-way through the old shape.
+            Answers already given are kept, but where each one stands is recomputed, and
+            a step somebody was about to reach can move or disappear.
+          </p>
+          <p :if={sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
+            Recomputing them takes {sweep_estimate(open_journeys(assigns))}, and this page
+            waits for it.
+          </p>
+          <p class="mb-4 text-sm text-zinc-700">
+            Consider copying the flow instead: change the copy, and set this one to
+            <em>Winding down</em>
+            so the flow instances already started finish against the shape they started on.
+          </p>
+          <div class="flex justify-end gap-2">
+            <Core.button
+              components={@components}
+              phx-click="cancel_save"
+              phx-target={@myself}
+              class="btn"
+            >
+              Keep editing
+            </Core.button>
+            <Core.button
+              components={@components}
+              phx-click="confirm_save"
+              phx-target={@myself}
+              class="btn btn-error"
+            >
+              Save anyway
             </Core.button>
           </div>
         </div>

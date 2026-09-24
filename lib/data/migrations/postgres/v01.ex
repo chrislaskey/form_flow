@@ -7,8 +7,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   # definitions (versions), plus an instance of a user filling one out.
   # Mirrors FormFlow.Data.Templates.Form, FormFlow.Data.Templates.Form.Version,
   # and FormFlow.Data.Instances.Form. Published versions are immutable; every
-  # definition - draft or published - is a version row, and instances pin the
-  # exact version they were filled against (see archive/form-versioning.md).
+  # definition - draft or published - is a version row, and each instance
+  # records the exact version it was filled against (see archive/form-versioning.md).
   #
   # Flows - a property graph in the Neo4j style, stored relationally. Nodes
   # carry labels (a set) and properties; relationships carry a single label
@@ -64,12 +64,12 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     versions get uniqueness with no partial-index or CHECK logic. Status
   #     values (draft | published | archived) are enforced in the changeset,
   #     not the database.
-  #   * `instance_forms.template_form_version_id` - the pin: the exact
-  #     definition this instance renders against. There is deliberately no
-  #     lineage column beside it - the lineage is derived through the pin, and
+  #   * `instance_forms.template_form_version_id` - the instance's version: the
+  #     exact definition this instance renders against. There is deliberately no
+  #     lineage column beside it - the lineage is derived through the version, and
   #     a stored copy would need a desync guard. `:restrict` so answer sets
   #     can never be orphaned or cascade-deleted by template changes.
-  #   * `instance_form_events` - append-only audit: pin migrations, reopens,
+  #   * `instance_form_events` - append-only audit: moves to a new version, reopens,
   #     status changes, with prior data snapshotted when a migration discards
   #     it. `:restrict` from events to instances: deleting an instance goes
   #     through an explicit delete API that removes events deliberately.
@@ -129,7 +129,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     ownership cascade inside a single statement.
   #   * `nodes.form_id` - the form-node counterpart of `subflow_id`: this node
   #     collects that form (the lineage, never a version - version resolution
-  #     is a read-time and instance-pin concern). Same `:nothing` rationale.
+  #     is decided at read time, and recorded on the instance when it is
+  #     started). Same `:nothing` rationale.
   #
   # The SQLite version of this file is intentionally a near-copy rather than a
   # shared module, so each adapter's DDL stays readable in one place and is free

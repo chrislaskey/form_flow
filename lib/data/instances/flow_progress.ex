@@ -107,10 +107,19 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   Positions the tree no longer has are absent - a stranded instance is not a
   form of the flow any more (`FormFlow.Data.Instances.Flows.list_stranded/2`
   is where those surface).
+
+  `statuses` is `derive/2`'s answer, for a caller that has it already and
+  wants both views of one derivation - `forms/3` and `subflows/3` for the
+  same journey otherwise derive it twice, which is the walk's whole cost.
+  Derived here when omitted, so the two-argument call stays what it was.
   """
-  @spec forms(tree :: map() | nil, form_instances :: [struct()]) :: [FormProgress.t()]
-  def forms(tree, form_instances) do
-    ctx = %{statuses: derive(tree, form_instances), instances: active_by_path(form_instances)}
+  @spec forms(tree :: map() | nil, form_instances :: [struct()], %{path() => status()} | nil) ::
+          [FormProgress.t()]
+  def forms(tree, form_instances, statuses \\ nil) do
+    ctx = %{
+      statuses: statuses || derive(tree, form_instances),
+      instances: active_by_path(form_instances)
+    }
 
     flow_forms(tree, [], [], ctx)
   end
@@ -135,10 +144,13 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   `FormFlow.Data.Instances.SubflowProgress` - the step-level view beside
   `forms/2`, walked the same way and carrying the same derived statuses.
   What a "subflows" flow's `FormFlow.Config.Flows.Type` is asked about.
+
+  `statuses` is `derive/2`'s answer, as on `forms/3`.
   """
-  @spec subflows(tree :: map() | nil, form_instances :: [struct()]) :: [SubflowProgress.t()]
-  def subflows(tree, form_instances) do
-    ctx = %{statuses: derive(tree, form_instances)}
+  @spec subflows(tree :: map() | nil, form_instances :: [struct()], %{path() => status()} | nil) ::
+          [SubflowProgress.t()]
+  def subflows(tree, form_instances, statuses \\ nil) do
+    ctx = %{statuses: statuses || derive(tree, form_instances)}
 
     flow_subflows(tree, [], [], ctx)
   end

@@ -55,7 +55,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
     * `:flow_name` / `:form_label` / `:form_trail` - what the breadcrumb needs:
       the flow's name, the full "subflow / subflow / form" text, and the
       subflow names alone, outermost first, for drawing each as its own link
-    * `:parsed` / `:parse_error` - the pinned definition, through `DynamicForm`
+    * `:parsed` / `:parse_error` - the instance's version's definition, through
+      `DynamicForm`
 
   Then each page asks whether it may render (`on_mount/2`): first whether
   the instance is of a flow the page's `flows` attr names - a page about
@@ -63,7 +64,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   `on_mount`. Edit - only Edit, and only when the host said yes -
   makes the one write in here, `start/1`: a form with no instance yet is
   started when the flow's type allows it, which creates the instance and is
-  the moment the form version is pinned. The order is the point: a refused
+  the moment the form version is recorded. The order is the point: a refused
   visitor starts nothing.
   """
 
@@ -203,8 +204,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   Returns `%{tree: …, forms: …, steps: …, form_instance: …, version: …, context: …}` -
   the resolved template tree, the whole journey's progress (its forms and
   its subflow steps), the live
-  instance at the position (`nil` until it is started), the version it is
-  pinned to, and the `FormFlow.Context` the two form pages and every
+  instance at the position (`nil` until it is started), the version it
+  renders, and the `FormFlow.Context` the two form pages and every
   callback are given.
 
   It takes assigns rather than a socket because it is read from outside
@@ -631,8 +632,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
 
   @doc """
   Edit's mode: a position with no instance yet is started when the flow's
-  type allows editing there - the instance is created, which pins the form
-  version - and the page's assigns are derived again, since the first
+  type allows editing there - the instance is created, which records the
+  form version - and the page's assigns are derived again, since the first
   derivation ran before the start and still called this form available rather
   than in progress. A position with an instance, or one the type keeps
   closed, is left as it is; a start that fails leaves `:start_error`.

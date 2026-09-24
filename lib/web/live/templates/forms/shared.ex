@@ -169,7 +169,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   @doc """
   The form's stored `properties` map with a type applied - an unset type
   removes the key and the property values with it, so "no choice" stays
-  "use the configured default" rather than pinning whatever the default
+  "use the configured default" rather than storing whatever the default
   happened to be at save time. A type's property values are replaced whole,
   so switching types leaves nothing of the old one behind - and a type with
   nothing entered stores no values key at all.

@@ -86,7 +86,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
     Map.merge(prefilled_answers(context), data || %{})
   end
 
-  # `hide_submit` is the edit page's: it draws Submit in its pinned header,
+  # `hide_submit` is the edit page's: it draws Submit in its sticky header,
   # as a button whose `form` attribute names this form, so the form's own
   # button would be a second one
   @impl true

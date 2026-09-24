@@ -20,7 +20,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   ## What was reviewed
 
   Submitting the review records what it reviewed on its own completion event
-  (`snapshot/2`): the source's id, its pinned version id, its
+  (`snapshot/2`): the source's id, its version id, its
   `completed_at`, and its answers as they were rendered, under `"reviewed"`
   in the event's `snapshot`. Structure by reference - the version is
   immutable - and answers by copy, because the source can be resubmitted,
@@ -76,8 +76,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
       was erased when the source was deleted out of the journey
     * `{:stale, cause, structure_changed?: boolean()}` - the source moved on;
       `cause` is the latest thing that happened to it, and
-      `structure_changed?` says whether its pinned version differs from the
-      one reviewed
+      `structure_changed?` says whether its version differs from the one
+      reviewed
   """
   @type staleness ::
           :never_reviewed
@@ -165,8 +165,8 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
      `:migrated` when a publish policy did (`to_version_id` set), as is
      `migrated` itself.
 
-  `structure_changed?` is true when any newer event moved the pin or the
-  source's pinned version differs from the recorded one.
+  `structure_changed?` is true when any newer event moved the source to
+  another version or its version differs from the recorded one.
   """
   @spec staleness(Event.t() | nil, map() | nil, FormProgress.t() | nil, [Event.t()]) ::
           staleness()
@@ -373,7 +373,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
         </div>
       </section>
       <%!-- The review itself, in its own bordered column, which stays put
-            under the pinned header while the answers scroll --%>
+            under the sticky header while the answers scroll --%>
       <section class="self-start rounded-lg border border-zinc-300 p-6 lg:sticky lg:top-28 lg:col-span-2">
         <h3 class="mb-3 text-sm font-semibold">Your review</h3>
         {render_slot(@inner_block)}
@@ -509,7 +509,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   end
 
   # The diff between the recorded answers and the source's current ones. The
-  # current pinned definition titles both sides unless the structure moved,
+  # source's current definition titles both sides unless the structure moved,
   # when the reviewed version is loaded for the old side - the rare path.
   defp changed_answers(
          %{snapshot: snapshot, source: source, source_parsed: parsed},
@@ -523,7 +523,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
   defp stamp(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M") <> " UTC"
 
-  # The source's pinned definition, parsed - nil with no instance to show,
+  # The source's version's definition, parsed - nil with no instance to show,
   # and nil rather than a crash for a malformed definition (the same posture
   # as the form pages)
   defp parse(%{instance: %{template_form_version_id: version_id}}),

@@ -2,11 +2,11 @@ defmodule Demo.FormFlowDownloadsTest do
   @moduledoc """
   Exercises the download and print routes against a real database, a real
   router, and a real request — the whole path the library's own tests can't
-  reach: a mounted route, a position resolved out of the URL, the pinned
-  definition parsed, and a file coming back.
+  reach: a mounted route, a position resolved out of the URL, the instance's
+  version's definition parsed, and a file coming back.
 
   What it holds the library to is that a download says the same thing the
-  page it was started from says. The Show page renders the pinned definition
+  page it was started from says. The Show page renders the instance's version's definition
   filled in with the instance's `data`; so does the file, through the same
   `FormFlow.Web.Instances.Forms.Shared.resolve/1`. A test that only checked
   the bytes were a PDF would pass while the two drifted apart.

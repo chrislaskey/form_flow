@@ -45,6 +45,19 @@ Without that, a slow sweep of the tree as it was could land its answer on
 top of a newer one with a fresh stamp, leaving a stale row that nothing
 would ever mark or repair.
 
+**The editor asks before a structural save of a flow with journeys in
+flight** - a modal naming how many are in progress, saying that the save
+moves where they stand and that the page waits while they are recomputed,
+and pointing at copying the flow and winding this one down instead. The
+button reads "Save anyway". Both halves must be true to ask: a flow
+nobody has started never asks, and a rename, a status, a perspective, or
+a step dragged somewhere new never asks. Only Save asks - "Save &
+Continue" is already a prompt.
+
+`FormFlow.Data.Instances.FlowProgress.forms/3` and `subflows/3` now take
+`derive/2`'s answer, so a caller wanting both views of one journey walks
+the tree once rather than twice. The two-argument calls are unchanged.
+
 A position is open when the flow's **order rule** says so at every
 level: the form's own "forms" flow type's `editable?/2` and, for every
 "subflows" flow above it, `enterable?/2` - asked with **no viewer** in
@@ -134,6 +147,26 @@ again; the flow instance's page passes its own.
   is resolved among a list - stored id, then the first of the kind, then
   the library's default - and what the pages and the refresh both use.
 * `FormFlow.Data.Repo` wraps `insert_all/2`.
+
+### Vocabulary: "pin" retired
+
+The word **"pin"** is gone from the library's prose, tests, and one screen
+string. It had meant five things: a form instance's
+`template_form_version_id`, a migration file holding a FormFlow schema
+version, a header that stays at the top while the page scrolls, the Start
+and End nodes that cannot be deleted, and clearing a stored type. Only
+the second is the word's ordinary meaning, and only there does it stay
+(`mix form_flow.gen.migration` and `guides/development.md`).
+
+For an instance's version the plain words already on screen do the work:
+start **records** the version, the instance **renders** its version's
+definition, a publish policy **moves** instances to a new version, and a
+version **is in use** while any instance renders it. The archive
+confirmation on the form's page now reads "users who started on it are
+unaffected" instead of "users pinned to it". Headers are **sticky**; the
+Start and End nodes **cannot be deleted**. `AGENTS.md` gains a "Jargon not
+to use" list recording the retirement and the reasons, so the word is not
+re-proposed.
 
 ## v0.34.0
 

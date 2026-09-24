@@ -65,7 +65,7 @@ One term, one meaning. Do not widen these, and do not introduce a synonym.
 * **"position"** — exactly one thing: a place in a flow instance where a form
   sits, addressed by its `path`. Do not use the word for anything else.
 * **start / edit / show** — the verbs on the instance side. **start** creates
-  the form instance and pins the version; **edit** is the working page;
+  the form instance and records the version; **edit** is the working page;
   **show** is read only. **Reopen** is its own action. Links read Start,
   Continue, or View — never "Open".
 * **"gate"** — prose only, for the host's `on_mount`. It never appears in a
@@ -76,6 +76,27 @@ One term, one meaning. Do not widen these, and do not introduce a synonym.
   not a module named for a concept.
 * **Alias collisions do not drive names.** Argue from concepts. If two good
   names collide, alias one at the call site.
+
+### Jargon not to use
+
+Words that were coined here or borrowed from elsewhere, tried, and
+retired. Do not bring them back; say the plain thing instead.
+
+* **"pin"** for a form instance's version. An instance has one column,
+  `template_form_version_id`, and the plain words cover every use of it:
+  start **records** the version; the instance **renders** its version's
+  definition; a publish policy **moves** instances to a new version (the
+  history page already says "Moved to a new version"); a version **is in
+  use** while any instance renders it. Retired because the one word carried
+  five meanings at once: this reference, a migration file holding a schema
+  version, a header that stays at the top while the page scrolls, the Start
+  and End nodes that cannot be deleted, and clearing a stored type. The
+  word stays only in `mix form_flow.gen.migration`, where it is the ordinary
+  developer word for holding a dependency at one version.
+* **"pinned"** or **"pins"** for a header that stays put while the page
+  scrolls. Say **sticky**, the CSS word for it.
+* **"pinned Start and End"**. Say they **cannot be deleted**; the node
+  attribute is `deletable: false`.
 
 ## Prose follows the same rule
 

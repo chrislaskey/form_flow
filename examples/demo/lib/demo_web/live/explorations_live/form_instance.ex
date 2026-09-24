@@ -162,7 +162,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstance do
       id: :sticky_rail,
       title: "R3 · Rail that stays, header that stays",
       note:
-        "R1 with the rail pinned as the form scrolls and the form's header pinned above it, actions in reach. Scroll the frame to see both hold."
+        "R1 with the rail staying put as the form scrolls and the form's header sticky above it, actions in reach. Scroll the frame to see both hold."
     }
   ]
 
@@ -171,19 +171,19 @@ defmodule DemoWeb.ExplorationsLive.FormInstance do
       id: :header_sticky,
       title: "A1 · The whole header sticks",
       note:
-        "Trail, title, and actions top right as the templates pages draw them, and the whole header pins to the top when the form scrolls under it. Scroll the frame."
+        "Trail, title, and actions top right as the templates pages draw them, and the whole header sticks to the top when the form scrolls under it. Scroll the frame."
     },
     %{
       id: :bar_sticky,
       title: "A2 · A toolbar under the header sticks",
       note:
-        "The header scrolls away like content; a slim bar right under it - the form's name, the save state, Save draft, Submit - is what pins. Less UI held on screen than A1."
+        "The header scrolls away like content; a slim bar right under it - the form's name, the save state, Save draft, Submit - is what stays at the top. Less UI held on screen than A1."
     },
     %{
       id: :actions_float,
       title: "A3 · Only the actions stick",
       note:
-        "The header is ordinary; the buttons alone sit in a pill that pins to the top right and floats over the form as it scrolls. The smallest thing that can stay in reach."
+        "The header is ordinary; the buttons alone sit in a pill that sticks to the top right and floats over the form as it scrolls. The smallest thing that can stay in reach."
     }
   ]
 

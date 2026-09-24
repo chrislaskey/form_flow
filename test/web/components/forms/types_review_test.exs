@@ -120,7 +120,7 @@ defmodule FormFlow.Web.Components.Forms.Types.ReviewTest do
                {:stale, :migrated, structure_changed?: true}
     end
 
-    test "migrated: a publish policy moved the pin without reopening" do
+    test "migrated: a publish policy moved the source to a new version without reopening" do
       trail = [event("status_changed", -60), event("migrated", 30, to_version_id: @v2)]
 
       assert Review.staleness(completion(), snapshot(), source(instance("intake-1", @v2)), trail) ==

@@ -205,7 +205,7 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   describe "publish-time migration policies" do
-    test "the default (small fix) keeps existing instances pinned" do
+    test "the default (small fix) keeps existing instances on their version" do
       {form, v1} = published_form()
       instance = insert_instance(v1)
 
@@ -232,7 +232,7 @@ defmodule Demo.FormFlowFormsTest do
       assert event.to_version_id == v2.id
       assert event.user_id == "admin-7"
 
-      # Completed pins are attestation records — untouched by default
+      # Completed instances are attestation records — untouched by default
       assert reload(completed).template_form_version_id == v1.id
       assert events_for(completed) == []
     end

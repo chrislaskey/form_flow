@@ -4,8 +4,8 @@ defmodule FormFlow.Web.Templates.Flows.New do
 
   A flow's flavor is declared up front and is immutable after, so this page is
   the chooser: a name and the forms-or-subflows decision. Creating seeds the
-  flow with `FormFlow.Data.Templates.Flows.starter_nodes/0` (a pinned Start and End)
-  and lands on the edit page - the canvas lives there, not here.
+  flow with `FormFlow.Data.Templates.Flows.starter_nodes/0` (a Start and End that
+  cannot be deleted) and lands on the edit page - the canvas lives there, not here.
 
       <.live_component module={FormFlow.Web.Templates.Flows.New} id="flows-new" />
 

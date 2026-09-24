@@ -456,8 +456,11 @@ defmodule FormFlow.Data.Instances.Flows do
   # `open_paths` every one of them, in flow order; a completed journey has
   # neither (see `complete/2`)
   defp derive_next_positions(tree, instances, %Instances.Flow{} = journey, opts) do
-    forms = FlowProgress.forms(tree, instances)
-    steps = FlowProgress.subflows(tree, instances)
+    # One walk of the tree, two views of it: `forms/2` and `subflows/2` each
+    # derive from scratch, and the sweep runs this once per journey
+    statuses = FlowProgress.derive(tree, instances)
+    forms = FlowProgress.forms(tree, instances, statuses)
+    steps = FlowProgress.subflows(tree, instances, statuses)
     flow_types = Keyword.get(opts, :flow_types) || FormFlow.Config.Flows.Type.defaults()
     callback_data = Keyword.get(opts, :callback_data) || %{}
 

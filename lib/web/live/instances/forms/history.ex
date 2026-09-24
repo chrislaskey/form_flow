@@ -245,7 +245,7 @@ defmodule FormFlow.Web.Instances.Forms.History do
   defp dot(:info), do: "bg-primary"
   defp dot(_neutral), do: "bg-zinc-300"
 
-  # The header every clause but the first two draws: pinned, the form's
+  # The header every clause but the first two draws: sticky, the form's
   # status after its name, the three views as tabs with History chosen. A
   # refused or invisible form draws it without tabs.
   attr(:base, :string, required: true)

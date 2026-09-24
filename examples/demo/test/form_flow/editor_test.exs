@@ -69,7 +69,7 @@ defmodule Demo.FormFlowEditorTest do
       assert render(element(view, "#flows-edit-editor")) =~ Assets.editor_path()
     end
 
-    test "carries the flow as JSON for the hook to parse, Start and End pinned", %{conn: conn} do
+    test "carries the flow as JSON for the hook to parse, Start and End present", %{conn: conn} do
       {:ok, flow} = create_seeded()
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
 
@@ -82,7 +82,7 @@ defmodule Demo.FormFlowEditorTest do
         |> hd()
         |> Jason.decode!()
 
-      # The universal seed: a pinned Start and End, no middle node, no edges —
+      # The universal seed: a Start and End that cannot be deleted, no middle node, no edges —
       # the user connects the dots. End is inserted first (see
       # Flows.starter_nodes/0) so a node someone adds lands to the right of
       # Start rather than End.

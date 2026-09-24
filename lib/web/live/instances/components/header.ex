@@ -23,10 +23,10 @@ defmodule FormFlow.Web.Instances.Components.Header do
 
   Side by side only where there is room for both; below `xl` the two stack.
 
-  A form page's header **pins** (`sticky`): the title, the status, the
+  A form page's header is **sticky**: the title, the status, the
   tabs, the activity button, and the page's buttons stay at the top of the
   window while the form scrolls under them, so Submit is never further away
-  than the top of the screen. The listing and the flow instance's page do not pin -
+  than the top of the screen. The listing and the flow instance's page are not sticky -
   nothing on them is an action on what scrolls.
 
       <Header.header base={@base} flow_instance={@flow_instance} flow_name={@flow_name}>

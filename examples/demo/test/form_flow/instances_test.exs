@@ -225,7 +225,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       # Unguarded this is not a reopen at all: the write falls through to the
       # create, which would start a form at a position this page never
-      # offered, pinned to a version of another flow's form
+      # offered, on a version of another flow's form
       refute instance_at(instance, [elsewhere.id])
       assert %{status: "completed"} = instance_at(instance, [name.id])
     end
@@ -2446,7 +2446,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # The same, with the form left in draft: the position exists and the flow's
-  # type allows work there, but there is no version to pin
+  # type allows work there, but there is no published version to start on
   defp flow_of_one_unpublished do
     {:ok, flow} = Flows.create(%{name: "Unpublished", status: "open"})
 

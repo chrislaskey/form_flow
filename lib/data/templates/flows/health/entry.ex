@@ -140,7 +140,7 @@ defmodule FormFlow.Data.Templates.Flows.Health.Entry do
   end
 
   def explanation(:form_not_published) do
-    "Users start a form by pinning its latest published version. Until one exists the step " <>
+    "Users start a form on its latest published version. Until one exists the step " <>
       "cannot be started, and everything after it waits."
   end
 

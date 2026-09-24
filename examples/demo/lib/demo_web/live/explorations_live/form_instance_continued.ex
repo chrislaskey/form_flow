@@ -234,7 +234,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceContinued do
       id: :f3_a2,
       title: "X1 · F3 + A2, editing",
       note:
-        "T2 header with the F3b rectangle on its right; under it A2's toolbar pins as the form scrolls, with the N1 tabs on its left and the save state and buttons on its right. Scroll the frame. The status badge sits between the save state and the buttons."
+        "T2 header with the F3b rectangle on its right; under it A2's toolbar stays at the top as the form scrolls, with the N1 tabs on its left and the save state and buttons on its right. Scroll the frame. The status badge sits between the save state and the buttons."
     },
     %{
       id: :f3_a2_history,
@@ -246,19 +246,19 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceContinued do
       id: :f3_a2_flush,
       title: "X1b · F3 + A2, no top border on the bar",
       note:
-        "X1 with the toolbar's top border gone and the gap above it closed, as X3a's pinned block has none: the tabs read as the header's last line, and the whole header is shorter. Status and save state as in X1."
+        "X1 with the toolbar's top border gone and the gap above it closed, as X3a's sticky block has none: the tabs read as the header's last line, and the whole header is shorter. Status and save state as in X1."
     },
     %{
       id: :f1_a1_tabs_in_header,
       title: "X3a · F1 + A1, tabs in the sticky header",
       note:
-        "The whole header pins: title and actions, then the N1 tabs under them as part of what pins. The F1b card scrolls away with the form."
+        "The whole header is sticky: title and actions, then the N1 tabs under them as part of what stays. The F1b card scrolls away with the form."
     },
     %{
       id: :f1_a1_segmented,
       title: "X3b · F1 + A1, segmented tabs among the actions",
       note:
-        "The header pins with the N2 capsule left of the save state and the buttons, one row; the F1b card scrolls with the form."
+        "The header is sticky, with the N2 capsule left of the save state and the buttons, one row; the F1b card scrolls with the form."
     },
     %{
       id: :f1_a1_swapped,
@@ -270,7 +270,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceContinued do
       id: :r2_a1,
       title: "X4 · R2b + A1",
       note:
-        "The rail holds the flow, its steps, and the tabs, and stays; the header with the actions pins above the scrolling form."
+        "The rail holds the flow, its steps, and the tabs, and stays; the header with the actions stays at the top above the scrolling form."
     }
   ]
 
@@ -428,7 +428,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceContinued do
         <.section
           id="combos"
           title="Combinations"
-          intro="The pieces put together on one page each, in scrolling frames with a long form, so what pins and what scrolls can be seen."
+          intro="The pieces put together on one page each, in scrolling frames with a long form, so what stays at the top and what scrolls can be seen."
         >
           <div :for={d <- @combos} class="space-y-3">
             <.direction_title d={d} />

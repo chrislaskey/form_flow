@@ -14,7 +14,8 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   Without a `version_id` the page resolves the latest *published* version;
   when nothing has been published yet it falls back to the newest draft (with
   its draft badge - viewing a draft read-only is the pre-publish preview).
-  Instances never resolve this way: they render only through their own pins.
+  Instances never resolve this way: each renders only the version it
+  recorded when it was started.
 
   Publishing happens here: the dialog offers the three presets (bug / small /
   big fix) with plain-language descriptions and restates the blast radius
@@ -543,7 +544,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
             components={@components}
             phx-click="archive"
             phx-target={@myself}
-            data-confirm="Archive this version? It stops being the latest; users pinned to it are unaffected."
+            data-confirm="Archive this version? It stops being the latest; users who started on it are unaffected."
             class="btn"
           >
             Archive version

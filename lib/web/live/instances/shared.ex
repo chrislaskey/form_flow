@@ -27,7 +27,7 @@ defmodule FormFlow.Web.Instances.Shared do
   | `:refused` | the host's `on_mount` said no | all four |
   | `:not_visible` | the flow's type says this form is not this viewer's work | form pages |
   | `:not_started` | the position has no instance yet | form pages |
-  | `:broken_definition` | the pinned definition will not parse | form pages |
+  | `:broken_definition` | the instance's version's definition will not parse | form pages |
   | `:completed` | the form is submitted | form pages |
   | `:ready` | the page draws its own content | all four |
 
@@ -60,7 +60,7 @@ defmodule FormFlow.Web.Instances.Shared do
   ## An invariant, not a branch
 
   There is no state for "the definition is missing". A form instance always
-  has a version - the pin is `on_delete: :restrict` - so the branch could
+  has a version - `template_form_version_id` is `on_delete: :restrict` - so the branch could
   not fire, and an unreachable branch is an untestable one. If that ever
   breaks, a crash is more traceable than a silent "can't be rendered".
   `:broken_definition` is a different thing and does fire: a stored

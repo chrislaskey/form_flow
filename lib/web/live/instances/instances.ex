@@ -33,7 +33,7 @@ defmodule FormFlow.Web.Instances do
 
   Plus `FormFlow.Web.Instances.Components.Header` (the breadcrumb and title
   every page puts above its content, the same shape as the templates
-  side's; a form page's pins), `FormFlow.Web.Instances.Components.Flows.Progress`
+  side's; a form page's is sticky), `FormFlow.Web.Instances.Components.Flows.Progress`
   (the card saying where the user is in the flow's forms) and
   `FormFlow.Web.Instances.Paths` (every URL these pages link to).
 

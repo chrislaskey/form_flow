@@ -50,7 +50,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:no_end` | error | the flow has no End node |
   | `:end_unreachable` | error | following relationships forward from Start never arrives at an End |
   | `:form_missing` | error | a connected form step points at no form, or at one that no longer exists |
-  | `:form_not_published` | error | a connected form step's form has no published version - users cannot start it (`FormFlow.Data.Instances.Forms` pins the latest published version) |
+  | `:form_not_published` | error | a connected form step's form has no published version - users cannot start it (`FormFlow.Data.Instances.Forms` starts it on the latest published version) |
   | `:subflow_missing` | error | a connected subflow step points at no flow, or at one that could not be resolved |
   | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value - the Review type's "Form to review", say |
   | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches - either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |

@@ -9,7 +9,7 @@ defmodule FormFlow.Data.Instances.Form.Draft do
   it: a half-typed date, a word in a number field, and a required question
   left blank are all kept exactly as typed, because a draft's whole job is
   to keep the user's place. Nothing here is ever a user's *answers*. Show,
-  the PDF, a review's snapshot, and pin migration read `data` on the
+  the PDF, a review's snapshot, and a move to a new version read `data` on the
   instance; a draft is drawn on the Edit page, over the stored answers, and
   nowhere else.
 

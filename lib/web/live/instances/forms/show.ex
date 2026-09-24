@@ -1,7 +1,7 @@
 defmodule FormFlow.Web.Instances.Forms.Show do
   @moduledoc """
   `FormFlow.Web.Instances.Forms.Show` LiveComponent renders the answers at one
-  position of a flow instance, read-only - the pinned version's definition
+  position of a flow instance, read-only - the instance's version's definition
   through `DynamicForm`, filled in with what is in `data`, every control
   disabled and no submit. The answers are the form's `FormFlow.Config.Forms.Type`'s
   to draw (`show_component/1`), as they are on Edit: the default is the
@@ -380,7 +380,7 @@ defmodule FormFlow.Web.Instances.Forms.Show do
     """
   end
 
-  # The header every clause but the first two draws: pinned, the form's
+  # The header every clause but the first two draws: sticky, the form's
   # status after its name, and the three views as tabs with View chosen. A
   # refused or invisible form draws it without tabs - nothing of the form
   # is shown, so nothing of it is offered. The answers clause adds the last

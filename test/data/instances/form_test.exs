@@ -6,7 +6,7 @@ defmodule FormFlow.Data.Instances.FormTest do
   @version_id Ecto.UUID.generate()
 
   describe "Instances.Form.changeset/2" do
-    test "requires the version pin — an instance always knows what it renders against" do
+    test "requires the version - an instance always knows what it renders against" do
       refute Instances.Form.changeset(%Instances.Form{}, %{data: %{}}).valid?
 
       changeset =

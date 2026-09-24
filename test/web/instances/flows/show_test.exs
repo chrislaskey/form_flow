@@ -72,7 +72,7 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
     test "refuses a position the page never drew" do
       # The hole this closes: unguarded, confirming it would carry a path to
       # `confirm_reopen` that could create an instance at whatever position
-      # the client names, pinned to whatever form version that node points at
+      # the client names, on whatever form version that node points at
       # — anyone's
       socket = socket(%{})
 

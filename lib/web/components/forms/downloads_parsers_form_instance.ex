@@ -6,8 +6,8 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   This is the first of the download parsers, and the shape the ones after it
   follow: it knows one resource, produces the shared document, and knows
   nothing about PDFs. It sits among the components that draw a form because
-  it reads the same thing they do - the pinned definition and the answers
-  against it - only onto paper rather than onto a page. It reads the same
+  it reads the same thing they do - the instance's version's definition and
+  the answers against it - only onto paper rather than onto a page. It reads the same
   `FormFlow.Context` the user-facing Show page renders from
   (`FormFlow.Web.Instances.Forms.Shared.resolve/1` builds it), so a download
   and the page it was started from can never disagree about what the answers
@@ -15,8 +15,8 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
 
   ## What it prints
 
-  The pinned definition, walked in the order it asks its questions, filled
-  in with what the instance holds:
+  The instance's version's definition, walked in the order it asks its
+  questions, filled in with what the instance holds:
 
     * a static panel becomes a section, its title the heading; questions
       outside any panel land in the untitled section before the first one
@@ -69,7 +69,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   `{:error, :not_started}` when the context has no `:form_instance` - the
   position exists but nobody has opened it, so there is nothing to print;
   the caller answers that rather than sending an empty file.
-  `{:error, :no_definition}` when the pinned version cannot be parsed, which
+  `{:error, :no_definition}` when the instance's version cannot be parsed, which
   is the same malformed-definition case the Show page reports inline.
   """
   @spec document(Context.t(), DynamicForm.Instance.t() | nil) ::

@@ -12,8 +12,8 @@ defmodule FormFlow.Data.Instances.Forms do
     * `update_status(journey, path, :in_progress)` - "the user is working
       here." On an empty position this *creates* the instance - created on
       first start, not when the journey starts, because creation is what
-      pins the version: the row permanently records which published
-      definition the user saw, so creating rows any earlier would pin
+      records the version: the row permanently records which published
+      definition the user saw, so creating rows any earlier would record
       versions for forms the user may never reach and miss improvements
       published in the meantime. On a completed instance it *reopens*
       (back to `in_progress`, `completed_at` cleared, `reopened_at` stamped,

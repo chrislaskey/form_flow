@@ -28,7 +28,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
     * `preset: :bug_fix | :small_fix | :big_fix` - expands to the knobs below
     * `in_progress: :keep | :carry | :reset` - existing in-progress instances
-      stay pinned, move to the new version keeping their data, or move and
+      keep their version, move to the new version keeping their data, or move and
       start over
     * `completed: :untouched | :reopen_carry | :reopen_reset` - completed
       instances are attestation records and stay untouched by default
@@ -43,7 +43,7 @@ defmodule FormFlow.Data.Templates.Forms do
     * `user_id:` - opaque host-app identity stamped into every event
 
   The default preset is `:small_fix` (keep / untouched) - the least
-  surprising for existing users. Every pin move writes an append-only
+  surprising for existing users. Every move to a new version writes an append-only
   `FormFlow.Data.Instances.Form.Event`.
 
   ## Prefills
@@ -121,7 +121,7 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Deletes a lineage and its versions.
 
-  Refuses with `{:error, :has_instances}` when any instance pins any of the
+  Refuses with `{:error, :has_instances}` when any instance uses any of the
   lineage's versions - instance data can never be orphaned - and with
   `{:error, :in_use}` while any step still points at the lineage: the
   node's foreign key would refuse anyway, and a catalog form shared by
@@ -362,7 +362,7 @@ defmodule FormFlow.Data.Templates.Forms do
 
   @doc """
   Whether any version of the lineage was ever published - archived included,
-  since version numbers are never reissued and instances may still pin them.
+  since version numbers are never reissued and instances may still use them.
   The first publish is the special case that skips the migration-policy
   dialog: with no published history, no instance can exist.
   """
@@ -487,15 +487,15 @@ defmodule FormFlow.Data.Templates.Forms do
   @doc """
   Deletes a draft. Published and archived versions cannot be deleted.
 
-  Refuses with `{:error, :has_instances}` if anything pins the draft -
-  impossible today (instances pin published versions), but the test-instance
+  Refuses with `{:error, :has_instances}` if any instance uses the draft -
+  impossible today (instances record published versions), but the test-instance
   seam will change that, and a raise from the FK is the wrong answer.
   """
   def delete_draft(%Version{status: "draft"} = version) do
-    pinned? =
+    in_use? =
       Repo.exists?(from(i in Instances.Form, where: i.template_form_version_id == ^version.id))
 
-    if pinned?, do: {:error, :has_instances}, else: Repo.delete(version)
+    if in_use?, do: {:error, :has_instances}, else: Repo.delete(version)
   end
 
   def delete_draft(%Version{}), do: {:error, :not_draft}
@@ -521,7 +521,7 @@ defmodule FormFlow.Data.Templates.Forms do
   the moduledoc for the policy options. `update_status(version, :archived)`
   archives a published version: it drops out of `get_latest_version/1` (so
   archiving the latest is a de-facto rollback to the previous one), stops
-  being a valid `based_on` target, and keeps serving its pinned instances.
+  being a valid `based_on` target, and keeps serving the instances that use it.
   """
   def update_status(version, status, opts \\ [])
 

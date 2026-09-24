@@ -9,8 +9,8 @@ defmodule FormFlow.Data.Instances.Flow do
   reachable through subflow references, with interior positions addressed by
   `path` on the attached form instances. The flow is referenced *live* - never
   versioned, never snapshotted: structure is routing, and edits propagate
-  to journeys in flight (form instances already carry their own immutable
-  pin at the form-version level, which is where attestation lives).
+  to journeys in flight (each form instance already records its own form
+  version, which never changes on its own, and that is where attestation lives).
 
   Traversal state is deliberately not stored as the truth - no per-node
   rows, no *authoritative* progress columns. It is derived by

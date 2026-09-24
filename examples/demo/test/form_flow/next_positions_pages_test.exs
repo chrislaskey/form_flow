@@ -46,12 +46,17 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
 
       assert reload(journey).next_computed_at == computed_at
 
-      # A structural save: Address is removed
+      # A structural save: Address is removed. With a journey in flight this
+      # asks first (`Demo.FormFlowFlowSaveConfirmationTest`), so the sweep
+      # runs on "Save anyway"
       view
       |> element("#flows-edit-editor")
       |> render_hook("form_flow:flow_changed", canvas(flow, [start, name, stop]))
 
       view |> element("button", "Save") |> render_click()
+      assert render(view) =~ "Save anyway"
+
+      view |> element("button", "Save anyway") |> render_click()
       assert render(view) =~ "Saved."
 
       swept = reload(journey)

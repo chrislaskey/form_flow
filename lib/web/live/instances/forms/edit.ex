@@ -1,7 +1,7 @@
 defmodule FormFlow.Web.Instances.Forms.Edit do
   @moduledoc """
   `FormFlow.Web.Instances.Forms.Edit` LiveComponent renders one position of a
-  flow instance as the real, editable form - the pinned version's definition
+  flow instance as the real, editable form - the instance's version's definition
   through `DynamicForm`, with the data the form's `FormFlow.Config.Forms.Type`
   supplies (`initial_data/2`: the stored answers by default, plus whatever a
   host's type prefills).
@@ -13,7 +13,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   What is only true here: **this is the page that starts a form.** A
   position with no instance yet gets one created on mount - which is the
-  moment the form version is pinned - gated by the flow type's `editable?/2`
+  moment the form version is recorded - gated by the flow type's `editable?/2`
   the flow instance's page asks before offering the link, and by the host
   `on_mount`, asked first: a refused or redirected visitor
   starts nothing. Starting is idempotent afterwards, so this URL is an
@@ -784,7 +784,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
         >
           Save draft
         </Capture.capture_button>
-        <%!-- Submit lives up here, pinned with the header, as a button whose
+        <%!-- Submit lives up here, in the sticky header, as a button whose
               `form` attribute names the form DynamicForm draws below - the
               same id Capture reads - so the form's own button is hidden
               (`hide_submit`) and there is one Submit on the page --%>
@@ -903,7 +903,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
     """
   end
 
-  # The header every clause but the first two draws: pinned, the form's
+  # The header every clause but the first two draws: sticky, the form's
   # status after its name, and the three views as tabs with Edit chosen. A
   # refused or invisible form draws the header without tabs - nothing of
   # the form is shown, so nothing of it is offered. The ready clause adds

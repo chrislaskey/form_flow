@@ -13,7 +13,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
   ## Not version specific
 
   A prefill belongs to the lineage (`FormFlow.Data.Templates.Form`), not to a
-  version, and nothing pins one to the definition it was written against. A
+  version, and nothing ties one to the definition it was written against. A
   publish therefore leaves every prefill where it is, and an older set
   applied to a newer definition lands softly: `DynamicForm` casts only the
   names the definition declares, so answers to questions that went away are

@@ -57,7 +57,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert flow.name == "Enrollment"
     assert flow.label == "forms"
 
-    # The universal starter: a pinned Start and End, nothing else
+    # The universal starter: a Start and End that cannot be deleted, nothing else
     assert flow.nodes |> Enum.map(&get_in(&1.properties, ["data", "label"])) |> Enum.sort() ==
              ["End", "Start"]
 
@@ -638,7 +638,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, _view, html} = live(conn, "/demo/admin/flows/#{id}")
     assert html =~ "Wizard (any order)"
 
-    # Picking "default" again removes the key rather than pinning a value
+    # Picking "default" again removes the key rather than storing a value
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     view

@@ -54,7 +54,7 @@ defmodule Demo.FormFlowMigrationTest do
     assert {:ok, %{rows: [[1]]}} = Repo.query("SELECT count(*) FROM form_flow_instance_forms")
   end
 
-  test "instances cannot be orphaned — the version pin is RESTRICT" do
+  test "instances cannot be orphaned — template_form_version_id is RESTRICT" do
     {:ok, form_id} = insert_template("Enrollment")
     {:ok, version_id} = insert_version(form_id)
 

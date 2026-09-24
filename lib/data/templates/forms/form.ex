@@ -6,8 +6,8 @@ defmodule FormFlow.Data.Templates.Form do
   A form's stable identity (name, description, ownership) lives here;
   every definition - draft or published - is a
   `FormFlow.Data.Templates.Form.Version` row. The split is what makes
-  versioning work: nodes and URLs point at the lineage, instances pin a
-  version, and "which version to show" is a read-time question (see
+  versioning work: nodes and URLs point at the lineage, an instance records
+  the version it was started on, and "which version to show" is a read-time question (see
   `FormFlow.Data.Templates.Forms`).
 
   ## Ownership

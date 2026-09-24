@@ -2508,7 +2508,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         <%!-- Sticky beside a long editor: the preview stays in view while
               the admin scrolls the fields, and scrolls on its own when it is
               the taller of the two. Only once the columns sit side by side -
-              stacked or full width, sticky would pin it over the editor, and
+              stacked or full width, sticky would hold it over the editor, and
               a preview given the whole width is meant to run as tall as the
               form it shows. --%>
         <div class={[
@@ -2519,7 +2519,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         ]}>
           <%!-- Going full width moves the preview to the top of the page,
                 which is above an admin who was down among the elements with
-                the preview pinned beside them - and nothing about the new
+                the preview held beside them - and nothing about the new
                 layout says to scroll up. This marker exists only in the wide
                 state, so the hook mounts on the way in and never on the way
                 back, and it scrolls the preview into view. Nearest, not

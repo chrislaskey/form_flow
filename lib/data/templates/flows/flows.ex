@@ -21,7 +21,7 @@ defmodule FormFlow.Data.Templates.Flows do
   root is deleted, and a save refuses a subflow step pointing at a flow the
   tree does not own. A subflow wanted elsewhere is copied there by pasting
   its step (see "Pasting a step"). Sharing by reference is for forms alone (see "Reusing a
-  catalog form"): a form is a leaf, one lineage and one version pin per
+  catalog form"): a form is a leaf, one lineage and one version per
   instance, while a subflow is a subtree - its own forms, the paths through
   it, its perspectives and type - and sharing one across trees makes every
   operation on it ambiguous about which tree it is happening to.
@@ -51,8 +51,8 @@ defmodule FormFlow.Data.Templates.Flows do
       presentation type, stored only in that flow's
       `properties["flow_type"]` (see `FormFlow.Data.Templates.Flow`).
       Popped from the node's properties at save; an absent key clears the
-      child's property, so picking "default" un-pins rather than freezing a
-      value. A type that changes takes the old type's property values with
+      child's property, so picking "default" clears the value rather than
+      storing a copy of the default. A type that changes takes the old type's property values with
       it - they belonged to that type - while the canvas itself never edits
       property values; those are set on the flow's own page.
     * `data.form_type` on a form node - the collected form's type, stored only
@@ -401,7 +401,7 @@ defmodule FormFlow.Data.Templates.Flows do
       would strand and the delete refuse; a never-published one cannot.
 
   Instances already started at the step, in any flow, keep the version
-  they pinned: nothing here re-resolves a pin.
+  they started on: nothing here re-resolves an instance's version.
 
   A step leaves a catalog form by being removed from the canvas and added
   again; the new step has a new id, so users who had started the old one
@@ -523,7 +523,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
-  The node attributes every flow starts from: a pinned `Start` and `End`,
+  The node attributes every flow starts from: a `Start` and `End` that cannot be deleted,
   nothing else - the user connects the dots. One universal seed for both
   flavors, used for new flows and for subflow children created at save.
 

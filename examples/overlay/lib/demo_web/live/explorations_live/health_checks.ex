@@ -1018,7 +1018,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
               Review / Decision has no published version
             </h4>
             <p class="mt-1 text-sm text-gray-600">
-              Users start a form by pinning its latest published version. Without one, the Decision step cannot be started, so a reviewer cannot finish the flow.
+              Users start a form on its latest published version. Without one, the Decision step cannot be started, so a reviewer cannot finish the flow.
             </p>
           </div>
           <dl class="grid grid-cols-2 gap-3 text-sm">

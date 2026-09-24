@@ -3,14 +3,15 @@ defmodule FormFlow.Data.Instances.Form.Event do
   `FormFlow.Data.Instances.Form.Event` Ecto Schema for the append-only audit
   trail of an instance form.
 
-  Every pin migration, reopen, and status change writes one event carrying
+  Every move to a new version, reopen, and status change writes one event carrying
   the responsible user (`user_id`, an opaque host-app identity - any
-  principal, including "system:pin-migration"-style identities - threaded
+  principal, including "system:version-migration"-style identities - threaded
   from day one, because retrofitting identity into a state machine was the
   reference system's unfinished TODO). `reopened` has two writers: a user
   reopening a completed form, and the `:reopen_carry` / `:reopen_reset`
   publish policies (`FormFlow.Data.Templates.Forms.update_status/3`), which
-  also move the pin and so set `from_version_id` and `to_version_id`; a
+  also move the instance to the new version and so set `from_version_id` and
+  `to_version_id`; a
   user's reopen leaves both nil.
 
   `snapshot` is a free-form payload. When a migration discards or

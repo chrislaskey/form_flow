@@ -914,7 +914,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       html = describe_form(view, "Add a breed field", edited)
 
       # Squished, because the sentence is wrapped in the markup and a test
-      # that pins where it wraps breaks every time somebody rewords it
+      # that fixes where it wraps breaks every time somebody rewords it
       assert squish(html) =~
                "This draft has unsaved changes. AI tools are not always accurate and will " <>
                  "replace what the editor holds. Save draft first if you want something to " <>

@@ -12,7 +12,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
   page is about, and where the other one goes (V1 to V5). The second takes
   V2 - the answers as a card on the form editor's dotted canvas, the review
   form in its own column - and puts the UI components picked on the continued
-  page around it: X1b's flush toolbar, X3a's pinned header, X3b's segmented tabs.
+  page around it: X1b's flush toolbar, X3a's sticky header, X3b's segmented tabs.
 
   The header, badge, card, tabs, toolbar, and save state are
   `DemoWeb.ExplorationsLive.FormInstanceParts`, the same pieces the
@@ -99,7 +99,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
       id: :sheet_rail,
       title: "V5 · Fact sheet and a narrow review rail",
       note:
-        "The answers as a fact sheet - label over value, four to a row, as the instance page's Details - taking the width; the review form a narrow column on the right whose heading pins as the sheet scrolls."
+        "The answers as a fact sheet - label over value, four to a row, as the instance page's Details - taking the width; the review form a narrow column on the right whose heading stays at the top as the sheet scrolls."
     }
   ]
 
@@ -108,19 +108,19 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceReview do
       id: :x1b,
       title: "V2a · V2 under X1b",
       note:
-        "The F3b rectangle in the header's right, the flush toolbar pinned under it - Edit / View / History, the save state, Draft, Save draft, Submit review - and V2 below: the answers scroll on their canvas while the review column stays put beneath the bar."
+        "The F3b rectangle in the header's right, the flush toolbar sticky under it - Edit / View / History, the save state, Draft, Save draft, Submit review - and V2 below: the answers scroll on their canvas while the review column stays put beneath the bar."
     },
     %{
       id: :x3a,
       title: "V2b · V2 under X3a",
       note:
-        "The header pins whole: title, Draft, the buttons, then the tab line with the save state at its right. The F1b card for the reviewer's four steps scrolls away with the answers; the review column stays."
+        "The whole header is sticky: title, Draft, the buttons, then the tab line with the save state at its right. The F1b card for the reviewer's four steps scrolls away with the answers; the review column stays."
     },
     %{
       id: :x3b,
       title: "V2c · V2 under X3b",
       note:
-        "The header pins with the segmented Edit / View / History among the actions, Draft after the title. The F1b card and the canvas scroll; the review column stays."
+        "The header is sticky, with the segmented Edit / View / History among the actions, Draft after the title. The F1b card and the canvas scroll; the review column stays."
     }
   ]
 
