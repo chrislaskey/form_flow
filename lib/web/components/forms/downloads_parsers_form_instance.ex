@@ -317,8 +317,9 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   defp details(%Instances.Form{} = instance, context) do
     [
       {"Status", status(instance)},
-      {"Started", stamp(instance.inserted_at)},
-      {"Submitted", stamp(instance.completed_at)},
+      {"Started", FormFlow.Web.Templates.Shared.absolute(instance.inserted_at)},
+      {"Submitted",
+       instance.completed_at && FormFlow.Web.Templates.Shared.absolute(instance.completed_at)},
       {"Flow instance", context.flow_instance && context.flow_instance.id},
       {"Form version", instance.template_form_version_id}
     ]
@@ -328,9 +329,6 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstance do
   defp status(%Instances.Form{status: "completed"}), do: "Submitted"
   defp status(%Instances.Form{status: "in_progress"}), do: "In progress"
   defp status(%Instances.Form{status: status}), do: to_string(status)
-
-  defp stamp(nil), do: nil
-  defp stamp(at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M UTC")
 
   # The same posture the pages take with an admin-authored definition: a
   # malformed one is an answer the caller reports, never a crash

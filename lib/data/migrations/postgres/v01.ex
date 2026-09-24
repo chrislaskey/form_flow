@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #
   # `tenant_id` on flows, template forms, nodes, and relationships is the
   # host tenant a row belongs to - an opaque host identity, NULL for a host
-  # with no tenants, stamped at creation and immutable; a node or
+  # with no tenants, set at creation and immutable; a node or
   # relationship takes its flow's. Like `flow_id` on nodes it is written to
   # both locations: the column, for indexing, and a copy inside `properties`,
   # the location that carries over to Neo4j - so a graph query can narrow to
@@ -77,7 +77,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     is referenced live - no flow versioning, edits propagate to journeys
   #     in flight - and `:restrict`ed: journeys can never be orphaned by
   #     template deletion. `user_id` is the creating user and `tenant_id`
-  #     the host tenant it belongs to, both opaque host identities, stamped
+  #     the host tenant it belongs to, both opaque host identities, set
   #     at creation and immutable. Traversal state is never stored as the
   #     truth; it is derived (FormFlow.Data.Instances.FlowProgress).
   #   * `instance_flows.next_path` + `next_node_id` + `completed_forms` +
@@ -102,7 +102,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     in flow order. `:restrict` from the rows to the journey: deletion
   #     goes through FormFlow.Data.Instances.Flows.delete_instance/2, which
   #     removes them ahead of the journey row.
-  #   * `instance_forms.user_id` + `tenant_id` - the same two stamps on a form
+  #   * `instance_forms.user_id` + `tenant_id` - the same two columns on a form
   #     instance: the user who started it and the tenant it belongs to.
   #   * `instance_forms.instance_flow_id` + `path` - the visit identity of an
   #     in-journey form instance: the chain of node ids from the root flow
@@ -115,7 +115,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     the answers as typed, valid or not, with who saved it and when
   #     (FormFlow.Data.Instances.Form.Draft). NULL when there is none.
   #     Cleared by completion; never read as answers - `data` is the answers.
-  #   * `instance_forms.superseded_at` - stamped by strand reconciliation on
+  #   * `instance_forms.superseded_at` - written by strand reconciliation on
   #     the old instance when its successor is created; derivation skips
   #     superseded rows. The unique index is scoped to active rows: one
   #     *active* form instance per visit, while superseded rows remain as

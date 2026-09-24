@@ -32,7 +32,7 @@ defmodule FormFlow.Data.Instances.Form do
   An instance carries two opaque host identities, the same pair as
   `FormFlow.Data.Instances.Flow`: `user_id`, the user who started it, and
   `tenant_id`, the host tenant it belongs to, `nil` for a host with no
-  tenants. Both are stamped at creation and immutable afterwards.
+  tenants. Both are set at creation and immutable afterwards.
 
   `metadata` is an opaque host-app map: whatever the host wants to attach -
   including who a form instance concerns, until about-ness earns a named column.
@@ -43,11 +43,11 @@ defmodule FormFlow.Data.Instances.Form do
   `path`, the chain of node ids from the root flow
   through each embedding subflow node down to the form node itself. Both are
   present or both absent (a standalone fill), and `path` is a snapshot
-  stamped at creation through `visit_changeset/4`, never castable, never
+  written at creation through `visit_changeset/4`, never castable, never
   updated; there is deliberately no node FK beside it (a derivable copy of
   `last(path)` that no FK action would survive - editor saves replace all
   nodes). Stranded is not a column state: `FormFlow.Data.Instances.FlowProgress` derives it when a
-  path matches no position in the current tree. `superseded_at` is stamped
+  path matches no position in the current tree. `superseded_at` is written
   by strand reconciliation on a replaced instance; derivation skips
   superseded rows, and the partial unique index enforces one *active*
   instance per visit.
@@ -92,7 +92,7 @@ defmodule FormFlow.Data.Instances.Form do
   Builds a changeset for an instance form.
 
   `status`, `completed_at`, and `reopened_at` are not castable - they are
-  stamped by completion machinery, never supplied by callers (the same discipline as
+  set by completion machinery, never supplied by callers (the same discipline as
   `FormFlow.Data.Instances.Flow`). `user_id` and `tenant_id` are castable
   at creation and immutable afterwards. Updates go through the optimistic
   lock: two editors of one instance's `data` surface `Ecto.StaleEntryError`
@@ -113,7 +113,7 @@ defmodule FormFlow.Data.Instances.Form do
 
   @doc """
   Builds a changeset for an in-journey form instance: `changeset/2` plus
-  the stamped visit identity. `path` is never castable from external
+  the visit identity. `path` is never castable from external
   input - the runner supplies it here, at creation, and it is immutable
   afterwards.
   """

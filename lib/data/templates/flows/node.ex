@@ -59,7 +59,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
   would let a tab opened before an admin changed the slug put the old one
   back on its next save.
 
-  `tenant_id` is the flow's, stamped when the node is inserted and immutable
+  `tenant_id` is the flow's, set when the node is inserted and immutable
   afterwards - a flow never changes tenants - and dual-written like the
   rest, so a Neo4j query can narrow to a tenant without a hop to the
   `:Flow` node. It is also what makes the slug's per-tenant unique index

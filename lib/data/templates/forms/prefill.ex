@@ -77,7 +77,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
 
   The name is required and trimmed - it is the key the set is stored under,
   and the word an admin says to pick it. The timestamps are not castable:
-  `FormFlow.Data.Templates.Forms` stamps them as it writes.
+  `FormFlow.Data.Templates.Forms` sets them as it writes.
   """
   def changeset(prefill, attrs \\ %{}) do
     prefill

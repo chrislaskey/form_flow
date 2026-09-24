@@ -28,7 +28,7 @@ That rule is what makes the Neo4j mapping mechanical:
     relationships, since none of them points at a node: `id` on nodes and
     relationships (the row's own, so a query can match the record by the id
     the rest of the system knows it by), `tenant_id` on both (the flow's,
-    stamped at insert), and `slug` on nodes (a node's handle in the product's
+    set at insert), and `slug` on nodes (a node's handle in the product's
     words, a *step's*, `FormFlow.Data.Templates.Slug`). A query narrows by
     them directly.
   * **Keys with a leading underscore are the library's own bookkeeping**,

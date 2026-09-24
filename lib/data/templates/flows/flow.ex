@@ -38,7 +38,7 @@ defmodule FormFlow.Data.Templates.Flow do
   ## Tenancy
 
   `tenant_id` is the host tenant the flow belongs to - an opaque host
-  identity, `nil` for a host with no tenants - stamped at creation and
+  identity, `nil` for a host with no tenants - set at creation and
   immutable afterwards. Owned children, save-time or copied, take their
   root's. Like a node's `flow_id` it is written to both locations: the
   dedicated column, so the database can index and narrow by it, and a

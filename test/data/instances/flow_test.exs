@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
     end
 
-    test "status and completed_at are not castable — completion machinery stamps them" do
+    test "status and completed_at are not castable — only completion sets them" do
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{
           template_flow_id: @flow_id,

@@ -16,11 +16,11 @@ defmodule FormFlow.Data.Instances.Forms do
       definition the user saw, so creating rows any earlier would record
       versions for forms the user may never reach and miss improvements
       published in the meantime. On a completed instance it *reopens*
-      (back to `in_progress`, `completed_at` cleared, `reopened_at` stamped,
+      (back to `in_progress`, `completed_at` cleared, `reopened_at` set,
       `reopened` event), keeping the answers for editing. Already in
       progress: a no-op.
     * `update_status(journey, path, :completed, data: answers)` - submit:
-      the answers land in `data`, `status`/`completed_at` are stamped,
+      the answers land in `data`, `status`/`completed_at` are set,
       `reopened_at` is cleared, and a `status_changed` event is written.
       Completion is what unlocks successor positions in
       `FormFlow.Data.Instances.FlowProgress`.
@@ -102,10 +102,10 @@ defmodule FormFlow.Data.Instances.Forms do
   `opts`:
 
     * `:data` - the answers, written on `:completed` (left untouched when
-      absent, so a bare re-stamp never wipes answers)
+      absent, so a bare status change never wipes answers)
     * `:user_id` - the acting user, recorded on the event and, when the
-      call creates the instance, stamped on it as the user who started it
-    * `:tenant_id` - the host tenant, stamped on the instance when the call
+      call creates the instance, recorded on it as the user who started it
+    * `:tenant_id` - the host tenant, set on the instance when the call
       creates it
     * `:snapshot` - free-form event payload
 
@@ -297,7 +297,7 @@ defmodule FormFlow.Data.Instances.Forms do
   events of the journey's other instances, superseded ones included (a
   superseded review's trail is kept, not deleted, so its copy has to be
   blanked too). Each copy's `"data"` becomes `%{}` and `"redacted_at"` is
-  stamped beside it; nothing else on the row changes. Returns how many
+  written beside it; nothing else on the row changes. Returns how many
   copies were blanked.
 
   This is the only sanctioned update of an event row

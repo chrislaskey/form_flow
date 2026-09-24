@@ -85,7 +85,7 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.properties == %{}
   end
 
-  test "copied_from_form_id is not castable — only copy/2 stamps provenance" do
+  test "copied_from_form_id is not castable — only copy/2 sets it" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", copied_from_form_id: Ecto.UUID.generate()})
 

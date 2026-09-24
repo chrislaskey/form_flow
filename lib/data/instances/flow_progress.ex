@@ -43,7 +43,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   traversal state.
 
   The tree comes from `FormFlow.Data.Templates.Flows.resolve_tree/1`. The
-  journey's stamped `status` and this module answer different questions and
+  journey's recorded `status` and this module answer different questions and
   may legitimately diverge after a template edit - `complete?/2` is the
   derivation-side answer.
   """
@@ -464,7 +464,7 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   end
 
   # Completion is intrinsic for Start (trivially complete), form nodes
-  # (their instance's stamped status), and subflow nodes (their interior
+  # (their instance's recorded status), and subflow nodes (their interior
   # End); End and unknown kinds complete when every predecessor does - the
   # committed AND-join. The visiting set breaks edge cycles: a node on a
   # cycle is never derivably complete.

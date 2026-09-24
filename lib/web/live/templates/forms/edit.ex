@@ -773,7 +773,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # The absolute half of "last updated 3 days ago on ..." - the relative
   # phrase says how long, this says when
-  defp updated_stamp(version),
+  defp updated_on(version),
     do: Calendar.strftime(version.updated_at, "%Y-%m-%d at %-I:%M%P UTC")
 
   # The four ways to edit one definition: what the radio offers, and what
@@ -2053,7 +2053,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         Past max-w-3xl the fields stop widening and hand the slack to the
         preview, which the flex algorithm redistributes once the capped
         column freezes. Groups inside the form are reached by the name the
-        library stamps on them (data-dynamic-form-group,
+        library puts on them (data-dynamic-form-group,
         DynamicForm 1.1.0).
 
         Full width preview (the toggle in its heading) drops the column
@@ -2177,7 +2177,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
                   /></svg>
               </.link>.
             </span>
-            Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_stamp(@version)}. Edit using:
+            Last updated {Templates.Shared.relative(@version.updated_at)} on {updated_on(@version)}. Edit using:
           </SectionHeading.section_heading>
         </:field>
         <%!-- Three ways to edit one definition, under one radio. Each hides

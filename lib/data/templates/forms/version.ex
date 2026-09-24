@@ -87,7 +87,7 @@ defmodule FormFlow.Data.Templates.Form.Version do
   @doc """
   Builds a changeset for a status transition.
 
-  Whitelist: `draft → published` (which also stamps the assigned `version`
+  Whitelist: `draft → published` (which also sets the assigned `version`
   number and `published_at` - supplied by the context, not cast) and
   `published → archived`. Everything else is rejected.
   """

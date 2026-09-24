@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.36.0
+
+### Vocabulary: "stamp" retired
+
+The word **"stamp"** is gone from the library's prose, tests, and private
+function names. It had meant five things: a value the code sets when a
+row is created (`user_id`, `tenant_id`, `path`), a fact the code records
+at a later moment (`completed_at`, `reopened_at`, `superseded_at`), a
+formatted timestamp for display, an HTML attribute DynamicForm adds, and
+page numbers on a PDF. Only the last two are the word's ordinary meaning.
+
+No single word replaces it. The prose now says what happens, when, and by
+what: a value is **set** at creation and never changed after; `complete/2`
+**writes** `status` and `completed_at`; `status` is a **recorded** fact,
+not a cache. "Not castable", Ecto's own word, was already carrying the
+"the code writes it, not the caller" half and stays.
+
+**Breaking:** `FormFlow.Web.Instances.Components.Forms.Status.absolute/1`
+is now `FormFlow.Web.Templates.Shared.absolute/1`, beside `relative/1`,
+the other half of the same sentence. Two private copies of it under the
+name `stamp/1` are deleted. `AGENTS.md` records the retirement.
+
 ## v0.35.0
 
 ### Where a journey's flow is open, cached: the reviewer's queue in one query

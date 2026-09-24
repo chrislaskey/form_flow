@@ -40,7 +40,7 @@ defmodule FormFlow.Data.Templates.Forms do
       declares its fields (`"fields" => [%{"name" => ...}, ...]`); a
       definition without declared fields prunes nothing rather than
       everything.
-    * `user_id:` - opaque host-app identity stamped into every event
+    * `user_id:` - opaque host-app identity recorded on every event
 
   The default preset is `:small_fix` (keep / untouched) - the least
   surprising for existing users. Every move to a new version writes an append-only

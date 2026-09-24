@@ -6,7 +6,7 @@ defmodule FormFlow.Data.Instances.Flows do
   the term).
 
   Deliberately minimal until the runner lands: creation (with its `created`
-  event), the completion stamp, the derived-progress helpers, stranded
+  event), completion (`complete/2`), the derived-progress helpers, stranded
   listing, and the one operation that must exist concretely from day one -
   explicit deletion, because nothing on the instance side ever cascades.
 
@@ -39,7 +39,7 @@ defmodule FormFlow.Data.Instances.Flows do
   to one creator, `opts[:tenant_id]` to one tenant, `opts[:flow]` to
   instances of one or more flow templates (see `narrow_flow/2`), and
   `opts[:status]` to journeys in one status - `"in_progress"` or
-  `"completed"`, the journey's own stamp (`complete/2`), not the flow's -
+  `"completed"`, the journey's own recorded status (`complete/2`), not the flow's -
   query conveniences for "my journeys" listings, not access control: the
   library never enforces visibility.
   """
@@ -60,7 +60,7 @@ defmodule FormFlow.Data.Instances.Flows do
   `instances` attr of `FormFlow.Web.router/1`: the listing page's own
   default is `list_query(user_id: user_id)`, narrowed to the flows the page
   offers when it offers some in particular. `status: "completed"` is how a
-  host that stamps journeys asks for a user's finished ones - last year's
+  host that completes journeys asks for a user's finished ones - last year's
   filing, for a form that prefills from it.
   """
   def list_query(opts \\ []) do
@@ -198,16 +198,16 @@ defmodule FormFlow.Data.Instances.Flows do
   defp mark_pre_release(attrs, _flow), do: attrs
 
   @doc """
-  Stamps `status: "completed"` and `completed_at`, writing a
-  `status_changed` event. The stamp is a fact at a moment, never recomputed
+  Sets `status: "completed"` and `completed_at`, writing a
+  `status_changed` event. Both are facts recorded at a moment, never recomputed
   - it may legitimately diverge from `complete?/1` after a later template
   edit. Who calls it - runner-automatic on End reached, host-triggered, or
   End-node custom logic (planned) - is deliberately not decided here.
   Completing a completed journey is a no-op. The flow's status is not
-  consulted: this is an administrative stamp on the journey, not a user
+  consulted: this is an administrative action on the journey, not a user
   continuing it, and a host closing out a read-only year may well call it.
 
-  The stamp refreshes the journey's open positions in the same transaction
+  The call refreshes the journey's open positions in the same transaction
   (`update_next_positions/2`): a completed journey has none, whatever its
   forms say, so it leaves every queue. `opts[:flow_types]`,
   `opts[:callback_data]`, and `refresh: false` reach the refresh as they
@@ -254,7 +254,7 @@ defmodule FormFlow.Data.Instances.Flows do
   end
 
   @doc """
-  The derivation-side completion answer - distinct from the stamped
+  The derivation-side completion answer - distinct from the recorded
   `status`, which is a fact at a moment. The two may diverge after a
   template edit; hosts should ask the question they mean.
   """
@@ -575,7 +575,7 @@ defmodule FormFlow.Data.Instances.Flows do
   # stale struct happens to hold already. `updated_at` is left alone - it
   # is when the journey itself changed, not when its cache did.
   #
-  # `started_at` is stamped once per run of `update_next_positions/2`, before
+  # `started_at` is set once per run of `update_next_positions/2`, before
   # it reads anything, and the `where` refuses a row a *newer* run already
   # wrote. That is what makes two overlapping runs safe: a slow sweep of the
   # tree as it was cannot land its answer on top of a later one. Without it

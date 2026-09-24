@@ -244,14 +244,14 @@ defmodule FormFlow.Data.Instances.FlowProgressTest do
     test "superseded instances are skipped everywhere" do
       {tree, _start, form1, _form2, _stop} = linear_flow()
       dead_path = [Ecto.UUID.generate()]
-      stamp = DateTime.utc_now()
+      now = DateTime.utc_now()
 
       statuses =
         FlowProgress.derive(tree, [
           # a superseded completed instance must not complete its position
-          form_instance([form1.id], "completed", superseded_at: stamp),
+          form_instance([form1.id], "completed", superseded_at: now),
           # a superseded stranded instance must not resurface as stranded
-          form_instance(dead_path, "in_progress", superseded_at: stamp)
+          form_instance(dead_path, "in_progress", superseded_at: now)
         ])
 
       assert statuses[[form1.id]] == :available

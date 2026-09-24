@@ -446,7 +446,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
       <% {text, kind} = row_badge(@status) %>
       <span class={[if(@next?, do: "font-semibold", else: "font-medium")]}>{@label}</span>
       <Core.badge components={@components} kind={kind}>{text}</Core.badge>
-      <span :if={@row.last} class="text-sm text-zinc-500" title={FormStatus.absolute(@row.last.event.inserted_at)}>
+      <span :if={@row.last} class="text-sm text-zinc-500" title={FormFlow.Web.Templates.Shared.absolute(@row.last.event.inserted_at)}>
         {FormStatus.event_label(@row.last.event)}
         {FormFlow.Web.Templates.Shared.relative(@row.last.event.inserted_at)}
         <span :if={@row.last.event.user_id}>· <code class="text-xs">{@row.last.event.user_id}</code></span>

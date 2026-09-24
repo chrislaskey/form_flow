@@ -418,7 +418,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   @doc """
   The finished PDF.
 
-  The cursor's page is closed, page numbers are stamped ("1 of 3", which
+  The cursor's page is closed, page numbers are written ("1 of 3", which
   needs the total and so cannot be drawn before now), and the objects are
   assembled with the cross-reference table the format requires.
   """
@@ -650,9 +650,9 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.Writer do
   end
 
   defp info_object(title) do
-    stamp = Calendar.strftime(DateTime.utc_now(), "D:%Y%m%d%H%M%SZ")
+    creation_date = Calendar.strftime(DateTime.utc_now(), "D:%Y%m%d%H%M%SZ")
 
-    "<< /Producer (FormFlow) /Title (#{escape(title || "")}) /CreationDate (#{stamp}) >>"
+    "<< /Producer (FormFlow) /Title (#{escape(title || "")}) /CreationDate (#{creation_date}) >>"
   end
 
   defp body(objects) do

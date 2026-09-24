@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Templates.Flow.Relationship do
   inside `properties`, which is the copy that carries over to Neo4j, where
   there is no column. The changeset keeps the copy in sync - the column is
   authoritative, and a stale `"flow_id"` arriving in `properties` is
-  overwritten. `tenant_id` - the flow's, stamped at insert - is written the
+  overwritten. `tenant_id` - the flow's, set at insert - is written the
   same way, so the Neo4j property map carries the tenant on every edge as
   well as every node, and so does the relationship's own `id`.
 

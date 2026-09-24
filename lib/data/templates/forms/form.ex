@@ -27,7 +27,7 @@ defmodule FormFlow.Data.Templates.Form do
   ## Tenancy
 
   `tenant_id` is the host tenant the lineage belongs to - an opaque host
-  identity, `nil` for a host with no tenants - stamped at creation and
+  identity, `nil` for a host with no tenants - set at creation and
   immutable afterwards; owned forms and copies take their flow tree's. Like a
   node's `flow_id` it is written to both locations: the dedicated column,
   so the database can index and narrow by it, and a `"tenant_id"` key inside
@@ -103,7 +103,7 @@ defmodule FormFlow.Data.Templates.Form do
 
   The definition lives on versions, never here, and the prefills move only
   through `prefills_changeset/2`. `copied_from_form_id` is not castable;
-  provenance is stamped only by the copy operation. `tenant_id` is castable
+  provenance is set only by the copy operation. `tenant_id` is castable
   at creation and immutable afterwards.
   """
   def changeset(form, attrs \\ %{}) do

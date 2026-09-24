@@ -874,7 +874,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             the flow is (name, slug, status), then what it is (kind, read
             only - it is fixed at creation - then type, perspectives, and
             the type's properties, wrapping three to a row). The groups are laid out
-            from here, by the attribute DynamicForm stamps on each - a grid
+            from here, by the attribute DynamicForm puts on each - a grid
             in place of the library's content-sized flex row, so every
             member takes exactly a column - and stack to one column below
             md. The status summary sits between them at the page's width;

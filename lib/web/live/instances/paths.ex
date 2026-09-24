@@ -15,7 +15,7 @@ defmodule FormFlow.Web.Instances.Paths do
 
   A form is addressed by its **position**, not by its instance row:
   `base/:id/forms/:node_id`, with one extra segment per subflow drilled
-  through - the `path` a `FormFlow.Data.Instances.Form` stamps at creation.
+  through - the `path` a `FormFlow.Data.Instances.Form` writes at creation.
   Addressing the position means the URL exists before the row does, which is
   what lets every navigation to a form be an ordinary link.
   """

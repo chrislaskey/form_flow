@@ -29,7 +29,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
 
   **User ID** is the opposite case and is drawn conditionally. It is the
   journey's own `user_id` column, so Slab sorts it, and it holds the host's
-  own id for the user who started the journey - stamped at creation and
+  own id for the user who started the journey - set at creation and
   immutable (`FormFlow.Data.Instances.Flow`). It is drawn only when the host
   passed an `instances` query, because the default listing is the viewer's
   own journeys and the column would repeat the viewer's id on every row. The
@@ -44,7 +44,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   Torres" renders its own column.
 
   "The current user" means the router's `user_id` attr: by default the list
-  is narrowed to instances that user created, and starting one stamps them as
+  is narrowed to instances that user created, and starting one records that user as
   its creator. The host decides otherwise through the `instances` attr - a
   reviewer's page passes `Instances.Flows.list_query()` bare to list
   everyone's. Which flow templates the page is about is the `flows` attr - a
@@ -497,7 +497,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             </.link>
           </:column>
           <%!-- The host's own id for whoever started the journey, as it was
-                stamped at creation (`FormFlow.Data.Instances.Flow`). The
+                set at creation (`FormFlow.Data.Instances.Flow`). The
                 library has no users and no names: it shows the string it
                 was given, and the header says which string that is, so a
                 reader knows what they are looking at. A host that wants a

@@ -73,7 +73,7 @@ defmodule FormFlow.Web.Router do
   New pages and the forms index - since a styling override belongs
   everywhere a page draws markup, not only where a type callback runs. See
   `FormFlow.Web.ComponentResolver`. Every template page takes `user_id`
-  too - the admin at the page, stamped on the flow's log
+  too - the admin at the page, recorded on the flow's log
   (`FormFlow.Data.Templates.Flow.Event`) and on a health ignore
   (`FormFlow.Data.Templates.Flows.Health`); the forms pages carry it for
   the events they will write - and the flows New page takes the two type
@@ -104,7 +104,7 @@ defmodule FormFlow.Web.Router do
 
   On the instances side a form is addressed by its **position** rather than by
   its instance row: `*path` is the chain of node ids from the root flow down
-  to the form node - the same `path` a `FormFlow.Data.Instances.Form` stamps
+  to the form node - the same `path` a `FormFlow.Data.Instances.Form` writes
   at creation - so a form two subflows deep has three segments. The template
   side needs no such chain, because every path to a shared subflow reaches
   the same template; two paths through an *instance* are two different sets
@@ -131,7 +131,7 @@ defmodule FormFlow.Web.Router do
   attr(:user_id, :string,
     required: true,
     doc:
-      "opaque host identity of the current user - stamped as the creator " <>
+      "opaque host identity of the current user - recorded as the creator " <>
         "of flow instances started here and as the acting user on instance " <>
         "events. Never interpreted by the library; auth stays the host's job"
   )
@@ -139,7 +139,7 @@ defmodule FormFlow.Web.Router do
   attr(:tenant_id, :string,
     default: nil,
     doc:
-      "opaque host identity of the current user's tenant - stamped on the " <>
+      "opaque host identity of the current user's tenant - recorded on the " <>
         "flow and form templates created here, on flow instances started " <>
         "here, and on form instances started inside them; the index pages " <>
         "list only that tenant's. Only multitenant hosts set it; the default " <>

@@ -54,7 +54,7 @@ defmodule FormFlow.Data.Instances.Form.Draft do
 
   @doc """
   Builds a changeset for a draft. `saved_at` is not castable:
-  `FormFlow.Data.Instances.Forms.save_draft/4` stamps it as it writes.
+  `FormFlow.Data.Instances.Forms.save_draft/4` sets it as it writes.
   """
   def changeset(draft, attrs \\ %{}) do
     cast(draft, attrs, [:data, :user_id])

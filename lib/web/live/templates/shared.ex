@@ -637,6 +637,13 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
+  @doc """
+  The same moment written out in full - "2026-09-24 14:05 UTC" - the other
+  half of the sentence `relative/1` starts. Goes in the element's title, or
+  beside the relative phrase in a lighter weight.
+  """
+  def absolute(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M") <> " UTC"
+
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do
       "" -> nil

@@ -178,12 +178,9 @@ defmodule FormFlow.Web.Instances.Components.Forms.Status do
       <span class="block">{@what}<span :if={@user_id}> by {@user_id}</span></span>
       <span :if={@at} class="flex items-baseline gap-1.5 text-xs text-zinc-500">
         {FormFlow.Web.Templates.Shared.relative(@at)}
-        <span class="text-zinc-400">{absolute(@at)}</span>
+        <span class="text-zinc-400">{FormFlow.Web.Templates.Shared.absolute(@at)}</span>
       </span>
     </span>
     """
   end
-
-  @doc "A moment written out in full, as the pages write timestamps."
-  def absolute(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M") <> " UTC"
 end

@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
     end
 
-    test "status is not castable — completion machinery stamps it" do
+    test "status is not castable — only completion sets it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
@@ -39,7 +39,7 @@ defmodule FormFlow.Data.Instances.FormTest do
                template_form_version_id: @version_id
              }).valid?
 
-      # a journey without a stamped path is invalid — the partial unique
+      # a journey instance without a path is invalid — the partial unique
       # index can't catch this half, the changeset must
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
@@ -50,7 +50,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       refute changeset.valid?
       assert {"is required for an in-journey form instance", _} = changeset.errors[:path]
 
-      # path is not castable — only visit_changeset/4 stamps it
+      # path is not castable — only visit_changeset/4 sets it
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
@@ -61,7 +61,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :path) == []
     end
 
-    test "visit_changeset/4 stamps the full visit identity" do
+    test "visit_changeset/4 writes the full visit identity" do
       instance_flow_id = Ecto.UUID.generate()
       path = [Ecto.UUID.generate(), Ecto.UUID.generate()]
 
@@ -78,7 +78,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :path) == path
     end
 
-    test "superseded_at is not castable — reconciliation stamps it" do
+    test "superseded_at is not castable — reconciliation sets it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
@@ -197,7 +197,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Draft.from_entry(%{"data" => %{}, "saved_at" => "yesterday"}).saved_at == nil
     end
 
-    test "saved_at is not castable - the context stamps it" do
+    test "saved_at is not castable - the context sets it" do
       changeset =
         Draft.changeset(%Draft{}, %{
           data: %{"name" => "Ada"},

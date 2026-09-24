@@ -393,7 +393,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   defp notice(%{review: %{staleness: :current}} = assigns) do
     ~H"""
     <p id={@id} class="mb-2 text-xs text-zinc-500">
-      Reviewed {stamp(@review.completion.inserted_at)}. Unchanged since.
+      Reviewed {FormFlow.Web.Templates.Shared.absolute(@review.completion.inserted_at)}. Unchanged since.
     </p>
     """
   end
@@ -401,7 +401,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   defp notice(%{review: %{staleness: :redacted}} = assigns) do
     ~H"""
     <p id={@id} class="mb-2 text-xs text-zinc-500">
-      Reviewed {stamp(@review.completion.inserted_at)}. The record of what was reviewed has been erased.
+      Reviewed {FormFlow.Web.Templates.Shared.absolute(@review.completion.inserted_at)}. The record of what was reviewed has been erased.
     </p>
     """
   end
@@ -425,9 +425,9 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
       <p class="font-medium">
         <%= case @cause do %>
           <% :resubmitted -> %>
-            {@label} was submitted again on {stamp(@latest.inserted_at)}, after this review.
+            {@label} was submitted again on {FormFlow.Web.Templates.Shared.absolute(@latest.inserted_at)}, after this review.
           <% :reopened -> %>
-            {@label} is being edited - reopened on {stamp(@latest.inserted_at)}, not yet resubmitted.
+            {@label} is being edited - reopened on {FormFlow.Web.Templates.Shared.absolute(@latest.inserted_at)}, not yet resubmitted.
           <% :migrated -> %>
             {@label}'s form changed after this review (a new version was published).
           <% :replaced -> %>
@@ -520,8 +520,6 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
 
     diff(snapshot["data"], source.instance.data, old_definition, parsed)
   end
-
-  defp stamp(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M") <> " UTC"
 
   # The source's version's definition, parsed - nil with no instance to show,
   # and nil rather than a crash for a malformed definition (the same posture

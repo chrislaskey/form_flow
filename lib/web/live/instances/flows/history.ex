@@ -119,8 +119,8 @@ defmodule FormFlow.Web.Instances.Flows.History do
             <span :if={entry.event.user_id} class="text-zinc-500">by</span>
             <code :if={entry.event.user_id} class="text-xs">{entry.event.user_id}</code>
           </p>
-          <p class="text-xs text-zinc-500" title={FormStatus.absolute(entry.event.inserted_at)}>
-            {FormFlow.Web.Templates.Shared.relative(entry.event.inserted_at)} · {FormStatus.absolute(
+          <p class="text-xs text-zinc-500" title={FormFlow.Web.Templates.Shared.absolute(entry.event.inserted_at)}>
+            {FormFlow.Web.Templates.Shared.relative(entry.event.inserted_at)} · {FormFlow.Web.Templates.Shared.absolute(
               entry.event.inserted_at
             )}
           </p>

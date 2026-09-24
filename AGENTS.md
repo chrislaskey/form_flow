@@ -97,6 +97,19 @@ retired. Do not bring them back; say the plain thing instead.
   scrolls. Say **sticky**, the CSS word for it.
 * **"pinned Start and End"**. Say they **cannot be deleted**; the node
   attribute is `deletable: false`.
+* **"stamp"**, **"stamped"**, or **"stamps"** for a value the code writes.
+  Say what happens, when, and by what. A value written once when the row
+  is created is **set**: "`tenant_id` is set at creation and never changed
+  after." A value one operation writes is **written by** it:
+  "`superseded_at` is written by strand reconciliation." A fact kept as of
+  a moment, as opposed to a cache, is **recorded**: "`status` is a recorded
+  fact, not a cache - written by `complete/2`, never recomputed." Ecto's
+  **not castable** already says the code writes it and the caller cannot,
+  so keep that beside it. Retired because the one word carried all three of
+  these plus two ordinary senses (a formatted timestamp, page numbers on a
+  PDF), and because the moment-facts are not written at creation, so no
+  one word - not `created` either - fit every use. A formatted timestamp
+  is `FormFlow.Web.Templates.Shared.absolute/1`, the pair of `relative/1`.
 
 ## Prose follows the same rule
 
