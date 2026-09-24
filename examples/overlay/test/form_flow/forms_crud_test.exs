@@ -1531,6 +1531,58 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert html =~ "There are 1 flows that are in-progress"
     end
 
+    test "a reopening publish through the page sweeps the next-position cache", %{conn: conn} do
+      {owner, v1} = published_catalog("Owner contact")
+      {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
+      {:ok, dog} = Flows.update_status(dog, "open", [])
+      through(dog, dog_node)
+      instance = start_at(dog, dog_node)
+      journey = Instances.Flows.get(instance.instance_flow_id)
+      assert journey.next_path == [dog_node.id]
+      {:ok, _} = Instances.Forms.update_status(journey, [dog_node.id], :completed, data: %{})
+      journey = Instances.Flows.get(journey.id)
+      assert journey.next_path == nil
+      computed_before = journey.next_computed_at
+
+      {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
+      {:ok, view, _html} = live(conn, "/demo/admin/forms/#{owner.id}/versions/#{draft.id}")
+      view |> element("button", "Publish") |> render_click()
+
+      view
+      |> element("#forms-show-publish-form-form")
+      |> render_submit(%{"dynamic_form" => %{"reopen_submitted" => "true"}})
+
+      assert_redirect(view, "/demo/admin/forms/#{owner.id}/versions/#{draft.id}")
+
+      # The form is reopened and the cache says so - the reviewer's queue
+      # has the row back
+      swept = Instances.Flows.get(journey.id)
+      assert swept.next_path == [dog_node.id]
+      assert DateTime.compare(swept.next_computed_at, computed_before) == :gt
+      tree_updated_at = Flows.tree_updated_at(Flows.resolve_tree(dog.id))
+      refute Instances.Flows.next_positions_stale?(swept, tree_updated_at)
+    end
+
+    test "a publish that reopens nothing leaves the cache alone", %{conn: conn} do
+      {owner, v1} = published_catalog("Owner contact")
+      {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
+      {:ok, dog} = Flows.update_status(dog, "open", [])
+      through(dog, dog_node)
+      instance = start_at(dog, dog_node)
+      journey = Instances.Flows.get(instance.instance_flow_id)
+      computed_before = journey.next_computed_at
+
+      {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
+      {:ok, view, _html} = live(conn, "/demo/admin/forms/#{owner.id}/versions/#{draft.id}")
+      view |> element("button", "Publish") |> render_click()
+      # A draft only: nothing submitted, nothing to ask, nothing to sweep
+      view |> element("#forms-show-publish-form-publish-now") |> render_click()
+      assert_redirect(view, "/demo/admin/forms/#{owner.id}/versions/#{draft.id}")
+
+      assert Instances.Flows.get(journey.id).next_computed_at == computed_before
+      assert FormFlow.Data.Instances.Forms.get(instance.id).template_form_version_id == draft.id
+    end
+
     test "deleting a catalog form in use names the flows using it", %{conn: conn} do
       {owner, _v1} = published_catalog("Owner contact")
       flow_with_catalog_form_node("Dog License", owner)
@@ -2911,6 +2963,15 @@ defmodule Demo.FormFlowFormsCrudTest do
       )
 
     node
+  end
+
+  # Start -> step -> End around a lone form step, so a journey can be open at
+  # it: nothing is reachable in a flow with no Start
+  defp through(flow, step) do
+    start_node = build_node(flow, ["Start"], "Start")
+    end_node = build_node(flow, ["End"], "End")
+    edge(flow, start_node, step)
+    edge(flow, step, end_node)
   end
 
   defp edge(flow, source, target) do

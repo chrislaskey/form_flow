@@ -849,6 +849,75 @@ defmodule Demo.FormFlowFormsTest do
       assert reload(dog_instance).template_form_version_id == v2.id
       assert reload(cat_instance).template_form_version_id == v2.id
     end
+
+    test "a reopening publish moves where a journey is open, and the sweep catches the cache up" do
+      {owner, v1} = published_form()
+      {dog, step} = flow_through(owner, "Dog License")
+      instance = start_at_step(dog, step)
+      journey = Instances.Flows.get(instance.instance_flow_id)
+      assert journey.next_path == [step.id]
+
+      {:ok, _} = Instances.Forms.update_status(journey, [step.id], :completed, data: %{})
+      journey = Instances.Flows.get(journey.id)
+      # The only form is submitted: the flow is open nowhere
+      assert journey.next_path == nil
+      computed_before = journey.next_computed_at
+
+      {:ok, _v2} = publish_next(owner, v1, reopen_submitted: true)
+
+      # The publish reopened the form and moved where the flow is open,
+      # and the cache does not know yet - what the sweep exists for
+      assert reload(instance).status == "in_progress"
+      assert Instances.Flows.get(journey.id).next_path == nil
+
+      assert {:ok, 1} = Forms.refresh_next_positions(owner.id)
+
+      swept = Instances.Flows.get(journey.id)
+      assert swept.next_path == [step.id]
+      assert DateTime.compare(swept.next_computed_at, computed_before) == :gt
+    end
+
+    test "the sweep reaches every root a catalog form is in, and skips standalone instances" do
+      {owner, v1} = published_form()
+      {dog, dog_step} = flow_through(owner, "Dog License")
+      {cat, cat_step} = flow_through(owner, "Cat License")
+
+      journeys =
+        for {flow, step} <- [{dog, dog_step}, {cat, cat_step}] do
+          instance = start_at_step(flow, step)
+          journey = Instances.Flows.get(instance.instance_flow_id)
+          {:ok, _} = Instances.Forms.update_status(journey, [step.id], :completed, data: %{})
+          Instances.Flows.get(journey.id)
+        end
+
+      # Filled outside any flow: nothing to sweep, nothing to crash on
+      insert_instance(v1, status: "completed", completed_at: DateTime.utc_now())
+
+      assert Forms.sweep_size(owner.id) == 2
+
+      {:ok, _v2} = publish_next(owner, v1, reopen_submitted: true)
+      assert {:ok, 2} = Forms.refresh_next_positions(owner.id)
+
+      for {journey, step} <- Enum.zip(journeys, [dog_step, cat_step]) do
+        assert Instances.Flows.get(journey.id).next_path == [step.id]
+      end
+    end
+
+    test "sweep_size counts journeys still in progress of the roots reached, and no others" do
+      {owner, _v1} = published_form()
+      {dog, step} = flow_through(owner, "Dog License")
+
+      # Two journeys in the root, one of them completed; a third journey of
+      # an unrelated flow
+      _open = start_at_step(dog, step)
+      finished = start_at_step(dog, step)
+      {:ok, _} = Instances.Flows.complete(Instances.Flows.get(finished.instance_flow_id))
+      {other, other_step} = flow_through(elem(published_form(), 0), "Other")
+      _elsewhere = start_at_step(other, other_step)
+
+      assert Forms.sweep_size(owner.id) == 1
+      assert [%{flow_name: "Dog License"}] = Forms.instance_counts_by_flow(owner.id)
+    end
   end
 
   # A root "forms" flow whose one step points at the catalog form
@@ -865,10 +934,54 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   # A journey through the flow with its one step's form started
-  defp start_at_step(%{nodes: [step]} = flow) do
+  defp start_at_step(%{nodes: [step]} = flow), do: start_at_step(flow, step)
+
+  defp start_at_step(flow, step) do
     {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "owner"})
     {:ok, instance} = Instances.Forms.update_status(journey, [step.id], :in_progress)
     instance
+  end
+
+  # Start -> the catalog form -> End: a root flow a journey can actually be
+  # open in, which `flow_reusing/2`'s lone step is not (nothing reaches it
+  # from Start). Returns the flow and the form's step.
+  defp flow_through(form, name) do
+    {:ok, flow} = Flows.create(%{name: name, status: "open"})
+
+    [start_node, step, end_node] =
+      for {labels, label, attrs} <- [
+            {["Start"], "Start", %{}},
+            {["Form"], form.name, %{form_id: form.id}},
+            {["End"], "End", %{}}
+          ] do
+        attrs =
+          Map.merge(
+            %{flow_id: flow.id, labels: labels, properties: %{"data" => %{"label" => label}}},
+            attrs
+          )
+
+        {:ok, node} =
+          FormFlowRepo.insert(
+            FormFlow.Data.Templates.Flow.Node.changeset(
+              %FormFlow.Data.Templates.Flow.Node{},
+              attrs
+            )
+          )
+
+        node
+      end
+
+    for {source, target} <- [{start_node, step}, {step, end_node}] do
+      {:ok, _} =
+        FormFlowRepo.insert(
+          FormFlow.Data.Templates.Flow.Relationship.changeset(
+            %FormFlow.Data.Templates.Flow.Relationship{},
+            %{flow_id: flow.id, source_id: source.id, target_id: target.id, label: "CONNECTS_TO"}
+          )
+        )
+    end
+
+    {Flows.get(flow.id), step}
   end
 
   # --- helpers --------------------------------------------------------------

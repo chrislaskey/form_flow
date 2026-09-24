@@ -700,18 +700,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
-  # Roughly how long the sweep will hold the page: ~0.7 ms per open journey,
-  # measured at 5,000 and 100,000 on both adapters (the implementation
-  # notes, R1-measured). Nothing is said below two seconds - a number that
-  # small is noise, and saying "about 0 seconds" reads as a bug.
-  defp sweep_estimate(journeys) do
-    case round(journeys * 0.7 / 1000) do
-      seconds when seconds < 2 -> nil
-      seconds when seconds < 90 -> "about #{seconds} seconds"
-      seconds -> "about #{round(seconds / 60)} minutes"
-    end
-  end
-
   # The type as the module that answers for it, not the stored id: a save
   # that writes the default's id where none was stored changes no rule
   defp structure(%Flow{} = flow, flow_types) do
@@ -1027,8 +1015,8 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             Answers already given are kept, but where each one stands is recomputed, and
             a step somebody was about to reach can move or disappear.
           </p>
-          <p :if={sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
-            Recomputing them takes {sweep_estimate(open_journeys(assigns))}, and this page
+          <p :if={Shared.sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
+            Recomputing them takes {Shared.sweep_estimate(open_journeys(assigns))}, and this page
             waits for it.
           </p>
           <p class="mb-4 text-sm text-zinc-700">

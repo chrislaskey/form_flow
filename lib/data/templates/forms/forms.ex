@@ -64,7 +64,8 @@ defmodule FormFlow.Data.Templates.Forms do
 
   Every move writes an append-only `FormFlow.Data.Instances.Form.Event`:
   `migrated` for a carry, `reopened` for a reopen. A reopen moves where the
-  journey's flow is open; the next-position cache is not refreshed here.
+  journey's flow is open; the next-position cache is not refreshed here -
+  call `refresh_next_positions/2` after the transaction, as the pages do.
 
   ## Prefills
 
@@ -83,6 +84,7 @@ defmodule FormFlow.Data.Templates.Forms do
   alias FormFlow.Data.Instances.Form.Event
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates.Flow
+  alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Form
   alias FormFlow.Data.Templates.Form.Prefill
   alias FormFlow.Data.Templates.Form.Version
@@ -465,6 +467,67 @@ defmodule FormFlow.Data.Templates.Forms do
 
       {version_id, counts(by_status)}
     end)
+  end
+
+  @doc """
+  Recomputes where every journey still in progress of every root flow this
+  form template's instances live in is open -
+  `FormFlow.Data.Instances.Flows.update_next_positions/2` once per root,
+  the clause the flow editor calls after a structural save.
+
+  What a publish with `reopen_submitted: true` owes the cache: reopening a
+  submitted form moves where its journey's flow is open, and the publish
+  writes that status directly, so nothing else refreshes it. Called
+  **after** the publish transaction commits, never inside it - the sweep
+  is long and the publish holds the form template lock. A host calling
+  `update_status/3` itself and not calling this leaves those journeys'
+  cached positions stale until each is opened (read-repair).
+
+  The roots are those of `instance_counts_by_flow/1`; standalone
+  instances have no journey and no cache, and are skipped. `opts` are
+  `update_next_positions/2`'s: `:flow_types` and `:callback_data`.
+  Returns `{:ok, roots_swept}`, or the first `{:error, reason}` a root's
+  sweep returned.
+  """
+  def refresh_next_positions(form_id, opts \\ []) do
+    opts = Keyword.take(opts, [:flow_types, :callback_data])
+
+    form_id
+    |> root_ids()
+    |> Enum.reduce_while({:ok, 0}, fn root_id, {:ok, swept} ->
+      with %Flow{} = root <- Flows.get(root_id),
+           {:ok, _count} <- Instances.Flows.update_next_positions(root, opts) do
+        {:cont, {:ok, swept + 1}}
+      else
+        nil -> {:cont, {:ok, swept}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  @doc """
+  How many journeys `refresh_next_positions/2` would recompute: the
+  journeys still in progress of every root flow this form template's
+  instances live in. The publish dialog's time estimate.
+  """
+  def sweep_size(form_id) do
+    case root_ids(form_id) do
+      [] ->
+        0
+
+      root_ids ->
+        Repo.one(
+          from(fi in Instances.Flow,
+            where: fi.template_flow_id in ^root_ids and fi.status == "in_progress",
+            select: count(fi.id)
+          )
+        )
+    end
+  end
+
+  defp root_ids(form_id) do
+    for %{flow_id: root_id} when not is_nil(root_id) <- instance_counts_by_flow(form_id),
+        do: root_id
   end
 
   defp counts(by_status) do

@@ -22,6 +22,7 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
 
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
+  alias FormFlow.Web.Templates.Shared
 
   attr(:id, :string, required: true, doc: "the DynamicForm component id")
 
@@ -35,6 +36,13 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
     doc:
       "the same counts attributed to root flows (`Forms.instance_counts_by_flow/1`) - " <>
         "how an admin learns a catalog form's publish reaches several flows"
+  )
+
+  attr(:sweep_size, :integer,
+    default: 0,
+    doc:
+      "`Forms.sweep_size/1` - how many flow instances a reopening publish recomputes, " <>
+        "for the time estimate under the reopen option"
   )
 
   attr(:target, :any,
@@ -100,6 +108,17 @@ defmodule FormFlow.Web.Templates.Forms.Components.PublishDialog do
             metadata={%{"style" => "vertical"}}
           />
         </DynamicForm.form>
+
+        <%!-- Inform, do not steer: reopening is how a wrong question on a
+              live form gets fixed. Say what it costs when it costs enough
+              to say. --%>
+        <p
+          :if={@submitted > 0 && Shared.sweep_estimate(@sweep_size)}
+          class="mt-2 text-sm text-zinc-500"
+        >
+          Reopening also recomputes where every flow instance still in progress in those
+          flows is open. That takes {Shared.sweep_estimate(@sweep_size)}, and this page waits.
+        </p>
 
         <div class="mt-2 flex justify-end gap-2">
           <Core.button

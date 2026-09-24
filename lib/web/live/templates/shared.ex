@@ -545,6 +545,21 @@ defmodule FormFlow.Web.Templates.Shared do
 
   def instance_counts(_owned), do: nil
 
+  @doc """
+  Roughly how long a next-position sweep over `journeys` open journeys
+  holds the page: ~0.7 ms per journey, measured at 5,000 and 100,000 on
+  both adapters (`archive/plans/next-position-implementation.md`). Nothing
+  is said below two seconds - a number that small is noise, and "about 0
+  seconds" reads as a bug. Nil, or "about N seconds" / "about N minutes".
+  """
+  def sweep_estimate(journeys) do
+    case round(journeys * 0.7 / 1000) do
+      seconds when seconds < 2 -> nil
+      seconds when seconds < 90 -> "about #{seconds} seconds"
+      seconds -> "about #{round(seconds / 60)} minutes"
+    end
+  end
+
   @doc "The counts as a sentence, or nothing when there is nothing to say."
   def instance_counts_sentence(nil), do: nil
 

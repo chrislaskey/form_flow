@@ -204,10 +204,19 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
          ) do
       {:ok, published} ->
         refresh_health(socket)
-        # Redirects are forbidden inside update/2; handle_async is the
-        # component-owned callback where they are allowed
-        to = version_show_path(socket.assigns, published)
-        {:ok, start_async(socket, :navigate, fn -> to end)}
+
+        case sweep_next_positions(socket, published, reopen_submitted) do
+          nil ->
+            # Redirects are forbidden inside update/2; handle_async is the
+            # component-owned callback where they are allowed
+            to = version_show_path(socket.assigns, published)
+            {:ok, start_async(socket, :navigate, fn -> to end)}
+
+          message ->
+            # Stay, so the admin reads how the cache catches up; the page
+            # reloads as the read-only view of what is now published
+            {:ok, socket |> assign(error: message, publishing?: false) |> load()}
+        end
 
       {:error, :not_draft} ->
         {:ok, assign(socket, error: "Only drafts can be published.", publishing?: false)}
@@ -402,6 +411,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     %{
       counts: Forms.instance_counts(form.id),
       counts_by_flow: Forms.instance_counts_by_flow(form.id),
+      sweep_size: Forms.sweep_size(form.id),
       usages: Flows.form_usages(form.id)
     }
   end
@@ -1635,6 +1645,29 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     |> assign(:preview_rev, socket.assigns.preview_rev + 1)
   end
 
+  # A publish that reopened nothing moved no position. Only a reopening
+  # publish with something to reopen sweeps: `counts.submitted` is what the
+  # dialog showed and what the migration reopened. Returns the message for
+  # a sweep that did not finish, or nil - the publish is committed either
+  # way, and the journey's page repairs a stale row on open.
+  defp sweep_next_positions(_socket, _published, false), do: nil
+
+  defp sweep_next_positions(%{assigns: %{counts: %{submitted: 0}}}, _published, true), do: nil
+
+  defp sweep_next_positions(socket, published, true) do
+    case Forms.refresh_next_positions(published.form_id,
+           flow_types: socket.assigns.flow_types,
+           callback_data: socket.assigns.callback_data
+         ) do
+      {:ok, _roots} ->
+        nil
+
+      {:error, _reason} ->
+        "Published, but recomputing where the reopened flow instances stand did not " <>
+          "finish. Opening a flow instance brings it up to date."
+    end
+  end
+
   defp publish_directly(socket) do
     case Forms.update_status(socket.assigns.version, :published, user_id: socket.assigns.user_id) do
       {:ok, published} ->
@@ -2652,6 +2685,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
         id={"#{@id}-publish-form"}
         counts={@counts}
         counts_by_flow={@counts_by_flow}
+        sweep_size={@sweep_size}
         target={@myself}
         on_success={&publish(&1, @id)}
         components={@components}

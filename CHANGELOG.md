@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.39.0
+
+### Form publish: the next-position cache catches up
+
+A publish with `reopen_submitted: true` puts submitted forms back to
+draft, which moves where each of those journeys' flow is open. The cache
+of that (`next_path` and the next-positions table, v0.35.0) was not
+refreshed: the publish writes the status directly, and the staleness
+check dates rows against flow saves, which a publish is not. A reviewer's
+queue lost the reopened rows until each journey was opened.
+
+The form template Show and Edit pages now sweep after a reopening publish
+that reopened something - `FormFlow.Data.Templates.Forms.refresh_next_positions/2`,
+new: `Instances.Flows.update_next_positions/2` once per root flow the
+form's instances live in, the same call the flow editor makes after a
+structural save. It runs after the publish commits, never inside the form
+template lock. A publish that reopened nothing sweeps nothing. If the
+sweep does not finish, the page stays with a message and the published
+version in its history; the journey's page repairs a stale row on open.
+
+The publish dialog says what reopening costs when it is worth saying:
+`Forms.sweep_size/1` (new) counts the journeys still in progress the
+sweep would recompute, and the flow editor's estimate rule now lives in
+`FormFlow.Web.Templates.Shared.sweep_estimate/1` for both pages.
+
+A host calling `Forms.update_status/3` itself owes the same call; the
+moduledoc says so. Nothing on the flow side changed.
+
 ## v0.38.0
 
 ### A completed journey records what its flow looked like

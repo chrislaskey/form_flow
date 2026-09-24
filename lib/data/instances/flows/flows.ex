@@ -352,7 +352,11 @@ defmodule FormFlow.Data.Instances.Flows do
   `create/2`, and `complete/2` call this themselves after every change
   they make, so a page never has to; `refresh: false` on any of them skips
   it, and the caller then owes the cache a call here - a seed passes it
-  per row and calls the `Templates.Flow` clause once at the end.
+  per row and calls the `Templates.Flow` clause once at the end. The flow
+  editor calls the `Templates.Flow` clause after a save that changed the
+  structure, and the form template pages call it, through
+  `FormFlow.Data.Templates.Forms.refresh_next_positions/2`, after a publish
+  that reopened submitted forms.
   """
   def update_next_positions(journey_or_flow, opts \\ [])
 
