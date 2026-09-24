@@ -55,7 +55,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   | `:property_missing` | error | a flow's or a form's type requires a property (`FormFlow.Config.Property`'s `:required`) that has no value - the Review type's "Form to review", say |
   | `:related_form_missing` | error | a `:related_form` property names a position the tree no longer has, or one no Start reaches - either way the property resolves to nothing at runtime (`FormFlow.Config.Forms.Type.related_form/2` looks among the connected positions) |
   | `:related_form_in_any_flow_missing` | error | a `:related_form_in_any_flow` property names a flow that is gone, a position that flow no longer has, or one no Start reaches in it - either way the property resolves to nothing at runtime |
-  | `:related_form_shared` | error | a catalog form - one lineage shared by every step reusing it - has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
+  | `:related_form_shared` | error | a catalog form - one form template row shared by every step reusing it - has a `:related_form` value, a position in one flow; it can be right in one flow only, and re-picking it from another breaks the first (the form pages refuse the choice; a copied flow arrives with it) |
   | `:unconnected` | warning | a node no Start reaches; users can never get there |
   | `:dead_end` | warning | a node Start reaches that nothing follows, so End never waits for it |
   | `:no_steps` | warning | Start reaches End with no form or subflow step between them |
@@ -446,10 +446,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   @doc """
-  `refresh/2` for every root flow that uses the form lineage `form_id`
+  `refresh/2` for every root flow that uses the form template `form_id`
   (`FormFlow.Data.Templates.Flows.form_usages/1`) - what a form's pages call
   after a publish, an archive, or a draft saved or deleted, since a catalog
-  form's lineage is shared by every flow with a step on it, and an owned
+  form is one form template row shared by every flow with a step on it, and an owned
   form's one usage is its own tree.
   """
   @spec refresh_for_form(Ecto.UUID.t(), keyword()) :: :ok
@@ -967,7 +967,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     end
   end
 
-  # A catalog form is one lineage for every step reusing it, with one place
+  # A catalog form is one form template row shared by every step reusing it, with one place
   # for its type's property values, so a `:related_form` value - a position
   # in one flow - can be right in one flow only; every other sees a stale
   # pick, and re-picking there breaks the first. The form pages refuse the

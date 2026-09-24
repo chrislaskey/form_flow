@@ -1,18 +1,20 @@
 defmodule FormFlow.Data.Templates.Forms do
   @moduledoc """
   `FormFlow.Data.Templates.Forms` context module for form templates: the
-  lineage/version lifecycle and the publish operation.
+  lifecycle of form template rows and form template versions, and the
+  publish operation.
 
-  A form is a lineage (`FormFlow.Data.Templates.Form` - pure identity) plus
-  versions (`FormFlow.Data.Templates.Form.Version` - every definition, draft
-  or published). Published versions are immutable; a fix is a new version,
+  A form template is one form template row (`FormFlow.Data.Templates.Form` -
+  pure identity) plus form template versions
+  (`FormFlow.Data.Templates.Form.Version` - every definition, draft or
+  published). Published versions are immutable; a fix is a new version,
   and what happens to existing instances is a publish-time policy, not a
   migration file. The design and its rationale live in
   `archive/form-versioning.md`.
 
   ## Drafts
 
-  Any number of drafts may coexist per lineage. `create_draft/2` forks a
+  Any number of drafts may coexist per form template. `create_draft/2` forks a
   *published* version (or starts blank), `update_draft/2` edits under an
   optimistic lock, and `stale_draft?/1` reports when the base is no longer
   the latest published version. There is no merge machinery - publishes are
@@ -21,7 +23,7 @@ defmodule FormFlow.Data.Templates.Forms do
   ## Publishing
 
   `update_status(version, :published, opts)` publishes a draft in one
-  transaction: the lineage row is locked (Postgres - SQLite's single writer
+  transaction: the form template row is locked (Postgres - SQLite's single writer
   makes the lock unnecessary, and its grammar has no `FOR UPDATE`), the next
   number is computed over every version ever published (archived included),
   and the migration policy is applied to existing instances:
@@ -49,7 +51,7 @@ defmodule FormFlow.Data.Templates.Forms do
   ## Prefills
 
   `list_prefills/1`, `get_prefill/2`, `create_prefill/2`, `update_prefill/3`,
-  and `delete_prefill/2` are the lineage's named sets of test answers
+  and `delete_prefill/2` are the form template's named sets of test answers
   (`FormFlow.Data.Templates.Form.Prefill`). They read and write one column of
   one row - the whole set is a single value - so each takes the form and
   returns the form it wrote, with the set as it now stands. A prefill is
@@ -78,10 +80,10 @@ defmodule FormFlow.Data.Templates.Forms do
   @completed_policies [:untouched, :reopen_carry, :reopen_reset]
 
   @doc """
-  Creates a form: the lineage plus its initial draft, in one transaction.
+  Creates a form template: the row plus its initial draft, in one transaction.
 
   A `:definition` key in the attributes seeds the draft; everything else is
-  lineage identity. A missing `:slug` is generated from the name for a
+  the form template row's identity. A missing `:slug` is generated from the name for a
   catalog form (`FormFlow.Data.Templates.Slug`); an owned form
   (`:owner_flow_id`) gets none unless one is given - its step's slug is the
   handle. Returns the form with its versions preloaded.
@@ -113,17 +115,17 @@ defmodule FormFlow.Data.Templates.Forms do
     end
   end
 
-  @doc "Updates a lineage's identity fields (name, description, slug) and properties."
+  @doc "Updates a form template's identity fields (name, description, slug) and properties."
   def update(%Form{} = form, attrs) do
     Repo.update(Form.changeset(form, attrs))
   end
 
   @doc """
-  Deletes a lineage and its versions.
+  Deletes a form template: its row and its versions.
 
   Refuses with `{:error, :has_instances}` when any instance uses any of the
-  lineage's versions - instance data can never be orphaned - and with
-  `{:error, :in_use}` while any step still points at the lineage: the
+  form template's versions - instance data can never be orphaned - and with
+  `{:error, :in_use}` while any step still points at the form template: the
   node's foreign key would refuse anyway, and a catalog form shared by
   several flows is deleted by removing those steps first.
   `FormFlow.Data.Templates.Flows.form_usages/1` names them.
@@ -132,11 +134,11 @@ defmodule FormFlow.Data.Templates.Forms do
     cond do
       has_instances?(form.id) -> {:error, :has_instances}
       in_use?(form.id) -> {:error, :in_use}
-      true -> Repo.transaction(fn -> delete_versions_then_lineage(form) end)
+      true -> Repo.transaction(fn -> delete_versions_then_form_template(form) end)
     end
   end
 
-  defp delete_versions_then_lineage(form) do
+  defp delete_versions_then_form_template(form) do
     Repo.delete_all(from(v in Version, where: v.form_id == ^form.id))
 
     case Repo.delete(form) do
@@ -146,9 +148,9 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Copies a lineage - the rollover operation behind copying a flow tree.
+  Copies a form template - the rollover operation behind copying a flow tree.
 
-  The copy is a new lineage with `copied_from_form_id` provenance. A source
+  The copy is a new form template with `copied_from_form_id` provenance. A source
   with a published version copies as a single **published v1** carrying the
   latest published definition - version history stays with the original,
   reachable via provenance, and drafts do not copy. A source that has never
@@ -206,11 +208,11 @@ defmodule FormFlow.Data.Templates.Forms do
     Slug.available(Form, form.slug || Slug.segment(form.name, "form"), form.tenant_id)
   end
 
-  @doc "Fetches a lineage by id, or nil."
+  @doc "Fetches a form template by id, or nil."
   def get(form_id), do: Repo.get(Form, form_id)
 
   @doc """
-  Fetches a lineage by its slug (`FormFlow.Data.Templates.Slug`), or `nil`.
+  Fetches a form template by its slug (`FormFlow.Data.Templates.Slug`), or `nil`.
   `opts[:tenant_id]` scopes the lookup to one tenant; a host with no tenants
   needs nothing more than the slug. Slugs are unique per
   tenant, not across them, so without `tenant_id:` a slug that several
@@ -350,7 +352,7 @@ defmodule FormFlow.Data.Templates.Forms do
     Repo.update(Form.prefills_changeset(form, prefills))
   end
 
-  @doc "Lists a lineage's versions, drafts and published alike, newest first."
+  @doc "Lists a form template's versions, drafts and published alike, newest first."
   def list_versions(form_id) do
     Repo.all(
       from(v in Version,
@@ -361,7 +363,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Whether any version of the lineage was ever published - archived included,
+  Whether any version of the form template was ever published - archived included,
   since version numbers are never reissued and instances may still use them.
   The first publish is the special case that skips the migration-policy
   dialog: with no published history, no instance can exist.
@@ -370,7 +372,7 @@ defmodule FormFlow.Data.Templates.Forms do
     Repo.exists?(from(v in Version, where: v.form_id == ^form_id and not is_nil(v.version)))
   end
 
-  @doc "The latest published version of a lineage, or nil. Skips drafts and archived."
+  @doc "The latest published version of a form template, or nil. Skips drafts and archived."
   def get_latest_version(form_id) do
     Repo.one(
       from(v in Version,
@@ -382,7 +384,7 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Counts a lineage's instances by status - the publish dialog's blast radius
+  Counts a form template's instances by status - the publish dialog's blast radius
   ("N in-progress instances will be reset").
   """
   def instance_counts(form_id) do
@@ -406,7 +408,7 @@ defmodule FormFlow.Data.Templates.Forms do
   the publish reaches. One entry per root flow with instances, as
   `%{flow_id:, flow_name:, in_progress:, completed:}`, flows by name;
   standalone instances - filled outside any flow - come last with a `nil`
-  flow. Empty when the lineage has no instances.
+  flow. Empty when the form template has no instances.
   """
   def instance_counts_by_flow(form_id) do
     rows =
@@ -440,10 +442,10 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Creates a draft for a lineage.
+  Creates a draft for a form template.
 
   `based_on: version_id` forks a published or archived version of the same
-  lineage - the definition is copied and the provenance recorded, powering
+  form template - the definition is copied and the provenance recorded, powering
   `stale_draft?/1` (a draft forked from an archived version is stale from
   the start whenever something else is published, which is the truth of it).
   Drafts cannot fork drafts (`{:error, :based_on_draft}`). Without
@@ -533,7 +535,7 @@ defmodule FormFlow.Data.Templates.Forms do
     policy = resolve_policy!(opts)
 
     Repo.transaction(fn ->
-      lock_lineage(version.form_id)
+      lock_form_template(version.form_id)
 
       # Reloaded inside the lock - the caller's struct may predate a
       # concurrent publish of the same draft
@@ -587,11 +589,11 @@ defmodule FormFlow.Data.Templates.Forms do
     policy
   end
 
-  # Serializes concurrent publishes of one lineage. Postgres only: SQLite has
+  # Serializes concurrent publishes of one form template. Postgres only: SQLite has
   # no FOR UPDATE in its grammar (an unconditional lock is a runtime syntax
   # error, not a no-op) and its single-writer model makes the lock
   # unnecessary. The unique (form_id, version) index is the backstop.
-  defp lock_lineage(form_id) do
+  defp lock_form_template(form_id) do
     query = from(f in Form, where: f.id == ^form_id)
     query = if postgres?(), do: lock(query, "FOR UPDATE"), else: query
 

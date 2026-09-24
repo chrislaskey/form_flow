@@ -249,8 +249,8 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   @doc """
   The `FormFlow.Context` of the form at `path` in a flow instance: the form,
   its flow's forms in order, the journey's subflow steps (`steps`, from
-  `FlowProgress.subflows/2` - the doors on the way down), and the template
-  lineage they sit in. A stranded position is no longer one of the tree's
+  `FlowProgress.subflows/2` - the doors on the way down), and the form
+  template they sit in. A stranded position is no longer one of the tree's
   forms, so the flow instance's own flow answers for it.
   """
   def context(%{flow_instance: flow_instance, path: path} = assigns, tree, forms, steps) do

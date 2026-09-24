@@ -18,7 +18,7 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
       assert Ecto.Changeset.get_field(changeset, :version) == nil
     end
 
-    test "requires the lineage" do
+    test "requires the form template" do
       refute Version.create_changeset(%Version{}, %{definition: %{}}).valid?
     end
 

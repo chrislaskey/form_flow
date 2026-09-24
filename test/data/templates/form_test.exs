@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.FormTest do
 
   alias FormFlow.Data.Templates.Form
 
-  test "requires a name — a lineage is an identity, and the name is it" do
+  test "requires a name — a form template row is an identity, and the name is it" do
     refute Form.changeset(%Form{}).valid?
 
     changeset = Form.changeset(%Form{}, %{name: "W-2 Details"})

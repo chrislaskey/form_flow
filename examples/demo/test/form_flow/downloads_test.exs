@@ -90,7 +90,7 @@ defmodule Demo.FormFlowDownloadsTest do
       assert disposition =~ "inline"
       assert response_content_type(printed, :pdf) =~ "application/pdf"
 
-      # The PDF's creation stamp is the only thing that differs between two
+      # The PDF's creation date is the only thing that differs between two
       # renders of one form
       assert scrub(printed.resp_body) == scrub(downloaded.resp_body)
     end
@@ -220,7 +220,7 @@ defmodule Demo.FormFlowDownloadsTest do
 
   # ── fixtures ────────────────────────────────────────────────────────────
 
-  # The demo's own PDF stamp moves every render; everything else must match
+  # The demo's own PDF creation date moves every render; everything else must match
   defp scrub(pdf), do: String.replace(pdf, ~r/\/CreationDate \(D:[^)]*\)/, "")
 
   defp flow_of_one do

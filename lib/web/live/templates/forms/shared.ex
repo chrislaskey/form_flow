@@ -5,7 +5,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   with.
 
   A form's **details** - its name, slug, description, and type with the
-  type's property values - belong to the lineage, not to a version. They
+  type's property values - belong to the form template row, not to a form template version. They
   change the moment they are saved, and every version shows the change,
   published ones included. Two pages edit them through the same `DynamicForm`
   fields: `FormFlow.Web.Templates.Forms.Edit` while the form has never been
@@ -123,7 +123,7 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
   row. `{:ok, form, node}`, or `{:error, reason}` for
   `save_details_error/2` to word.
 
-  A catalog form is one lineage for every step reusing it, so a
+  A catalog form is one form template row shared by every step reusing it, so a
   `:related_form` value - a position in one flow - cannot be its: the rule
   `Flows.reuse_form/3` applies when a step picks such a form, applied from
   this side when such a form picks a step. The type alone is fine; it is

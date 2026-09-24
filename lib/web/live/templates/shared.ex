@@ -181,7 +181,7 @@ defmodule FormFlow.Web.Templates.Shared do
   The forms a root flow's steps point at, subflows included, in the order a
   user works them, as `{qualified label, form, node}` - the label is the
   step's (`FormFlow.Data.Instances.FlowProgress.qualified_label/1`,
-  "Documents / Proof of address"), the form the lineage it points at, the
+  "Documents / Proof of address"), the form the form template it points at, the
   node the step itself, whose `slug` is how the pages name a flow's form
   (an owned form has none of its own). Each form once, at its first step,
   so a catalog form reused at two steps is offered once. Empty with no
@@ -202,7 +202,7 @@ defmodule FormFlow.Web.Templates.Shared do
     end
   end
 
-  # The step's form: the node's form_id is the lineage. A node whose form is
+  # The step's form: the node's form_id is the form template id. A node whose form is
   # gone offers nothing.
   defp flow_form(%{node: node} = progress) do
     case node.form_id && Templates.Forms.get(node.form_id) do

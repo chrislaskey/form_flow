@@ -4,7 +4,7 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
   A name and an optional description, rendered and validated by
   `DynamicForm.form` with declarative `<:field>` slots. Creating makes the
-  lineage plus its initial blank draft and lands on that draft's edit page
+  form template row plus its initial blank draft and lands on that draft's edit page
   (`FormFlow.Web.Templates.Forms.Edit`), which starts with the same choice a
   step's new form gets - Fresh start, or Copy form - and then edits the
   details and the definition on one page, so the name typed here is not the

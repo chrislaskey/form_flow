@@ -7,8 +7,8 @@ defmodule Demo.FormFlowNextPositionsTest do
   (`archive/plans/next-position.md` §5.2, §5.3).
 
   Every path that changes a form instance's status is proven to leave the
-  row **and** the table right: creation, start, submit, reopen, the journey
-  stamp, deletion, and the `refresh: false` opt-out. Two shapes get their
+  row **and** the table right: creation, start, submit, reopen, completing the
+  journey, deletion, and the `refresh: false` opt-out. Two shapes get their
   own tests because they are where a single cached position would lie: a
   form behind a step another step still shuts, and a flow worked in any
   order, where every unfinished form is open at once.
@@ -115,7 +115,7 @@ defmodule Demo.FormFlowNextPositionsTest do
       assert open_paths(fresh) == [[address.id]]
     end
 
-    test "the journey stamp empties the cache, whatever the forms say" do
+    test "completing the journey empties the cache, whatever the forms say" do
       %{journey: journey, forms: [name, _address]} = flow_of_two()
 
       {:ok, completed} = Instances.Flows.complete(journey)
@@ -317,15 +317,15 @@ defmodule Demo.FormFlowNextPositionsTest do
 
   describe "two runs overlapping" do
     # A slow run of the tree as it was must not land its answer on top of a
-    # newer run's. `next_computed_at` is stamped once per run, before it
+    # newer run's. `next_computed_at` is set once per run, before it
     # reads anything, and the write refuses a row a newer run already wrote:
     # last run *started* wins, not last finished. The newer run is simulated
-    # by stamping the row as it would have.
+    # by writing the row's `next_computed_at` as it would have.
 
-    test "a run started before the row's stamp writes neither the columns nor the rows" do
+    test "a run started before the row's `next_computed_at` writes neither the columns nor the rows" do
       %{journey: journey, forms: [name, address]} = flow_of_two()
 
-      # A newer run got there first: the row carries its stamp and its answer
+      # A newer run got there first: the row carries its `next_computed_at` and its answer
       newer = DateTime.add(DateTime.utc_now(), 60, :second)
 
       FormFlowRepo.update_all(
@@ -358,7 +358,7 @@ defmodule Demo.FormFlowNextPositionsTest do
       refute name.id in Enum.map(rows_of(kept), & &1.node_id)
     end
 
-    test "a run started after the row's stamp writes as usual" do
+    test "a run started after the row's `next_computed_at` writes as usual" do
       %{journey: journey, forms: [name, _address]} = flow_of_two()
 
       older = DateTime.add(DateTime.utc_now(), -60, :second)
@@ -469,7 +469,7 @@ defmodule Demo.FormFlowNextPositionsTest do
   # ── fixtures ────────────────────────────────────────────────────────────
 
   # Start → Name → Address → End, one "forms" flow of the given type, and a
-  # journey of it. `opts[:tenant_id]` stamps the journey.
+  # journey of it. `opts[:tenant_id]` sets the journey's tenant.
   defp flow_of_two(type_or_opts \\ nil)
 
   defp flow_of_two(opts) when is_list(opts), do: flow_of_two(nil, opts)

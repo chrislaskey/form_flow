@@ -12,8 +12,8 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
 
   ## Not version specific
 
-  A prefill belongs to the lineage (`FormFlow.Data.Templates.Form`), not to a
-  version, and nothing ties one to the definition it was written against. A
+  A prefill belongs to the form template row (`FormFlow.Data.Templates.Form`),
+  not to a form template version, and nothing ties one to the definition it was written against. A
   publish therefore leaves every prefill where it is, and an older set
   applied to a newer definition lands softly: `DynamicForm` casts only the
   names the definition declares, so answers to questions that went away are
@@ -23,7 +23,7 @@ defmodule FormFlow.Data.Templates.Form.Prefill do
 
   ## The stored entry
 
-  The lineage's `prefills` column is a map of name to entry, and this struct
+  The form template row's `prefills` column is a map of name to entry, and this struct
   is one entry with its name alongside it:
 
       %{

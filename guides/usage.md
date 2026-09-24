@@ -326,7 +326,7 @@ too, with a bare map for the page: `status_allows?(flow, :see,
 callback that keys on `context.form_node.slug` sees the copy's prefix
 (`dog-license-2027_owner`, not `dog-license-2026_owner`): key on the part
 after the `_`, or on `context.form.slug` when the step reuses a catalog
-form, which is the same lineage in both years.
+form, which is the same form template in both years.
 
 ### Prefilling this year from last year
 

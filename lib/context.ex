@@ -40,7 +40,7 @@ defmodule FormFlow.Context do
       It is always `form_progress.node` where both are set - the field is
       the shorter read, not a second source - so code that re-aims a
       context at another form sets both together
-    * `:form` - the `FormFlow.Data.Templates.Form` lineage in scope, or `nil`
+    * `:form` - the form template (`FormFlow.Data.Templates.Form`) in scope, or `nil`
     * `:form_version` - the specific `FormFlow.Data.Templates.Form.Version`
       in scope, or `nil`
     * `:flow_type_property_values` - what an admin entered for `:subflow`'s

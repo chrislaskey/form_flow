@@ -2,7 +2,7 @@ defmodule Demo.FormFlowFormsCrudTest do
   @moduledoc """
   Drives the forms CRUD pages end-to-end through the dedicated
   `live "/demo/admin/*path", FormFlowLive.Admin` route (mounted with `base="/demo/admin"`):
-  `/demo/admin/forms` is the catalog, `/demo/admin/forms/new` creates a lineage with
+  `/demo/admin/forms` is the catalog, `/demo/admin/forms/new` creates a form template with
   its initial draft and lands on that draft's edit page, `/demo/admin/forms/:id`
   shows the resolved version (latest published, else newest draft) with the
   version history and the publish dialog, `/demo/admin/forms/:id/versions/:vid/edit`
@@ -50,7 +50,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     end
   end
 
-  test "the new page creates a lineage with its initial draft", %{conn: conn} do
+  test "the new page creates a form template with its initial draft", %{conn: conn} do
     {:ok, view, html} = live(conn, "/demo/admin/forms/new")
 
     assert html =~ "New form"
@@ -1158,7 +1158,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert Forms.get(form.id).slug == "mine2027"
   end
 
-  test "one Save writes identity to the lineage and the definition to the draft",
+  test "one Save writes identity to the form template row and the definition to the draft",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Before", description: "Old"})
     [draft] = Forms.list_versions(form.id)
@@ -1394,7 +1394,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   describe "reusing a catalog form" do
     # Dog License and Cat License share the catalog's Owner contact: one
-    # lineage, two steps pointing at it, each flow's step label its own.
+    # form template, two steps pointing at it, each flow's step label its own.
     test "the chooser's Reuse form: through a step only, the catalog alone, unpublished forms marked, landing on the step's form page",
          %{conn: conn} do
       {owner, _v1} = published_catalog("Owner contact")
@@ -2693,7 +2693,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert_redirect(view, "/demo/admin/flows/#{root.id}/nodes/#{node.id}/form")
   end
 
-  # The details — name, slug, description, type — belong to the lineage and
+  # The details — name, slug, description, type — belong to the form template row and
   # change the moment they are saved. The draft editor carries them only
   # until the form is first published; after that they have their own page.
   describe "form details" do
@@ -2751,7 +2751,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert %{name: "Settled", description: "Kept"} = Forms.get(form.id)
     end
 
-    test "the details page saves the lineage for every version at once", %{conn: conn} do
+    test "the details page saves the form template row for every version at once", %{conn: conn} do
       {form, _v1} = published_form(name: "Settled", description: "Before")
 
       {:ok, view, html} = live(conn, "/demo/admin/forms/#{form.id}/edit")

@@ -70,6 +70,16 @@ One term, one meaning. Do not widen these, and do not introduce a synonym.
   Continue, or View — never "Open".
 * **"gate"** — prose only, for the host's `on_mount`. It never appears in a
   function or state name.
+* **form template / form template row / form template id / form template
+  version / form instance** — the template side of a form is a **form
+  template**: one `FormFlow.Data.Templates.Form` row plus its
+  `Form.Version` rows. Say **form template row**, or **form template id**
+  for `form_id`, when the row alone is meant as against its versions; **form
+  template version** for one definition; **form instance** for one user's
+  fill. The three are the three table names: `template_forms`,
+  `template_form_versions`, `instance_forms`. Bare **form** stays for what
+  the user fills, and for ordinary speech where the side is obvious. Never
+  shorten "form template version" to "form template".
 * Compound names put **the domain noun last**: `snapshot_data`, not
   `data_snapshot`; `initial_data`, not `data_initial`.
 * Shared logic for sibling LiveComponents lives in a module named **`Shared`**,
@@ -110,6 +120,12 @@ retired. Do not bring them back; say the plain thing instead.
   PDF), and because the moment-facts are not written at creation, so no
   one word - not `created` either - fit every use. A formatted timestamp
   is `FormFlow.Web.Templates.Shared.absolute/1`, the pair of `relative/1`.
+* **"lineage"** for a `FormFlow.Data.Templates.Form` row. Say **form
+  template**, or **form template row** / **form template id** when the row
+  is meant as against its versions. Retired because in English lineage
+  means ancestry, and the ancestry column, `copied_from_form_id`, is a
+  different thing the code calls provenance - a reader who knew the word
+  guessed the wrong column.
 
 ## Prose follows the same rule
 

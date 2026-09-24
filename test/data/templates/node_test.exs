@@ -121,7 +121,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
   end
 
   test "an explicit form_id wins over the properties copy" do
-    # copy_flow relies on this: source properties carry the OLD lineage id,
+    # copy_flow relies on this: source properties carry the OLD form template id,
     # and taking that copy into the column would re-point a copied node at the
     # original form
     explicit = Ecto.UUID.generate()

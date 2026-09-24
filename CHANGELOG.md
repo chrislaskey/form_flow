@@ -22,6 +22,26 @@ is now `FormFlow.Web.Templates.Shared.absolute/1`, beside `relative/1`,
 the other half of the same sentence. Two private copies of it under the
 name `stamp/1` are deleted. `AGENTS.md` records the retirement.
 
+### Vocabulary: "lineage" retired
+
+The word **"lineage"** is gone from the library's prose, tests, and private
+function names. It had meant one thing - a `FormFlow.Data.Templates.Form`
+row, the identity every version of a form shares - but in English lineage
+means ancestry, and the ancestry column, `copied_from_form_id`, is a
+different thing the code calls provenance. A reader who knew the word
+guessed the wrong column.
+
+The template side of a form is now a **form template**: one form template
+row plus its form template versions. **Form template row** and **form
+template id** (`form_id`) name the row alone, against its versions; **form
+template version** names one definition; **form instance** names one
+user's fill. The three terms are the three table names. Bare "form" stays
+for what the user fills. The private helpers `lock_lineage/1`,
+`delete_versions_then_lineage/1`, and `copy_form_lineage/3` are now
+`lock_form_template/1`, `delete_versions_then_form_template/1`, and
+`copy_owned_form_template/3`. `AGENTS.md` records the vocabulary and the
+retirement.
+
 ## v0.35.0
 
 ### Where a journey's flow is open, cached: the reviewer's queue in one query

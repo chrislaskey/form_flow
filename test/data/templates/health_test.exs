@@ -232,7 +232,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert health.level == :info
   end
 
-  test "an archived-only lineage counts as unpublished" do
+  test "a form template with only archived versions counts as unpublished" do
     form = %Form{
       id: Ecto.UUID.generate(),
       name: "Old",

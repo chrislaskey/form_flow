@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   `FormFlow.Web.Templates.Forms.Details` LiveComponent edits a form's
   details - name, slug, description, and type - on their own page.
 
-  The details belong to the lineage, not to a version: a save here shows on
+  The details belong to the form template row, not to a form template version: a save here shows on
   every version at once, published ones included, and no draft or publish
   is involved. The page says so above the fields, and points back at the
   form's page - where drafts are - for anything about the form's content.

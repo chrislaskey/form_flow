@@ -16,7 +16,7 @@ defmodule FormFlow.Data.Templates.Form.Version do
 
   `draft → published → archived`, whitelisted - enforced here, not in the
   database. Drafts are mutable working copies (several may coexist per
-  lineage); `version` numbers and `published_at` are assigned only by
+  form template); `version` numbers and `published_at` are assigned only by
   `FormFlow.Data.Templates.Forms.update_status/3` and are never castable
   from external input, the same discipline as `lock_version` - casting a
   lock column would let a caller silently bypass the lock.
@@ -58,7 +58,7 @@ defmodule FormFlow.Data.Templates.Form.Version do
   @doc """
   Builds a changeset for a new draft.
 
-  Only the lineage, the definition, and the fork provenance are castable -
+  Only the form template id (`form_id`), the definition, and the fork provenance are castable -
   a version is born a draft with no number.
   """
   def create_changeset(version, attrs \\ %{}) do

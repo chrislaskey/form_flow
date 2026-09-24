@@ -175,7 +175,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
 
   # Who may write a prefill here: the status the menu is drawn under
   # (`FormFlow.Web.Instances.Forms.Shared.prefills_offered?/1`), and a
-  # resolved form lineage to write it to. Not a permission - where the menu
+  # resolved form template to write it to. Not a permission - where the menu
   # is drawn is the whole restriction, and this is that same rule asked on
   # the way in (`archive/plans/prefills-for-testing.md` §15).
   defguardp prefills_writable?(socket)

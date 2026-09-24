@@ -98,7 +98,7 @@ defmodule FormFlow.Web.Helpers.ReactFlow do
       the embedded flow - the single stored copy.
     * `form_type` - the same for form nodes: the *collected form's*
       `properties["form_type"]` (requires `:form` preloaded), edited by the
-      canvas dropdown and written through to the form lineage at save.
+      canvas dropdown and written through to the form template at save.
     * `perspectives` - the *embedded flow's* `properties["perspectives"]`
       (`FormFlow.Config.Flows.Perspective`), on subflow nodes, for the node
       to name who the subflow is for. Display only: perspectives are set on

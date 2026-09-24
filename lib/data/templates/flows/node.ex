@@ -29,7 +29,7 @@ defmodule FormFlow.Data.Templates.Flow.Node do
 
   A node that embeds another flow carries that flow's id in `subflow_id` -
   the reference behind `FormFlow.Data.Templates.Flows`' subflow operations. A form
-  node carries its form's *lineage* id in `form_id` - never a version id:
+  node carries its *form template id* in `form_id` - never a form template version id:
   which version to show is decided at read time and recorded on the instance
   when it is started (see
   `archive/form-versioning.md`, Decision 3). Both references follow

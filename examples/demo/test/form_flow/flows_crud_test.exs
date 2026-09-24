@@ -826,7 +826,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    # One stored copy — the form lineage's properties; the node keeps none
+    # One stored copy — the form template row's properties; the node keeps none
     [saved_node] = Flows.get(id).nodes
 
     assert Forms.get(node.form_id).properties == %{"form_type" => "review"}

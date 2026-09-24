@@ -3,8 +3,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
   # The initial schema, in two parts:
   #
-  # Forms - a form template split into an identity (the lineage) and its
-  # definitions (versions), plus an instance of a user filling one out.
+  # Forms - a form template split into an identity (the form template row) and
+  # its definitions (form template versions), plus an instance of a user filling one out.
   # Mirrors FormFlow.Data.Templates.Form, FormFlow.Data.Templates.Form.Version,
   # and FormFlow.Data.Instances.Form. Published versions are immutable; every
   # definition - draft or published - is a version row, and each instance
@@ -48,12 +48,12 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     because cleanup of owned forms is explicit context code (deleting a
   #     flow deletes its owned forms deliberately - a nilified owner must never
   #     silently become a catalog entry).
-  #   * `template_forms.copied_from_form_id` - provenance: which lineage this
+  #   * `template_forms.copied_from_form_id` - provenance: which form template this
   #     one was copied from (yearly rollover), for cross-cycle identity and
   #     for carrying last cycle's answers forward.
-  #   * `template_forms.prefills` - the lineage's named sets of test answers
+  #   * `template_forms.prefills` - the form template's named sets of test answers
   #     (`FormFlow.Data.Templates.Form.Prefill`), a map of name to envelope.
-  #     On the lineage and not on a version: prefills are not version
+  #     On the form template row and not on a version: prefills are not version
   #     specific, and one set travels with the form through every publish.
   #   * The `(name)` unique index is scoped to the catalog
   #     (`owner_flow_id IS NULL`) - one namespace: owned forms may repeat
@@ -66,7 +66,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     not the database.
   #   * `instance_forms.template_form_version_id` - the instance's version: the
   #     exact definition this instance renders against. There is deliberately no
-  #     lineage column beside it - the lineage is derived through the version, and
+  #     form template id beside it - the form template is reached through the
+  #     version, and
   #     a stored copy would need a desync guard. `:restrict` so answer sets
   #     can never be orphaned or cascade-deleted by template changes.
   #   * `instance_form_events` - append-only audit: moves to a new version, reopens,
@@ -128,7 +129,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     error and where delete ordering is explicit - RESTRICT would race the
   #     ownership cascade inside a single statement.
   #   * `nodes.form_id` - the form-node counterpart of `subflow_id`: this node
-  #     collects that form (the lineage, never a version - version resolution
+  #     collects that form (the form template row, never a form template version - version resolution
   #     is decided at read time, and recorded on the instance when it is
   #     started). Same `:nothing` rationale.
   #

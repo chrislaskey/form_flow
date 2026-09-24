@@ -1,6 +1,6 @@
 defmodule Demo.FormFlowFormsTest do
   @moduledoc """
-  Exercises `FormFlow.Data.Templates.Forms` — the lineage/version lifecycle
+  Exercises `FormFlow.Data.Templates.Forms` — the form template row and version lifecycle
   and the publish operation with its migration policies — against a real
   database. The library's own tests stop at changesets; the optimistic lock,
   the version-numbering unique index, the FK net, and the instance
@@ -15,8 +15,8 @@ defmodule Demo.FormFlowFormsTest do
   alias FormFlow.Data.Templates.Form
   alias FormFlow.Data.Templates.Forms
 
-  describe "lineage CRUD" do
-    test "create makes the lineage plus its initial draft in one transaction" do
+  describe "form template CRUD" do
+    test "create makes the form template row plus its initial draft in one transaction" do
       assert {:ok, %Form{} = form} =
                Forms.create(%{name: "W-2 Details", definition: %{"seed" => true}})
 
@@ -57,7 +57,7 @@ defmodule Demo.FormFlowFormsTest do
       assert %{name: ["has already been taken"]} = errors_on(changeset)
     end
 
-    test "delete removes versions then the lineage" do
+    test "delete removes versions then the form template row" do
       {:ok, form} = Forms.create(%{name: "Mistake"})
 
       assert {:ok, _} = Forms.delete(Forms.get(form.id))
@@ -94,14 +94,14 @@ defmodule Demo.FormFlowFormsTest do
       assert {:error, :based_on_draft} = Forms.create_draft(form.id, based_on: draft.id)
     end
 
-    test "based_on must belong to the same lineage" do
+    test "based_on must belong to the same form template" do
       {_form, v1} = published_form()
       {:ok, other} = Forms.create(%{name: "Other"})
 
       assert {:error, :based_on_wrong_form} = Forms.create_draft(other.id, based_on: v1.id)
     end
 
-    test "several drafts coexist per lineage" do
+    test "several drafts coexist per form template" do
       {form, v1} = published_form()
 
       {:ok, _a} = Forms.create_draft(form.id, based_on: v1.id)
@@ -408,7 +408,7 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   describe "prefills" do
-    test "create saves a named set of answers, stamped with who and when" do
+    test "create saves a named set of answers, recorded with who and when" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
 
       assert {:ok, form} =
@@ -656,7 +656,7 @@ defmodule Demo.FormFlowFormsTest do
       assert copied_form.owner_flow_id == copy.id
 
       # The stale property copy was overwritten — a copied node must never
-      # point back at the original lineage through the properties copy
+      # point back at the original form template through the properties copy
       assert copied_node.properties["form_id"] == copied_node.form_id
     end
 

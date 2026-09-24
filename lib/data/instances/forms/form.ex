@@ -9,8 +9,8 @@ defmodule FormFlow.Data.Instances.Form do
   (`FormFlow.Data.Templates.Forms.update_status/3`), each move recorded as an
   append-only `FormFlow.Data.Instances.Form.Event`.
 
-  There is deliberately no lineage (`form_id`) column beside the
-  version: the lineage is derived through the version, so it can never
+  There is deliberately no form template id (`form_id`) column beside the
+  version: the form template is reached through the version, so it can never
   desync, and the rare admin queries that want it join for free.
 
   `data` holds the answers, keyed by field name, and holds *only* answers -

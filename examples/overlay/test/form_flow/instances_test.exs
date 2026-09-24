@@ -232,7 +232,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   describe "an instance's host identities" do
-    test "starting a form stamps the user on it", %{conn: conn} do
+    test "starting a form records the user on it", %{conn: conn} do
       %{instance: instance, forms: [name, _address]} = flow_of_two()
 
       {:ok, _view, _html} = live(conn, edit_path(instance, [name.id]))
@@ -242,7 +242,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert form_instance.tenant_id == nil
     end
 
-    test "a tenant is stamped on the journey and its forms, and narrows the listing" do
+    test "a tenant is set on the journey and its forms, and narrows the listing" do
       %{flow: flow, forms: [name, _address]} = flow_of_two()
 
       {:ok, tenant_instance} =
@@ -1098,7 +1098,7 @@ defmodule Demo.FormFlowInstancesTest do
       owner = build_form_node(last_year, "Owner", owner_flow_id: last_year.id)
       edge(last_year, build_node(last_year, ["Start"], "Start"), owner)
 
-      # This year points at it because an admin said so — no copy, no lineage
+      # This year points at it because an admin said so — no copy, no new form template
       this_year = renewing_flow(Property.flow_position(last_year.id, [owner.id]))
       this_instance = start_flow(this_year.flow)
 
@@ -2498,8 +2498,8 @@ defmodule Demo.FormFlowInstancesTest do
     completed
   end
 
-  # What strand reconciliation will do to a replaced instance: stamp it
-  # superseded, keeping its trail
+  # What strand reconciliation will do to a replaced instance: write
+  # `superseded_at` on it, keeping its trail
   defp supersede(form_instance) do
     {:ok, superseded} =
       FormFlowRepo.update(Ecto.Changeset.change(form_instance, superseded_at: DateTime.utc_now()))

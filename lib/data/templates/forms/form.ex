@@ -1,12 +1,12 @@
 defmodule FormFlow.Data.Templates.Form do
   @moduledoc """
   `FormFlow.Data.Templates.Form` Ecto Schema for a form template's identity -
-  the lineage.
+  the form template row, the one every form template version shares.
 
   A form's stable identity (name, description, ownership) lives here;
   every definition - draft or published - is a
   `FormFlow.Data.Templates.Form.Version` row. The split is what makes
-  versioning work: nodes and URLs point at the lineage, an instance records
+  versioning work: nodes and URLs point at the form template row, an instance records
   the version it was started on, and "which version to show" is a read-time question (see
   `FormFlow.Data.Templates.Forms`).
 
@@ -19,14 +19,14 @@ defmodule FormFlow.Data.Templates.Form do
   catalog is one namespace; owned forms may repeat names freely (yearly
   copies of "W-2 Details").
 
-  `copied_from_form_id` records provenance across copies - which lineage this
+  `copied_from_form_id` records provenance across copies - which form template this
   one was rolled over from - for cross-cycle identity and for carrying last
   cycle's answers forward.
   It is not castable: only `FormFlow.Data.Templates.Forms.copy/2` sets it.
 
   ## Tenancy
 
-  `tenant_id` is the host tenant the lineage belongs to - an opaque host
+  `tenant_id` is the host tenant the form template belongs to - an opaque host
   identity, `nil` for a host with no tenants - set at creation and
   immutable afterwards; owned forms and copies take their flow tree's. Like a
   node's `flow_id` it is written to both locations: the dedicated column,
@@ -51,8 +51,8 @@ defmodule FormFlow.Data.Templates.Form do
   to the entry holding that set - what an admin fills the form with while
   trying it out, on the preview and in a journey. It is a column of its own
   rather than a key in `properties`, which is the host's open domain data
-  and the library's to leave alone, and it is on the lineage rather than on
-  a version because prefills are not version specific: one set travels with
+  and the library's to leave alone, and it is on the form template row rather than on
+  a form template version because prefills are not version specific: one set travels with
   the form through every publish.
 
   The whole set is one value, so a write rewrites it and the last write
@@ -99,7 +99,7 @@ defmodule FormFlow.Data.Templates.Form do
   end
 
   @doc """
-  Builds a changeset for a form lineage - identity fields and properties only.
+  Builds a changeset for a form template row - identity fields and properties only.
 
   The definition lives on versions, never here, and the prefills move only
   through `prefills_changeset/2`. `copied_from_form_id` is not castable;

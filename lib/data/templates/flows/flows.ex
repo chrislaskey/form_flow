@@ -21,7 +21,7 @@ defmodule FormFlow.Data.Templates.Flows do
   root is deleted, and a save refuses a subflow step pointing at a flow the
   tree does not own. A subflow wanted elsewhere is copied there by pasting
   its step (see "Pasting a step"). Sharing by reference is for forms alone (see "Reusing a
-  catalog form"): a form is a leaf, one lineage and one version per
+  catalog form"): a form is a leaf, one form template and one form template version per
   instance, while a subflow is a subtree - its own forms, the paths through
   it, its perspectives and type - and sharing one across trees makes every
   operation on it ambiguous about which tree it is happening to.
@@ -56,7 +56,7 @@ defmodule FormFlow.Data.Templates.Flows do
       it - they belonged to that type - while the canvas itself never edits
       property values; those are set on the flow's own page.
     * `data.form_type` on a form node - the collected form's type, stored only
-      in the form lineage's `properties["form_type"]`
+      in the form template row's `properties["form_type"]`
       (see `FormFlow.Data.Templates.Form`), with the same rules - **when
       this flow tree owns the form**. A catalog form is typed on its own
       page, once for every flow that reuses it (`reuse_form/3`); a type
@@ -80,7 +80,7 @@ defmodule FormFlow.Data.Templates.Flows do
   node it was copied from. Nothing is written until the save. `update/2`
   then, before anything else reads the nodes, copies the entity behind the
   source for the pasted step, the way `copy/2` copies a tree: an owned form
-  as a new lineage owned by this tree (`FormFlow.Data.Templates.Forms.copy/2`,
+  as a new form template owned by this tree (`FormFlow.Data.Templates.Forms.copy/2`,
   with provenance), a subflow whole with its steps' slugs under this root's
   prefix, a catalog form as the same shared reference; a Start or End has
   nothing behind it. The marker is consumed, never stored, so a step saved
@@ -122,16 +122,16 @@ defmodule FormFlow.Data.Templates.Flows do
 
   ## Reusing a catalog form
 
-  A form step points at a form *lineage* (`FormFlow.Data.Templates.Flow.Node`'s
+  A form step points at a *form template* (`FormFlow.Data.Templates.Flow.Node`'s
   `form_id`), and saving a flow gives every new form step a blank owned
-  lineage of its own (`create_missing_forms/2`). `reuse_form/3` points the
-  step at a catalog form instead - one lineage, shared by every flow whose
+  form template of its own (`create_missing_forms/2`). `reuse_form/3` points the
+  step at a catalog form instead - one form template, shared by every flow whose
   steps point at it, so an edit or a publish reaches them all at once - and
-  deletes the owned lineage the step abandons. A step leaves a catalog form
+  deletes the owned form template the step abandons. A step leaves a catalog form
   the way it leaves any form: removed from the canvas and added again, it
   is a new step with a fresh owned form and the chooser, where Copy form
   makes a private copy of the catalog form. `form_usages/1` lists the steps
-  pointing at a lineage, with their flows, for every page that has to say
+  pointing at a form template, with their flows, for every page that has to say
   where a shared form is used.
   """
 
@@ -336,7 +336,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp put_slug_change(changes, _attrs), do: changes
 
   @doc """
-  Every step that points at the form lineage `form_id`, as
+  Every step that points at the form template `form_id`, as
   `%{node:, flow:, root:}` - the step, the flow it is in, and that flow's
   ownership root (the flow itself when it is a root), so a caller can say
   "Dog License / Application". Oldest root first, then oldest flow, then
@@ -2051,7 +2051,7 @@ defmodule FormFlow.Data.Templates.Flows do
   defp copy_form(form_id, domain_id, context, copied) do
     case copied.forms[form_id] do
       nil ->
-        copy_id = copy_form_lineage(Repo.get(Templates.Form, form_id), domain_id, context)
+        copy_id = copy_owned_form_template(Repo.get(Templates.Form, form_id), domain_id, context)
         {copy_id, put_in(copied.forms[form_id], copy_id)}
 
       copy_id ->
@@ -2059,15 +2059,19 @@ defmodule FormFlow.Data.Templates.Flows do
     end
   end
 
-  defp copy_form_lineage(nil, _domain_id, _context), do: nil
+  defp copy_owned_form_template(nil, _domain_id, _context), do: nil
 
   # A catalog form is not copied, so nothing of its is cleared either: one
-  # lineage serves every flow reusing it, and clearing a value here would
+  # form template row serves every flow reusing it, and clearing a value here would
   # empty it for the flows the copy did not touch
-  defp copy_form_lineage(%Templates.Form{owner_flow_id: nil} = catalog, _domain_id, _context),
-    do: catalog.id
+  defp copy_owned_form_template(
+         %Templates.Form{owner_flow_id: nil} = catalog,
+         _domain_id,
+         _context
+       ),
+       do: catalog.id
 
-  defp copy_form_lineage(%Templates.Form{} = owned, domain_id, context) do
+  defp copy_owned_form_template(%Templates.Form{} = owned, domain_id, context) do
     properties =
       owned.properties
       |> clear_on_copy(context.form_types, "form_type", "form_type_property_values")
@@ -2163,7 +2167,7 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   # Save-time form creation, the form-node mirror of create_missing_subflows:
-  # a form node without a form gets a fresh owned lineage (with one blank
+  # a form node without a form gets a fresh owned form template (with one blank
   # draft), named from the canvas label, owned by the ownership root. Neither
   # child gets a slug - the step's is the handle.
   defp create_missing_forms(flow, nodes) do

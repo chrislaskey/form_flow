@@ -9,7 +9,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   The form's **details** - name, slug, description, type - are edited here
   too, above the definition, but only until the form is first published.
-  They belong to the lineage and change the moment they are saved, so once
+  They belong to the form template row and change the moment they are saved, so once
   a published version would show the change they move to their own page,
   `FormFlow.Web.Templates.Forms.Details`, and this page says so where the
   fields were. `FormFlow.Web.Templates.Forms.Shared` is the data both read
@@ -1076,7 +1076,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   # The chooser's Copy: the source's description, form type and its
-  # property values become *this* lineage's - never its name, which is the
+  # property values become *this* form template's - never its name, which is the
   # step's (`FormFlow.Web.Templates.Forms.Shared.step_name/2`); the source's resolved
   # definition (latest published, else newest draft - the same fallback
   # `FormFlow.Web.Templates.Forms.Show` resolves a bare URL to) becomes
@@ -1385,7 +1385,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   # The one-time copy: writes the source's identity (description, form type
   # and its property values - never the name or slug) and its resolved
-  # definition onto *this* lineage and draft. This form's own slug is never
+  # definition onto *this* form template and draft. This form's own slug is never
   # touched, since it already carries this node's place in the flow (or its
   # own, standalone).
   # Reloading afterwards is what makes the chooser stop offering itself: its
