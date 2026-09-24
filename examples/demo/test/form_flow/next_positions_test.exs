@@ -16,6 +16,8 @@ defmodule Demo.FormFlowNextPositionsTest do
 
   use Demo.DataCase, async: false
 
+  import Ecto.Query
+
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Flow.NextPosition
   alias FormFlow.Data.Repo, as: FormFlowRepo
@@ -310,6 +312,93 @@ defmodule Demo.FormFlowNextPositionsTest do
       end
 
       assert length(all_rows()) == 206
+    end
+  end
+
+  describe "two runs overlapping" do
+    # A slow run of the tree as it was must not land its answer on top of a
+    # newer run's. `next_computed_at` is stamped once per run, before it
+    # reads anything, and the write refuses a row a newer run already wrote:
+    # last run *started* wins, not last finished. The newer run is simulated
+    # by stamping the row as it would have.
+
+    test "a run started before the row's stamp writes neither the columns nor the rows" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      # A newer run got there first: the row carries its stamp and its answer
+      newer = DateTime.add(DateTime.utc_now(), 60, :second)
+
+      FormFlowRepo.update_all(
+        from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [next_path: [address.id], next_node_id: address.id, next_computed_at: newer]
+      )
+
+      FormFlowRepo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
+
+      FormFlowRepo.insert_all(NextPosition, [
+        %{
+          id: Ecto.UUID.generate(),
+          instance_flow_id: journey.id,
+          path: [address.id],
+          node_id: address.id,
+          tenant_id: journey.tenant_id,
+          inserted_at: newer,
+          updated_at: newer
+        }
+      ])
+
+      # The older run derives [name] and tries to write it
+      {:ok, _returned} = Instances.Flows.update_next_positions(reload(journey))
+
+      kept = reload(journey)
+
+      assert kept.next_path == [address.id], "the newer run's answer was overwritten"
+      assert kept.next_computed_at == newer
+      assert open_paths(kept) == [[address.id]], "the newer run's rows were replaced"
+      refute name.id in Enum.map(rows_of(kept), & &1.node_id)
+    end
+
+    test "a run started after the row's stamp writes as usual" do
+      %{journey: journey, forms: [name, _address]} = flow_of_two()
+
+      older = DateTime.add(DateTime.utc_now(), -60, :second)
+
+      FormFlowRepo.update_all(
+        from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [next_path: [], next_node_id: nil, next_computed_at: older]
+      )
+
+      {:ok, _written} = Instances.Flows.update_next_positions(reload(journey))
+
+      written = reload(journey)
+
+      assert written.next_path == [name.id]
+      assert DateTime.compare(written.next_computed_at, older) == :gt
+      assert open_paths(written) == [[name.id]]
+    end
+
+    test "the sweep skips the journeys a newer run already wrote and rewrites the rest" do
+      %{flow: flow, forms: [name, address]} = flow_of_two()
+      guarded = start_flow(flow, [])
+      ordinary = start_flow(flow, [])
+
+      newer = DateTime.add(DateTime.utc_now(), 60, :second)
+
+      FormFlowRepo.update_all(
+        from(i in Instances.Flow, where: i.id == ^guarded.id),
+        set: [next_path: [address.id], next_node_id: address.id, next_computed_at: newer]
+      )
+
+      {:ok, count} = Instances.Flows.update_next_positions(Flows.get(flow.id))
+
+      # Every open journey was visited - `flow_of_two/0` started one too.
+      # The count is journeys read, not journeys written: the guard decides
+      # who is written, and a skipped journey is not a failure.
+      assert count == 3
+
+      assert reload(guarded).next_path == [address.id]
+      assert reload(guarded).next_computed_at == newer
+      assert reload(ordinary).next_path == [name.id]
     end
   end
 

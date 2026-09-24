@@ -341,6 +341,8 @@ defmodule FormFlow.Data.Instances.Flows do
   def update_next_positions(journey_or_flow, opts \\ [])
 
   def update_next_positions(%Instances.Flow{} = journey, opts) do
+    started_at = DateTime.utc_now()
+
     tree =
       Keyword.get_lazy(opts, :tree, fn ->
         Templates.Flows.resolve_tree(journey.template_flow_id)
@@ -350,10 +352,8 @@ defmodule FormFlow.Data.Instances.Flows do
     derived = derive_next_positions(tree, instances, journey, opts)
 
     Repo.transaction(fn ->
-      case write_next_positions(journey, derived) do
-        {:ok, journey} -> journey
-        {:error, reason} -> Repo.rollback(reason)
-      end
+      {:ok, journey} = write_next_positions(journey, derived, started_at)
+      journey
     end)
   end
 
@@ -369,6 +369,7 @@ defmodule FormFlow.Data.Instances.Flows do
   # open journey, cheap on SQLite and not on Postgres over a network - see
   # the plan's §5.4 for the measurement.
   def update_next_positions(%Templates.Flow{} = flow, opts) do
+    started_at = DateTime.utc_now()
     root_id = flow.owner_flow_id || flow.id
     tree = Keyword.get_lazy(opts, :tree, fn -> Templates.Flows.resolve_tree(root_id) end)
 
@@ -379,14 +380,14 @@ defmodule FormFlow.Data.Instances.Flows do
     |> Repo.all()
     |> Enum.chunk_every(@sweep_chunk)
     |> Enum.reduce_while({:ok, 0}, fn journeys, {:ok, count} ->
-      case sweep_chunk(journeys, tree, opts) do
+      case sweep_chunk(journeys, tree, opts, started_at) do
         :ok -> {:cont, {:ok, count + length(journeys)}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
 
-  defp sweep_chunk(journeys, tree, opts) do
+  defp sweep_chunk(journeys, tree, opts, started_at) do
     ids = Enum.map(journeys, & &1.id)
 
     instances_by_journey =
@@ -408,29 +409,36 @@ defmodule FormFlow.Data.Instances.Flows do
         {journey, derive_next_positions(tree, instances, journey, opts)}
       end
 
-    Repo.transaction(fn -> write_chunk(ids, derived) end)
+    Repo.transaction(fn -> write_chunk(derived, started_at) end)
     |> case do
       {:ok, _result} -> :ok
       {:error, reason} -> {:error, reason}
     end
   end
 
-  # The child table's side batches: one DELETE for the chunk, one
-  # insert_all of every new row - rows nothing points at, holding nothing
-  # the sweep does not own. The journey rows are one UPDATE each.
-  defp write_chunk(ids, derived) do
-    Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id in ^ids))
-
-    now = DateTime.utc_now()
-    rows = Enum.flat_map(derived, fn {journey, d} -> next_position_rows(journey, d, now) end)
-    if rows != [], do: Repo.insert_all(NextPosition, rows)
-
-    Enum.each(derived, fn {journey, d} ->
-      case update_journey_columns(journey, d, now) do
-        {:ok, _journey} -> :ok
-        {:error, reason} -> Repo.rollback(reason)
+  # The journey rows are one guarded UPDATE each - the guard is what decides
+  # whether this run still owns the journey (see `update_journey_columns/3`) -
+  # and only the journeys it won have their table rows replaced. The child
+  # table's side then batches: one DELETE for the winners, one insert_all of
+  # every new row. Rows nothing points at, holding nothing the sweep owns.
+  defp write_chunk(derived, started_at) do
+    won =
+      for {journey, d} <- derived, update_journey_columns(journey, d, started_at) == :written do
+        {journey, d}
       end
-    end)
+
+    ids = Enum.map(won, fn {journey, _d} -> journey.id end)
+
+    if ids != [] do
+      Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id in ^ids))
+
+      rows =
+        Enum.flat_map(won, fn {journey, d} -> next_position_rows(journey, d, started_at) end)
+
+      if rows != [], do: Repo.insert_all(NextPosition, rows)
+    end
+
+    :ok
   end
 
   # The form instance columns the derivation reads, and no answers: a
@@ -524,15 +532,19 @@ defmodule FormFlow.Data.Instances.Flows do
 
   # The journey's five columns and its rows in the child table, replaced
   # whole
-  defp write_next_positions(%Instances.Flow{} = journey, derived) do
-    now = DateTime.utc_now()
+  defp write_next_positions(%Instances.Flow{} = journey, derived, started_at) do
+    case update_journey_columns(journey, derived, started_at) do
+      :written ->
+        Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
 
-    Repo.delete_all(from(p in NextPosition, where: p.instance_flow_id == ^journey.id))
+        rows = next_position_rows(journey, derived, started_at)
+        if rows != [], do: Repo.insert_all(NextPosition, rows)
 
-    rows = next_position_rows(journey, derived, now)
-    if rows != [], do: Repo.insert_all(NextPosition, rows)
+        {:ok, journey_with(journey, derived, started_at)}
 
-    update_journey_columns(journey, derived, now)
+      :skipped ->
+        {:ok, journey}
+    end
   end
 
   # One row per open position. `node_id` is the path's last segment, put
@@ -559,20 +571,45 @@ defmodule FormFlow.Data.Instances.Flows do
   # compares against the struct, skipping a column whose new value the
   # stale struct happens to hold already. `updated_at` is left alone - it
   # is when the journey itself changed, not when its cache did.
-  defp update_journey_columns(%Instances.Flow{} = journey, derived, now) do
-    changes = [
+  #
+  # `started_at` is stamped once per run of `update_next_positions/2`, before
+  # it reads anything, and the `where` refuses a row a *newer* run already
+  # wrote. That is what makes two overlapping runs safe: a slow sweep of the
+  # tree as it was cannot land its answer on top of a later one. Without it
+  # the loser's write arrives last in wall clock, wins, and leaves a stale
+  # answer carrying a fresh `next_computed_at` - a wrong row that
+  # `next_positions_stale?/2` then calls fresh, which nothing repairs.
+  # Last run *started* wins, not last finished. `:skipped` says another run
+  # owns the journey, which is a correct outcome and not an error; a row
+  # that has gone is skipped the same way, since deletion is the only other
+  # way to match nothing and a deleted journey wants no cache.
+  defp update_journey_columns(%Instances.Flow{} = journey, derived, started_at) do
+    query =
+      from(i in Instances.Flow,
+        where:
+          i.id == ^journey.id and
+            (is_nil(i.next_computed_at) or i.next_computed_at < ^started_at)
+      )
+
+    case Repo.update_all(query, set: changes_for(derived, started_at)) do
+      {0, _} -> :skipped
+      {_written, _} -> :written
+    end
+  end
+
+  defp changes_for(derived, started_at) do
+    [
       next_path: derived.next_path,
       next_node_id: derived.next_path && List.last(derived.next_path),
       completed_forms: derived.completed_forms,
       forms_total: derived.forms_total,
-      next_computed_at: now
+      next_computed_at: started_at
     ]
-
-    case Repo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id), set: changes) do
-      {1, _} -> {:ok, struct(journey, changes)}
-      {0, _} -> {:error, :not_found}
-    end
   end
+
+  # The struct as the row now reads, for the caller that holds it
+  defp journey_with(%Instances.Flow{} = journey, derived, started_at),
+    do: struct(journey, changes_for(derived, started_at))
 
   @doc """
   Whether a journey's cached open positions may be out of date: no refresh

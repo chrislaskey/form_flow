@@ -38,6 +38,13 @@ Given a `Templates.Flow` - a root or a subflow, whose root it finds - it
 sweeps every open journey of the root in chunks of a few hundred against
 one tree, and returns `{:ok, count}`.
 
+Each run stamps `next_computed_at` once, before it reads anything, and
+its writes refuse a journey a **newer** run already wrote - so two runs
+that overlap settle as last-started-wins rather than last-finished-wins.
+Without that, a slow sweep of the tree as it was could land its answer on
+top of a newer one with a fresh stamp, leaving a stale row that nothing
+would ever mark or repair.
+
 A position is open when the flow's **order rule** says so at every
 level: the form's own "forms" flow type's `editable?/2` and, for every
 "subflows" flow above it, `enterable?/2` - asked with **no viewer** in
