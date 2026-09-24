@@ -678,7 +678,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # saved flow's the same way `structure/2` compares them: an unset value
   # resolving to the same module as the stored one is no change
   defp pending_type_module(%{flow: %Flow{} = flow} = assigns) do
-    pending = %{flow | properties: Map.put(flow.properties || %{}, "flow_type", assigns.pending_type)}
+    pending = %{
+      flow
+      | properties: Map.put(flow.properties || %{}, "flow_type", assigns.pending_type)
+    }
 
     FormFlow.Config.Flows.Type.for_flow(assigns.flow_types, pending).module
   end
