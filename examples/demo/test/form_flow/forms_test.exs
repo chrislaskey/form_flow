@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowFormsTest do
   @moduledoc """
   Exercises `FormFlow.Data.Templates.Forms` — the form template row and version lifecycle
-  and the publish operation with its migration policies — against a real
+  and the publish operation with what it does to existing instances — against a real
   database. The library's own tests stop at changesets; the optimistic lock,
   the version-numbering unique index, the FK net, and the instance
   migrations are proven here.
@@ -204,37 +204,121 @@ defmodule Demo.FormFlowFormsTest do
     end
   end
 
-  describe "publish-time migration policies" do
-    test "the default (small fix) keeps existing instances on their version" do
+  describe "publishing: what happens to existing form instances" do
+    test "drafts move to the new version with their answers; submitted forms stay" do
       {form, v1} = published_form()
-      instance = insert_instance(v1)
+      draft = insert_instance(v1, data: %{"name" => "Ada"})
+      submitted = insert_instance(v1, status: "completed", completed_at: DateTime.utc_now())
 
-      {:ok, _v2} = publish_next(form, v1)
+      {:ok, v2} = publish_next(form, v1, user_id: "admin-7")
 
-      assert reload(instance).template_form_version_id == v1.id
-      assert events_for(instance) == []
-    end
-
-    test "bug fix carries in-progress instances, keeping data; completed stay untouched" do
-      {form, v1} = published_form()
-      in_progress = insert_instance(v1, data: %{"name" => "Ada"})
-      completed = insert_instance(v1, status: "completed", completed_at: DateTime.utc_now())
-
-      {:ok, v2} = publish_next(form, v1, preset: :bug_fix, user_id: "admin-7")
-
-      carried = reload(in_progress)
+      carried = reload(draft)
       assert carried.template_form_version_id == v2.id
       assert carried.data == %{"name" => "Ada"}
 
-      assert [event] = events_for(in_progress)
+      assert [event] = events_for(draft)
       assert event.event == "migrated"
       assert event.from_version_id == v1.id
       assert event.to_version_id == v2.id
       assert event.user_id == "admin-7"
 
-      # Completed instances are attestation records — untouched by default
-      assert reload(completed).template_form_version_id == v1.id
-      assert events_for(completed) == []
+      # A submitted form is an attestation record - left as it is by default
+      assert reload(submitted).template_form_version_id == v1.id
+      assert reload(submitted).status == "completed"
+      assert events_for(submitted) == []
+    end
+
+    test "reopen_submitted: true reopens submitted forms in journeys still in progress, answers kept" do
+      {form, v1} = published_form()
+      journey = journey()
+
+      submitted =
+        insert_instance(v1,
+          instance_flow_id: journey.id,
+          path: ["a"],
+          status: "completed",
+          completed_at: DateTime.utc_now(),
+          data: %{"name" => "Grace"}
+        )
+
+      draft =
+        insert_instance(v1, instance_flow_id: journey.id, path: ["b"], data: %{"name" => "Ada"})
+
+      {:ok, v2} = publish_next(form, v1, reopen_submitted: true, user_id: "admin-7")
+
+      reopened = reload(submitted)
+      assert reopened.template_form_version_id == v2.id
+      assert reopened.status == "in_progress"
+      assert reopened.completed_at == nil
+      assert %DateTime{} = reopened.reopened_at
+      # Answers are never cleared - the user checks and submits again
+      assert reopened.data == %{"name" => "Grace"}
+
+      assert [event] = events_for(submitted)
+      assert event.event == "reopened"
+      assert event.from_version_id == v1.id
+      assert event.to_version_id == v2.id
+      assert event.snapshot == %{}
+      assert event.user_id == "admin-7"
+
+      # Drafts carry as they always do
+      assert reload(draft).template_form_version_id == v2.id
+      assert [%{event: "migrated"}] = events_for(draft)
+    end
+
+    test "a completed journey is never touched, whatever the publish asks" do
+      {form, v1} = published_form()
+      journey = journey("open", "completed")
+
+      draft =
+        insert_instance(v1, instance_flow_id: journey.id, path: ["a"], data: %{"name" => "Ada"})
+
+      submitted =
+        insert_instance(v1,
+          instance_flow_id: journey.id,
+          path: ["b"],
+          status: "completed",
+          completed_at: DateTime.utc_now()
+        )
+
+      {:ok, _v2} = publish_next(form, v1, reopen_submitted: true)
+
+      assert reload(draft).template_form_version_id == v1.id
+      assert reload(submitted).template_form_version_id == v1.id
+      assert reload(submitted).status == "completed"
+      assert events_for(draft) == []
+      assert events_for(submitted) == []
+    end
+
+    test "a read-only or archived flow is never touched either" do
+      {form, v1} = published_form()
+
+      instances =
+        for flow_status <- ["read_only", "archived"] do
+          journey = journey(flow_status)
+
+          [
+            insert_instance(v1,
+              instance_flow_id: journey.id,
+              path: ["a"],
+              data: %{"name" => "Ada"}
+            ),
+            insert_instance(v1,
+              instance_flow_id: journey.id,
+              path: ["b"],
+              status: "completed",
+              completed_at: DateTime.utc_now()
+            )
+          ]
+        end
+
+      {:ok, _v2} = publish_next(form, v1, reopen_submitted: true)
+
+      for instance <- List.flatten(instances) do
+        assert reload(instance).template_form_version_id == v1.id
+        assert reload(instance).status == instance.status
+        assert events_for(instance) == []
+      end
     end
 
     test "the saved draft follows the answers: carried and re-keyed with them" do
@@ -246,7 +330,7 @@ defmodule Demo.FormFlowFormsTest do
           draft: %{"data" => %{"name" => "Ad", "note" => "wip"}, "user_id" => "ada"}
         )
 
-      {:ok, v2} = publish_next(form, v1, preset: :bug_fix, renames: %{"name" => "full_name"})
+      {:ok, v2} = publish_next(form, v1, renames: %{"name" => "full_name"})
 
       carried = reload(instance)
       assert carried.template_form_version_id == v2.id
@@ -258,56 +342,12 @@ defmodule Demo.FormFlowFormsTest do
                "user_id" => "ada"
              }
 
-      # The event snapshots what prune dropped from the answers - nothing
-      # here - and never the draft
+      # The event snapshots what was dropped from the answers - nothing
+      # here, the definition declares no fields - and never the draft
       assert [%{event: "migrated", snapshot: %{}}] = events_for(instance)
     end
 
-    test "the saved draft is cleared with the answers, and not snapshotted" do
-      {form, v1} = published_form()
-
-      instance =
-        insert_instance(v1,
-          data: %{"name" => "Ada"},
-          draft: %{"data" => %{"name" => "Ad"}, "user_id" => "ada"}
-        )
-
-      {:ok, _v2} = publish_next(form, v1, preset: :big_fix)
-
-      reset = reload(instance)
-      assert reset.data == %{}
-      assert reset.draft == nil
-      assert [%{event: "migrated", snapshot: %{"name" => "Ada"}}] = events_for(instance)
-    end
-
-    test "big fix resets in-progress and reopens completed, snapshotting discarded data" do
-      {form, v1} = published_form()
-      in_progress = insert_instance(v1, data: %{"name" => "Ada"})
-
-      completed =
-        insert_instance(v1,
-          status: "completed",
-          completed_at: DateTime.utc_now(),
-          data: %{"name" => "Grace"}
-        )
-
-      {:ok, v2} = publish_next(form, v1, preset: :big_fix)
-
-      reset = reload(in_progress)
-      assert reset.template_form_version_id == v2.id
-      assert reset.data == %{}
-      assert [%{event: "migrated", snapshot: %{"name" => "Ada"}}] = events_for(in_progress)
-
-      reopened = reload(completed)
-      assert reopened.template_form_version_id == v2.id
-      assert reopened.status == "in_progress"
-      assert reopened.completed_at == nil
-      assert %DateTime{} = reopened.reopened_at
-      assert reopened.data == %{}
-      assert [%{event: "reopened", snapshot: %{"name" => "Grace"}}] = events_for(completed)
-    end
-
-    test "renames re-key carried data before prune drops the rest" do
+    test "renames re-key carried data, then keys the new definition does not declare are dropped into the snapshot" do
       {form, v1} = published_form()
 
       instance =
@@ -320,27 +360,122 @@ defmodule Demo.FormFlowFormsTest do
           definition: %{"fields" => [%{"name" => "new_name"}, %{"name" => "kept"}]}
         })
 
-      {:ok, _v2} =
-        Forms.update_status(draft, :published,
-          preset: :bug_fix,
-          renames: %{"old_name" => "new_name"},
-          prune: true
-        )
+      {:ok, _v2} = Forms.update_status(draft, :published, renames: %{"old_name" => "new_name"})
 
       migrated = reload(instance)
       assert migrated.data == %{"new_name" => "Ada", "kept" => "yes"}
 
-      # The pruned key survives in the event snapshot — nothing is lost silently
+      # The dropped key survives in the event snapshot - nothing is lost silently
       assert [%{snapshot: %{"orphan" => "gone"}}] = events_for(instance)
     end
 
-    test "prune without declared fields prunes nothing — never everything" do
+    test "a definition without declared fields drops nothing - never everything" do
       {form, v1} = published_form()
       instance = insert_instance(v1, data: %{"name" => "Ada"})
 
-      {:ok, _v2} = publish_next(form, v1, preset: :bug_fix, prune: true)
+      {:ok, _v2} = publish_next(form, v1)
 
       assert reload(instance).data == %{"name" => "Ada"}
+      assert [%{snapshot: %{}}] = events_for(instance)
+    end
+
+    test "a shared catalog form's publish reaches every flow using it, journey by journey" do
+      {form, v1} = published_form()
+      dog = journey()
+      cat = journey()
+      finished = journey("open", "completed")
+
+      [in_dog, in_cat, in_finished] =
+        for journey <- [dog, cat, finished] do
+          insert_instance(v1,
+            instance_flow_id: journey.id,
+            status: "completed",
+            completed_at: DateTime.utc_now()
+          )
+        end
+
+      {:ok, v2} = publish_next(form, v1, reopen_submitted: true)
+
+      assert reload(in_dog).template_form_version_id == v2.id
+      assert reload(in_dog).status == "in_progress"
+      assert reload(in_cat).template_form_version_id == v2.id
+      assert reload(in_cat).status == "in_progress"
+      assert reload(in_finished).template_form_version_id == v1.id
+      assert reload(in_finished).status == "completed"
+    end
+
+    test "the retired options are refused, not ignored" do
+      {form, v1} = published_form()
+
+      for opts <- [
+            [preset: :big_fix],
+            [in_progress: :carry],
+            [completed: :reopen_carry],
+            [prune: true]
+          ] do
+        assert_raise ArgumentError, ~r/unknown publish option/, fn ->
+          publish_next(form, v1, opts)
+        end
+      end
+
+      assert_raise ArgumentError, ~r/boolean/, fn ->
+        publish_next(form, v1, reopen_submitted: :yes)
+      end
+    end
+  end
+
+  describe "instance counts" do
+    test "count the forms a publish reaches, by draft and submitted, by flow, and by version" do
+      {form, v1} = published_form()
+      {:ok, open_flow} = Flows.create(%{name: "Open flow", status: "open"})
+
+      {:ok, open_journey} =
+        Instances.Flows.create(%{template_flow_id: open_flow.id}, refresh: false)
+
+      finished = journey("open", "completed")
+      frozen = journey("read_only")
+
+      # Counted: a standalone submitted form, and a draft and a submitted
+      # form in a journey still in progress
+      insert_instance(v1, status: "completed", completed_at: DateTime.utc_now())
+      insert_instance(v1, instance_flow_id: open_journey.id, path: ["a"])
+
+      insert_instance(v1,
+        instance_flow_id: open_journey.id,
+        path: ["b"],
+        status: "completed",
+        completed_at: DateTime.utc_now()
+      )
+
+      # Not counted: a completed journey, a read-only flow, a superseded row
+      insert_instance(v1,
+        instance_flow_id: finished.id,
+        status: "completed",
+        completed_at: DateTime.utc_now()
+      )
+
+      insert_instance(v1,
+        instance_flow_id: frozen.id,
+        status: "completed",
+        completed_at: DateTime.utc_now()
+      )
+
+      insert_instance(v1,
+        instance_flow_id: open_journey.id,
+        path: ["c"],
+        status: "completed",
+        completed_at: DateTime.utc_now(),
+        superseded_at: DateTime.utc_now()
+      )
+
+      assert Forms.instance_counts(form.id) == %{drafts: 1, submitted: 2}
+
+      assert Forms.instance_counts_by_flow(form.id) == [
+               %{flow_id: open_flow.id, flow_name: "Open flow", drafts: 1, submitted: 1},
+               %{flow_id: nil, flow_name: nil, drafts: 0, submitted: 1}
+             ]
+
+      assert Forms.instance_counts_by_version(form.id) == %{v1.id => %{drafts: 1, submitted: 2}}
     end
   end
 
@@ -703,13 +838,13 @@ defmodule Demo.FormFlowFormsTest do
 
       # The dialog's attribution, by root flow, flows by name
       assert Forms.instance_counts_by_flow(owner.id) == [
-               %{flow_id: cat.id, flow_name: "Cat License", in_progress: 1, completed: 0},
-               %{flow_id: dog.id, flow_name: "Dog License", in_progress: 1, completed: 0}
+               %{flow_id: cat.id, flow_name: "Cat License", drafts: 1, submitted: 0},
+               %{flow_id: dog.id, flow_name: "Dog License", drafts: 1, submitted: 0}
              ]
 
       # One publish, both flows: the reason to share, and the thing to see
       # coming
-      {:ok, v2} = publish_next(owner, v1, preset: :big_fix)
+      {:ok, v2} = publish_next(owner, v1)
 
       assert reload(dog_instance).template_form_version_id == v2.id
       assert reload(cat_instance).template_form_version_id == v2.id
@@ -745,6 +880,23 @@ defmodule Demo.FormFlowFormsTest do
   defp insert_flow do
     {:ok, flow} = Flows.create()
     flow
+  end
+
+  # A journey of a flow with the given status, completed when asked. No
+  # graph: the publish reads the journey's status and its flow's, nothing
+  # else, and `refresh: false` keeps the next-position cache out of it
+  defp journey(flow_status \\ "open", journey_status \\ "in_progress") do
+    {:ok, flow} = Flows.create(%{status: flow_status})
+    {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id}, refresh: false)
+
+    case journey_status do
+      "completed" ->
+        {:ok, journey} = Instances.Flows.complete(journey, refresh: false)
+        journey
+
+      "in_progress" ->
+        journey
+    end
   end
 
   defp published_form(definition \\ %{}) do

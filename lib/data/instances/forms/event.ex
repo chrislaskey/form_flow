@@ -8,14 +8,13 @@ defmodule FormFlow.Data.Instances.Form.Event do
   principal, including "system:version-migration"-style identities - threaded
   from day one, because retrofitting identity into a state machine was the
   reference system's unfinished TODO). `reopened` has two writers: a user
-  reopening a completed form, and the `:reopen_carry` / `:reopen_reset`
-  publish policies (`FormFlow.Data.Templates.Forms.update_status/3`), which
-  also move the instance to the new version and so set `from_version_id` and
-  `to_version_id`; a
-  user's reopen leaves both nil.
+  reopening a submitted form, and a publish with `reopen_submitted: true`
+  (`FormFlow.Data.Templates.Forms.update_status/3`), which also moves the
+  instance to the new version and so sets `from_version_id` and
+  `to_version_id`; a user's reopen leaves both nil.
 
-  `snapshot` is a free-form payload. When a migration discards or
-  replaces data (reset, prune), the prior answers survive here - which is
+  `snapshot` is a free-form payload. When a publish drops answers whose
+  question the new definition no longer declares, they survive here - which is
   why events never cascade-delete with their instance: removing an instance
   goes through `FormFlow.Data.Instances.Forms.delete_instance/2`, which
   deletes events deliberately. It also holds what a form type chose to

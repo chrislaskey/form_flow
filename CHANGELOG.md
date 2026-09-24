@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.37.0
+
+### Form publish: one question
+
+Publishing a new form template version used to ask the admin to pick a
+"bug fix", "small fix" or "big fix", each a pair of per-status knobs
+(`in_progress: :keep | :carry | :reset`, `completed: :untouched |
+:reopen_carry | :reopen_reset`). Those knobs were cut along the **form
+instance's** status, whose two values, `in_progress` and `completed`, read
+to a person as the **flow's**. The decision a publish really asks about is
+the journey, and there is only one:
+
+* A **completed journey** is a finished record. Nothing in it is touched.
+* A journey whose flow is **read-only or archived** promised its users
+  nothing changes. Nothing in it is touched.
+* A **draft** (a form not yet submitted) in a journey still in progress
+  always moves to the new version with its answers. Keys the new
+  definition does not declare are dropped into the event snapshot.
+* A **submitted** form in a journey still in progress is left as it is,
+  or - the one question - reopened with its answers kept, for the user
+  to check and submit again.
+* A form not yet reached has no row; the user gets the new version on
+  arrival. That was already true.
+
+**Breaking:** `FormFlow.Data.Templates.Forms.update_status/3` for
+`:published` takes `reopen_submitted: boolean` (default `false`),
+`renames:` and `user_id:`. The options `preset`, `in_progress`,
+`completed` and `prune` are gone and raise `ArgumentError`. Answers are
+never cleared by a publish; "start over" has no home, since re-attesting
+is reopen-and-check and a wipe is a new journey. Dropping undeclared keys
+is always on (a definition with no declared `fields` still drops
+nothing). Superseded instances are skipped.
+
+`Forms.instance_counts/1` and `instance_counts_by_flow/1` now count only
+the instances a publish reaches, under keys `drafts` and `submitted`
+(atoms; the `"in_progress"` / `"completed"` string keys are gone).
+`Forms.instance_counts_by_version/1` is new.
+
+The publish dialog is rewritten around the journey: it says which
+submitted forms in flows still in progress the publish reaches, per flow,
+and asks the one question. With nothing submitted it asks nothing. The
+pages now pass the current `user_id`, so publish-written events name who
+published. The form template Show page's version history shows how many
+submitted forms are still on each version.
+
+In prose a form instance is a **draft** or **submitted**; a journey is
+**in progress** or **completed**. The column values are unchanged.
+
 ## v0.36.0
 
 ### Vocabulary: "stamp" retired

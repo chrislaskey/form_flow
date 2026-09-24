@@ -196,9 +196,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
 
   @impl true
   def update(%{event: "publish", payload: payload}, socket) do
-    preset = String.to_existing_atom(payload.data[:preset])
+    reopen_submitted = payload.data[:reopen_submitted] == "true"
 
-    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
+    case Forms.update_status(socket.assigns.version, :published,
+           reopen_submitted: reopen_submitted,
+           user_id: socket.assigns.user_id
+         ) do
       {:ok, published} ->
         refresh_health(socket)
         # Redirects are forbidden inside update/2; handle_async is the
@@ -995,7 +998,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
       end
 
     "This step becomes the catalog's “#{target.name}”. Edits to that form reach every flow " <>
-      "using it; publishing it can reset or reopen users' forms in all of them. #{own} " <>
+      "using it; publishing it can reopen users' submitted forms in all of them. #{own} " <>
       "To stop reusing it later, remove this step from the canvas and add it again."
   end
 
@@ -1319,6 +1322,12 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     {:noreply, assign(socket, :publishing?, false)}
   end
 
+  # The dialog with nothing to ask: no submitted form in a flow still in
+  # progress, so the publish has no answer to carry
+  def handle_event("publish_now", _params, socket) do
+    publish_directly(socket)
+  end
+
   @impl true
   def handle_event("toggle_auto_update", _params, socket) do
     socket = assign(socket, :auto_update?, !socket.assigns.auto_update?)
@@ -1627,7 +1636,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   end
 
   defp publish_directly(socket) do
-    case Forms.update_status(socket.assigns.version, :published) do
+    case Forms.update_status(socket.assigns.version, :published, user_id: socket.assigns.user_id) do
       {:ok, published} ->
         refresh_health(socket)
         {:noreply, push_navigate(socket, to: version_show_path(socket.assigns, published))}

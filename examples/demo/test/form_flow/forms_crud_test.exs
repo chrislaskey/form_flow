@@ -1505,8 +1505,18 @@ defmodule Demo.FormFlowFormsCrudTest do
       {cat, cat_node} = flow_with_catalog_form_node("Cat License", owner)
       {:ok, dog} = Flows.update_status(dog, "open", [])
       {:ok, cat} = Flows.update_status(cat, "open", [])
-      start_at(dog, dog_node)
+      dog_instance = start_at(dog, dog_node)
       start_at(cat, cat_node)
+
+      # Only submitted forms are a question; the dog owner's is, the cat
+      # owner's draft moves on its own
+      {:ok, _} =
+        Instances.Forms.update_status(
+          Instances.Flows.get(dog_instance.instance_flow_id),
+          [dog_node.id],
+          :completed,
+          data: %{}
+        )
 
       {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
       {:ok, view, _html} = live(conn, "/demo/admin/forms/#{owner.id}/versions/#{draft.id}")
@@ -1514,8 +1524,11 @@ defmodule Demo.FormFlowFormsCrudTest do
       view |> element("button", "Publish") |> render_click()
 
       html = render(view)
-      assert html =~ "2 in progress and 0 completed"
-      assert html =~ "In progress: 1 in Cat License, 1 in Dog License"
+
+      assert html =~
+               "1 submitted form(s) in flows still in progress, across these flows: Dog License (1)."
+
+      assert html =~ "There are 1 flows that are in-progress"
     end
 
     test "deleting a catalog form in use names the flows using it", %{conn: conn} do
@@ -2332,9 +2345,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     view |> element("button", "Publish") |> render_click()
     assert render(view) =~ "unsaved edits are not included"
 
-    view
-    |> element("#forms-edit-publish-form-form")
-    |> render_submit(%{"dynamic_form" => %{"preset" => "small_fix"}})
+    # Nothing submitted anywhere, so there is nothing to ask - the dialog's
+    # Publish button publishes on its own
+    refute render(view) =~ "What should we do?"
+    view |> element("#forms-edit-publish-form-publish-now") |> render_click()
 
     assert_redirect(view, "/demo/admin/forms/#{form.id}/versions/#{second.id}")
     assert %{status: "published", version: 2} = Forms.get_version(second.id)
@@ -2361,8 +2375,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert %{status: "published", version: 1} = Forms.get_version(draft.id)
   end
 
-  test "every later publish prompts for the policy, archived history included",
-       %{conn: conn} do
+  test "every later publish prompts, archived history included", %{conn: conn} do
     {form, v1} = published_form()
     {:ok, _} = Forms.update_status(v1, :archived)
     {:ok, draft} = Forms.create_draft(form.id)
@@ -2370,41 +2383,57 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}")
 
     view |> element("button", "Publish") |> render_click()
-    assert render(view) =~ "Publish this draft?"
+    html = render(view)
+    assert html =~ "Publish this draft?"
+    assert html =~ "Already completed flows are not updated."
+    assert html =~ "No submitted forms in flows still in progress."
+    refute html =~ "What should we do?"
 
-    view
-    |> element("#forms-show-publish-form-form")
-    |> render_submit(%{"dynamic_form" => %{"preset" => "small_fix"}})
+    view |> element("#forms-show-publish-form-publish-now") |> render_click()
 
     assert_redirect(view, "/demo/admin/forms/#{form.id}/versions/#{draft.id}")
     assert %{status: "published", version: 2} = Forms.get_version(draft.id)
   end
 
-  test "the big-fix preset passes through to the migration policy", %{conn: conn} do
+  test "submitted forms are counted per version, and the dialog asks whether to reopen them",
+       %{conn: conn} do
     {form, v1} = published_form()
 
+    # `Instances.Form.changeset/2` never casts status - a submitted row is
+    # set directly, as the data tests do
     {:ok, instance} =
       FormFlow.Data.Repo.insert(
-        FormFlow.Data.Instances.Form.changeset(%FormFlow.Data.Instances.Form{}, %{
+        struct(FormFlow.Data.Instances.Form, %{
           template_form_version_id: v1.id,
-          data: %{"name" => "Ada"}
+          data: %{"name" => "Ada"},
+          status: "completed",
+          completed_at: DateTime.utc_now()
         })
       )
 
     {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
 
-    {:ok, view, _html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}")
+    {:ok, view, html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}")
+
+    # The version history says who is still on v1
+    assert html =~ ~r/1 submitted\s*</
 
     view |> element("button", "Publish") |> render_click()
-    assert render(view) =~ "Publish this draft?"
+    html = render(view)
+    assert html =~ "1 submitted form(s) in flows still in progress"
+    assert html =~ "no flow (filled standalone) (1)"
+    assert html =~ "What should we do?"
+    assert html =~ "Reopen submitted forms"
 
     view
     |> element("#forms-show-publish-form-form")
-    |> render_submit(%{"dynamic_form" => %{"preset" => "big_fix"}})
+    |> render_submit(%{"dynamic_form" => %{"reopen_submitted" => "true"}})
 
-    migrated = FormFlow.Data.Instances.Forms.get(instance.id)
-    assert migrated.template_form_version_id == draft.id
-    assert migrated.data == %{}
+    reopened = FormFlow.Data.Instances.Forms.get(instance.id)
+    assert reopened.template_form_version_id == draft.id
+    assert reopened.status == "in_progress"
+    # Answers are kept for the user to check and submit again
+    assert reopened.data == %{"name" => "Ada"}
   end
 
   test "a published version offers a new draft, landing on its editor", %{conn: conn} do

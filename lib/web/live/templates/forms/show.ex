@@ -17,9 +17,10 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   Instances never resolve this way: each renders only the version it
   recorded when it was started.
 
-  Publishing happens here: the dialog offers the three presets (bug / small /
-  big fix) with plain-language descriptions and restates the blast radius
-  before anything moves.
+  Publishing happens here: the dialog says which submitted forms in flows
+  still in progress the publish reaches, and asks whether to reopen them
+  (`FormFlow.Web.Templates.Forms.Components.PublishDialog`). The version
+  history shows how many submitted forms are still on each version.
 
   A published or archived version's actions fork it - New draft from this
   version - and, while a draft exists, lead to the newest one: Continue
@@ -85,9 +86,12 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   @impl true
   def update(%{event: "publish", payload: payload}, socket) do
-    preset = String.to_existing_atom(payload.data[:preset])
+    reopen_submitted = payload.data[:reopen_submitted] == "true"
 
-    case Forms.update_status(socket.assigns.version, :published, preset: preset) do
+    case Forms.update_status(socket.assigns.version, :published,
+           reopen_submitted: reopen_submitted,
+           user_id: socket.assigns.user_id
+         ) do
       {:ok, published} ->
         refresh_health(socket)
         # Redirects are forbidden inside update/2; handle_async is the
@@ -141,13 +145,24 @@ defmodule FormFlow.Web.Templates.Forms.Show do
       node: node,
       versions: versions,
       version: version,
-      counts: form && Forms.instance_counts(form.id),
-      counts_by_flow: (form && Forms.instance_counts_by_flow(form.id)) || [],
       usages: (form && Flows.form_usages(form.id)) || [],
       form_types: form_types(assigns, form, version, node)
     )
+    |> assign(instance_counts(form))
     |> Shared.assign_prefills(form, assigns.params["prefill"])
     |> assign_breadcrumb(node)
+  end
+
+  # The forms a publish reaches: the dialog's counts, per flow, and the
+  # version history's per-version counts
+  defp instance_counts(nil), do: %{counts: nil, counts_by_flow: [], counts_by_version: %{}}
+
+  defp instance_counts(form) do
+    %{
+      counts: Forms.instance_counts(form.id),
+      counts_by_flow: Forms.instance_counts_by_flow(form.id),
+      counts_by_version: Forms.instance_counts_by_version(form.id)
+    }
   end
 
   # The page's form types, with each related-form property's choices filled
@@ -229,6 +244,12 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   @impl true
   def handle_event("cancel_publish", _params, socket) do
     {:noreply, assign(socket, :publishing?, false)}
+  end
+
+  # The dialog with nothing to ask: no submitted form in a flow still in
+  # progress, so the publish has no answer to carry
+  def handle_event("publish_now", _params, socket) do
+    publish_directly(socket)
   end
 
   @impl true
@@ -578,6 +599,11 @@ defmodule FormFlow.Web.Templates.Forms.Show do
               <span class="block text-[10px] text-zinc-400">
                 {Calendar.strftime(version.updated_at, "%Y-%m-%d %H:%M")}
               </span>
+              <%!-- Who is still on this version: the submitted forms a publish
+                    left as they were, in flows still in progress --%>
+              <span :if={version.status != "draft"} class="block text-[10px] text-zinc-400">
+                {submitted_on(@counts_by_version, version)} submitted
+              </span>
             </li>
           </ul>
         </div>
@@ -655,7 +681,7 @@ defmodule FormFlow.Web.Templates.Forms.Show do
   end
 
   defp publish_directly(socket) do
-    case Forms.update_status(socket.assigns.version, :published) do
+    case Forms.update_status(socket.assigns.version, :published, user_id: socket.assigns.user_id) do
       {:ok, published} ->
         refresh_health(socket)
         {:noreply, push_navigate(socket, to: version_path(socket.assigns, published))}
@@ -670,6 +696,13 @@ defmodule FormFlow.Web.Templates.Forms.Show do
 
   # The newest draft, or nil - `versions` is newest first
   defp latest_draft(versions), do: Enum.find(versions, &(&1.status == "draft"))
+
+  defp submitted_on(counts_by_version, version) do
+    case Map.get(counts_by_version, version.id) do
+      %{submitted: n} -> n
+      nil -> 0
+    end
+  end
 
   # Once, after a version changed: every root with a step on this form - one
   # for an owned form, every user of a catalog form - recomputes its health

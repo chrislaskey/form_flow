@@ -1777,7 +1777,7 @@ defmodule Demo.FormFlowInstancesTest do
           }
         })
 
-      {:ok, _published} = Forms.update_status(draft, :published, completed: :reopen_carry)
+      {:ok, _published} = Forms.update_status(draft, :published, reopen_submitted: true)
 
       {:ok, _view, html} = live(conn, form_path(instance, [review.id]))
       assert html =~ "Intake&#39;s form changed after this review"

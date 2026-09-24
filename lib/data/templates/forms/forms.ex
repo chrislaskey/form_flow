@@ -26,27 +26,45 @@ defmodule FormFlow.Data.Templates.Forms do
   transaction: the form template row is locked (Postgres - SQLite's single writer
   makes the lock unnecessary, and its grammar has no `FOR UPDATE`), the next
   number is computed over every version ever published (archived included),
-  and the migration policy is applied to existing instances:
+  and existing form instances are moved to the new version.
 
-    * `preset: :bug_fix | :small_fix | :big_fix` - expands to the knobs below
-    * `in_progress: :keep | :carry | :reset` - existing in-progress instances
-      keep their version, move to the new version keeping their data, or move and
-      start over
-    * `completed: :untouched | :reopen_carry | :reopen_reset` - completed
-      instances are attestation records and stay untouched by default
-    * `renames: %{"old" => "new"}` - re-keys carried data (applied before
-      prune: a renamed field's old key is by definition absent from the new
-      definition)
-    * `prune: true` - drops carried keys not present in the new definition,
-      snapshotting them into the event. Applies only when the definition
-      declares its fields (`"fields" => [%{"name" => ...}, ...]`); a
-      definition without declared fields prunes nothing rather than
-      everything.
+  What happens to a form instance is decided by its **journey** (the flow
+  instance it belongs to), not by the form:
+
+    * a journey that is `completed` is a finished record - none of its
+      forms are touched
+    * a journey whose flow template no longer allows `:continue`
+      (`FormFlow.Data.Templates.Flow.allows?/2` - `read_only`, `archived`)
+      promises its users nothing changes - none of its forms are touched
+    * a **draft** (an instance still `in_progress`) always moves to the new
+      version keeping its answers and its saved draft
+    * a **submitted** instance (`completed`) stays as it is, unless the
+      publish asks for `reopen_submitted: true` - then it moves to the new
+      version keeping its answers and goes back to `in_progress`, for the
+      user to check and submit again
+    * a form not yet reached has no instance row - the user gets the new
+      version when they arrive
+
+  A standalone instance - filled outside any journey - is treated as a
+  journey still in progress. A superseded instance (strand reconciliation
+  replaced it) is nobody's live form and is skipped.
+
+  Carried answers drop the keys the new definition does not declare, and
+  the dropped keys are kept in the event's `snapshot`. A definition that
+  does not declare its fields (`"fields" => [%{"name" => ...}, ...]`) drops
+  nothing rather than everything. Answers are never cleared by a publish.
+
+  Options:
+
+    * `reopen_submitted: boolean` - default `false`; see above
+    * `renames: %{"old" => "new"}` - re-keys carried answers (and the saved
+      draft) before the drop: a renamed field's old key is by definition
+      absent from the new definition
     * `user_id:` - opaque host-app identity recorded on every event
 
-  The default preset is `:small_fix` (keep / untouched) - the least
-  surprising for existing users. Every move to a new version writes an append-only
-  `FormFlow.Data.Instances.Form.Event`.
+  Every move writes an append-only `FormFlow.Data.Instances.Form.Event`:
+  `migrated` for a carry, `reopened` for a reopen. A reopen moves where the
+  journey's flow is open; the next-position cache is not refreshed here.
 
   ## Prefills
 
@@ -70,14 +88,7 @@ defmodule FormFlow.Data.Templates.Forms do
   alias FormFlow.Data.Templates.Form.Version
   alias FormFlow.Data.Templates.Slug
 
-  @presets %{
-    bug_fix: %{in_progress: :carry, completed: :untouched},
-    small_fix: %{in_progress: :keep, completed: :untouched},
-    big_fix: %{in_progress: :reset, completed: :reopen_reset}
-  }
-
-  @in_progress_policies [:keep, :carry, :reset]
-  @completed_policies [:untouched, :reopen_carry, :reopen_reset]
+  @publish_options [:reopen_submitted, :renames, :user_id]
 
   @doc """
   Creates a form template: the row plus its initial draft, in one transaction.
@@ -384,43 +395,39 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   @doc """
-  Counts a form template's instances by status - the publish dialog's blast radius
-  ("N in-progress instances will be reset").
+  Counts the form instances a publish of this form template reaches, as
+  `%{drafts: n, submitted: n}` - the publish dialog's "M submitted form(s)".
+
+  Reaches means the journey rule in the moduledoc: instances in journeys
+  still in progress whose flow still allows `:continue`, plus standalone
+  instances. Instances in completed journeys, in read-only or archived
+  flows, and superseded instances are not counted, because the publish
+  never touches them.
   """
   def instance_counts(form_id) do
     rows =
       Repo.all(
-        from(i in Instances.Form,
-          join: v in Version,
-          on: i.template_form_version_id == v.id,
-          where: v.form_id == ^form_id,
+        from([i] in reachable_instances(form_id),
           group_by: i.status,
           select: {i.status, count(i.id)}
         )
       )
 
-    Map.merge(%{"in_progress" => 0, "completed" => 0}, Map.new(rows))
+    counts(Map.new(rows))
   end
 
   @doc """
   `instance_counts/1` attributed to the root flows the instances were
   started in - what tells an admin publishing a catalog form which flows
-  the publish reaches. One entry per root flow with instances, as
-  `%{flow_id:, flow_name:, in_progress:, completed:}`, flows by name;
+  the publish reaches. One entry per root flow with reachable instances,
+  as `%{flow_id:, flow_name:, drafts:, submitted:}`, flows by name;
   standalone instances - filled outside any flow - come last with a `nil`
-  flow. Empty when the form template has no instances.
+  flow. Empty when the publish reaches nothing.
   """
   def instance_counts_by_flow(form_id) do
     rows =
       Repo.all(
-        from(i in Instances.Form,
-          join: v in Version,
-          on: i.template_form_version_id == v.id,
-          left_join: fi in Instances.Flow,
-          on: fi.id == i.instance_flow_id,
-          left_join: f in Flow,
-          on: f.id == fi.template_flow_id,
-          where: v.form_id == ^form_id,
+        from([i, _v, _fi, f] in reachable_instances(form_id),
           group_by: [f.id, f.name, i.status],
           select: {f.id, f.name, i.status, count(i.id)}
         )
@@ -429,16 +436,62 @@ defmodule FormFlow.Data.Templates.Forms do
     rows
     |> Enum.group_by(fn {flow_id, flow_name, _status, _count} -> {flow_id, flow_name} end)
     |> Enum.map(fn {{flow_id, flow_name}, rows} ->
-      counts = Map.new(rows, fn {_id, _name, status, count} -> {status, count} end)
+      by_status = Map.new(rows, fn {_id, _name, status, count} -> {status, count} end)
 
-      %{
-        flow_id: flow_id,
-        flow_name: flow_name,
-        in_progress: Map.get(counts, "in_progress", 0),
-        completed: Map.get(counts, "completed", 0)
-      }
+      Map.merge(%{flow_id: flow_id, flow_name: flow_name}, counts(by_status))
     end)
     |> Enum.sort_by(fn %{flow_name: name} -> {is_nil(name), name} end)
+  end
+
+  @doc """
+  `instance_counts/1` per form template version, as
+  `%{version_id => %{drafts: n, submitted: n}}` - how the Show page tells
+  an admin who is still on an old version after a publish that left
+  submitted forms as they were. Versions nobody is on are absent.
+  """
+  def instance_counts_by_version(form_id) do
+    rows =
+      Repo.all(
+        from([i] in reachable_instances(form_id),
+          group_by: [i.template_form_version_id, i.status],
+          select: {i.template_form_version_id, i.status, count(i.id)}
+        )
+      )
+
+    rows
+    |> Enum.group_by(fn {version_id, _status, _count} -> version_id end)
+    |> Map.new(fn {version_id, rows} ->
+      by_status = Map.new(rows, fn {_id, status, count} -> {status, count} end)
+
+      {version_id, counts(by_status)}
+    end)
+  end
+
+  defp counts(by_status) do
+    %{
+      drafts: Map.get(by_status, "in_progress", 0),
+      submitted: Map.get(by_status, "completed", 0)
+    }
+  end
+
+  # The form instances a publish of this form template reaches - the journey
+  # rule in the moduledoc as one query. Bindings, in order: the instance, its
+  # version, its journey (nil when standalone), the journey's root flow.
+  defp reachable_instances(form_id) do
+    continuable = Flow.statuses_allowing(:continue)
+
+    from(i in Instances.Form,
+      as: :instance,
+      join: v in Version,
+      on: i.template_form_version_id == v.id,
+      left_join: fi in Instances.Flow,
+      on: fi.id == i.instance_flow_id,
+      left_join: f in Flow,
+      on: f.id == fi.template_flow_id,
+      where: v.form_id == ^form_id,
+      where: is_nil(i.superseded_at),
+      where: is_nil(fi.id) or (fi.status != "completed" and f.status in ^continuable)
+    )
   end
 
   @doc """
@@ -520,7 +573,7 @@ defmodule FormFlow.Data.Templates.Forms do
   Transitions a version's status.
 
   `update_status(version, :published, opts)` is the publish operation - see
-  the moduledoc for the policy options. `update_status(version, :archived)`
+  the moduledoc for what happens to existing instances and the options. `update_status(version, :archived)`
   archives a published version: it drops out of `get_latest_version/1` (so
   archiving the latest is a de-facto rollback to the previous one), stops
   being a valid `based_on` target, and keeps serving the instances that use it.
@@ -564,29 +617,27 @@ defmodule FormFlow.Data.Templates.Forms do
   end
 
   defp resolve_policy!(opts) do
-    preset = Keyword.get(opts, :preset, :small_fix)
+    case Keyword.keys(opts) -- @publish_options do
+      [] ->
+        :ok
 
-    base =
-      Map.get(@presets, preset) ||
-        raise ArgumentError, "unknown preset #{inspect(preset)}"
+      unknown ->
+        raise ArgumentError,
+              "unknown publish option(s) #{inspect(unknown)}; " <>
+                "the options are #{inspect(@publish_options)}"
+    end
 
-    policy = %{
-      in_progress: Keyword.get(opts, :in_progress, base.in_progress),
-      completed: Keyword.get(opts, :completed, base.completed),
+    reopen_submitted = Keyword.get(opts, :reopen_submitted, false)
+
+    unless is_boolean(reopen_submitted) do
+      raise ArgumentError, "reopen_submitted must be a boolean"
+    end
+
+    %{
+      reopen_submitted: reopen_submitted,
       renames: Keyword.get(opts, :renames, %{}),
-      prune: Keyword.get(opts, :prune, false),
       user_id: Keyword.get(opts, :user_id)
     }
-
-    unless policy.in_progress in @in_progress_policies do
-      raise ArgumentError, "in_progress must be one of #{inspect(@in_progress_policies)}"
-    end
-
-    unless policy.completed in @completed_policies do
-      raise ArgumentError, "completed must be one of #{inspect(@completed_policies)}"
-    end
-
-    policy
   end
 
   # Serializes concurrent publishes of one form template. Postgres only: SQLite has
@@ -617,37 +668,31 @@ defmodule FormFlow.Data.Templates.Forms do
     (max || 0) + 1
   end
 
+  # The journey rule (moduledoc) is the query: instances in completed
+  # journeys, in flows that no longer allow :continue, and superseded rows
+  # are never loaded, so nothing here has to decide to leave them alone
   defp migrate_instances(published, policy) do
     instances =
       Repo.all(
-        from(i in Instances.Form,
-          join: v in Version,
-          on: i.template_form_version_id == v.id,
-          where: v.form_id == ^published.form_id,
+        from([i] in reachable_instances(published.form_id),
           where: i.template_form_version_id != ^published.id
         )
       )
 
     Enum.each(instances, fn instance ->
-      action =
-        case instance.status do
-          "in_progress" -> policy.in_progress
-          "completed" -> policy.completed
-        end
-
-      apply_policy(instance, action, published, policy)
+      case {instance.status, policy.reopen_submitted} do
+        {"in_progress", _reopen} -> carry(instance, published, policy)
+        {"completed", true} -> reopen(instance, published, policy)
+        {"completed", false} -> :ok
+      end
     end)
   end
 
-  defp apply_policy(_instance, action, _published, _policy)
-       when action in [:keep, :untouched],
-       do: :ok
-
-  # The user's saved draft (FormFlow.Data.Instances.Form.Draft) follows the
-  # answers under every policy: carried along with them, re-keyed and pruned
-  # the same way, or cleared with them. It is never snapshotted onto the
-  # event - a draft is not attested, the answers are.
-  defp apply_policy(instance, :carry, published, policy) do
+  # A draft moves to the new version with its answers. The user's saved
+  # draft (FormFlow.Data.Instances.Form.Draft) follows the answers: carried
+  # along with them, re-keyed and dropped the same way. It is never
+  # snapshotted onto the event - a draft is not attested, the answers are.
+  defp carry(instance, published, policy) do
     {data, dropped} = transform_data(instance.data, published, policy)
 
     migrate!(
@@ -660,11 +705,9 @@ defmodule FormFlow.Data.Templates.Forms do
     )
   end
 
-  defp apply_policy(instance, :reset, published, policy) do
-    migrate!(instance, published, policy, "migrated", %{data: %{}, draft: nil}, instance.data)
-  end
-
-  defp apply_policy(instance, :reopen_carry, published, policy) do
+  # A submitted form goes back to a draft on the new version, answers kept,
+  # for the user to check and submit again
+  defp reopen(instance, published, policy) do
     {data, dropped} = transform_data(instance.data, published, policy)
 
     migrate!(
@@ -680,23 +723,6 @@ defmodule FormFlow.Data.Templates.Forms do
         reopened_at: DateTime.utc_now()
       },
       dropped
-    )
-  end
-
-  defp apply_policy(instance, :reopen_reset, published, policy) do
-    migrate!(
-      instance,
-      published,
-      policy,
-      "reopened",
-      %{
-        data: %{},
-        draft: nil,
-        status: "in_progress",
-        completed_at: nil,
-        reopened_at: DateTime.utc_now()
-      },
-      instance.data
     )
   end
 
@@ -731,10 +757,10 @@ defmodule FormFlow.Data.Templates.Forms do
     end
   end
 
-  # Renames re-key first, then prune drops keys absent from the new
-  # definition - the only correct order: a renamed field's old key is by
+  # Renames re-key first, then keys absent from the new definition are
+  # dropped - the only correct order: a renamed field's old key is by
   # definition not in the new definition. Returns {data, dropped} where
-  # dropped is what prune removed (the event's snapshot).
+  # dropped is what was removed (the event's snapshot).
   defp transform_data(data, published, policy) do
     data =
       Enum.reduce(policy.renames, data, fn {old, new}, acc ->
@@ -744,19 +770,17 @@ defmodule FormFlow.Data.Templates.Forms do
         end
       end)
 
-    prune_data(data, published, policy)
+    drop_undeclared(data, published)
   end
 
-  defp prune_data(data, published, %{prune: true}) do
+  defp drop_undeclared(data, published) do
     case declared_field_names(published.definition) do
-      # A definition that doesn't declare its fields prunes nothing -
+      # A definition that doesn't declare its fields drops nothing -
       # never everything
       nil -> {data, %{}}
       names -> {Map.take(data, names), Map.drop(data, names)}
     end
   end
-
-  defp prune_data(data, _published, _policy), do: {data, %{}}
 
   defp declared_field_names(%{"fields" => fields}) when is_list(fields) do
     names = for %{"name" => name} <- fields, is_binary(name), do: name
