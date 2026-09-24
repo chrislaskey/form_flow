@@ -1067,17 +1067,18 @@ defmodule FormFlow.Data.Templates.Flows.Health do
         missing.("points “#{property.name}” at something that is not a form of any flow")
 
       {flow_id, path} ->
-        case opts.named_flows[flow_id] do
-          nil ->
-            missing.("points “#{property.name}” at a flow that no longer exists")
+        named_flow_result(property, path, opts.named_flows[flow_id], missing)
+    end
+  end
 
-          paths ->
-            cond do
-              MapSet.member?(paths.connected, path) -> :pass
-              MapSet.member?(paths.all, path) -> missing.(no_start_reaches_it(property))
-              true -> missing.(gone_from_its_flow(property))
-            end
-        end
+  defp named_flow_result(property, _path, nil, missing),
+    do: missing.("points “#{property.name}” at a flow that no longer exists")
+
+  defp named_flow_result(property, path, paths, missing) do
+    cond do
+      MapSet.member?(paths.connected, path) -> :pass
+      MapSet.member?(paths.all, path) -> missing.(no_start_reaches_it(property))
+      true -> missing.(gone_from_its_flow(property))
     end
   end
 
