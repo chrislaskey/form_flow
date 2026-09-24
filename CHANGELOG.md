@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.40.0
+
+### Two fixes on the way to a form
+
+**The three views of a form crashed unless the form was submitted.**
+`FormFlow.Web.Instances.Components.Forms.Tabs` handed `target` down to
+`FormFlow.Web.Components.Tabs` on every render. A target there with no
+event beside it means the other navigation style - every tab pushing
+`"navigate"` at the page - which is the flow editor's and not these
+pages'. Neither View nor History handles `"navigate"`, so on any form
+nobody had submitted, clicking Edit or History raised a
+`FunctionClauseError` and took the LiveView down. The target now goes
+down only together with the `"request_reopen"` event it was added for.
+
+**Continue on the instances index went to a page that could not
+continue.** `FormFlow.Web.Instances.Flows.Index` linked Continue at the
+next position's View page. The next position is usually one nobody has
+started, where View says "You haven't started this form yet." Continue
+now goes to that position's Edit page - the page that starts the form,
+and the one the journey page's own Start and Continue buttons have
+always used.
+
 ## v0.39.0
 
 ### Form publish: the next-position cache catches up

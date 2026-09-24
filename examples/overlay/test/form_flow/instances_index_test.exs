@@ -134,14 +134,17 @@ defmodule Demo.FormFlowInstancesIndexTest do
       assert has_element?(view, row(journey), "1 of 2")
     end
 
-    test "Continue goes straight to the next position when it is the viewer's", %{conn: conn} do
+    test "Continue goes straight to the next position's Edit page when it is the viewer's",
+         %{conn: conn} do
       %{journey: journey, intake: intake} = licensing("Dog License")
 
       {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
+      # Edit, not View: nobody has started this position yet, and View
+      # there would only say so
       assert has_element?(
                view,
-               "a[href='/demo/pet-licenses/applications/#{journey.id}/forms/#{Enum.join(intake, "/")}']",
+               "a[href='/demo/pet-licenses/applications/#{journey.id}/forms/#{Enum.join(intake, "/")}/edit']",
                "Continue"
              )
 

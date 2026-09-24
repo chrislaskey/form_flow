@@ -86,8 +86,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       word, In progress, since nothing finer is known of it.
     * **Next** - the first open position, named as the flow instance's
       page names it ("Documents / Proof of address"), and nothing once the
-      journey is done or blocked. Continue links straight to it when it is
-      the viewer's; to the journey's page otherwise.
+      journey is done or blocked. Continue links straight to that
+      position's Edit page when it is the viewer's - the page that starts
+      the form, since the next position is often one nobody has begun -
+      and to the journey's page otherwise.
     * **Flow progress** - how many of the flow's forms are done, every
       perspective's included, so a reviewer sees how far the whole
       application is.
@@ -329,10 +331,13 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   end
 
   # Where Continue goes: straight to the next position when it is the
-  # viewer's, else the journey's page
+  # viewer's, else the journey's page. The position's Edit page, the same
+  # one the journey page's Start and Continue buttons go to, because it is
+  # the page that starts the form - the next position is often one nobody
+  # has begun, and View there would only say so.
   defp continue_path(base, %Instances.Flow{} = flow_instance, node_ids) do
     if flow_instance.next_path && MapSet.member?(node_ids, flow_instance.next_node_id) do
-      Paths.form_path(base, flow_instance.id, flow_instance.next_path)
+      Paths.form_edit_path(base, flow_instance.id, flow_instance.next_path)
     else
       Paths.flow_path(base, flow_instance.id)
     end
@@ -559,7 +564,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
             </span>
           </:column>
           <%!-- View goes to the journey's page; Continue straight to the
-                next position when it is the viewer's --%>
+                next position's Edit page when it is the viewer's --%>
           <:column :let={flow_instance} label="Actions">
             <%= if flow_instance.status == "completed" or
                      not Templates.Flow.allows?(flow_instance.template_flow, :continue) do %>

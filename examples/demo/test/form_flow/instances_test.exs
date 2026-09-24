@@ -788,8 +788,22 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
 
-      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      assert has_element?(view, "nav a[href='#{edit_path(instance, [name.id])}']")
       refute has_element?(view, ~s(button[phx-click="request_reopen"]))
+    end
+
+    test "no tab of an unsubmitted form pushes an event this page does not handle",
+         %{conn: conn} do
+      # "navigate" is the flow editor's way off a page, not these pages'.
+      # A tab pushing it here is a crash, so no tab may.
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+
+      for path <- [form_path(instance, [name.id]), history_path(instance, [name.id])] do
+        {:ok, view, _html} = live(conn, path)
+
+        refute has_element?(view, ~s(button[phx-click="navigate"]))
+        assert has_element?(view, "nav a[href='#{edit_path(instance, [name.id])}']")
+      end
     end
   end
 

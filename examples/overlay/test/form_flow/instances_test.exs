@@ -788,8 +788,22 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, view, _html} = live(conn, form_path(instance, [name.id]))
 
-      assert has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
+      assert has_element?(view, "nav a[href='#{edit_path(instance, [name.id])}']")
       refute has_element?(view, ~s(button[phx-click="request_reopen"]))
+    end
+
+    test "no tab of an unsubmitted form pushes an event this page does not handle",
+         %{conn: conn} do
+      # "navigate" is the flow editor's way off a page, not these pages'.
+      # A tab pushing it here is a crash, so no tab may.
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+
+      for path <- [form_path(instance, [name.id]), history_path(instance, [name.id])] do
+        {:ok, view, _html} = live(conn, path)
+
+        refute has_element?(view, ~s(button[phx-click="navigate"]))
+        assert has_element?(view, "nav a[href='#{edit_path(instance, [name.id])}']")
+      end
     end
   end
 
@@ -1817,6 +1831,25 @@ defmodule Demo.FormFlowInstancesTest do
     end
   end
 
+  describe "reopening a form sets reopened_at" do
+    test "set by a reopen, cleared by the next submit" do
+      %{instance: instance, form: only} = flow_of_one()
+
+      completed = complete(instance, [only.id], %{"name" => "Ada"})
+      assert completed.reopened_at == nil
+
+      {:ok, reopened} = Instances.Forms.update_status(instance, [only.id], :in_progress)
+      assert %DateTime{} = reopened.reopened_at
+      assert reopened.completed_at == nil
+
+      {:ok, resubmitted} =
+        Instances.Forms.update_status(instance, [only.id], :completed, data: %{"name" => "Ada"})
+
+      assert resubmitted.reopened_at == nil
+      assert %DateTime{} = resubmitted.completed_at
+    end
+  end
+
   describe "an instance's event trail" do
     test "list_events/2 reads it oldest first, and filters by kind" do
       %{instance: instance, forms: [name, _address]} = flow_of_two()
@@ -2275,7 +2308,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute html =~ ~s(value="Submitted")
       refute html =~ ~s(value="Prefilled")
 
-      # The status badge is the form's standing, not the button: Reopened
+      # The status badge is the form's status word, not the button: Reopened
       assert html =~ "Reopened"
 
       # Show renders the answers, never the draft

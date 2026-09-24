@@ -21,6 +21,13 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
   were. Edit's own page keeps its Reopen button for whoever arrives at that
   URL directly.
 
+  `target` goes down to `FormFlow.Web.Components.Tabs` only together with
+  that event, because a target with no event there means the other style -
+  every tab pushing `"navigate"` at the caller, which is the flow editor's
+  and not these pages'. Nothing here handles `"navigate"`, so handing the
+  target down unconditionally turned every tab of an unsubmitted form into
+  a crash.
+
   Sits among the header's actions on the three pages, right of the page's
   own buttons.
   """
@@ -41,7 +48,11 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
       "Edit asks to reopen the form rather than going to a page that would only say it was submitted"
   )
 
-  attr(:target, :any, default: nil, doc: "the LiveComponent asked, when `reopen_first?`")
+  attr(:target, :any,
+    default: nil,
+    doc: "the LiveComponent asked, and only when `reopen_first?` - see the moduledoc"
+  )
+
   attr(:class, :any, default: nil)
 
   def tabs(assigns) do
@@ -55,6 +66,7 @@ defmodule FormFlow.Web.Instances.Components.Forms.Tabs do
         {:edit, "Edit", Paths.form_edit_path(base, id, path)}
       ])
       |> assign(:events, (assigns.reopen_first? && %{edit: "request_reopen"}) || %{})
+      |> assign(:target, (assigns.reopen_first? && assigns.target) || nil)
 
     ~H"""
     <Tabs.tabs items={@items} active={@active} events={@events} target={@target} class={@class} />
