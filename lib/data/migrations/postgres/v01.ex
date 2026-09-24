@@ -81,6 +81,13 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     the host tenant it belongs to, both opaque host identities, set
   #     at creation and immutable. Traversal state is never stored as the
   #     truth; it is derived (FormFlow.Data.Instances.FlowProgress).
+  #   * `instance_flows.completed_template_snapshot` - the one exception,
+  #     and a recorded fact rather than a truth: the flow tree and the
+  #     journey's form positions as they stood when the journey
+  #     completed, written once by FormFlow.Data.Instances.Flows.complete/2
+  #     (see FormFlow.Data.Instances.Flows.Snapshot) and never recomputed.
+  #     NULL until completion. Form templates by id only - the instances
+  #     record their versions - and no answers.
   #   * `instance_flows.next_path` + `next_node_id` + `completed_forms` +
   #     `forms_total` + `next_computed_at` - a cache of that derivation, not
   #     a second truth: where the flow is open (the first actionable
@@ -329,6 +336,11 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:tenant_id, :string)
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
+
+      # The flow tree and positions as they stood when the journey
+      # completed (see the header): written by complete/2 alone, never
+      # cast, null before
+      add(:completed_template_snapshot, :map)
 
       # The cache of where the flow is open (see the header): written by
       # the refresh alone, never cast

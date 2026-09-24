@@ -114,7 +114,7 @@ defmodule FormFlow.Web.Instances.Flows.History do
             dot(kind(entry))
           ]} />
           <p class="text-sm">
-            <span class="font-semibold">{label(entry)}</span>
+            <span class="font-semibold">{label(entry, @flow_instance)}</span>
             <span class="text-zinc-700">· {subject(entry, @forms, @flow_name)}</span>
             <span :if={entry.event.user_id} class="text-zinc-500">by</span>
             <code :if={entry.event.user_id} class="text-xs">{entry.event.user_id}</code>
@@ -131,16 +131,30 @@ defmodule FormFlow.Web.Instances.Flows.History do
   end
 
   # A form's event is labelled as its own History page labels it; the
-  # instance's own events in the same voice
-  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "created"}}), do: "Started"
+  # instance's own events in the same voice. Completion says how many form
+  # positions the flow had at that moment, from the snapshot the row keeps
+  # - a journey completed before the snapshot existed says "Completed" alone
+  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "created"}}, _instance),
+    do: "Started"
 
-  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}}),
-    do: "Completed"
+  defp label(
+         %{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}},
+         %Instances.Flow{completed_template_snapshot: %{"positions" => positions}}
+       ),
+       do:
+         "Completed · #{length(positions)} #{if length(positions) == 1, do: "form", else: "forms"}"
 
-  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "reconciled"}}),
+  defp label(
+         %{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}},
+         _instance
+       ),
+       do: "Completed"
+
+  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "reconciled"}}, _instance),
     do: "Reconciled"
 
-  defp label(%{event: %Instances.Form.Event{} = event}), do: FormStatus.event_label(event)
+  defp label(%{event: %Instances.Form.Event{} = event}, _instance),
+    do: FormStatus.event_label(event)
 
   defp kind(%{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}}),
     do: :success

@@ -470,6 +470,68 @@ defmodule Demo.FormFlowNextPositionsTest do
 
   # Start → Name → Address → End, one "forms" flow of the given type, and a
   # journey of it. `opts[:tenant_id]` sets the journey's tenant.
+  describe "Instances.Flows.complete/2 records the template" do
+    test "writes the tree and the form positions as they stand, once" do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+      _ = complete(journey, [name.id])
+
+      {:ok, completed} = Instances.Flows.complete(journey)
+      snapshot = completed.completed_template_snapshot
+
+      assert snapshot["tree"]["flow"]["id"] == flow.id
+      assert snapshot["tree"]["flow"]["name"] == "Application"
+      assert snapshot["tree"]["subflows"] == %{}
+      assert length(snapshot["tree"]["nodes"]) == 4
+      assert length(snapshot["tree"]["relationships"]) == 3
+
+      form_node = Enum.find(snapshot["tree"]["nodes"], &(&1["id"] == name.id))
+      assert form_node["form_id"] == name.form_id
+      assert form_node["labels"] == ["Form"]
+
+      [name_instance] = Instances.Flows.form_instances(journey)
+
+      assert snapshot["positions"] == [
+               %{
+                 "path" => [name.id],
+                 "label" => "Name",
+                 "status" => "completed",
+                 "instance_id" => name_instance.id,
+                 "version_id" => name_instance.template_form_version_id
+               },
+               %{
+                 "path" => [address.id],
+                 "label" => "Address",
+                 "status" => "available",
+                 "instance_id" => nil,
+                 "version_id" => nil
+               }
+             ]
+
+      # Completing a completed journey is a no-op: the snapshot stays
+      {:ok, again} = Instances.Flows.complete(completed)
+      assert again.completed_template_snapshot == snapshot
+      assert reload(journey).completed_template_snapshot == snapshot
+    end
+
+    test "a later template edit moves the derivation, not the snapshot" do
+      %{flow: flow, journey: journey, forms: [_name, address]} = flow_of_two()
+      {:ok, completed} = Instances.Flows.complete(journey)
+      snapshot = completed.completed_template_snapshot
+      assert length(snapshot["positions"]) == 2
+
+      extra = build_form_node(flow, "Extra")
+      edge(flow, address, extra)
+
+      assert map_size(Instances.Flows.progress(reload(journey))) == 5
+      assert reload(journey).completed_template_snapshot == snapshot
+    end
+
+    test "null on a journey still in progress" do
+      %{journey: journey} = flow_of_two()
+      assert reload(journey).completed_template_snapshot == nil
+    end
+  end
+
   defp flow_of_two(type_or_opts \\ nil)
 
   defp flow_of_two(opts) when is_list(opts), do: flow_of_two(nil, opts)

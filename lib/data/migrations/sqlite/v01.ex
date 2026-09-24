@@ -136,6 +136,11 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
 
+      # The flow tree and positions as they stood when the journey
+      # completed (see the Postgres file): written by complete/2 alone,
+      # never cast, null before
+      add(:completed_template_snapshot, :map)
+
       # The cache of where the flow is open (see the Postgres file): written
       # by the refresh alone, never cast
       add(:next_path, {:array, :string})

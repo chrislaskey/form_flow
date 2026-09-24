@@ -33,6 +33,17 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :completed_at) == nil
     end
 
+    test "completed_template_snapshot is not castable - completion alone writes it" do
+      changeset =
+        Instances.Flow.changeset(%Instances.Flow{}, %{
+          template_flow_id: @flow_id,
+          completed_template_snapshot: %{"tree" => %{}, "positions" => []}
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :completed_template_snapshot) == nil
+    end
+
     test "the next-position cache columns are not castable - the refresh alone writes them" do
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{

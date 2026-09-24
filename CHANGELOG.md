@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.38.0
+
+### A completed journey records what its flow looked like
+
+A flow is mutable and unversioned, so a completed journey's `status`
+could disagree with what the live tree derives after a later edit, and
+nothing recorded what the user actually finished. Now
+`FormFlow.Data.Instances.Flows.complete/2` writes
+`completed_template_snapshot` on the journey's row in the same update as
+`status` and `completed_at`: the resolved flow tree (flows, nodes,
+relationships, subflows) and every form position with its path, label,
+derived status, form instance id and form template version id
+(`FormFlow.Data.Instances.Flows.Snapshot`). Form templates appear by id
+only, since each instance records its version and published versions
+never change; answers are not copied. Written once, never recomputed,
+null on journeys completed before this version. The flow instance's
+History page says how many forms the flow had at completion.
+
+**Schema.** `V01` gains the column on both adapters. A database migrated
+before this version must be recreated (the library is pre-release and
+`V01` is the schema).
+
 ## v0.37.0
 
 ### Form publish: one question

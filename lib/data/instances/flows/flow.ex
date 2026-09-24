@@ -18,7 +18,13 @@ defmodule FormFlow.Data.Instances.Flow do
   journey's form instances, so a template edit can never desync it.
   `status` and `completed_at` are recorded facts, not caches: true at a moment,
   written by `FormFlow.Data.Instances.Flows.complete/2` - they claim only
-  their moment and are never recomputed.
+  their moment and are never recomputed. `completed_template_snapshot` is
+  the third of that family: the flow tree and the journey's form positions
+  as they stood at that same moment
+  (`FormFlow.Data.Instances.Flows.Snapshot`), written by the same call,
+  null before it, and the one recorded answer to "what did this flow look
+  like when I finished it?" once a later template edit has moved the
+  derivation on.
 
   Five columns are a **cache of that derivation**, written by
   `FormFlow.Data.Instances.Flows.update_next_positions/2` alone and never
@@ -68,6 +74,7 @@ defmodule FormFlow.Data.Instances.Flow do
     field(:tenant_id, :string)
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
+    field(:completed_template_snapshot, :map)
 
     # The cache of where the flow is open - see the moduledoc
     field(:next_path, {:array, :string})
@@ -95,8 +102,9 @@ defmodule FormFlow.Data.Instances.Flow do
   @doc """
   Builds a changeset for a journey.
 
-  `status` and `completed_at` are not castable - completion machinery
-  sets them (see moduledoc) - and neither are the five cache columns,
+  `status`, `completed_at`, and `completed_template_snapshot` are not
+  castable - completion machinery sets them (see moduledoc) - and neither
+  are the five cache columns,
   which `FormFlow.Data.Instances.Flows.update_next_positions/2` writes
   through a plain change of its own, as `complete/2` writes `status` and `completed_at`.
   `template_flow_id`, `user_id`, and `tenant_id` are

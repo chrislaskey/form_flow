@@ -28,6 +28,7 @@ defmodule FormFlow.Data.Instances.Flows do
   alias FormFlow.Data.Instances.Flow.Event
   alias FormFlow.Data.Instances.Flow.NextPosition
   alias FormFlow.Data.Instances.FlowProgress
+  alias FormFlow.Data.Instances.Flows.Snapshot
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
 
@@ -201,7 +202,10 @@ defmodule FormFlow.Data.Instances.Flows do
   Sets `status: "completed"` and `completed_at`, writing a
   `status_changed` event. Both are facts recorded at a moment, never recomputed
   - it may legitimately diverge from `complete?/1` after a later template
-  edit. Who calls it - runner-automatic on End reached, host-triggered, or
+  edit. So that the divergence can still be read, the same update writes
+  `completed_template_snapshot`: the flow tree and the journey's form
+  positions as they stand right now (`FormFlow.Data.Instances.Flows.Snapshot`).
+  Who calls it - runner-automatic on End reached, host-triggered, or
   End-node custom logic (planned) - is deliberately not decided here.
   Completing a completed journey is a no-op. The flow's status is not
   consulted: this is an administrative action on the journey, not a user
@@ -211,15 +215,27 @@ defmodule FormFlow.Data.Instances.Flows do
   (`update_next_positions/2`): a completed journey has none, whatever its
   forms say, so it leaves every queue. `opts[:flow_types]`,
   `opts[:callback_data]`, and `refresh: false` reach the refresh as they
-  do from `create/2`.
+  do from `create/2`. The tree is resolved once - `opts[:tree]` if the
+  caller has it - and shared by the snapshot and the refresh.
   """
   def complete(instance, opts \\ [])
 
   def complete(%Instances.Flow{status: "completed"} = instance, _opts), do: {:ok, instance}
 
   def complete(%Instances.Flow{} = instance, opts) do
+    tree =
+      Keyword.get_lazy(opts, :tree, fn ->
+        Templates.Flows.resolve_tree(instance.template_flow_id)
+      end)
+
+    opts = Keyword.put(opts, :tree, tree)
+
     Repo.transaction(fn ->
-      changes = %{status: "completed", completed_at: DateTime.utc_now()}
+      changes = %{
+        status: "completed",
+        completed_at: DateTime.utc_now(),
+        completed_template_snapshot: Snapshot.take(tree, form_instances(instance))
+      }
 
       with {:ok, completed} <- Repo.update(Ecto.Changeset.change(instance, changes)),
            {:ok, _event} <- insert_event(completed, "status_changed", opts),
