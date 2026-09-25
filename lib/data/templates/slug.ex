@@ -162,12 +162,24 @@ defmodule FormFlow.Data.Templates.Slug do
   """
   def validate_slug(changeset, index_name) do
     changeset
-    |> update_change(:slug, &normalize/1)
-    |> validate_format(:slug, @format,
+    |> validate_shape(:slug)
+    |> unique_constraint(:slug, name: index_name)
+  end
+
+  @doc """
+  The shape rules alone, on any field written in the slug alphabet -
+  normalized to lowercase and trimmed, blank to nil, format and length
+  checked. What `validate_slug/2` applies before the unique index, and what
+  a flow's `flow_group` applies on its own: a group is shared by every flow
+  in it, so it has no index to map.
+  """
+  def validate_shape(changeset, field) do
+    changeset
+    |> update_change(field, &normalize/1)
+    |> validate_format(field, @format,
       message: "may only contain lowercase letters, numbers, _ and -"
     )
-    |> validate_length(:slug, max: @max_length)
-    |> unique_constraint(:slug, name: index_name)
+    |> validate_length(field, max: @max_length)
   end
 
   defp normalize(nil), do: nil

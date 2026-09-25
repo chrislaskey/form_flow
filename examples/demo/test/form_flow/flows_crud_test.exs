@@ -437,6 +437,53 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute has_element?(view, "button", "Discard changes")
   end
 
+  test "the new page takes a group, and the edit page saves one with the rest", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/demo/admin/flows/new")
+    assert html =~ "Group"
+
+    view
+    |> element("form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Dog License",
+        "label" => "forms",
+        "flow_group" => "Pet-Licensing"
+      }
+    })
+
+    {path, _flash} = assert_redirect(view)
+    assert "/demo/admin/flows/" <> rest = path
+    [id, "edit"] = String.split(rest, "/")
+    assert Flows.get(id).flow_group == "pet-licensing"
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
+    assert html =~ "pet-licensing"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"flow_group" => "other"}})
+
+    assert Flows.get(id).flow_group == "pet-licensing"
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(id).flow_group == "other"
+    refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "the show page lists the group, and the index filters by it", %{conn: conn} do
+    {:ok, dog} = Flows.create(%{name: "Dog License", slug: "dog", flow_group: "pet-licensing"})
+    {:ok, _address} = Flows.create(%{name: "Change of Address", slug: "address"})
+
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{dog.id}")
+    assert html =~ "pet-licensing"
+
+    {:ok, _view, html} = live(conn, "/demo/admin/flows?filter[flow_group]=pet")
+    assert html =~ "Dog License"
+    refute html =~ "Change of Address"
+  end
+
   test "a taken slug is a refused save that names the field", %{conn: conn} do
     {:ok, _other} = Flows.create(%{name: "Other", slug: "taken"})
     id = create_flow(conn, "Mine")

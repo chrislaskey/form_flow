@@ -64,6 +64,7 @@ defmodule FormFlow.Web.Templates.Flows.New do
       name: payload.data[:name],
       label: payload.data[:label],
       slug: payload.data[:slug],
+      flow_group: payload.data[:flow_group],
       tenant_id: socket.assigns.tenant_id,
       nodes: Flows.starter_nodes(),
       relationships: []
@@ -171,10 +172,12 @@ defmodule FormFlow.Web.Templates.Flows.New do
           on_success={&created(&1, @id)}
           components={@components || CoreComponents}
         >
-          <%!-- Neither field carries help text: a horizontal group centers
-                its members, so one description under one field would leave
-                the other half a line low, and the two labels say enough on
-                a page whose whole job is a name and a kind. --%>
+          <%!-- No field carries help text: a horizontal group centers its
+                members, so one description under one field would leave the
+                others half a line low, and the labels say enough on a page
+                whose whole job is a name and a kind. The group is the edit
+                page's to explain; here it is offered so a flow built for a
+                page lands on it from its first save. --%>
           <:group name="name_and_slug" type="horizontal" title={false} />
           <:field
             group="name_and_slug"
@@ -190,6 +193,13 @@ defmodule FormFlow.Web.Templates.Flows.New do
             name="slug"
             label="Slug"
             placeholder="Generated when left blank"
+          />
+          <:field
+            group="name_and_slug"
+            type="text"
+            name="flow_group"
+            label="Group"
+            placeholder="Optional"
           />
           <:field
             :let={field}

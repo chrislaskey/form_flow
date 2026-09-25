@@ -39,10 +39,10 @@ defmodule FormFlow.Web.Templates.Flows.Index do
 
   ## Filters
 
-  A Filters tab over status, name, and slug, whitelisted as `<:filter>`
+  A Filters tab over status, name, slug, and group, whitelisted as `<:filter>`
   fields so Slab compiles `filter[...]` URL params into WHERE conditions:
   status is a select of `FormFlow.Web.Templates.Shared.status_options/0`,
-  name and slug are case-insensitive contains. Like the sort and the page,
+  name, slug, and group are case-insensitive contains. Like the sort and the page,
   they live in the URL, so a filtered listing survives a reload and can be
   sent to someone.
 
@@ -397,6 +397,7 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         />
         <:filter field={:name} label="Name" placeholder="Search names" />
         <:filter field={:slug} label="Slug" placeholder="Search slugs" />
+        <:filter field={:flow_group} label="Group" placeholder="Search groups" />
         <:column :let={flow} field={:name} sortable>
           <.link
             navigate={"#{@base}/flows/#{flow.id}"}
@@ -408,6 +409,9 @@ defmodule FormFlow.Web.Templates.Flows.Index do
         </:column>
         <:column :let={flow} field={:id} label="ID" optional>
           <span class="font-mono text-[10px] text-zinc-400">{flow.id}</span>
+        </:column>
+        <:column :let={flow} field={:flow_group} label="Group" optional>
+          <code :if={flow.flow_group} class="text-xs text-zinc-600">{flow.flow_group}</code>
         </:column>
         <:column :let={flow} field={:status} label="Status">
           <Core.badge

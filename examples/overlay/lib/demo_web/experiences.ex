@@ -1,11 +1,14 @@
 defmodule DemoWeb.Experiences do
   @moduledoc """
-  The three sides of the demo, and the page that introduces them.
+  The pages of the demo - three sides, four pages - and the page that
+  introduces them.
 
-  `all/0` is the three sides; `menu/0` puts `overview/0` in front of them, and
+  `all/0` is the four pages; `menu/0` puts `overview/0` in front of them, and
   is what the header's Demo app menu and the mobile nav list. The overview is
-  not a fourth side of the demo — it is the page those three are described on,
-  which is also where the menu's own label goes.
+  not a page of the demo's service — it is the page the others are described
+  on, which is also where the menu's own label goes. The user side has two
+  pages: the pet license applications, and Other Forms, the catch-all for
+  every flow outside the pet licensing group.
 
   Each experience names the `roles` it is for. The page hands them to
   `DemoWeb.PersonaComponents.persona_gate/1`, and the header's menus list
@@ -60,6 +63,15 @@ defmodule DemoWeb.Experiences do
       path: "/demo/pet-licenses/reviews",
       blurb: "Review and decide applications",
       roles: [:reviewer]
+    },
+    %{
+      id: :other,
+      nav: :other_forms,
+      title: "Other Forms",
+      kind: "User pages",
+      path: "/demo/other-forms",
+      blurb: "Fill out and track any flow outside pet licensing",
+      roles: [:owner]
     }
   ]
 
@@ -82,7 +94,7 @@ defmodule DemoWeb.Experiences do
 
   # The roles the menu offers every side to, admitted or not. The admin's,
   # and only because the demo opens as the admin (`Demo.Users.default/0`):
-  # a visitor who starts there and is shown two of four pages has no way to
+  # a visitor who starts there and is shown two of five pages has no way to
   # learn the other two exist. The link leads to a refusal that names whose
   # page it is and points at the switcher, which teaches the demo's one
   # lesson better than a missing link does.

@@ -111,6 +111,26 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert changeset.changes.properties == %{"k" => "v"}
   end
 
+  test "flow_group is normalized like a slug, copied into properties, and cleared by a blank" do
+    changeset =
+      Flow.changeset(%Flow{}, %{flow_group: " Pet-Licensing ", properties: %{"k" => "v"}})
+
+    assert changeset.valid?
+    assert changeset.changes.flow_group == "pet-licensing"
+    assert changeset.changes.properties == %{"k" => "v", "flow_group" => "pet-licensing"}
+
+    refute Flow.changeset(%Flow{}, %{flow_group: "pet licensing"}).valid?
+
+    persisted =
+      %Flow{flow_group: "pet-licensing", properties: %{"flow_group" => "pet-licensing"}}
+      |> Ecto.put_meta(state: :loaded)
+
+    changeset = Flow.changeset(persisted, %{flow_group: ""})
+    assert changeset.valid?
+    assert changeset.changes.flow_group == nil
+    assert changeset.changes.properties == %{}
+  end
+
   test "ignores unknown attributes rather than casting them" do
     changeset = Flow.changeset(%Flow{}, %{color: "teal"})
 

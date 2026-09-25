@@ -310,17 +310,20 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "the listing offers open flows, names winding-down ones, and hides drafts",
          %{conn: conn} do
-      {:ok, open} = Flows.create(%{name: "Cat License", status: "open"})
+      {:ok, open} =
+        Flows.create(%{flow_group: "pet-licensing", name: "Cat License", status: "open"})
+
       {:ok, winding} = Flows.create(%{name: "Dog License 2025", status: "winding_down"})
-      {:ok, _draft} = Flows.create(%{name: "Dog License 2027"})
+      {:ok, _draft} = Flows.create(%{flow_group: "pet-licensing", name: "Dog License 2027"})
 
       {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
 
       assert has_element?(view, start_button(open))
       refute has_element?(view, start_button(winding))
 
-      # /demo/pet-licenses/applications names no flows, so a winding-down one is neither offered nor
-      # announced; a page that names it gets the line (tested below)
+      # /demo/pet-licenses/applications names its group's flows, so a winding-down one
+      # outside the group is neither offered nor announced; a page that names it gets
+      # the line (tested below)
       refute html =~ "Dog License 2025"
       refute html =~ "Dog License 2027"
       refute html =~ "No flows are open."
@@ -328,7 +331,13 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "a pre-release flow is open to the users a page names and a draft to the rest",
          %{conn: conn} do
-      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, flow} =
+        Flows.create(%{
+          flow_group: "pet-licensing",
+          name: "Dog License 2027",
+          status: "pre_release"
+        })
+
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       # /demo/pet-licenses/applications names dog_owner: offered, listed, and open
@@ -352,7 +361,13 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "pre_release_user_ids takes a function of the page's context as well as a list",
          %{conn: conn} do
-      {:ok, flow} = Flows.create(%{name: "Dog License 2027", status: "pre_release"})
+      {:ok, flow} =
+        Flows.create(%{
+          flow_group: "pet-licensing",
+          name: "Dog License 2027",
+          status: "pre_release"
+        })
+
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       # The function names the viewer: offered, listed, and open
@@ -380,7 +395,12 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "the winding-down line is drawn for flows the page names, not for every root",
          %{conn: conn} do
-      {:ok, winding} = Flows.create(%{name: "Dog License 2025", status: "winding_down"})
+      {:ok, winding} =
+        Flows.create(%{
+          flow_group: "pet-licensing",
+          name: "Dog License 2025",
+          status: "winding_down"
+        })
 
       {:ok, _view, html} = live_isolated(conn, UnlistedPage, session: %{"path" => []})
       refute html =~ "Dog License 2025"
@@ -395,7 +415,7 @@ defmodule Demo.FormFlowFlowStatusTest do
     end
 
     test "with nothing open the listing says so", %{conn: conn} do
-      {:ok, _draft} = Flows.create(%{name: "Dog License 2027"})
+      {:ok, _draft} = Flows.create(%{flow_group: "pet-licensing", name: "Dog License 2027"})
 
       {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
 
@@ -403,7 +423,8 @@ defmodule Demo.FormFlowFlowStatusTest do
     end
 
     test "a start is refused at the click once the flow stops taking them", %{conn: conn} do
-      {:ok, flow} = Flows.create(%{name: "Cat License", status: "open"})
+      {:ok, flow} =
+        Flows.create(%{flow_group: "pet-licensing", name: "Cat License", status: "open"})
 
       {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
       assert has_element?(view, start_button(flow))
@@ -420,7 +441,9 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "a winding-down flow's instances are listed and continue; a draft's disappear",
          %{conn: conn} do
-      {:ok, flow} = Flows.create(%{name: "Dog License 2025", status: "open"})
+      {:ok, flow} =
+        Flows.create(%{flow_group: "pet-licensing", name: "Dog License 2025", status: "open"})
+
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       {:ok, _} = Flows.update_status(flow, "winding_down", [])
@@ -444,7 +467,9 @@ defmodule Demo.FormFlowFlowStatusTest do
 
     test "a read-only flow's instances are seen but not continued; an archived one's vanish",
          %{conn: conn} do
-      {:ok, flow} = Flows.create(%{name: "Dog License 2024", status: "open"})
+      {:ok, flow} =
+        Flows.create(%{flow_group: "pet-licensing", name: "Dog License 2024", status: "open"})
+
       {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       {:ok, _} = Flows.update_status(flow, "read_only", [])

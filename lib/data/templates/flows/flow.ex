@@ -4,7 +4,7 @@ defmodule FormFlow.Data.Templates.Flow do
   the nodes and relationships of one flow diagram hang off.
 
   The row is the flow's identity and what is said about it as a whole -
-  name, flavor (`label`), tenant, slug, status; the substance lives in the associated
+  name, flavor (`label`), tenant, slug, group, status; the substance lives in the associated
   `FormFlow.Data.Templates.Flow.Node` and
   `FormFlow.Data.Templates.Flow.Relationship` records, following Neo4j's
   property graph vocabulary. `FormFlow.Data.Templates.Flows.get/1` returns the
@@ -55,6 +55,17 @@ defmodule FormFlow.Data.Templates.Flow do
   when none is given. An owned subflow has none: the step that embeds it
   (`FormFlow.Data.Templates.Flow.Node`) carries the slug.
 
+  ## Group
+
+  `flow_group` is the name of the group of root flows a host page is about -
+  `"pet-licensing"` on every flow the pet licensing pages list. A host builds
+  a page's `flows` attr from it (`FormFlow.Data.Templates.Flows.list/1` with
+  `flow_group:`), so a flow an admin puts in the group appears on the page
+  with no change to the host's code. Optional, one per flow, in the slug
+  alphabet (`FormFlow.Data.Templates.Slug.validate_shape/2`), shared rather
+  than unique, dual-written into `properties["flow_group"]` like `slug`. An
+  owned subflow has none: it is listed nowhere on its own.
+
   This row maps wholesale to a `:Flow` node when the Neo4j dual-write lands -
   ownership becomes an `OWNED_BY` relationship. See the Neo4j guide
   (`guides/neo4j.md`).
@@ -81,6 +92,7 @@ defmodule FormFlow.Data.Templates.Flow do
 
     field(:tenant_id, :string)
     field(:slug, :string)
+    field(:flow_group, :string)
 
     # What users may do with the flow - see `statuses/0`. A flow is born a
     # draft; `FormFlow.Data.Templates.Flows.update_status/3` moves it.
@@ -169,7 +181,7 @@ defmodule FormFlow.Data.Templates.Flow do
   @doc """
   Builds a changeset for a flow.
 
-  `:name`, `:slug`, `:properties`, and `:owner_flow_id` are castable;
+  `:name`, `:slug`, `:flow_group`, `:properties`, and `:owner_flow_id` are castable;
   `:label`, `:tenant_id`, and `:status` are castable at creation and
   immutable afterwards - the declared flavor is a commitment (the escape
   hatch is wrapping in a new parent flow, not converting), a template never
@@ -180,15 +192,26 @@ defmodule FormFlow.Data.Templates.Flow do
   """
   def changeset(flow, attrs \\ %{}) do
     flow
-    |> cast(attrs, [:name, :label, :tenant_id, :slug, :properties, :owner_flow_id, :status])
+    |> cast(attrs, [
+      :name,
+      :label,
+      :tenant_id,
+      :slug,
+      :flow_group,
+      :properties,
+      :owner_flow_id,
+      :status
+    ])
     |> validate_inclusion(:label, ~w(forms subflows))
     |> validate_inclusion(:status, @statuses)
     |> validate_immutable(:label)
     |> validate_immutable(:tenant_id)
     |> validate_immutable(:status)
     |> Slug.validate_slug(:form_flow_template_flows_slug_tenant_index)
+    |> Slug.validate_shape(:flow_group)
     |> copy_into_properties(:tenant_id, "tenant_id")
     |> copy_into_properties(:slug, "slug")
+    |> copy_into_properties(:flow_group, "flow_group")
     |> foreign_key_constraint(:owner_flow_id)
   end
 

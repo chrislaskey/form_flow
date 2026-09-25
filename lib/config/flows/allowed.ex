@@ -26,7 +26,15 @@ defmodule FormFlow.Config.Flows.Allowed do
   Leaving the attr unset is the other value it takes: every root flow of
   the tenant, everything allowed. A list names exactly the flows the page
   is about, so a flow authored tomorrow does not appear on the page until
-  the host says so.
+  the host says so - or until an admin puts it in the page's group, when
+  the host builds the list from one:
+
+      Templates.Flows.list(tenant_id: tenant_id, flow_group: "pet-licensing")
+      |> Enum.map(&Allowed.new(flow: &1, start: false))
+
+  The group is a column on the flow (`FormFlow.Data.Templates.Flow`,
+  "Group"), set on the admin pages; `flow_group: :none` lists the flows in
+  no group, for a catch-all page.
 
   ## Naming the flow
 

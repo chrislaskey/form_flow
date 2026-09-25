@@ -38,7 +38,7 @@ defmodule DemoWeb.Layouts do
     default: nil,
     doc:
       "which primary nav item is active: :home, :install_check, :docs, " <>
-        ":demo, :admin, :users, or :reviewers — the last four light the Demo app menu"
+        ":demo, :admin, :users, :reviewers, or :other_forms — the last five light the Demo app menu"
 
   attr :current_user, :map,
     default: nil,

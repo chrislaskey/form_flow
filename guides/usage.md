@@ -76,6 +76,12 @@ is the gate.
   flow of the tenant, everything allowed — so a flow authored later turns
   up on its own. The flow's status is asked as well, and an action needs
   both: a `winding_down` flow is not offered however this attr reads.
+  Between the two is a **group**: an admin sets `flow_group` on the flow's
+  edit page, and the host builds the list from it -
+  `FormFlow.Data.Templates.Flows.list(flow_group: "pet-licensing")`, each
+  wrapped in `Allowed.new(flow: flow)` - so a flow authored later turns up
+  on the page its group names, with no change to the host. `flow_group:
+  :none` lists the flows in no group, for a catch-all page.
 * **`instances`** — whose instances the listing shows, as an Ecto query
   over `FormFlow.Data.Instances.Flow`. Omitted, the current user's own.
   `FormFlow.Data.Instances.Flows.list_query/1` builds one: with no options

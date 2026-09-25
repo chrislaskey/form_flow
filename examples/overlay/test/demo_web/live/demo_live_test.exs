@@ -34,7 +34,8 @@ defmodule DemoWeb.DemoLiveTest do
     assert headings == [
              "Admin pages",
              "User pages - Pet License Applications",
-             "Reviewer pages - Pet License Reviews"
+             "Reviewer pages - Pet License Reviews",
+             "User pages - Other Forms"
            ]
   end
 

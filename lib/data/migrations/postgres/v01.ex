@@ -36,6 +36,12 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   # by slug alone uses it. Owned subflows and owned forms carry none - their
   # step's slug is the handle.
   #
+  # `flow_group` on flows is a listing handle: the name of the group of root
+  # flows a host page is about (`FormFlow.Data.Templates.Flows.roots_query/1`
+  # filters by it). Nullable, free-form within the slug alphabet, not unique,
+  # dual-written like `slug`; plain-indexed for the filter. Owned subflows
+  # carry none.
+  #
   # Deleting a node deletes its relationships (Neo4j's DETACH DELETE as the
   # only mode): `:restrict` would push deletion ordering onto every caller, and
   # for a diagram editor detach-delete is what the UI means.
@@ -156,6 +162,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
       add(:slug, :string)
+      add(:flow_group, :string)
       add(:status, :string, null: false, default: "draft")
       add(:properties, :map, null: false, default: %{})
 
@@ -174,6 +181,8 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     create_if_not_exists(
       index(:form_flow_template_flows, [:owner_flow_id], prefix: context.prefix)
     )
+
+    create_if_not_exists(index(:form_flow_template_flows, [:flow_group], prefix: context.prefix))
 
     create_if_not_exists(index(:form_flow_template_flows, [:tenant_id], prefix: context.prefix))
     create_if_not_exists(index(:form_flow_template_flows, [:status], prefix: context.prefix))

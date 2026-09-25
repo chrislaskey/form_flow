@@ -19,6 +19,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
       add(:label, :string, null: false, default: "forms")
       add(:tenant_id, :string)
       add(:slug, :string)
+      add(:flow_group, :string)
       add(:status, :string, null: false, default: "draft")
       add(:properties, :map, null: false, default: %{})
 
@@ -33,6 +34,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     create_if_not_exists(index(:form_flow_template_flows, [:owner_flow_id]))
     create_if_not_exists(index(:form_flow_template_flows, [:tenant_id]))
     create_if_not_exists(index(:form_flow_template_flows, [:status]))
+    create_if_not_exists(index(:form_flow_template_flows, [:flow_group]))
 
     create_if_not_exists table(:form_flow_template_flow_events, primary_key: false) do
       add(:id, :uuid, primary_key: true)

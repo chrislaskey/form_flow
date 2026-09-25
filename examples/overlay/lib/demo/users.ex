@@ -10,10 +10,12 @@ defmodule Demo.Users do
   """
 
   alias FormFlow.Config.Flows.Allowed
+  alias FormFlow.Data.Templates
 
-  # The flows a reviewer reviews, by slug - the two pet licenses seeded into
-  # every demo database (`flows/1`).
-  @pet_licenses ["dog-license", "cat-license"]
+  # The group the pet licensing pages are about: the value of `flow_group`
+  # on every pet license (`flows/2`). The seeded licenses carry it; a flow
+  # the admin builds joins the pages by naming it on the flow's edit page.
+  @pet_licensing "pet-licensing"
 
   # In reading order: reading, applying, then the two staff roles — the
   # reviewer works applications, the admin builds the flows. The demo opens
@@ -43,11 +45,10 @@ defmodule Demo.Users do
   # reaches its URL, and `DemoWeb.PersonaComponents.persona_gate/1` is what
   # keeps a visitor off the page to begin with.
   #
-  # `journeys` decides the `flows` attr too (`flows/1`): a user who applies
-  # gets every flow the tenant holds, so an admin can author one and then go
-  # and start it, and a user who works other people's applications gets the
-  # two pet licenses with `start: false`, which takes the Start section off
-  # the reviews page.
+  # `journeys` decides half of the `flows` attr too (`flows/2`): a user who
+  # works other people's applications gets every flow with `start: false`,
+  # which takes the Start section off the reviews page. Which flows is the
+  # page's half - its group.
   #
   # `landing` is where switching to the user sends the visitor
   # (`DemoWeb.UserSwitchController`): the page that perspective is for. The
@@ -141,27 +142,30 @@ defmodule Demo.Users do
   def instances(%{journeys: :everyone}), do: FormFlow.Data.Instances.Flows.list_query()
 
   @doc """
-  The flows this user's pages are about, in the shape the FormFlow pages'
-  `flows` attr wants: `nil` for a user who applies, and a
-  `FormFlow.Config.Flows.Allowed` per pet license, none of them startable,
-  for a user who works other people's applications.
+  The flows a page is about for this user, in the shape the FormFlow pages'
+  `flows` attr wants: a `FormFlow.Config.Flows.Allowed` per root flow in
+  `group`, read from the database on every render.
 
-  `nil` is every root flow, which is the demo's own story: the admin builds
-  a flow, switches to a pet owner, and finds it there to start. Naming the
-  licenses on the applications page would break that walk-through, and this
-  demo is here to give it.
+  The group is the page's half: `pet_licensing/0` on the pet licensing
+  pages, `:none` on the Other Forms page, which is where a flow lands when
+  the admin gives it no group. That is the demo's own story - the admin
+  builds a flow, switches to a pet owner, and finds it there to start - and
+  putting it in the pet licensing group instead is one field on the flow's
+  edit page, with no edit here.
 
-  The reviews page names them, because it says something about them - a
-  reviewer starts no applications of their own, so each license is
-  `start: false` and the page has no Start section at all. Naming is also
-  what keeps a flow the admin authors at run time from quietly becoming a
-  reviewer's work: the reviews page says what a reviewer reviews, and adding
-  a license is an edit here.
+  The user is the other half. A user who applies may start every flow the
+  page lists; a user who works other people's applications starts none, so
+  each flow is `start: false` and the reviews page has no Start section at
+  all - a reviewer who could start an application would be filing one in
+  their own name.
   """
-  def flows(%{journeys: :own}), do: nil
+  def flows(%{journeys: journeys}, group) do
+    Templates.Flows.list(flow_group: group)
+    |> Enum.map(&Allowed.new(flow: &1, start: journeys == :own))
+  end
 
-  def flows(%{journeys: :everyone}),
-    do: Enum.map(@pet_licenses, &Allowed.new(flow_slug: &1, start: false))
+  @doc "The group the pet licensing pages are about: `flow_group` on every pet license."
+  def pet_licensing, do: @pet_licensing
 
   @doc "Looks a user up by id."
   def fetch(id), do: Enum.find_value(@users, :error, &if(&1.id == id, do: {:ok, &1}))

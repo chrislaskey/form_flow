@@ -417,7 +417,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
             the flow is and then what it is, read here rather than edited;
             the heading's Edit flow details leads to the editor, where the
             same sheet takes input. A step's name and slug through a node,
-            the flow's own at the root. --%>
+            the flow's own at the root, with its group. --%>
       <SectionHeading.section_heading
         title="Flow details"
         description={details_description(assigns)}
@@ -433,6 +433,9 @@ defmodule FormFlow.Web.Templates.Flows.Show do
           <FactSheet.detail label={name_label(assigns)}>{step_name(@flow, @node)}</FactSheet.detail>
           <FactSheet.detail label={slug_label(assigns)}>
             <FactSheet.detail_value value={step_slug(@flow, @node)} code />
+          </FactSheet.detail>
+          <FactSheet.detail :if={is_nil(@flow.owner_flow_id)} label="Group">
+            <FactSheet.detail_value value={@flow.flow_group} code />
           </FactSheet.detail>
           <FactSheet.detail :if={is_nil(@flow.owner_flow_id)} label="Status">
             {Shared.status_label(@flow.status)}
@@ -456,7 +459,7 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   # What the fact sheet holds, said once above it: a root flow has a
   # status, an owned subflow's is its root's
   defp details_description(%{flow: %{owner_flow_id: nil}}),
-    do: "What every step of this flow shares: its name, slug, status, and kind."
+    do: "What every step of this flow shares: its name, slug, group, status, and kind."
 
   defp details_description(_assigns),
     do: "What every step of this subflow shares: its name, slug, and kind."

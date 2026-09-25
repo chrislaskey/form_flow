@@ -63,12 +63,16 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "dog_owner"
-    test "offers a pet owner only the overview and the pet license applications", %{conn: conn} do
+    test "offers a pet owner the overview and the two user pages", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
 
       menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
 
-      assert LazyHTML.attribute(menu, "href") == ["/demo", "/demo/pet-licenses/applications"]
+      assert LazyHTML.attribute(menu, "href") == [
+               "/demo",
+               "/demo/pet-licenses/applications",
+               "/demo/other-forms"
+             ]
     end
 
     @tag user: "reviewer"
@@ -129,7 +133,8 @@ defmodule DemoWeb.PersonaTest do
                {"Overview", "/demo"},
                {"Admin pages", "/demo/admin"},
                {"Pet License Applications", "/demo/pet-licenses/applications"},
-               {"Pet License Reviews", "/demo/pet-licenses/reviews"}
+               {"Pet License Reviews", "/demo/pet-licenses/reviews"},
+               {"Other Forms", "/demo/other-forms"}
              ]
     end
 
@@ -138,7 +143,8 @@ defmodule DemoWeb.PersonaTest do
             {"admin", "/demo/admin", "#admin-pages", "Admin"},
             {"dog_owner", "/demo/pet-licenses/applications", "#users-pages",
              "Pet License Applications"},
-            {"reviewer", "/demo/pet-licenses/reviews", "#reviewers-pages", "Pet License Reviews"}
+            {"reviewer", "/demo/pet-licenses/reviews", "#reviewers-pages", "Pet License Reviews"},
+            {"dog_owner", "/demo/other-forms", "#other-forms-pages", "Other Forms"}
           ] do
         {:ok, view, _html} = live(build_conn_as(user), path)
 
@@ -199,6 +205,26 @@ defmodule DemoWeb.PersonaTest do
       {:ok, view, _html} = live(conn, ~p"/demo/admin")
 
       assert has_element?(view, "#admin-pages")
+    end
+  end
+
+  describe "the other forms experience" do
+    @tag user: "cat_owner"
+    test "opens for a pet owner", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/demo/other-forms")
+
+      assert has_element?(view, "#other-forms-pages")
+    end
+
+    @tag user: "reviewer"
+    test "refuses the reviewer, and names the pet owners", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/demo/other-forms")
+
+      {:ok, owner} = Demo.Users.fetch("dog_owner")
+
+      refute has_element?(view, "#other-forms-pages")
+      assert html =~ "who cannot see the other forms"
+      assert allowed_names(html) =~ owner.name
     end
   end
 
@@ -347,6 +373,7 @@ defmodule DemoWeb.PersonaTest do
                  "/docs",
                  "/demo",
                  "/demo/pet-licenses/applications",
+                 "/demo/other-forms",
                  "https://github.com/chrislaskey/form_flow"
                ]
     end

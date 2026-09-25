@@ -156,7 +156,9 @@ defmodule FormFlow.Data.Templates.Flows do
 
   Owned subflow children are deliberately excluded: they live inside their
   root and are reached by drill-in, not listed beside it. `opts[:tenant_id]`
-  narrows to one tenant - a listing convenience, not access control.
+  narrows to one tenant - a listing convenience, not access control - and
+  `opts[:flow_group]` to one group, or with `:none` to the flows in no group
+  (`roots_query/1` has every option).
   """
   def list(opts \\ []) do
     Repo.all(from(f in roots_query(opts), order_by: [asc: f.inserted_at]))
@@ -173,6 +175,9 @@ defmodule FormFlow.Data.Templates.Flows do
   `opts[:status]` filters to the flows in one status and
   `opts[:exclude_status]` filters out the flows in one - how the flows index
   keeps archived flows out of the listing until asked, and counts them.
+  `opts[:flow_group]` filters to the flows in one group (`FormFlow.Data.Templates.Flow`,
+  "Group"), or, as `:none`, to the flows in no group - how a host page lists
+  a group of flows without naming each, and a catch-all page the rest.
   """
   def roots_query(opts \\ []) do
     node_counts =
@@ -199,7 +204,12 @@ defmodule FormFlow.Data.Templates.Flows do
     |> narrow_tenant(Keyword.get(opts, :tenant_id))
     |> filter_status(Keyword.get(opts, :status))
     |> exclude_status(Keyword.get(opts, :exclude_status))
+    |> filter_flow_group(Keyword.get(opts, :flow_group))
   end
+
+  defp filter_flow_group(query, nil), do: query
+  defp filter_flow_group(query, :none), do: from(f in query, where: is_nil(f.flow_group))
+  defp filter_flow_group(query, group), do: from(f in query, where: f.flow_group == ^group)
 
   defp narrow_tenant(query, nil), do: query
   defp narrow_tenant(query, tenant_id), do: from(f in query, where: f.tenant_id == ^tenant_id)
@@ -1094,7 +1104,8 @@ defmodule FormFlow.Data.Templates.Flows do
 
   `name:` names the copy; the subflows under it keep their own names, as
   their steps keep their labels. Without it the copy takes the source's
-  name. The copy is a **draft** whatever the source's status - not offered
+  name, and it keeps the source's group either way - a copy of a pet
+  license is a pet license. The copy is a **draft** whatever the source's status - not offered
   to users until an admin opens it - and the copy itself gets a `created`
   event (`FormFlow.Data.Templates.Flow.Event`) carrying `user_id:`, the
   admin copying, when given; the subflows copied under it have no log of
@@ -1954,6 +1965,7 @@ defmodule FormFlow.Data.Templates.Flows do
             |> rewrite_paths(context),
           tenant_id: context.tenant_id,
           slug: slug,
+          flow_group: if(is_nil(owner_id), do: source.flow_group),
           owner_flow_id: owner_id
         })
       )

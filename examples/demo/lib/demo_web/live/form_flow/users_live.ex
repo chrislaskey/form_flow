@@ -14,11 +14,12 @@ defmodule DemoWeb.FormFlowLive.Users do
   `user_id`, `perspectives`, `instances` and `flows` are the current user's
   (`Demo.Users`): a pet owner is an applicant, so FormFlow shows them the
   applicant subflows of a journey and hides the reviewer's, and the listing
-  is their own applications. `flows` is unset for a pet owner
-  (`Demo.Users.flows/1`), which is FormFlow's "every root flow of the
-  tenant": a flow the admin authors is there to start the moment they switch
-  to this side. Only the pet owners reach this page - the gate turns
-  everyone else away, the admin included.
+  is their own applications. `flows` is every root flow in the pet licensing
+  group (`Demo.Users.flows/2`), read from the database on every render: a
+  flow the admin authors is there to start the moment they give it the group
+  and switch to this side. A flow in no group goes to
+  `DemoWeb.FormFlowLive.OtherForms` instead. Only the pet owners reach this
+  page - the gate turns everyone else away, the admin included.
   """
 
   use DemoWeb, :live_view
@@ -59,7 +60,7 @@ defmodule DemoWeb.FormFlowLive.Users do
               user_id={@current_user.id}
               perspectives={@current_user.perspectives}
               instances={Demo.Users.instances(@current_user)}
-              flows={Demo.Users.flows(@current_user)}
+              flows={Demo.Users.flows(@current_user, Demo.Users.pet_licensing())}
               uri={@uri}
               params={@params}
               path={@path}

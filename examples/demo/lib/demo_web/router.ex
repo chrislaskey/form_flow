@@ -52,6 +52,7 @@ defmodule DemoWeb.Router do
       live "/demo/admin/*path", FormFlowLive.Admin
       live "/demo/pet-licenses/applications/*path", FormFlowLive.Users
       live "/demo/pet-licenses/reviews/*path", FormFlowLive.Reviewers
+      live "/demo/other-forms/*path", FormFlowLive.OtherForms
       live "/", HomeLive
     end
   end

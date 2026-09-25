@@ -92,7 +92,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
   end
 
   test "the start-a-flow picker is a plain list beside the table", %{conn: conn} do
-    {:ok, flow} = Flows.create(%{name: "Startable", status: "open"})
+    {:ok, flow} = Flows.create(%{flow_group: "pet-licensing", name: "Startable", status: "open"})
 
     {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
@@ -213,7 +213,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
     do: "tr:has(a[href='/demo/pet-licenses/#{section}/#{instance.id}']) span"
 
   defp start_flow(name, user_id) do
-    {:ok, flow} = Flows.create(%{name: name, status: "open"})
+    {:ok, flow} = Flows.create(%{flow_group: "pet-licensing", name: name, status: "open"})
     {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: user_id})
 
     instance
@@ -223,7 +223,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
   # Review) → End, named `name` so the reviews page's `flows` finds it by
   # slug, and a journey of it started by the dog owner
   defp licensing(name) do
-    {:ok, root} = Flows.create(%{name: name, label: "subflows", status: "open"})
+    {:ok, root} =
+      Flows.create(%{flow_group: "pet-licensing", name: name, label: "subflows", status: "open"})
 
     application = owned_forms_flow(root, "Application", ["applicant"], "Intake")
     review = owned_forms_flow(root, "Review", ["reviewer"], "Review")

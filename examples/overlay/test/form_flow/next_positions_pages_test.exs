@@ -148,7 +148,8 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
 
   # Start → Name → Address → End, open, and a journey of it
   defp flow_of_two do
-    {:ok, flow} = Flows.create(%{name: "Dog License", status: "open"})
+    {:ok, flow} =
+      Flows.create(%{flow_group: "pet-licensing", name: "Dog License", status: "open"})
 
     first_node = build_node(flow, ["Start"], "Start")
     name = build_form_node(flow, "Name")

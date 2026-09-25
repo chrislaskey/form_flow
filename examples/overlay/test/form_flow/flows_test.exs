@@ -320,6 +320,32 @@ defmodule Demo.FormFlowFlowsTest do
     end
   end
 
+  describe "groups" do
+    test "the listings filter by group, and :none is the flows in no group" do
+      {:ok, dog} = Flows.create(%{name: "Dog", flow_group: "pet-licensing"})
+      {:ok, cat} = Flows.create(%{name: "Cat", flow_group: "pet-licensing"})
+      {:ok, address} = Flows.create(%{name: "Address"})
+
+      assert Enum.map(Flows.list(flow_group: "pet-licensing"), & &1.id) == [dog.id, cat.id]
+      assert Enum.map(Flows.list(flow_group: :none), & &1.id) == [address.id]
+      assert length(Flows.list()) == 3
+    end
+
+    test "copy keeps the source's group; a subflow copied under it has none" do
+      {:ok, root} = Flows.create(%{name: "Dog", flow_group: "pet-licensing"})
+      {:ok, child} = Flows.create(%{owner_flow_id: root.id})
+      insert_subflow_node(root, child)
+
+      {:ok, copy} = Flows.copy(root, host_types())
+
+      assert copy.flow_group == "pet-licensing"
+      assert copy.properties["flow_group"] == "pet-licensing"
+
+      assert [copied_node] = copy.nodes
+      assert Flows.get(copied_node.subflow_id).flow_group == nil
+    end
+  end
+
   describe "tenancy on the graph tables" do
     test "nodes and relationships carry the flow's tenant_id, in the column and in properties" do
       {:ok, flow} = Flows.create(%{name: "Intake", tenant_id: "acme"})

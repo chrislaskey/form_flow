@@ -135,6 +135,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
      socket
      |> assign(:pending_name, Map.get(payload.data, :name, socket.assigns.pending_name))
      |> assign(:pending_slug, Map.get(payload.data, :slug, socket.assigns.pending_slug))
+     |> assign(
+       :pending_flow_group,
+       Map.get(payload.data, :flow_group, socket.assigns.pending_flow_group)
+     )
      |> assign(:pending_perspectives, pending_perspectives(payload, pending_type, socket.assigns))
      |> assign(:pending_type, pending_type)
      |> assign(:pending_property_values, Shared.payload_property_values(payload.data, properties))
@@ -186,6 +190,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     %{
       pending_name: flow && step_name(flow, node),
       pending_slug: flow && step_slug(flow, node),
+      pending_flow_group: flow && flow.flow_group,
       pending_perspectives: Perspective.ids(flow),
       pending_type: flow && flow.properties["flow_type"],
       pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
@@ -256,6 +261,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       values
     )
     |> Map.merge(form_data_status(%{flow: flow}))
+    |> Map.merge(form_data_group(node, flow.flow_group))
   end
 
   defp form_data(name, slug, perspectives, type_id, properties, values) do
@@ -268,6 +274,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # The status a root flow's fields form shows; an owned flow has no field
   defp form_data_status(%{flow: %{owner_flow_id: nil, status: status}}), do: %{status: status}
   defp form_data_status(_assigns), do: %{}
+
+  # The group a root flow's fields form shows; an owned subflow has no field
+  defp form_data_group(nil, group), do: %{flow_group: group}
+  defp form_data_group(_node, _group), do: %{}
 
   # The page's flow types for a flow in this context. Empty means the flow
   # has no type of its own, and no dropdown.
@@ -291,8 +301,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     else
       %{
         flow: flow,
+        subflow_node: node,
         pending_name: name,
         pending_slug: slug,
+        pending_flow_group: group,
         pending_perspectives: perspectives,
         pending_status: status
       } = socket.assigns
@@ -316,6 +328,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           values
         )
         |> Map.merge(form_data_status(%{flow: %{flow | status: status}}))
+        |> Map.merge(form_data_group(node, group))
       )
     end
   end
@@ -472,6 +485,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     assigns.current != assigns.data or
       assigns.pending_name != step_name(assigns.flow, assigns.subflow_node) or
       assigns.pending_slug != step_slug(assigns.flow, assigns.subflow_node) or
+      assigns.pending_flow_group != assigns.flow.flow_group or
       assigns.pending_perspectives != Perspective.ids(assigns.flow) or
       assigns.pending_type != assigns.flow.properties["flow_type"] or
       assigns.pending_property_values != FormFlow.Config.Flows.Type.property_values(assigns.flow) or
@@ -545,6 +559,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         flow_name(socket.assigns.flow, socket.assigns.subflow_node, socket.assigns.pending_name)
       )
       |> put_flow_slug(socket.assigns.subflow_node, socket.assigns.pending_slug)
+      |> put_flow_group(socket.assigns.subflow_node, socket.assigns.pending_flow_group)
       |> Map.put(
         :properties,
         socket.assigns
@@ -578,6 +593,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           current: data,
           pending_name: step_name(flow, node),
           pending_slug: step_slug(flow, node),
+          pending_flow_group: flow.flow_group,
           pending_perspectives: Perspective.ids(flow),
           pending_type: flow.properties["flow_type"],
           pending_property_values: FormFlow.Config.Flows.Type.property_values(flow),
@@ -860,7 +876,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
             Under the show page's heading and inside its border, so the
             two pages read as one sheet. Three columns, in two groups: who
-            the flow is (name, slug, status), then what it is (kind, read
+            the flow is (name, slug, group, status), then what it is (kind, read
             only - it is fixed at creation - then type, perspectives, and
             the type's properties, wrapping three to a row). The groups are laid out
             from here, by the attribute DynamicForm puts on each - a grid
@@ -901,6 +917,18 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
             name="slug"
             label={slug_label(assigns)}
             description={slug_description(assigns)}
+          />
+          <%!-- Which page lists the flow, on a root flow only: a host page
+                builds its `flows` from the group, so the admin's choice here
+                is what puts the flow on it (FormFlow.Data.Templates.Flow,
+                "Group"). --%>
+          <:field
+            :if={is_nil(@flow.owner_flow_id)}
+            group="identity"
+            type="text"
+            name="flow_group"
+            label="Group"
+            description={flow_group_description()}
           />
           <%!-- What users may do with the flow (FormFlow.Data.Templates.Flow's
                 status table), on a root flow only - an owned subflow's is
@@ -1094,6 +1122,10 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   defp put_flow_slug(attrs, nil, slug), do: Map.put(attrs, :slug, slug)
   defp put_flow_slug(attrs, _node, _slug), do: attrs
 
+  # The group is the root flow's alone; through a node the form has no field
+  defp put_flow_group(attrs, nil, group), do: Map.put(attrs, :flow_group, group)
+  defp put_flow_group(attrs, _node, _group), do: attrs
+
   defp update_step(nil, _name, _slug), do: {:ok, nil}
   defp update_step(node, name, slug), do: Flows.update_node(node, %{label: name, slug: slug})
 
@@ -1117,7 +1149,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   # What the sheet holds, said once above it - the show page's words, so
   # the two pages read as one
   defp details_description(%{flow: %{owner_flow_id: nil}}),
-    do: "What every step of this flow shares: its name, slug, status, and kind."
+    do: "What every step of this flow shares: its name, slug, group, status, and kind."
 
   defp details_description(_assigns),
     do: "What every step of this subflow shares: its name, slug, and kind."
@@ -1137,6 +1169,11 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     do:
       "A stable name for looking this step up in code - lowercase letters, numbers, _ and -. " <>
         "It does not follow a rename."
+
+  defp flow_group_description,
+    do:
+      "Which page lists this flow - a name the host's pages ask for in code, " <>
+        "lowercase letters, numbers, _ and -. Leave it blank for a flow no page claims."
 
   defp status_callout(%{status: nil} = assigns), do: ~H""
 

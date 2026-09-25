@@ -74,6 +74,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
         {"id", "uuid", :target},
         {"name", "string", nil},
         {"slug", "string", nil},
+        {"flow_group", "string", nil},
         {"status", "string", nil},
         {"owner_flow_id", "uuid", :source},
         {"properties.*", "domain data", nil}

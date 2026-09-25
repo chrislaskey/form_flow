@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.42.0
+
+### A flow has a group, and a page can be about one
+
+A host page names the flows it is about with the `flows` attr, one
+`FormFlow.Config.Flows.Allowed` per flow. That list is code, so a flow an
+admin builds after the deploy waits for the host to name it. The other
+value the attr took, unset, was every root flow of the tenant - too wide
+for a host with more than one kind of page.
+
+**`flow_group` is a new column on flow templates**: the name of the group
+of root flows a page is about - `pet-licensing` on every pet license.
+Optional, one per flow, written in the slug alphabet
+(`FormFlow.Data.Templates.Slug.validate_shape/2`, new - the rules
+`validate_slug/2` applies before its unique index, now on their own),
+shared rather than unique, and dual-written into `properties["flow_group"]`
+as `slug` is. An owned subflow carries none. `Flows.copy/2` keeps the
+source's group: a copy of a pet license is a pet license.
+
+`FormFlow.Data.Templates.Flows.roots_query/1` and `list/1` take
+`flow_group:` - one group, or `:none` for the flows in no group - so a
+host builds the attr from it and an admin adds a flow to the page by
+naming its group:
+
+    Templates.Flows.list(tenant_id: tenant_id, flow_group: "pet-licensing")
+    |> Enum.map(&Allowed.new(flow: &1, start: false))
+
+`Allowed` itself is unchanged: it still names one flow. Nothing on the
+router changed either - the attr takes the same list, the host just has a
+new place to get it from.
+
+The admin pages carry the field. The flow New page takes a Group beside
+Name and Slug; the Edit page's Flow details sheet edits it on a root flow
+(never through a step - an owned subflow has none) and saves it with the
+rest; the Show page lists it; the flows index filters by it and has an
+optional Group column.
+
+**The V01 migration gained the column.** The library is pre-release and
+its one migration is the schema, so an existing database is recreated,
+not migrated: the demo runs `mix ecto.reset`.
+
+### Demo: an Other Forms page
+
+The demo's user pages were about every flow, which was its walk-through:
+the admin builds a flow, switches to a pet owner, and finds it there to
+start. They are now about their group. The pet license applications and
+reviews pages list the `pet-licensing` group - the three seeded licenses
+carry it - and a fourth page, **Other Forms** at `/demo/other-forms`, is
+the catch-all: every root flow in no group, which is where a flow the
+admin builds lands until it is given one. The walk-through is the same,
+one page over; putting the new flow beside the licenses instead is one
+field on its edit page. `Demo.Users.flows/2` reads the group's flows from
+the database on every render and answers `start` by the user, as before.
+
 ## v0.41.0
 
 ### One dialog, and the publish question fits inside it

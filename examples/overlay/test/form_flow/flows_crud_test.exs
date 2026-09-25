@@ -137,7 +137,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     badge = ~s(a[href="#{page}"])
     entries = "#flows-health-entries"
     detail = "#flows-health-detail"
-    standing = "#flows-health-standing"
+    summary = "#flows-health-summary"
 
     # Never checked: the index runs no check, so the badge says so
     {:ok, view, _html} = live(conn, "/demo/admin/flows")
@@ -157,9 +157,9 @@ defmodule Demo.FormFlowFlowsCrudTest do
     refute has_element?(view, ~s(a[href="/demo/admin/flows/#{flow.id}/edit"]), "Edit")
     assert has_element?(view, "dt", "Perspectives")
     assert has_element?(view, "dd", "Simple flow")
-    assert has_element?(view, standing, "1 error")
-    assert has_element?(view, standing, "1 warning")
-    assert has_element?(view, standing, "checks passing")
+    assert has_element?(view, summary, "1 error")
+    assert has_element?(view, summary, "1 warning")
+    assert has_element?(view, summary, "checks passing")
 
     assert has_element?(
              view,
@@ -213,8 +213,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "#{switch}[aria-checked=true]", "Ignored")
     today = Date.to_iso8601(Date.utc_today())
     assert has_element?(view, detail, "Ignored by demo-admin on #{today}")
-    assert has_element?(view, standing, "1 ignored")
-    assert has_element?(view, standing, "0 warnings")
+    assert has_element?(view, summary, "1 ignored")
+    assert has_element?(view, summary, "0 warnings")
     assert has_element?(view, "#{entries} button[aria-current=true] .bg-zinc-300")
 
     assert %{
@@ -326,7 +326,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "#{badge} span", "✓")
 
     {:ok, view, _html} = live(conn, page)
-    assert has_element?(view, "#flows-health-standing", "0 errors")
+    assert has_element?(view, "#flows-health-summary", "0 errors")
     assert render(view) =~ "Nothing to report"
 
     # A save that bypasses the pages leaves the badge behind — until the
@@ -343,7 +343,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(index, "#{badge} span", "✓")
 
     {:ok, view, _html} = live(conn, page)
-    assert has_element?(view, "#flows-health-standing", "1 error")
+    assert has_element?(view, "#flows-health-summary", "1 error")
 
     {:ok, index, _html} = live(conn, "/demo/admin/flows")
     assert has_element?(index, "#{badge} span", "3")
@@ -435,6 +435,53 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert Flows.get(id).slug == "dla2027"
     refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "the new page takes a group, and the edit page saves one with the rest", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/demo/admin/flows/new")
+    assert html =~ "Group"
+
+    view
+    |> element("form")
+    |> render_submit(%{
+      "dynamic_form" => %{
+        "name" => "Dog License",
+        "label" => "forms",
+        "flow_group" => "Pet-Licensing"
+      }
+    })
+
+    {path, _flash} = assert_redirect(view)
+    assert "/demo/admin/flows/" <> rest = path
+    [id, "edit"] = String.split(rest, "/")
+    assert Flows.get(id).flow_group == "pet-licensing"
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
+    assert html =~ "pet-licensing"
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{"dynamic_form" => %{"flow_group" => "other"}})
+
+    assert Flows.get(id).flow_group == "pet-licensing"
+    assert has_element?(view, "button", "Discard changes")
+
+    view |> element("button", "Save") |> render_click()
+
+    assert Flows.get(id).flow_group == "other"
+    refute has_element?(view, "button", "Discard changes")
+  end
+
+  test "the show page lists the group, and the index filters by it", %{conn: conn} do
+    {:ok, dog} = Flows.create(%{name: "Dog License", slug: "dog", flow_group: "pet-licensing"})
+    {:ok, _address} = Flows.create(%{name: "Change of Address", slug: "address"})
+
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{dog.id}")
+    assert html =~ "pet-licensing"
+
+    {:ok, _view, html} = live(conn, "/demo/admin/flows?filter[flow_group]=pet")
+    assert html =~ "Dog License"
+    refute html =~ "Change of Address"
   end
 
   test "a taken slug is a refused save that names the field", %{conn: conn} do

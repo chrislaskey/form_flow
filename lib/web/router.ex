@@ -263,7 +263,10 @@ defmodule FormFlow.Web.Router do
         "the named flows alone. `nil` - the attr unset - is every root flow " <>
         "of the tenant, everything allowed, so a flow authored later appears " <>
         "here on its own; a list names exactly the flows the page is about " <>
-        "and a new flow waits for the host. The page's answer and the flow's " <>
+        "and a new flow waits for the host - unless the host builds the list " <>
+        "from a group (`FormFlow.Data.Templates.Flows.list/1` with `flow_group:`), " <>
+        "in which case an admin adds a flow to the page by naming its group. " <>
+        "The page's answer and the flow's " <>
         "status are both consulted and neither wins - a `winding_down` flow " <>
         "is not offered however this attr reads. " <>
         "The router's `tenant_id` is " <>
