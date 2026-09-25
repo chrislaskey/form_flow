@@ -8,7 +8,7 @@ defmodule Demo.FormFlowNextPositionsTest do
 
   Every path that changes a form instance's status is proven to leave the
   row **and** the table right: creation, start, submit, reopen, completing the
-  journey, deletion, and the `refresh: false` opt-out. Two shapes get their
+  journey, and deletion. Two shapes get their
   own tests because they are where a single cached position would lie: a
   form behind a step another step still shuts, and a flow worked in any
   order, where every unfinished form is open at once.
@@ -95,26 +95,6 @@ defmodule Demo.FormFlowNextPositionsTest do
       assert reload(journey).next_computed_at == computed_at
     end
 
-    test "refresh: false leaves the cache where it was, and the caller's own call catches it up" do
-      %{journey: journey, forms: [name, address]} = flow_of_two()
-
-      {:ok, _started} = Instances.Forms.update_status(journey, [name.id], :in_progress)
-
-      {:ok, _done} =
-        Instances.Forms.update_status(journey, [name.id], :completed, data: %{}, refresh: false)
-
-      # Stale on purpose: still says the first form
-      stale = reload(journey)
-      assert stale.next_path == [name.id]
-      assert stale.completed_forms == 0
-      assert open_paths(stale) == [[name.id]]
-
-      {:ok, fresh} = Instances.Flows.update_next_positions(stale)
-      assert fresh.next_path == [address.id]
-      assert fresh.completed_forms == 1
-      assert open_paths(fresh) == [[address.id]]
-    end
-
     test "completing the journey empties the cache, whatever the forms say" do
       %{journey: journey, forms: [name, _address]} = flow_of_two()
 
@@ -152,15 +132,15 @@ defmodule Demo.FormFlowNextPositionsTest do
       assert row.tenant_id == "acme"
     end
 
-    test "creating with refresh: false leaves the columns null and the table empty" do
+    test "a flow with no form position: nothing is next, and the table stays empty" do
       {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
       build_node(flow, ["Start"], "Start")
 
-      {:ok, journey} =
-        Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"}, refresh: false)
+      {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
       assert journey.next_path == nil
-      assert journey.next_computed_at == nil
+      assert journey.forms_total == 0
+      assert %DateTime{} = journey.next_computed_at
       assert rows_of(journey) == []
     end
   end
@@ -529,6 +509,139 @@ defmodule Demo.FormFlowNextPositionsTest do
     test "null on a journey still in progress" do
       %{journey: journey} = flow_of_two()
       assert reload(journey).completed_template_snapshot == nil
+    end
+  end
+
+  describe "the journey's status follows its forms" do
+    test "submitting the last form completes the journey, with its moment and its snapshot" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      assert reload(journey).status == "in_progress"
+
+      complete(journey, [address.id])
+
+      done = reload(journey)
+      assert done.status == "completed"
+      assert %DateTime{} = done.completed_at
+      assert %{"tree" => _tree, "positions" => positions} = done.completed_template_snapshot
+      assert length(positions) == 2
+      assert Enum.all?(positions, &(&1["status"] == "completed"))
+
+      # And it leaves every queue
+      assert done.next_path == nil
+      assert open_paths(done) == []
+      assert done.completed_forms == 2
+      assert done.forms_total == 2
+    end
+
+    test "a flow worked in any order needs all its forms, not just the one before End" do
+      %{journey: journey, forms: [name, address]} = flow_of_two("wizard_any_order")
+
+      # Address alone reaches End - `FlowProgress.complete?/2` says so - but
+      # Name is untouched, so the journey is not finished
+      complete(journey, [address.id])
+      assert reload(journey).status == "in_progress"
+
+      complete(journey, [name.id])
+      assert reload(journey).status == "completed"
+    end
+
+    test "a flow with no End never completes, however many forms are submitted" do
+      {:ok, flow} = Flows.create(%{name: "Application", status: "open"})
+      first_node = build_node(flow, ["Start"], "Start")
+      name = build_form_node(flow, "Name")
+      edge(flow, first_node, name)
+
+      {:ok, journey} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
+
+      complete(journey, [name.id])
+      assert reload(journey).status == "in_progress"
+    end
+
+    test "reopening one form reopens the journey, and clears its moment and snapshot" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      complete(journey, [address.id])
+      assert reload(journey).status == "completed"
+
+      # The form furthest from End, so this is not `complete?/2` answering
+      {:ok, _reopened} = Instances.Forms.update_status(journey, [name.id], :in_progress)
+
+      back = reload(journey)
+      assert back.status == "in_progress"
+      assert back.completed_at == nil
+      assert back.completed_template_snapshot == nil
+      assert back.next_path == [name.id]
+      assert open_paths(back) == [[name.id]]
+    end
+
+    test "finishing again records the second moment and takes the snapshot again" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      complete(journey, [address.id])
+      first = reload(journey)
+
+      {:ok, _reopened} = Instances.Forms.update_status(journey, [name.id], :in_progress)
+      # Cleared while it is not finished, so nothing claims a moment that
+      # has been taken back
+      assert reload(journey).completed_template_snapshot == nil
+
+      complete(journey, [name.id])
+
+      second = reload(journey)
+      assert second.status == "completed"
+      assert second.completed_template_snapshot != nil
+      assert DateTime.compare(second.completed_at, first.completed_at) == :gt
+    end
+
+    test "the trail records every crossing, in order, each readable on its own" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      complete(journey, [address.id])
+      {:ok, _reopened} = Instances.Forms.update_status(journey, [name.id], :in_progress)
+      complete(journey, [name.id])
+
+      statuses =
+        for %{form_instance: nil, event: event} <- Instances.Flows.list_events(reload(journey)),
+            event.event == "status_changed",
+            do: Instances.Flow.Event.status(event)
+
+      assert statuses == ["completed", "in_progress", "completed"]
+    end
+
+    test "a no-op submit moves nothing" do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      complete(journey, [address.id])
+      completed_at = reload(journey).completed_at
+
+      {:ok, _same} = Instances.Forms.update_status(journey, [address.id], :completed, data: %{})
+
+      assert reload(journey).completed_at == completed_at
+    end
+
+    test "the counts of a completed journey survive a later flow edit and a sweep" do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+
+      complete(journey, [name.id])
+      complete(journey, [address.id])
+      assert reload(journey).forms_total == 2
+
+      # A step added after the fact, and a sweep of the whole root
+      extra = build_form_node(flow, "Extra")
+      edge(flow, address, extra)
+      {:ok, _swept} = Instances.Flows.update_next_positions(flow)
+
+      still = reload(journey)
+      assert still.status == "completed"
+      assert still.completed_forms == 2
+      assert still.forms_total == 2
+      assert still.next_path == nil
     end
   end
 

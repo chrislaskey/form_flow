@@ -1535,13 +1535,16 @@ defmodule Demo.FormFlowFormsCrudTest do
       {owner, v1} = published_catalog("Owner contact")
       {dog, dog_node} = flow_with_catalog_form_node("Dog License", owner)
       {:ok, dog} = Flows.update_status(dog, "open", [])
-      through(dog, dog_node)
+      through_with_trailing(dog, dog_node)
       instance = start_at(dog, dog_node)
       journey = Instances.Flows.get(instance.instance_flow_id)
       assert journey.next_path == [dog_node.id]
       {:ok, _} = Instances.Forms.update_status(journey, [dog_node.id], :completed, data: %{})
       journey = Instances.Flows.get(journey.id)
-      assert journey.next_path == nil
+      # Submitted, and the journey still in progress behind it - what leaves
+      # the publish a form to reopen
+      assert journey.status == "in_progress"
+      refute journey.next_path == [dog_node.id]
       computed_before = journey.next_computed_at
 
       {:ok, draft} = Forms.create_draft(owner.id, based_on: v1.id)
@@ -2972,6 +2975,25 @@ defmodule Demo.FormFlowFormsCrudTest do
     end_node = build_node(flow, ["End"], "End")
     edge(flow, start_node, step)
     edge(flow, step, end_node)
+  end
+
+  # `through/2` with one more form position after the step, left untouched,
+  # so that submitting the step's form does not finish the journey. A publish
+  # never reaches a form inside a completed journey (the journey rule in
+  # `FormFlow.Data.Templates.Forms`), so a test about what a publish does to
+  # a submitted form needs the journey still open.
+  defp through_with_trailing(flow, step) do
+    {trailing_form, _v1} = published_catalog("Trailing #{System.unique_integer([:positive])}")
+
+    start_node = build_node(flow, ["Start"], "Start")
+    end_node = build_node(flow, ["End"], "End")
+
+    trailing =
+      build_node(flow, ["Form"], trailing_form.name, %{form_id: trailing_form.id})
+
+    edge(flow, start_node, step)
+    edge(flow, step, trailing)
+    edge(flow, trailing, end_node)
   end
 
   defp edge(flow, source, target) do

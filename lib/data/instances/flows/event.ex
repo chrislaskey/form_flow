@@ -39,6 +39,28 @@ defmodule FormFlow.Data.Instances.Flow.Event do
 
   def events, do: @events
 
+  @doc """
+  The status a `status_changed` event moved the journey to - `"completed"`
+  or `"in_progress"` - or nil on any other event, and on a `status_changed`
+  written before this was recorded (every journey completed before
+  `FormFlow.Data.Instances.Flows.reopen/2` existed, when completion was the
+  only direction there was). A reader with nil in hand should say what it
+  can rather than guess: for a long time "Completed" was the only thing a
+  `status_changed` event could mean.
+
+  It lives inside `snapshot` under `"form_flow"`, the one key FormFlow
+  claims in a host's maps, so `opts[:snapshot]` stays the host's.
+  """
+  def status(%__MODULE__{event: "status_changed", snapshot: %{"form_flow" => own}})
+      when is_map(own) do
+    case Map.get(own, "status") do
+      status when status in ["completed", "in_progress"] -> status
+      _other -> nil
+    end
+  end
+
+  def status(%__MODULE__{}), do: nil
+
   @doc "Builds a changeset for an event row."
   def changeset(event, attrs \\ %{}) do
     event

@@ -303,6 +303,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   # tree was saved after the last refresh, and no sweep has reached it
   # (`FormFlow.Data.Instances.Flows.next_positions_stale?/2`). Drawn as a
   # quiet mark beside the value; the journey's page repairs it on open.
+  #
+  # A completed journey is never stale and so is never marked - that rule
+  # lives in `next_positions_stale?/2`, where the journey's page reads it
+  # too.
   defp stale?(%Instances.Flow{} = flow_instance, trees_updated_at) do
     Instances.Flows.next_positions_stale?(
       flow_instance,

@@ -1840,7 +1840,9 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "a publish that reopens the source is a migration, not a user's reopen", %{conn: conn} do
-      %{instance: instance, intake: intake, review: review} = fixture = review_flow()
+      %{instance: instance, intake: intake, review: review} =
+        fixture = review_flow(trailing: true)
+
       source = complete(instance, [intake.id], %{"name" => "Ada"})
       reviewed(conn, fixture)
 
@@ -2625,7 +2627,7 @@ defmodule Demo.FormFlowInstancesTest do
 
   # Start → Intake → Review → End, any order; Review's form is a "review" of
   # Intake
-  defp review_flow do
+  defp review_flow(opts \\ []) do
     {:ok, flow} =
       Flows.create(%{
         flow_group: "pet-licensing",
@@ -2645,9 +2647,30 @@ defmodule Demo.FormFlowInstancesTest do
 
     edge(flow, first_node, intake)
     edge(flow, intake, review)
-    edge(flow, review, last_node)
 
-    %{flow: flow, instance: start_flow(flow), intake: intake, review: review}
+    # `trailing: true` puts one more form between the review and End, left
+    # untouched, so that submitting Intake and Review does not finish the
+    # journey. A publish never reaches a form inside a completed journey
+    # (the journey rule in `FormFlow.Data.Templates.Forms`), so a test about
+    # what a publish does to the reviewed form needs the journey still open.
+    trailing =
+      if Keyword.get(opts, :trailing, false) do
+        node = build_form_node(flow, "Trailing")
+        edge(flow, review, node)
+        edge(flow, node, last_node)
+        node
+      else
+        edge(flow, review, last_node)
+        nil
+      end
+
+    %{
+      flow: flow,
+      instance: start_flow(flow),
+      intake: intake,
+      review: review,
+      trailing: trailing
+    }
   end
 
   # The review submitted through its page, the way the reviewer does it — so

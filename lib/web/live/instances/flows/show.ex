@@ -390,15 +390,30 @@ defmodule FormFlow.Web.Instances.Flows.Show do
   attr(:next_up, :map, default: nil)
   attr(:components, :atom, default: nil)
 
+  # A finished journey says so and offers nothing: no next-up line, no
+  # Continue button. The rows below keep their own View and Reopen, which
+  # is what an admin repairing a record needs and what a user re-reading
+  # their answers expects. `completed?` asks the journey's recorded status
+  # rather than whether `next_up` is nil, because a host may complete a
+  # journey the derivation calls unfinished and the card must be right
+  # then too.
   defp overall_card(assigns) do
-    assigns = assign(assigns, done: done(assigns.rows), total: length(assigns.rows))
+    assigns =
+      assign(assigns,
+        done: done(assigns.rows),
+        total: length(assigns.rows),
+        completed?: assigns.flow_instance.status == "completed"
+      )
 
     ~H"""
     <div class="mb-6 flex flex-wrap items-center gap-5 rounded-2xl border border-zinc-300 px-5 py-4">
       <Progress.ring {ring_assigns(@rows)} />
       <div class="min-w-0 flex-1">
         <p class="truncate text-lg font-semibold leading-tight">{@flow_name}</p>
-        <p class="text-sm text-zinc-500">
+        <p :if={@completed?} class="text-sm text-zinc-500">
+          Completed · {@done} of {@total} forms done
+        </p>
+        <p :if={!@completed?} class="text-sm text-zinc-500">
           {@done} of {@total} forms done
           <span :if={@next_up}>· next {@next_up.form.label}</span>
           <span :if={is_nil(@next_up) and @done == @total}>· all done</span>
@@ -406,7 +421,7 @@ defmodule FormFlow.Web.Instances.Flows.Show do
         </p>
       </div>
       <Core.button
-        :if={@next_up}
+        :if={@next_up && !@completed?}
         components={@components}
         navigate={Paths.form_edit_path(@base, @flow_instance.id, @next_up.form.path)}
         variant="primary"

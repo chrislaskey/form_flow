@@ -109,6 +109,69 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
     end
   end
 
+  describe "a completed journey's page" do
+    @describetag user: "dog_owner"
+
+    test "says Completed, offers nothing to continue, and still lists the forms",
+         %{conn: conn} do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      submit(journey, [name.id])
+      submit(journey, [address.id])
+      assert reload(journey).status == "completed"
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      assert html =~ "Completed"
+      assert html =~ "2 of 2 forms done"
+      # Both rows are still there to read back
+      assert html =~ "Name"
+      assert html =~ "Address"
+      # Nothing to pick up: no next-up line, no Continue or Start
+      refute html =~ "nothing for you right now"
+      refute html =~ ">Continue<"
+      refute html =~ ">Start<"
+    end
+
+    test "counts the forms it had when it completed, not the ones added since",
+         %{conn: conn} do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+
+      submit(journey, [name.id])
+      submit(journey, [address.id])
+
+      # A step added to the template after this journey finished. It is not
+      # this journey's to answer, so the page must not count it or list it.
+      extra = build_form_node(flow, "Extra")
+      edge(flow, address, extra)
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      assert html =~ "2 of 2 forms done"
+      refute html =~ "3 forms"
+      refute html =~ "Extra"
+    end
+
+    test "a journey completed with no snapshot renders live rather than renders nothing",
+         %{conn: conn} do
+      %{journey: journey, forms: [name, address]} = flow_of_two()
+
+      submit(journey, [name.id])
+      submit(journey, [address.id])
+
+      # As every journey completed before the snapshot column existed
+      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [completed_template_snapshot: nil]
+      )
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      assert html =~ "2 of 2 forms done"
+      assert html =~ "Name"
+      assert html =~ "Address"
+    end
+  end
+
   describe "the listing" do
     @describetag user: "dog_owner"
 
@@ -123,6 +186,51 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
 
       {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
       assert html =~ "may have changed"
+    end
+
+    test "opening a completed journey does not recount it against the flow as it is now",
+         %{conn: conn} do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+
+      submit(journey, [name.id])
+      submit(journey, [address.id])
+      assert reload(journey).forms_total == 2
+
+      # A step added to the template after this journey finished, and the
+      # flow saved - which is what makes the cache look stale to a reader
+      extra = build_form_node(flow, "Extra")
+      edge(flow, address, extra)
+      later = DateTime.add(reload(journey).next_computed_at, 60, :second)
+      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
+
+      # Reading back a finished application is exactly what used to trigger
+      # the read-repair, rewriting its final 2 of 2 into 2 of 3
+      {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
+
+      after_viewing = reload(journey)
+      assert after_viewing.completed_forms == 2
+      assert after_viewing.forms_total == 2
+
+      # And the listing still says so
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
+      assert html =~ "2 of 2"
+      refute html =~ "2 of 3"
+    end
+
+    test "never marks a completed journey - its cache is final, not behind", %{conn: conn} do
+      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
+
+      submit(journey, [name.id])
+      submit(journey, [address.id])
+      journey = reload(journey)
+      assert journey.status == "completed"
+
+      # The same flow edit that marks a journey still in progress
+      later = DateTime.add(journey.next_computed_at, 60, :second)
+      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
+
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
+      refute html =~ "may have changed"
     end
   end
 
@@ -144,6 +252,12 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
           %{"id" => "#{a.id}-#{b.id}", "source" => a.id, "target" => b.id}
         end)
     }
+  end
+
+  defp submit(journey, path) do
+    {:ok, _started} = Instances.Forms.update_status(journey, path, :in_progress)
+    {:ok, done} = Instances.Forms.update_status(journey, path, :completed, data: %{})
+    done
   end
 
   # Start → Name → Address → End, open, and a journey of it

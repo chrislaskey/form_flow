@@ -138,17 +138,15 @@ defmodule FormFlow.Web.Instances.Flows.History do
     do: "Started"
 
   defp label(
-         %{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}},
-         %Instances.Flow{completed_template_snapshot: %{"positions" => positions}}
-       ),
-       do:
-         "Completed · #{length(positions)} #{if length(positions) == 1, do: "form", else: "forms"}"
-
-  defp label(
-         %{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}},
-         _instance
-       ),
-       do: "Completed"
+         %{form_instance: nil, event: %Instances.Flow.Event{} = event},
+         %Instances.Flow{} = instance
+       )
+       when event.event == "status_changed" do
+    case Instances.Flow.Event.status(event) do
+      "in_progress" -> "Reopened"
+      _completed -> completed_label(instance)
+    end
+  end
 
   defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "reconciled"}}, _instance),
     do: "Reconciled"
@@ -156,8 +154,25 @@ defmodule FormFlow.Web.Instances.Flows.History do
   defp label(%{event: %Instances.Form.Event{} = event}, _instance),
     do: FormStatus.event_label(event)
 
-  defp kind(%{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"}}),
-    do: :success
+  # How many form positions the flow had at that moment, from the snapshot
+  # the row keeps - but only while the journey still holds one. A reopen
+  # clears it, so a completion that was later taken back says "Completed"
+  # alone, as does one recorded before the snapshot column existed.
+  defp completed_label(%Instances.Flow{completed_template_snapshot: %{"positions" => positions}})
+       when is_list(positions),
+       do:
+         "Completed · #{length(positions)} #{if length(positions) == 1, do: "form", else: "forms"}"
+
+  defp completed_label(%Instances.Flow{}), do: "Completed"
+
+  # A reopen is not a success - it is the journey going back to work, the
+  # colour a reopened form already wears
+  defp kind(%{form_instance: nil, event: %Instances.Flow.Event{event: "status_changed"} = event}) do
+    case Instances.Flow.Event.status(event) do
+      "in_progress" -> :warning
+      _completed -> :success
+    end
+  end
 
   defp kind(%{form_instance: nil, event: %Instances.Flow.Event{event: "created"}}), do: :info
   defp kind(%{form_instance: nil}), do: :neutral

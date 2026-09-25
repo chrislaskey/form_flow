@@ -20,7 +20,8 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
       `%{form: form, editable?: bool, word: word, last: entry}`: the flow
       type's `editable?/2`, the form pages' status word for its instance
       (`FormFlow.Web.Instances.Components.Forms.Status.status/2`), and the
-      newest entry of its trail
+      newest entry of its trail. On a completed journey these are the forms
+      it had **when it completed** - see `as_completed/2`
     * `groups` - the rows cut where one "forms" flow ends and the next
       begins, as `{flow, rows}`
     * `trail` - everything that has happened in the instance, oldest first
@@ -149,7 +150,12 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
 
         trail = Instances.Flows.list_events(flow_instance)
         statuses = FlowProgress.derive(tree, instances)
-        rows = rows(forms, steps, tree, statuses, flow_instance, trail, socket.assigns)
+
+        rows =
+          forms
+          |> rows(steps, tree, statuses, flow_instance, trail, socket.assigns)
+          |> as_completed(flow_instance)
+
         continue_allowed? = continue_allowed?(flow, socket.assigns)
 
         socket =
@@ -179,6 +185,13 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
   # saved since the last one (`Instances.Flows.next_positions_stale?/2`) -
   # is rewritten the first time anyone opens it, whether or not a sweep
   # ever reaches it. A fresh row costs one comparison and nothing else.
+  #
+  # A completed journey is never stale, so opening one repairs nothing.
+  # That matters more here than the comparison saved: the refresh counts
+  # `completed_forms` and `forms_total` from the live tree, so repairing a
+  # finished journey would rewrite its final 11 of 11 into 11 of 12 the
+  # moment a step was added to the template - and reading back a finished
+  # application is the very thing that would trigger it.
   defp repair_next_positions(flow_instance, tree, assigns) do
     if Instances.Flows.next_positions_stale?(flow_instance, Templates.Flows.tree_updated_at(tree)) do
       case Instances.Flows.update_next_positions(flow_instance,
@@ -338,6 +351,39 @@ defmodule FormFlow.Web.Instances.Flows.Shared do
     rows != [] and flow_instance.status != "completed" and
       Enum.all?(rows, &(&1.form.status == :completed))
   end
+
+  # A completed journey shows the forms it had when it completed, not the
+  # forms its flow has now: a step added to the template afterwards is not
+  # this journey's to answer, and listing it would put the page at 50 of 51
+  # for work nobody can do. The journey's snapshot
+  # (`FormFlow.Data.Instances.Flows.Snapshot`) is the record of which
+  # positions those were, so the filter is one `MapSet` of its paths.
+  #
+  # Everything the page draws comes off `rows` - the counts, the sections
+  # (`groups/1` chunks, so a section emptied here is simply not rendered),
+  # the rings, `next_up` - so this one filter is the whole of it.
+  #
+  # Two things it leaves alone. `forms` stays live, because the History
+  # page looks an event's position up in it and a completed journey must
+  # not disown events it still holds. And a position *deleted* from the
+  # template is in the snapshot but not in `rows`, so it cannot be drawn
+  # from here at all - the same disappearance stranding already causes for
+  # every journey, and `Instances.Flows.list_stranded/2` is where it
+  # surfaces.
+  #
+  # A journey completed before the snapshot column existed has none, and
+  # renders live rather than renders nothing.
+  defp as_completed(rows, %Instances.Flow{
+         status: "completed",
+         completed_template_snapshot: %{"positions" => positions}
+       })
+       when is_list(positions) do
+    paths = MapSet.new(positions, & &1["path"])
+
+    Enum.filter(rows, &MapSet.member?(paths, &1.form.path))
+  end
+
+  defp as_completed(rows, _flow_instance), do: rows
 
   # The rows in the order the flow walks them, cut where one "forms" flow
   # ends and the next begins. A simple flow is one group; a complex one is

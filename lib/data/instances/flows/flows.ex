@@ -6,9 +6,21 @@ defmodule FormFlow.Data.Instances.Flows do
   the term).
 
   Deliberately minimal until the runner lands: creation (with its `created`
-  event), completion (`complete/2`), the derived-progress helpers, stranded
-  listing, and the one operation that must exist concretely from day one -
-  explicit deletion, because nothing on the instance side ever cascades.
+  event), completion and its other direction (`complete/2`, `reopen/2`),
+  the derived-progress helpers, stranded listing, and the one operation
+  that must exist concretely from day one - explicit deletion, because
+  nothing on the instance side ever cascades.
+
+  **A journey's recorded status follows its forms.** Neither `complete/2`
+  nor `reopen/2` waits for a host to notice: after any change
+  `FormFlow.Data.Instances.Forms.update_status/4` makes, that function asks
+  the derivation whether the root flow's End is reached and calls whichever
+  of the two matches. So a journey finishes when its user submits its last
+  form, and goes back to in progress if an admin reopens one of them. What
+  does **not** move a journey's status is a template edit - see
+  `FormFlow.Data.Instances.Flow` on the divergence that leaves, and
+  `update_next_positions/2` on why its sweep touches only journeys still in
+  progress.
 
   Beside those, the one cache the instance side keeps: **where the flow is
   open** for a journey, written by `update_next_positions/2` onto the
@@ -162,9 +174,7 @@ defmodule FormFlow.Data.Instances.Flows do
   (`update_next_positions/2`, in the same transaction): the positions Start
   reaches, and counts of `0` of the tree's forms - so a journey is in every
   queue it belongs in from its first moment. `opts[:flow_types]` and
-  `opts[:callback_data]` reach that refresh; `refresh: false` skips it, for
-  a bulk importer that will call `update_next_positions/2` on the
-  `Templates.Flow` once at the end.
+  `opts[:callback_data]` reach that refresh.
   """
   def create(attrs \\ %{}, opts \\ []) do
     flow_id = attrs[:template_flow_id] || attrs["template_flow_id"]
@@ -199,24 +209,32 @@ defmodule FormFlow.Data.Instances.Flows do
   defp mark_pre_release(attrs, _flow), do: attrs
 
   @doc """
+  Note: this function does not check the form flow template's status, only
+  the journey. Check that before calling this function.
+
   Sets `status: "completed"` and `completed_at`, writing a
   `status_changed` event. Both are facts recorded at a moment, never recomputed
   - it may legitimately diverge from `complete?/1` after a later template
   edit. So that the divergence can still be read, the same update writes
   `completed_template_snapshot`: the flow tree and the journey's form
   positions as they stand right now (`FormFlow.Data.Instances.Flows.Snapshot`).
-  Who calls it - runner-automatic on End reached, host-triggered, or
-  End-node custom logic (planned) - is deliberately not decided here.
   Completing a completed journey is a no-op. The flow's status is not
   consulted: this is an administrative action on the journey, not a user
   continuing it, and a host closing out a read-only year may well call it.
 
+  `FormFlow.Data.Instances.Forms.update_status/4` calls this itself, after
+  any change it makes, when the derivation says the root flow's End is
+  reached - so an ordinary journey finishes when its user submits its last
+  form, and no host has to watch for it. `reopen/2` is the other direction
+  of the same rule. A host calls this directly for the administrative case
+  above.
+
   The call refreshes the journey's open positions in the same transaction
   (`update_next_positions/2`): a completed journey has none, whatever its
-  forms say, so it leaves every queue. `opts[:flow_types]`,
-  `opts[:callback_data]`, and `refresh: false` reach the refresh as they
-  do from `create/2`. The tree is resolved once - `opts[:tree]` if the
-  caller has it - and shared by the snapshot and the refresh.
+  forms say, so it leaves every queue. `opts[:flow_types]` and
+  `opts[:callback_data]` reach the refresh as they do from `create/2`. The
+  tree is resolved once - `opts[:tree]` if the caller has it - and shared
+  by the snapshot and the refresh.
   """
   def complete(instance, opts \\ [])
 
@@ -237,8 +255,11 @@ defmodule FormFlow.Data.Instances.Flows do
         completed_template_snapshot: Snapshot.take(tree, form_instances(instance))
       }
 
+      # The status is written before the refresh, not after: the refresh
+      # reads it to decide there are no open positions (see
+      # `derive_next_positions/4`), which is what empties the queues
       with {:ok, completed} <- Repo.update(Ecto.Changeset.change(instance, changes)),
-           {:ok, _event} <- insert_event(completed, "status_changed", opts),
+           {:ok, _event} <- insert_event(completed, "status_changed", "completed", opts),
            {:ok, completed} <- refresh_next_positions(completed, opts) do
         completed
       else
@@ -247,14 +268,57 @@ defmodule FormFlow.Data.Instances.Flows do
     end)
   end
 
-  # The refresh a write of this module runs after itself, unless the caller
-  # said `refresh: false`
+  @doc """
+  Note: this function does not check the form flow template's status, only
+  the journey. Check that before calling this function.
+
+  `complete/2` run backwards: `status` back to `"in_progress"`,
+  `completed_at` and `completed_template_snapshot` cleared, a
+  `status_changed` event written, and the journey's open positions
+  refreshed - which now fills rather than empties, so the journey rejoins
+  every queue it left. Reopening an in-progress journey is a no-op.
+
+  The snapshot is cleared rather than kept because its one sentence is
+  "what did this flow look like when I finished it?", and a journey that is
+  not finished has no answer to that question. Finishing again takes a
+  fresh one. Nothing is lost: the trail holds the completion and the reopen
+  as separate rows, with their times and their users, and holds every
+  earlier pair too - which is why there is no `reopened_at` column. A
+  column could say when, once; the trail says how many times.
+
+  `FormFlow.Data.Instances.Forms.update_status/4` calls this itself when a
+  change it made leaves a completed journey's flow unfinished - an admin
+  reopening one form of a finished journey, most often. A host calls it
+  directly to take back a completion.
+
+  `opts` are `complete/2`'s: `:tree`, `:flow_types`, `:callback_data`,
+  and `:snapshot` for the event's free-form map.
+  """
+  def reopen(instance, opts \\ [])
+
+  def reopen(%Instances.Flow{status: "in_progress"} = instance, _opts), do: {:ok, instance}
+
+  def reopen(%Instances.Flow{} = instance, opts) do
+    Repo.transaction(fn ->
+      changes = %{
+        status: "in_progress",
+        completed_at: nil,
+        completed_template_snapshot: nil
+      }
+
+      with {:ok, reopened} <- Repo.update(Ecto.Changeset.change(instance, changes)),
+           {:ok, _event} <- insert_event(reopened, "status_changed", "in_progress", opts),
+           {:ok, reopened} <- refresh_next_positions(reopened, opts) do
+        reopened
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  # The refresh a write of this module runs after itself
   defp refresh_next_positions(journey, opts) do
-    if Keyword.get(opts, :refresh, true) do
-      update_next_positions(journey, Keyword.take(opts, [:tree, :flow_types, :callback_data]))
-    else
-      {:ok, journey}
-    end
+    update_next_positions(journey, Keyword.take(opts, [:tree, :flow_types, :callback_data]))
   end
 
   @doc """
@@ -313,8 +377,8 @@ defmodule FormFlow.Data.Instances.Flows do
   a flow's type - and not after one that changed a name or a flow's
   perspectives, which move no position. It runs in chunks of a few
   hundred journeys against one tree, reading only narrow form instance
-  rows; a host with a job runner may call it from a job, and a seed that
-  passed `refresh: false` per row calls it once at the end.
+  rows; a host with a job runner may call it from a job, and a bulk write
+  that wants one tree rather than one per row calls it once at the end.
 
   A position is open when the flow's order rule says so at every level:
   the form's own "forms" flow type says the form is editable
@@ -349,10 +413,9 @@ defmodule FormFlow.Data.Instances.Flows do
   `id`, `path`, `status`, and `superseded_at` - never `data`. The journey
   row and the child table's rows are written in one transaction, so the
   two cannot disagree. `FormFlow.Data.Instances.Forms.update_status/4`,
-  `create/2`, and `complete/2` call this themselves after every change
-  they make, so a page never has to; `refresh: false` on any of them skips
-  it, and the caller then owes the cache a call here - a seed passes it
-  per row and calls the `Templates.Flow` clause once at the end. The flow
+  `create/2`, `complete/2`, and `reopen/2` call this themselves after every
+  change they make, so a page never has to, and there is no way to ask them
+  not to. The flow
   editor calls the `Templates.Flow` clause after a save that changed the
   structure, and the form template pages call it, through
   `FormFlow.Data.Templates.Forms.refresh_next_positions/2`, after a publish
@@ -393,6 +456,11 @@ defmodule FormFlow.Data.Instances.Flows do
     root_id = flow.owner_flow_id || flow.id
     tree = Keyword.get_lazy(opts, :tree, fn -> Templates.Flows.resolve_tree(root_id) end)
 
+    # `in_progress` only, and that is load-bearing rather than a saving: it
+    # is what leaves a completed journey's `completed_forms` and
+    # `forms_total` where completion left them. A journey that finished
+    # 50 of 50 forms reads 50 of 50 forever, on a listing as on its own
+    # page, however many steps the template gains afterwards.
     from(i in Instances.Flow,
       where: i.template_flow_id == ^root_id and i.status == "in_progress",
       order_by: [asc: i.inserted_at, asc: i.id]
@@ -484,6 +552,12 @@ defmodule FormFlow.Data.Instances.Flows do
     flow_types = Keyword.get(opts, :flow_types) || FormFlow.Config.Flows.Type.defaults()
     callback_data = Keyword.get(opts, :callback_data) || %{}
 
+    # A completed journey has no open position, whatever its forms say.
+    # This branch is also the only "clear the cache" path there is: the
+    # write below turns `[]` into a null `next_path` and a delete of the
+    # child rows, so completing a journey empties its queues by running the
+    # ordinary refresh against a row that now says `completed` - which is
+    # why `complete/2` writes the status first.
     open_paths =
       if journey.status == "completed" do
         []
@@ -644,7 +718,18 @@ defmodule FormFlow.Data.Instances.Flows do
   instance's page, which derives live anyway, rewrites it
   (read-repair). `tree_updated_at` is the tree's, or nil when unknown, in
   which case only a missing refresh counts as stale.
+
+  **A completed journey is never stale.** Its cache is not behind, it is
+  final: the last refresh was its completion, the sweep takes only journeys
+  still in progress, and `completed_forms` / `forms_total` are the counts
+  as of the moment it finished (`FormFlow.Data.Instances.Flow`'s
+  moduledoc). Answering `true` for one would invite the two callers to
+  undo exactly that - the listing to mark a settled value unsettled, and
+  the journey's page to rewrite 11 of 11 into 11 of 12 the first time
+  anyone opened it to read back what they sent. This clause is where that
+  rule is kept for both of them, and for any caller after them.
   """
+  def next_positions_stale?(%Instances.Flow{status: "completed"}, _tree_updated_at), do: false
   def next_positions_stale?(%Instances.Flow{next_computed_at: nil}, _tree_updated_at), do: true
   def next_positions_stale?(%Instances.Flow{}, nil), do: false
 
@@ -877,5 +962,19 @@ defmodule FormFlow.Data.Instances.Flows do
     }
 
     Repo.insert(Event.changeset(%Event{}, attrs))
+  end
+
+  # `complete/2` and `reopen/2` write the same event kind, so the row has to
+  # carry which way it went or a reader cannot tell them apart. It goes in
+  # the snapshot under "form_flow", the one key FormFlow claims in a host's
+  # maps - merged inside that namespace rather than over it, so a host's own
+  # `snapshot:` survives, the rule `mark_pre_release/2` follows for
+  # `metadata`. Read back by `FormFlow.Data.Instances.Flow.Event.status/1`.
+  defp insert_event(instance, event, status, opts) do
+    snapshot = Keyword.get(opts, :snapshot) || %{}
+    own = Map.get(snapshot, "form_flow") || %{}
+    snapshot = Map.put(snapshot, "form_flow", Map.put(own, "status", status))
+
+    insert_event(instance, event, Keyword.put(opts, :snapshot, snapshot))
   end
 end

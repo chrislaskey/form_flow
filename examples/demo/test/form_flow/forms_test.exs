@@ -852,15 +852,18 @@ defmodule Demo.FormFlowFormsTest do
 
     test "a reopening publish moves where a journey is open, and the sweep catches the cache up" do
       {owner, v1} = published_form()
-      {dog, step} = flow_through(owner, "Dog License")
+      {dog, step} = flow_through_two(owner, "Dog License")
       instance = start_at_step(dog, step)
       journey = Instances.Flows.get(instance.instance_flow_id)
       assert journey.next_path == [step.id]
 
       {:ok, _} = Instances.Forms.update_status(journey, [step.id], :completed, data: %{})
       journey = Instances.Flows.get(journey.id)
-      # The only form is submitted: the flow is open nowhere
-      assert journey.next_path == nil
+      # Submitted, so the flow has moved past it - and the journey is still
+      # in progress, a form behind it, which is what leaves the publish
+      # anything to reach
+      assert journey.status == "in_progress"
+      refute journey.next_path == [step.id]
       computed_before = journey.next_computed_at
 
       {:ok, _v2} = publish_next(owner, v1, reopen_submitted: true)
@@ -868,7 +871,7 @@ defmodule Demo.FormFlowFormsTest do
       # The publish reopened the form and moved where the flow is open,
       # and the cache does not know yet - what the sweep exists for
       assert reload(instance).status == "in_progress"
-      assert Instances.Flows.get(journey.id).next_path == nil
+      refute Instances.Flows.get(journey.id).next_path == [step.id]
 
       assert {:ok, 1} = Forms.refresh_next_positions(owner.id)
 
@@ -879,8 +882,8 @@ defmodule Demo.FormFlowFormsTest do
 
     test "the sweep reaches every root a catalog form is in, and skips standalone instances" do
       {owner, v1} = published_form()
-      {dog, dog_step} = flow_through(owner, "Dog License")
-      {cat, cat_step} = flow_through(owner, "Cat License")
+      {dog, dog_step} = flow_through_two(owner, "Dog License")
+      {cat, cat_step} = flow_through_two(owner, "Cat License")
 
       journeys =
         for {flow, step} <- [{dog, dog_step}, {cat, cat_step}] do
@@ -972,6 +975,54 @@ defmodule Demo.FormFlowFormsTest do
       end
 
     for {source, target} <- [{start_node, step}, {step, end_node}] do
+      {:ok, _} =
+        FormFlowRepo.insert(
+          FormFlow.Data.Templates.Flow.Relationship.changeset(
+            %FormFlow.Data.Templates.Flow.Relationship{},
+            %{flow_id: flow.id, source_id: source.id, target_id: target.id, label: "CONNECTS_TO"}
+          )
+        )
+    end
+
+    {Flows.get(flow.id), step}
+  end
+
+  # `flow_through/2` with a second form position after the first, so that
+  # submitting the first leaves the journey **in progress**. A publish never
+  # touches a form inside a completed journey (the journey rule in
+  # `FormFlow.Data.Templates.Forms`), so a one-form flow finishes the moment
+  # its form is submitted and has nothing left for a reopening publish to
+  # move. Returns the flow and the first form's step.
+  defp flow_through_two(form, name) do
+    {:ok, trailing} = Forms.create(%{name: "Trailing #{System.unique_integer([:positive])}"})
+    [draft] = trailing.versions
+    {:ok, _published} = Forms.update_status(draft, :published)
+
+    {flow, step} = flow_through(form, name)
+    [end_node] = for n <- flow.nodes, n.labels == ["End"], do: n
+
+    {:ok, second} =
+      FormFlowRepo.insert(
+        FormFlow.Data.Templates.Flow.Node.changeset(
+          %FormFlow.Data.Templates.Flow.Node{},
+          %{
+            flow_id: flow.id,
+            labels: ["Form"],
+            form_id: trailing.id,
+            properties: %{"data" => %{"label" => trailing.name}}
+          }
+        )
+      )
+
+    [%{id: step_to_end_id}] =
+      for r <- flow.relationships, r.source_id == step.id, r.target_id == end_node.id, do: r
+
+    {:ok, _} =
+      FormFlowRepo.delete(
+        FormFlowRepo.get(FormFlow.Data.Templates.Flow.Relationship, step_to_end_id)
+      )
+
+    for {source, target} <- [{step, second}, {second, end_node}] do
       {:ok, _} =
         FormFlowRepo.insert(
           FormFlow.Data.Templates.Flow.Relationship.changeset(

@@ -1,5 +1,113 @@
 # Changelog
 
+## v0.43.0
+
+### A journey finishes when its forms are done
+
+`FormFlow.Data.Instances.Flows.complete/2` has recorded a journey's
+completion since it was written - the status, the moment, the snapshot of
+the flow as it stood - and nothing had ever called it. Every journey that
+has ever existed is `in_progress`, and the Completed badge on the flow
+instance page was unreachable code.
+
+Now `FormFlow.Data.Instances.Forms.update_status/4` settles the journey
+after every change it makes. **A journey is finished when the root flow's
+End is reached and every form position of it has been submitted.** It takes
+both questions: `FlowProgress.complete?/2` asks only whether End's
+predecessors are done and does not walk back from them, so a flow worked in
+any order would otherwise finish the moment its last form was submitted,
+with the earlier ones still blank.
+
+The other direction is new and comes with it:
+`FormFlow.Data.Instances.Flows.reopen/2` puts a finished journey back to
+work - status back to `in_progress`, `completed_at` and
+`completed_template_snapshot` cleared, a `status_changed` event written,
+and the open positions refreshed, so the journey rejoins every queue it
+left. `update_status/4` calls it on the same rule, which is what an admin
+reopening one form of a finished application now does. Reopening a journey
+by hand is a host's to call too.
+
+Nothing is lost when the snapshot is cleared. The journey's trail holds
+each crossing as its own row -
+`FormFlow.Data.Instances.Flow.Event.status/1` reads which way a
+`status_changed` event went - so a journey that completes, reopens and
+completes again says so three times, in order. The History page labels them
+Completed and Reopened, and no `reopened_at` column was added: a column
+could say when, once; the trail says how many times.
+
+### A finished journey's page is about what it finished
+
+The flow instance page draws a Completed line in place of the next-up line
+and offers no Continue or Start. The form rows stay, with their own View
+and Reopen, because reading back what you sent is the point of a finished
+application.
+
+It also **counts the forms it had when it completed.** A completed
+journey's rows are filtered to the positions in its
+`completed_template_snapshot`, so a step added to the flow template
+afterwards is neither listed nor counted: 50 of 50, never 50 of 51 for work
+nobody can do. One filter does all of it - the counts, the sections, and
+the progress rings all derive from that one list. A journey completed
+before the snapshot column existed has none and renders live, as before.
+
+### A finished journey's cache is final, and nothing treats it as behind
+
+`FormFlow.Data.Instances.Flows.next_positions_stale?/2` now answers `false`
+for a completed journey. Its cache is not out of date, it is settled: the
+last refresh was its completion, and the sweep takes only journeys still in
+progress, which is what keeps a finished journey reading 50 of 50 however
+many steps the template gains later.
+
+Two readers were undoing that, in the two ways there are:
+
+* The listing's Next column drew a quiet "(may have changed)" beside a
+  finished journey - marking a settled value unsettled, with nothing to sit
+  beside it (a completed journey's `next_path` is null), under a tooltip
+  promising that opening the journey brings it up to date.
+* Opening the journey then **did** bring it up to date, which was the worse
+  half. The flow instance page read-repairs a stale cache, and the refresh
+  counts `completed_forms` and `forms_total` from the live tree - so
+  viewing a finished application after a step had been added to its flow
+  rewrote its final 11 of 11 into 11 of 12. Reading back what you sent was
+  what triggered it.
+
+Both follow from the one clause; neither page needed a rule of its own.
+
+### A finished journey's forms are frozen against publishes
+
+`FormFlow.Data.Templates.Forms` has always refused to touch a form inside a
+completed journey - "a journey that is `completed` is a finished record" -
+and that rule has never excluded a single row, because no journey was ever
+completed. It now does. A publish with `reopen_submitted: true` reaches
+only journeys still in progress.
+
+### Demo: the snapshot carries the next-position cache
+
+`examples/snapshot.sh` did not know about
+`form_flow_instance_next_positions`, the table added with the
+next-position cache, so a freshly seeded demo had journeys with no cached
+open position. A reviewer's queue is a query over that table, so the
+in-progress Dog Owner application was invisible there until somebody
+opened the journey's own page and the read-repair wrote the rows.
+
+The table is now in the script's instance list, and the snapshot has been
+retaken with both journeys' caches warm. The script's guard did its job -
+it would have refused to run rather than snapshot without a FormFlow table
+it did not recognise - which is why this surfaced as missing data rather
+than a silent half-snapshot.
+
+### Breaking: the `refresh:` option is gone
+
+`refresh: false` on `FormFlow.Data.Instances.Flows.create/2`,
+`complete/2`, and `FormFlow.Data.Instances.Forms.update_status/4` skipped
+the next-position cache refresh. It was built for a seed or bulk importer
+that does not exist yet, and nothing in the library or the demo app called
+it. It is removed rather than extended to cover the journey's status too.
+Every write now settles the journey and refreshes the cache, always. When a
+bulk-import path is built it can bring back whatever shape it actually
+needs; `update_next_positions/2` on a `FormFlow.Data.Templates.Flow` is
+still there for a caller that wants one tree rather than one per row.
+
 ## v0.42.0
 
 ### A flow has a group, and a page can be about one

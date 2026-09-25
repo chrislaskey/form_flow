@@ -17,7 +17,8 @@ defmodule FormFlow.Data.Instances.Flow do
   `FormFlow.Data.Instances.FlowProgress` from the live tree and the
   journey's form instances, so a template edit can never desync it.
   `status` and `completed_at` are recorded facts, not caches: true at a moment,
-  written by `FormFlow.Data.Instances.Flows.complete/2` - they claim only
+  written by `FormFlow.Data.Instances.Flows.complete/2` and cleared by its
+  other direction, `reopen/2` - they claim only
   their moment and are never recomputed. `completed_template_snapshot` is
   the third of that family: the flow tree and the journey's form positions
   as they stood at that same moment
@@ -25,6 +26,15 @@ defmodule FormFlow.Data.Instances.Flow do
   null before it, and the one recorded answer to "what did this flow look
   like when I finished it?" once a later template edit has moved the
   derivation on.
+
+  What moves those three is a **form** of this journey changing status:
+  `FormFlow.Data.Instances.Forms.update_status/4` settles the journey after
+  every change it makes, completing it when the derivation says the root
+  flow's End is reached and reopening it when it no longer does. What does
+  not move them is a **template** edit. A step added to a finished
+  journey's flow leaves it `completed` and makes
+  `FormFlow.Data.Instances.Flows.complete?/1` disagree with `status` - the
+  legitimate divergence above, and what the snapshot is for reading through.
 
   Five columns are a **cache of that derivation**, written by
   `FormFlow.Data.Instances.Flows.update_next_positions/2` alone and never
@@ -38,6 +48,14 @@ defmodule FormFlow.Data.Instances.Flow do
   refresh has reached. They are what the last refresh derived; the
   derivation stays the truth, and the flow instance page derives live and
   rewrites them when it finds them stale.
+
+  On a **completed** journey the last refresh was its completion, and no
+  later one reaches it - the sweep takes only journeys still in progress.
+  So `completed_forms` and `forms_total` there are the counts as of
+  completion and stay that way: 50 of 50, never 50 of 51 because the
+  template gained a step afterwards. `completed_template_snapshot` is the
+  truth behind those two numbers, and the journey's own page filters its
+  rows against it for the same reason.
 
   Every position the flow is open at - not only the first - has a row in
   `FormFlow.Data.Instances.Flow.NextPosition`, the child table a listing

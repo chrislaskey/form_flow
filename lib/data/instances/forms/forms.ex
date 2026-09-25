@@ -56,6 +56,7 @@ defmodule FormFlow.Data.Instances.Forms do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.Form.Draft
   alias FormFlow.Data.Instances.Form.Event
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
 
@@ -109,11 +110,10 @@ defmodule FormFlow.Data.Instances.Forms do
       creates it
     * `:snapshot` - free-form event payload
 
-    * `:refresh` - `false` skips the refresh of the journey's open positions
-      (below); `true`, the default, runs it
-    * `:flow_types`, `:callback_data`, `:tree` - reach that refresh
-      (`FormFlow.Data.Instances.Flows.update_next_positions/2`): the host's
-      flow types decide the order rule, so a page passes its own
+    * `:flow_types`, `:callback_data`, `:tree` - reach the settle below
+      (`FormFlow.Data.Instances.Flows.update_next_positions/2` and the
+      derivation): the host's flow types decide the order rule, so a page
+      passes its own
 
   Returns `{:ok, instance}`. Errors: `{:error, :not_found}` (completing a
   position with no instance), `{:error, :unknown_position}` (no such node -
@@ -122,16 +122,35 @@ defmodule FormFlow.Data.Instances.Forms do
   error changeset.
 
   Every change this makes - a start, a submit, a reopen - moves where the
-  journey's flow is open, so each is followed, in the same transaction, by
-  `FormFlow.Data.Instances.Flows.update_next_positions/2` for the journey:
-  the cache a reviews page filters by. A no-op (the position already in
-  that status) refreshes nothing. `refresh: false` turns the refresh off,
-  and the caller then owes the cache a call of its own - a seed or a bulk
-  importer passes it per row and calls
-  `update_next_positions(%Templates.Flow{})` once at the end, which is
-  cheaper than one tree per row. A caller that forgets leaves a reviewer's
-  queue missing a row with nothing on screen to say so, which is why the
-  default is to refresh.
+  journey's flow is open, and may move whether the journey is finished at
+  all. So each is followed, in the same transaction, by a settle of the
+  journey. **A journey is finished when the root flow's End is reached
+  (`FormFlow.Data.Instances.FlowProgress.complete?/2`) and every form
+  position of it has been submitted** - both questions, because a flow
+  worked in any order reaches End the moment its last form is submitted,
+  whatever the earlier ones say. Then
+
+    * finished, journey `in_progress` - the journey is completed
+      (`FormFlow.Data.Instances.Flows.complete/2`), which records the
+      moment, snapshots the template, and empties its open positions
+    * not finished, journey `completed` - the journey is reopened
+      (`FormFlow.Data.Instances.Flows.reopen/2`), which is how an admin
+      reopening one form of a finished journey puts it back in the queues
+    * otherwise - only
+      `FormFlow.Data.Instances.Flows.update_next_positions/2`, the cache a
+      reviews page filters by
+
+  A no-op (the position already in that status) settles nothing, there
+  being nothing to settle. This is not optional and there is no flag to
+  turn it off: a caller that skipped it would leave a reviewer's queue
+  missing a row, or a finished journey looking unfinished, with nothing on
+  screen to say so.
+
+  The journey's status therefore follows its forms **at the moments its
+  forms change** - it is still written by an operation, never recomputed at
+  read time, and a template edit still moves nothing
+  (`FormFlow.Data.Instances.Flow`'s moduledoc on the divergence that
+  leaves).
 
   The flow's status is not consulted: whether a user may still continue -
   start, reopen, submit - is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
@@ -146,7 +165,7 @@ defmodule FormFlow.Data.Instances.Forms do
       journey
       |> find_instance(path)
       |> apply_status(status, journey, path, opts)
-      |> then_refresh(journey, opts)
+      |> then_settle_journey(journey, opts)
       |> case do
         {:ok, instance} -> instance
         {:error, reason} -> Repo.rollback(reason)
@@ -154,24 +173,76 @@ defmodule FormFlow.Data.Instances.Forms do
     end)
   end
 
-  # A change refreshes the journey's open positions; a no-op and an error
-  # pass through
-  defp then_refresh({:ok, instance}, journey, opts) do
-    with {:ok, _journey} <- refresh_next_positions(journey, opts), do: {:ok, instance}
+  # A change settles the journey it belongs to; a no-op and an error pass
+  # through, there being nothing to settle
+  defp then_settle_journey({:ok, instance}, journey, opts) do
+    with {:ok, _journey} <- settle_journey(journey, opts), do: {:ok, instance}
   end
 
-  defp then_refresh({:unchanged, instance}, _journey, _opts), do: {:ok, instance}
-  defp then_refresh({:error, reason}, _journey, _opts), do: {:error, reason}
+  defp then_settle_journey({:unchanged, instance}, _journey, _opts), do: {:ok, instance}
+  defp then_settle_journey({:error, reason}, _journey, _opts), do: {:error, reason}
 
-  defp refresh_next_positions(journey, opts) do
-    if Keyword.get(opts, :refresh, true) do
-      Instances.Flows.update_next_positions(
-        journey,
-        Keyword.take(opts, [:tree, :flow_types, :callback_data])
-      )
-    else
-      {:ok, journey}
+  # The journey's recorded status follows its forms: the derivation is asked
+  # whether the root flow's End is reached, and the journey is completed or
+  # reopened to match. Each of those refreshes the open positions itself,
+  # and must - the refresh reads the status it wrote to decide whether the
+  # journey has any open position at all - so only the third branch, where
+  # the status does not move, refreshes on its own.
+  #
+  # The tree is resolved once here and handed to whichever branch runs, so
+  # a submit costs one tree resolve however it settles.
+  #
+  # The journey is re-read first, and that is not belt and braces: the
+  # caller holds whatever struct it loaded, and the status may have moved
+  # since - most often because this very journey completed on the previous
+  # submit and the caller is still carrying the row from before. Deciding
+  # from the stale struct would reopen nothing, because the struct says
+  # `in_progress` while the row says `completed`. The row is the answer.
+  defp settle_journey(journey, opts) do
+    opts = Keyword.take(opts, [:tree, :flow_types, :callback_data])
+    journey = Instances.Flows.get(journey.id) || journey
+
+    tree =
+      Keyword.get_lazy(opts, :tree, fn ->
+        Templates.Flows.resolve_tree(journey.template_flow_id)
+      end)
+
+    opts = Keyword.put(opts, :tree, tree)
+
+    case {finished?(tree, journey), journey.status} do
+      {true, "in_progress"} -> Instances.Flows.complete(journey, opts)
+      {false, "completed"} -> Instances.Flows.reopen(journey, opts)
+      {_finished?, _status} -> Instances.Flows.update_next_positions(journey, opts)
     end
+  end
+
+  # A journey is finished when the flow's End is reached **and** every form
+  # position of it has been submitted. It takes both questions, and the
+  # second is not the first said twice.
+  #
+  # `FormFlow.Data.Instances.FlowProgress.complete?/2` asks only whether
+  # End's predecessors are completed, and does not walk back from them - so
+  # in a flow worked in any order, submitting the last form alone reaches
+  # End while earlier forms sit untouched. Asking it alone would finish that
+  # journey with half its forms blank. Asking the forms alone would finish a
+  # journey whose flow has no End at all, which `complete?/2` refuses and
+  # which is a malformed flow, not a finished journey.
+  #
+  # Stranded positions - a form instance at a position the tree no longer
+  # has - are not in `forms/2` and so hold nothing up; they are
+  # `FormFlow.Data.Instances.Flows.list_stranded/2`'s business.
+  #
+  # This is the strict reading, and it is the right one while the join rule
+  # is AND-only (`FlowProgress`'s moduledoc: OR-joins and N-of-M are
+  # deferred). Every form the flow can express today lies on a path to End,
+  # so "all of them" is no stronger than the flow itself asks. A flow that
+  # could branch past a form would want this question loosened, and this
+  # comment is where to start.
+  defp finished?(tree, journey) do
+    instances = Instances.Flows.form_instances(journey)
+
+    FlowProgress.complete?(tree, instances) and
+      Enum.all?(FlowProgress.forms(tree, instances), &(&1.status == :completed))
   end
 
   defp find_instance(journey, path) do

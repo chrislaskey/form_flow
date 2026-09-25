@@ -21,6 +21,14 @@
 # flows out - are test data more often than demo data, so they are left out
 # unless asked for with --with-instances.
 #
+# form_flow_instance_next_positions is one of them, and is the one worth
+# saying out loud: it is the cache of where each journey's flow is open,
+# and a reviewer's queue is a query over it. A snapshot without it seeds
+# journeys no queue can see - they appear only once someone opens the
+# journey's own page, which read-repairs the cache on the way in. Its rows
+# are written by the library, never by hand, so they travel with the
+# journeys rather than being rebuilt by the loader.
+#
 # Every INSERT names its columns: sqlite3's insert mode with headers on
 # (`INSERT INTO t(a,b,...) VALUES(...)`), rather than `.dump`'s positional
 # `INSERT INTO t VALUES(...)`. A positional row breaks the moment the table
@@ -61,6 +69,7 @@ TEMPLATE_TABLES=(
 )
 INSTANCE_TABLES=(
   form_flow_instance_flows
+  form_flow_instance_next_positions
   form_flow_instance_forms
   form_flow_instance_form_events
   form_flow_instance_flow_events
