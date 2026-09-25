@@ -37,9 +37,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PersonaComponents
-
-  alias DemoWeb.Experiences
+  on_mount {DemoWeb.ExperienceEntry, :reviewer}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -63,29 +61,23 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate
-          current_user={@current_user}
-          roles={Experiences.roles(:reviewer)}
-          page="the pet license reviews"
-        >
-          <div id="reviewers-pages">
-            <FormFlow.Web.router
-              user_id={@current_user.id}
-              perspectives={@current_user.perspectives}
-              instances={Demo.Users.instances(@current_user)}
-              flows={Demo.Users.flows(@current_user, Demo.Users.pet_licensing())}
-              actionable_only
-              uri={@uri}
-              params={@params}
-              path={@path}
-              base="/demo/pet-licenses/reviews"
-              flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
-              form_types={DemoWeb.FormFlowLive.Types.form_types()}
-              callback_data={%{hello: "world"}}
-              pre_release_user_ids={Enum.map(Demo.Users.with_roles([:reviewer]), & &1.id)}
-            />
-          </div>
-        </.persona_gate>
+        <div id="reviewers-pages">
+          <FormFlow.Web.router
+            user_id={@current_user.id}
+            perspectives={@current_user.perspectives}
+            instances={Demo.Users.instances(@current_user)}
+            flows={Demo.Users.flows(@current_user, Demo.Users.pet_licensing())}
+            actionable_only
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/demo/pet-licenses/reviews"
+            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+            form_types={DemoWeb.FormFlowLive.Types.form_types()}
+            callback_data={%{hello: "world"}}
+            pre_release_user_ids={Enum.map(Demo.Users.with_roles([:reviewer]), & &1.id)}
+          />
+        </div>
       </div>
     </Layouts.app>
     """

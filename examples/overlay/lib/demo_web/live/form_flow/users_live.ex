@@ -24,9 +24,7 @@ defmodule DemoWeb.FormFlowLive.Users do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PersonaComponents
-
-  alias DemoWeb.Experiences
+  on_mount {DemoWeb.ExperienceEntry, :user}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -50,28 +48,22 @@ defmodule DemoWeb.FormFlowLive.Users do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate
-          current_user={@current_user}
-          roles={Experiences.roles(:user)}
-          page="the pet license applications"
-        >
-          <div id="users-pages">
-            <FormFlow.Web.router
-              user_id={@current_user.id}
-              perspectives={@current_user.perspectives}
-              instances={Demo.Users.instances(@current_user)}
-              flows={Demo.Users.flows(@current_user, Demo.Users.pet_licensing())}
-              uri={@uri}
-              params={@params}
-              path={@path}
-              base="/demo/pet-licenses/applications"
-              flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
-              form_types={DemoWeb.FormFlowLive.Types.form_types()}
-              callback_data={%{hello: "world"}}
-              pre_release_user_ids={Enum.map(Demo.Users.with_roles([:owner]), & &1.id)}
-            />
-          </div>
-        </.persona_gate>
+        <div id="users-pages">
+          <FormFlow.Web.router
+            user_id={@current_user.id}
+            perspectives={@current_user.perspectives}
+            instances={Demo.Users.instances(@current_user)}
+            flows={Demo.Users.flows(@current_user, Demo.Users.pet_licensing())}
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/demo/pet-licenses/applications"
+            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+            form_types={DemoWeb.FormFlowLive.Types.form_types()}
+            callback_data={%{hello: "world"}}
+            pre_release_user_ids={Enum.map(Demo.Users.with_roles([:owner]), & &1.id)}
+          />
+        </div>
       </div>
     </Layouts.app>
     """

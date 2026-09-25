@@ -45,52 +45,15 @@ defmodule DemoWeb.PersonaTest do
       end
     end
 
-    @tag user: "admin"
-    test "offers the admin every side, though two of them refuse them", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+    test "offers every side to every user, whoever is viewing", %{conn: _conn} do
+      for user <- ["admin", "dog_owner", "cat_owner", "reviewer", "docs_reader"] do
+        {:ok, _view, html} = live(build_conn_as(user), ~p"/")
 
-      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
+        menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
 
-      assert LazyHTML.attribute(menu, "href") == Enum.map(Experiences.menu(), & &1.path)
-
-      # The link is the point: it is how a visitor who starts as the admin
-      # finds the other sides at all, and the refusal behind it names whose
-      # page it is
-      {:ok, view, refused} = live(conn, ~p"/demo/pet-licenses/reviews")
-
-      refute has_element?(view, "#reviewers-pages")
-      assert refused =~ "Not authorized"
-    end
-
-    @tag user: "dog_owner"
-    test "offers a pet owner the overview and the two user pages", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-
-      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
-
-      assert LazyHTML.attribute(menu, "href") == [
-               "/demo",
-               "/demo/pet-licenses/applications",
-               "/demo/other-forms"
-             ]
-    end
-
-    @tag user: "reviewer"
-    test "offers the reviewer only the overview and the pet license reviews", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-
-      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
-
-      assert LazyHTML.attribute(menu, "href") == ["/demo", "/demo/pet-licenses/reviews"]
-    end
-
-    @tag user: "docs_reader"
-    test "offers a reader the overview alone", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-
-      menu = LazyHTML.from_fragment(html) |> LazyHTML.query("#experience-menu a")
-
-      assert LazyHTML.attribute(menu, "href") == ["/demo"]
+        assert LazyHTML.attribute(menu, "href") == Enum.map(Experiences.menu(), & &1.path),
+               "the menu was filtered for #{user}"
+      end
     end
 
     @tag user: "dog_owner"
@@ -189,16 +152,12 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "dog_owner"
-    test "refuses a pet owner, and says who it is for", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/demo/admin")
+    test "switches a pet owner to the admin rather than refusing them", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/admin")
+      assert to == "/view-as/admin?return_to=%2Fdemo%2Fadmin"
 
-      {:ok, owner} = Demo.Users.fetch("dog_owner")
-      {:ok, admin} = Demo.Users.fetch("admin")
-
-      refute has_element?(view, "#admin-pages")
-      assert html =~ "Not authorized"
-      assert html =~ owner.name
-      assert html =~ admin.name
+      {:ok, view, _html} = live(follow_switch(conn, to), ~p"/demo/admin")
+      assert has_element?(view, "#admin-pages")
     end
 
     test "opens for the default user, who is the admin", %{conn: conn} do
@@ -217,14 +176,20 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "reviewer"
-    test "refuses the reviewer, and names the pet owners", %{conn: conn} do
+    test "switches the reviewer to the dog owner", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/other-forms")
+      assert to == "/view-as/dog_owner?return_to=%2Fdemo%2Fother-forms"
+    end
+
+    @tag user: "cat_owner"
+    test "leaves the cat owner as they are - an owner is who this page is for",
+         %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/demo/other-forms")
 
-      {:ok, owner} = Demo.Users.fetch("dog_owner")
+      {:ok, cat_owner} = Demo.Users.fetch("cat_owner")
 
-      refute has_element?(view, "#other-forms-pages")
-      assert html =~ "who cannot see the other forms"
-      assert allowed_names(html) =~ owner.name
+      assert has_element?(view, "#other-forms-pages")
+      assert html =~ cat_owner.name
     end
   end
 
@@ -237,30 +202,30 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "admin"
-    test "refuses the admin too, and names the pet owners alone", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
-
+    test "switches the admin to the dog owner, perspectives notwithstanding", %{conn: conn} do
+      # The admin carries the "applicant" perspective, so a perspective test
+      # would leave them here as themselves. Fit is the role.
       {:ok, admin} = Demo.Users.fetch("admin")
-      {:ok, owner} = Demo.Users.fetch("dog_owner")
+      assert "applicant" in admin.perspectives
 
-      refute has_element?(view, "#users-pages")
-      assert html =~ "Not authorized"
-      assert html =~ "who cannot see the pet license applications"
-      assert allowed_names(html) =~ owner.name
-      refute allowed_names(html) =~ admin.name
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/pet-licenses/applications")
+      assert to == "/view-as/dog_owner?return_to=%2Fdemo%2Fpet-licenses%2Fapplications"
     end
 
     @tag user: "docs_reader"
-    test "refuses a reader, and names the pet owners, not the admin", %{conn: conn} do
+    test "switches a reader to the dog owner", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/pet-licenses/applications")
+      assert to == "/view-as/dog_owner?return_to=%2Fdemo%2Fpet-licenses%2Fapplications"
+    end
+
+    @tag user: "cat_owner"
+    test "leaves the cat owner as they are, so a switch made by hand sticks", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
 
-      {:ok, owner} = Demo.Users.fetch("dog_owner")
       {:ok, cat_owner} = Demo.Users.fetch("cat_owner")
 
-      refute has_element?(view, "#users-pages")
-      assert html =~ "Not authorized"
-      assert allowed_names(html) =~ owner.name
-      assert allowed_names(html) =~ cat_owner.name
+      assert has_element?(view, "#users-pages")
+      assert html =~ cat_owner.name
     end
   end
 
@@ -273,38 +238,62 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "admin"
-    test "refuses the admin too, and names the reviewer alone", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/reviews")
+    test "switches the admin to the reviewer, perspectives notwithstanding", %{conn: conn} do
+      # The admin carries the "reviewer" perspective too
+      {:ok, admin} = Demo.Users.fetch("admin")
+      assert "reviewer" in admin.perspectives
 
-      {:ok, reviewer} = Demo.Users.fetch("reviewer")
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/pet-licenses/reviews")
+      assert to == "/view-as/reviewer?return_to=%2Fdemo%2Fpet-licenses%2Freviews"
 
-      refute has_element?(view, "#reviewers-pages")
-      assert html =~ "Not authorized"
-      assert allowed_names(html) == reviewer.name
+      {:ok, view, _html} = live(follow_switch(conn, to), ~p"/demo/pet-licenses/reviews")
+      assert has_element?(view, "#reviewers-pages")
     end
 
     @tag user: "dog_owner"
-    test "refuses a pet owner", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/reviews")
-
-      refute has_element?(view, "#reviewers-pages")
-      assert html =~ "Not authorized"
+    test "switches a pet owner to the reviewer", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} = live(conn, ~p"/demo/pet-licenses/reviews")
+      assert to == "/view-as/reviewer?return_to=%2Fdemo%2Fpet-licenses%2Freviews"
     end
   end
 
-  describe "a refused page" do
+  describe "opening a side of the demo you are not" do
     @tag user: "dog_owner"
-    test "still says which page it was", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/demo/admin")
+    test "keeps the deep link, so the switch lands where the click was going",
+         %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} =
+               live(conn, ~p"/demo/pet-licenses/reviews/some-journey-id")
 
-      headings =
-        html
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query("h1, h2")
-        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+      assert to ==
+               "/view-as/reviewer?return_to=%2Fdemo%2Fpet-licenses%2Freviews%2Fsome-journey-id"
 
-      assert [refusal] = headings
-      assert refusal =~ "Not authorized"
+      assert redirected_to(get(conn, to)) == "/demo/pet-licenses/reviews/some-journey-id"
+    end
+
+    @tag user: "dog_owner"
+    test "the switch writes the session, so the page opens on the way back", %{conn: conn} do
+      switched = get(conn, "/view-as/reviewer?return_to=%2Fdemo%2Fpet-licenses%2Freviews")
+
+      assert Plug.Conn.get_session(switched, Demo.Users.session_key()) == "reviewer"
+      assert redirected_to(switched) == "/demo/pet-licenses/reviews"
+    end
+
+    test "refuses to send the visitor off this site", %{conn: conn} do
+      {:ok, reviewer} = Demo.Users.fetch("reviewer")
+
+      for elsewhere <- ["https://evil.test/x", "//evil.test/x", "evil.test"] do
+        to = "/view-as/reviewer?return_to=" <> URI.encode_www_form(elsewhere)
+
+        assert redirected_to(get(conn, to)) == reviewer.landing,
+               "#{elsewhere} was followed"
+      end
+    end
+
+    test "an unknown user changes nothing and says so", %{conn: conn} do
+      switched = get(conn, "/view-as/nobody?return_to=%2Fdemo")
+
+      assert redirected_to(switched) == "/demo"
+      assert Phoenix.Flash.get(switched.assigns.flash, :error) =~ "does not exist"
     end
   end
 
@@ -317,13 +306,11 @@ defmodule DemoWeb.PersonaTest do
     end
 
     @tag user: "dog_owner"
-    test "is not repeated on a refusal, which points at the header instead", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/demo/admin")
+    test "is the header's alone on a demo page, not repeated inside it", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/demo/pet-licenses/applications")
 
-      assert html =~ "Not authorized"
       assert html =~ "Viewing as"
 
-      # The header's switcher is the only one on the page
       switchers =
         html
         |> LazyHTML.from_fragment()
@@ -358,24 +345,23 @@ defmodule DemoWeb.PersonaTest do
       assert Enum.empty?(nested)
     end
 
-    @tag user: "dog_owner"
-    test "lists only the demo pages the current user can open", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+    test "lists every demo page to every user, whoever is viewing", %{conn: _conn} do
+      expected =
+        ["/", "/docs"] ++
+          Enum.map(Experiences.menu(), & &1.path) ++
+          ["https://github.com/chrislaskey/form_flow"]
 
-      links =
-        html
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query("#mobile-nav a")
+      for user <- ["admin", "dog_owner", "cat_owner", "reviewer", "docs_reader"] do
+        {:ok, _view, html} = live(build_conn_as(user), ~p"/")
 
-      assert LazyHTML.attribute(links, "href") ==
-               [
-                 "/",
-                 "/docs",
-                 "/demo",
-                 "/demo/pet-licenses/applications",
-                 "/demo/other-forms",
-                 "https://github.com/chrislaskey/form_flow"
-               ]
+        links =
+          html
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.query("#mobile-nav a")
+
+        assert LazyHTML.attribute(links, "href") == expected,
+               "the mobile nav was filtered for #{user}"
+      end
     end
 
     test "carries the source link, which the header only shows on a wide screen", %{conn: conn} do
@@ -421,23 +407,12 @@ defmodule DemoWeb.PersonaTest do
     end
   end
 
-  # One region of a render, as text — what an admin sees on another role's
-  # page, to compare against what that role sees.
-  defp page(html, selector) do
-    html
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query(selector)
-    |> LazyHTML.text()
-  end
+  # The visitor after following the switch the entry hook sent them to: a
+  # conn carrying the session that switch wrote, ready to open the page the
+  # click was going to.
+  defp follow_switch(conn, to) do
+    switched = get(conn, to)
 
-  # Who the refusal says can see the page: the second bold name in its first
-  # line, the first being the reader's own
-  defp allowed_names(html) do
-    html
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query("p span.font-semibold")
-    |> Enum.at(1)
-    |> LazyHTML.text()
-    |> String.trim()
+    build_conn_as(Plug.Conn.get_session(switched, Demo.Users.session_key()))
   end
 end

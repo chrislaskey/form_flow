@@ -10,12 +10,30 @@ defmodule DemoWeb.Experiences do
   pages: the pet license applications, and Other Forms, the catch-all for
   every flow outside the pet licensing group.
 
-  Each experience names the `roles` it is for. The page hands them to
-  `DemoWeb.PersonaComponents.persona_gate/1`, and the header's menus list
-  what `menu_for/1` gives them: the experiences the current user is
-  admitted to, so nobody is offered a link to a refusal - except the admin,
-  who is offered every side (see `menu_for/1`). The overview has no roles:
-  it is where the sides are described, and everyone reads it.
+  Each experience names the `roles` it is for and the `lands_on` user it
+  puts a visitor who does not hold one. The header's menus list **every**
+  experience to everyone: in a self-guided demo a hidden link is a page
+  nobody learns exists, and the landing below means no link leads to a
+  refusal. The overview has no roles: it is where the sides are described,
+  and everyone reads it.
+
+  ## Clicking a side switches the visitor to it
+
+  `DemoWeb.ExperienceEntry` asks `fits?/2` on the way in and, when the
+  answer is no, switches the demo's current user to `lands_on` before the
+  page renders. So the reviews page is always read by a reviewer and the
+  admin pages by the admin, whoever clicked.
+
+  Fit is the **role**, not the FormFlow perspectives the user carries. The
+  admin holds both `"applicant"` and `"reviewer"` perspectives, so a
+  perspective test would leave an admin reading the reviews page as
+  themselves - every applicant's journey, correct in a real service and
+  unexplained here, which is the thing
+  `DemoWeb.PersonaComponents` was written to stop. One page, one side.
+
+  The two owner pages land on the dog owner and admit the cat owner, both
+  being owners, so a visitor who switched to the cat owner keeps that
+  choice while moving between them.
 
   `title` is the page's name in the pet licensing service, which the header
   menus show. `kind` is which side of the demo it is — "User pages",
@@ -44,7 +62,8 @@ defmodule DemoWeb.Experiences do
       kind: "Admin pages",
       path: "/demo/admin",
       blurb: "Build and view the flows and forms",
-      roles: [:admin]
+      roles: [:admin],
+      lands_on: "admin"
     },
     %{
       id: :user,
@@ -53,7 +72,8 @@ defmodule DemoWeb.Experiences do
       kind: "User pages",
       path: "/demo/pet-licenses/applications",
       blurb: "Fill out and track an application",
-      roles: [:owner]
+      roles: [:owner],
+      lands_on: "dog_owner"
     },
     %{
       id: :reviewer,
@@ -62,7 +82,8 @@ defmodule DemoWeb.Experiences do
       kind: "Reviewer pages",
       path: "/demo/pet-licenses/reviews",
       blurb: "Review and decide applications",
-      roles: [:reviewer]
+      roles: [:reviewer],
+      lands_on: "reviewer"
     },
     %{
       id: :other,
@@ -71,7 +92,8 @@ defmodule DemoWeb.Experiences do
       kind: "User pages",
       path: "/demo/other-forms",
       blurb: "Fill out and track any flow outside pet licensing",
-      roles: [:owner]
+      roles: [:owner],
+      lands_on: "dog_owner"
     }
   ]
 
@@ -92,36 +114,36 @@ defmodule DemoWeb.Experiences do
   @doc "Everything the Demo app menu offers: the overview, then the experiences."
   def menu, do: [@overview | @experiences]
 
-  # The roles the menu offers every side to, admitted or not. The admin's,
-  # and only because the demo opens as the admin (`Demo.Users.default/0`):
-  # a visitor who starts there and is shown two of five pages has no way to
-  # learn the other two exist. The link leads to a refusal that names whose
-  # page it is and points at the switcher, which teaches the demo's one
-  # lesson better than a missing link does.
-  #
-  # This is about links, not access. `DemoWeb.PersonaComponents` admits the
-  # admin to the admin pages and no others, as it does everyone.
-  @offered_every_side [:admin]
-
   @doc """
-  What the Demo app menu offers `user`: the overview, then the experiences
-  whose pages admit them - every side for the roles in `@offered_every_side`,
-  and the full `menu/0` when there is no user.
-  """
-  def menu_for(nil), do: menu()
-  def menu_for(%{role: role}) when role in @offered_every_side, do: menu()
-  def menu_for(user), do: Enum.filter(menu(), &admits?(&1, user))
+  What the Demo app menu offers: every experience, to everyone, whoever is
+  viewing. The argument is kept so callers read the same either way, and
+  because who is viewing is what the menu marks as current.
 
-  @doc "The roles the experience with `id` is for, as its page's gate wants them."
-  def roles(id) do
-    case Enum.find(@experiences, &(&1.id == id)) do
-      %{roles: roles} -> roles
-      nil -> raise ArgumentError, "no experience #{inspect(id)}"
-    end
+  It used to be filtered to the pages the viewer was admitted to, with the
+  admin excepted so the demo's opening user could still see the sides
+  exist. Both halves are gone: clicking a side now switches the visitor to
+  it (`DemoWeb.ExperienceEntry`), so there is no refusal for a link to lead
+  to, and a menu that changed shape as you moved around it was a poor way
+  to show a visitor what the demo contains.
+  """
+  def menu_for(_user), do: menu()
+
+  @doc "The experience with `id`."
+  def fetch!(id) do
+    Enum.find(@experiences, &(&1.id == id)) ||
+      raise ArgumentError, "no experience #{inspect(id)}"
   end
 
-  defp admits?(%{roles: :everyone}, _user), do: true
-  defp admits?(%{roles: roles}, user), do: DemoWeb.PersonaComponents.allows?(user, roles)
+  @doc "The roles the experience with `id` is for."
+  def roles(id), do: fetch!(id).roles
+
+  @doc """
+  Whether `user` is one this experience is for - the test
+  `DemoWeb.ExperienceEntry` asks on the way into a page, and the reason it
+  is the role rather than the perspectives (see the moduledoc).
+  """
+  def fits?(%{roles: :everyone}, _user), do: true
+  def fits?(%{roles: roles}, user), do: DemoWeb.PersonaComponents.allows?(user, roles)
 
   @doc "Every `current_nav` the Demo app menu covers."
   def navs, do: Enum.map(menu(), & &1.nav)

@@ -32,6 +32,7 @@ defmodule DemoWeb.Router do
     pipe_through :browser
 
     post "/switch-user/:user_id", UserSwitchController, :create
+    get "/view-as/:user_id", UserSwitchController, :show
 
     live_session :default, on_mount: DemoWeb.UserHook do
       live "/install-check", InstallCheckLive

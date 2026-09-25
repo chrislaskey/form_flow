@@ -96,6 +96,35 @@ it would have refused to run rather than snapshot without a FormFlow table
 it did not recognise - which is why this surfaced as missing data rather
 than a silent half-snapshot.
 
+### Demo: every side is on the menu, and clicking one switches you to it
+
+The demo's header and mobile navs listed only the pages the current user
+was admitted to, and the pages themselves refused anyone else. Faithful to
+a real service, and poor in a self-guided demo: a hidden link is a page
+nobody learns exists, and a refusal is a dead end where a visitor wanted a
+page.
+
+Both navs now list every side to everyone, and `DemoWeb.ExperienceEntry`
+puts the visitor into the one they opened: the reviews page switches them
+to the reviewer, the admin pages to the admin, and the two owner pages to
+the dog owner. A visitor who is already one the page is for keeps who they
+are, so a switch to the cat owner sticks while moving between the
+applications and Other Forms.
+
+Fit is the demo's **role**, not the FormFlow perspectives a user carries.
+The admin holds both `"applicant"` and `"reviewer"`, so a perspective test
+would leave an admin reading the reviews page as themselves - every
+applicant's journey, with nothing on screen saying whose view it is, which
+is the thing the refusals were written to stop. One page, one side.
+
+The switch is a redirect through `GET /view-as/:user_id?return_to=<path>`,
+because who the demo is viewing as lives in the session and a LiveView
+cannot write one. It keeps the deep link, so a bookmark into one journey
+survives it, and it takes `return_to` as a path only - never a URL - so it
+cannot be turned into an open redirect. `DemoWeb.PersonaComponents` keeps
+`allows?/2` and the perspective picker; the "Not authorized!" screen is
+gone with the dead end it explained.
+
 ### Breaking: the `refresh:` option is gone
 
 `refresh: false` on `FormFlow.Data.Instances.Flows.create/2`,

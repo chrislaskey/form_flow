@@ -21,9 +21,7 @@ defmodule DemoWeb.FormFlowLive.OtherForms do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PersonaComponents
-
-  alias DemoWeb.Experiences
+  on_mount {DemoWeb.ExperienceEntry, :other}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -47,28 +45,22 @@ defmodule DemoWeb.FormFlowLive.OtherForms do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate
-          current_user={@current_user}
-          roles={Experiences.roles(:other)}
-          page="the other forms"
-        >
-          <div id="other-forms-pages">
-            <FormFlow.Web.router
-              user_id={@current_user.id}
-              perspectives={@current_user.perspectives}
-              instances={Demo.Users.instances(@current_user)}
-              flows={Demo.Users.flows(@current_user, :none)}
-              uri={@uri}
-              params={@params}
-              path={@path}
-              base="/demo/other-forms"
-              flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
-              form_types={DemoWeb.FormFlowLive.Types.form_types()}
-              callback_data={%{hello: "world"}}
-              pre_release_user_ids={Enum.map(Demo.Users.with_roles([:owner]), & &1.id)}
-            />
-          </div>
-        </.persona_gate>
+        <div id="other-forms-pages">
+          <FormFlow.Web.router
+            user_id={@current_user.id}
+            perspectives={@current_user.perspectives}
+            instances={Demo.Users.instances(@current_user)}
+            flows={Demo.Users.flows(@current_user, :none)}
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/demo/other-forms"
+            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+            form_types={DemoWeb.FormFlowLive.Types.form_types()}
+            callback_data={%{hello: "world"}}
+            pre_release_user_ids={Enum.map(Demo.Users.with_roles([:owner]), & &1.id)}
+          />
+        </div>
       </div>
     </Layouts.app>
     """

@@ -53,7 +53,9 @@ defmodule DemoWeb.DemoLive do
           </.p>
         </header>
 
-        <.h3>Choose a user</.h3>
+        <.h3>Choose your perspective</.h3>
+
+        <.p>The demo app will automatically switch between users for you to see the app from different user tyeps. Certain pages are accessible by multiple users, for example Pet Licenses as a Dog Owner or a Cat Owner. Use the switcher in the top right corner of every page or the one below to change perspectives.</.p>
 
         <.pick_perspective
           id="perspective"

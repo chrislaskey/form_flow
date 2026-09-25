@@ -12,9 +12,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
 
   use DemoWeb, :live_view
 
-  import DemoWeb.PersonaComponents
-
-  alias DemoWeb.Experiences
+  on_mount {DemoWeb.ExperienceEntry, :admin}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -38,26 +36,20 @@ defmodule DemoWeb.FormFlowLive.Admin do
     ~H"""
     <Layouts.app flash={@flash} current_nav={@current_nav} current_user={@current_user}>
       <div class="space-y-6">
-        <.persona_gate
-          current_user={@current_user}
-          roles={Experiences.roles(:admin)}
-          page="the admin pages"
-        >
-          <div id="admin-pages">
-            <FormFlow.Web.router
-              type="templates"
-              user_id="demo-admin"
-              uri={@uri}
-              params={@params}
-              path={@path}
-              base="/demo/admin"
-              flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
-              form_types={DemoWeb.FormFlowLive.Types.form_types()}
-              callback_data={%{hello: "world"}}
-              build_with_ai={DemoWeb.FormFlowLive.AI.config()}
-            />
-          </div>
-        </.persona_gate>
+        <div id="admin-pages">
+          <FormFlow.Web.router
+            type="templates"
+            user_id="demo-admin"
+            uri={@uri}
+            params={@params}
+            path={@path}
+            base="/demo/admin"
+            flow_types={DemoWeb.FormFlowLive.Types.flow_types()}
+            form_types={DemoWeb.FormFlowLive.Types.form_types()}
+            callback_data={%{hello: "world"}}
+            build_with_ai={DemoWeb.FormFlowLive.AI.config()}
+          />
+        </div>
       </div>
     </Layouts.app>
     """
