@@ -29,6 +29,7 @@ defmodule Demo.FormFlowInstancesTest do
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Data.Templates.Forms
 
   # ── a host's form types, for the completion callbacks ───────────────────
@@ -844,22 +845,35 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   describe "what a form page draws when there are no answers to draw" do
-    test "a position the flow no longer has says so", %{conn: conn} do
-      %{instance: instance, forms: [_name, address]} = flow_of_two()
-      {:ok, _node} = Flows.delete_node(address)
+    test "a position the flow does not have says so", %{conn: conn} do
+      %{instance: instance} = flow_of_two()
+      path = [Ecto.UUID.generate()]
 
-      {:ok, _view, html} = live(conn, form_path(instance, [address.id]))
+      {:ok, _view, html} = live(conn, form_path(instance, path))
       assert html =~ "This form is not part of this flow."
 
-      {:ok, _view, html} = live(conn, edit_path(instance, [address.id]))
+      {:ok, _view, html} = live(conn, edit_path(instance, path))
       assert html =~ "This form is not part of this flow."
-      refute instance_at(instance, [address.id])
+      refute instance_at(instance, path)
+    end
+
+    test "a step deleted from the template after the start is still this flow instance's",
+         %{conn: conn} do
+      %{instance: instance, forms: [name, _address]} = flow_of_two()
+      {:ok, _node} = Flows.delete_node(name)
+
+      # The journey reads the tree it started on; the template's loss is not
+      # its loss, and the form behind the step is a catalog form that is
+      # still there to start
+      {:ok, _view, html} = live(conn, edit_path(instance, [name.id]))
+      refute html =~ "This form is not part of this flow."
+      assert %{status: "in_progress"} = instance_at(instance, [name.id])
     end
 
     test "a stranded position that was filled in still shows its answers", %{conn: conn} do
-      %{instance: instance, forms: [_name, address]} = flow_of_two()
+      %{flow: flow, instance: instance, forms: [_name, address]} = flow_of_two()
       complete(instance, [address.id], %{"name" => "Ada"})
-      {:ok, _node} = Flows.delete_node(address)
+      strand(flow, address)
 
       {:ok, view, html} = live(conn, form_path(instance, [address.id]))
 
@@ -876,9 +890,9 @@ defmodule Demo.FormFlowInstancesTest do
     end
 
     test "the flow instance's page lists no stranded position, and offers none", %{conn: conn} do
-      %{instance: instance, forms: [_name, address]} = flow_of_two()
+      %{flow: flow, instance: instance, forms: [_name, address]} = flow_of_two()
       complete(instance, [address.id], %{"name" => "Ada"})
-      {:ok, _node} = Flows.delete_node(address)
+      strand(flow, address)
 
       {:ok, view, html} = live(conn, flow_path(instance))
 
@@ -1675,8 +1689,11 @@ defmodule Demo.FormFlowInstancesTest do
 
     test "snapshot/2 lands on the event; handle_complete/2 sees the form done",
          %{conn: conn} do
-      %{instance: instance, form: only} = flow_of_one(nil, form_type: "recording")
+      # The slug goes on before the start: a journey reads the tree it
+      # started on, so a step named afterwards is named for the next one
+      %{flow: flow, form: only} = flow_of_one(nil, form_type: "recording")
       {:ok, only} = Flows.update_node(only, %{slug: "recorded-step"})
+      instance = start_flow(flow)
       {:ok, view, _html} = isolated_edit(conn, instance, [only.id])
       form_instance = instance_at(instance, [only.id])
 
@@ -2603,6 +2620,15 @@ defmodule Demo.FormFlowInstancesTest do
     {:ok, instance} = Instances.Flows.create(%{template_flow_id: flow.id, user_id: "dog_owner"})
 
     instance
+  end
+
+  # Strands every journey of `flow` at `node`: the step is deleted from the
+  # template and the journeys moved to the snapshot without it - the one
+  # way a position leaves a journey's tree
+  defp strand(flow, node) do
+    {:ok, _node} = Flows.delete_node(node)
+    {:ok, snapshot} = Snapshots.get_or_create(flow, Flows.resolve_tree(flow.id))
+    {:ok, _moved} = Instances.Flows.move_to_snapshot(flow, snapshot)
   end
 
   # Starts and submits the form at `path`; `opts` reach the completion

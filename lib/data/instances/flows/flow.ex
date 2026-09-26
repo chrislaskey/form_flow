@@ -7,34 +7,35 @@ defmodule FormFlow.Data.Instances.Flow do
 
   `template_flow_id` names the root; the traversal covers the whole tree
   reachable through subflow references, with interior positions addressed by
-  `path` on the attached form instances. The flow is referenced *live* - never
-  versioned, never snapshotted: structure is routing, and edits propagate
-  to journeys in flight (each form instance already records its own form
-  version, which never changes on its own, and that is where attestation lives).
+  `path` on the attached form instances. `template_flow_snapshot_id` names
+  the tree the journey walks: a template flow snapshot
+  (`FormFlow.Data.Templates.Flow.Snapshot`), the whole tree as it stood
+  when the journey started, set by `FormFlow.Data.Instances.Flows.create/2`
+  and written again only by the editor's Move. Every read of "the flow"
+  for a journey reads that snapshot, never the live template, so an
+  admin's edit reaches no journey in flight unless an admin sends it
+  there. Each form instance records its own form version the same way,
+  and that is where attestation lives. `template_flow_id` keeps every
+  listing and gating job: which flows a page is about, whose status allows
+  what, the pre-release marker.
 
   Traversal state is deliberately not stored as the truth - no per-node
   rows, no *authoritative* progress columns. It is derived by
-  `FormFlow.Data.Instances.FlowProgress` from the live tree and the
-  journey's form instances, so a template edit can never desync it.
-  `status` and `completed_at` are recorded facts, not caches: true at a moment,
-  written by `FormFlow.Data.Instances.Flows.complete/2` and cleared by its
-  other direction, `reopen/2` - they claim only
-  their moment and are never recomputed. `completed_template_snapshot` is
-  the third of that family: the flow tree and the journey's form positions
-  as they stood at that same moment
-  (`FormFlow.Data.Instances.Flows.Snapshot`), written by the same call,
-  null before it, and the one recorded answer to "what did this flow look
-  like when I finished it?" once a later template edit has moved the
-  derivation on.
+  `FormFlow.Data.Instances.FlowProgress` from the snapshot's tree and the
+  journey's form instances. `status` and `completed_at` are recorded
+  facts, not caches: true at a moment, written by
+  `FormFlow.Data.Instances.Flows.complete/2` and cleared by its other
+  direction, `reopen/2` - they claim only their moment and are never
+  recomputed.
 
-  What moves those three is a **form** of this journey changing status:
+  What moves those two is a **form** of this journey changing status:
   `FormFlow.Data.Instances.Forms.update_status/4` settles the journey after
   every change it makes, completing it when the derivation says the root
-  flow's End is reached and reopening it when it no longer does. What does
-  not move them is a **template** edit. A step added to a finished
-  journey's flow leaves it `completed` and makes
-  `FormFlow.Data.Instances.Flows.complete?/1` disagree with `status` - the
-  legitimate divergence above, and what the snapshot is for reading through.
+  flow's End is reached and reopening it when it no longer does. What
+  cannot move them is a **template** edit: a completed journey is never
+  moved to a new snapshot, so the tree it finished on is the tree it
+  reads forever, and "what did this flow look like when I finished it?"
+  is answered by the snapshot itself.
 
   Five columns are a **cache of that derivation**, written by
   `FormFlow.Data.Instances.Flows.update_next_positions/2` alone and never
@@ -52,10 +53,8 @@ defmodule FormFlow.Data.Instances.Flow do
   On a **completed** journey the last refresh was its completion, and no
   later one reaches it - the sweep takes only journeys still in progress.
   So `completed_forms` and `forms_total` there are the counts as of
-  completion and stay that way: 50 of 50, never 50 of 51 because the
-  template gained a step afterwards. `completed_template_snapshot` is the
-  truth behind those two numbers, and the journey's own page filters its
-  rows against it for the same reason.
+  completion and stay that way: 50 of 50, never 50 of 51, which the frozen
+  tree guarantees on its own.
 
   Every position the flow is open at - not only the first - has a row in
   `FormFlow.Data.Instances.Flow.NextPosition`, the child table a listing
@@ -86,13 +85,13 @@ defmodule FormFlow.Data.Instances.Flow do
 
   schema "form_flow_instance_flows" do
     belongs_to(:template_flow, Templates.Flow)
+    belongs_to(:template_flow_snapshot, Templates.Flow.Snapshot)
 
     field(:status, :string, default: "in_progress")
     field(:user_id, :string)
     field(:tenant_id, :string)
     field(:metadata, :map, default: %{})
     field(:completed_at, :utc_datetime_usec)
-    field(:completed_template_snapshot, :map)
 
     # The cache of where the flow is open - see the moduledoc
     field(:next_path, {:array, :string})
@@ -120,15 +119,16 @@ defmodule FormFlow.Data.Instances.Flow do
   @doc """
   Builds a changeset for a journey.
 
-  `status`, `completed_at`, and `completed_template_snapshot` are not
-  castable - completion machinery sets them (see moduledoc) - and neither
-  are the five cache columns,
-  which `FormFlow.Data.Instances.Flows.update_next_positions/2` writes
-  through a plain change of its own, as `complete/2` writes `status` and `completed_at`.
-  `template_flow_id`, `user_id`, and `tenant_id` are
-  castable at creation and immutable afterwards: a journey can never
-  re-point at a different tree (its form instances' paths reference that
-  tree's nodes), and provenance never changes.
+  `template_flow_snapshot_id` is not castable: `FormFlow.Data.Instances.Flows.create/2`
+  puts the snapshot it took, and the editor's Move writes the next one.
+  `status` and `completed_at` are not castable either - completion
+  machinery sets them (see moduledoc) - and neither are the five cache
+  columns, which `FormFlow.Data.Instances.Flows.update_next_positions/2`
+  writes through a plain change of its own, as `complete/2` writes
+  `status` and `completed_at`. `template_flow_id`, `user_id`, and
+  `tenant_id` are castable at creation and immutable afterwards: a journey
+  can never re-point at a different root (its form instances' paths
+  reference that tree's nodes), and provenance never changes.
   """
   def changeset(instance, attrs \\ %{}) do
     instance

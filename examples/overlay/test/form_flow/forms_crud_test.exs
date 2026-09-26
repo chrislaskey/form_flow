@@ -1562,8 +1562,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       swept = Instances.Flows.get(journey.id)
       assert swept.next_path == [dog_node.id]
       assert DateTime.compare(swept.next_computed_at, computed_before) == :gt
-      tree_updated_at = Flows.tree_updated_at(Flows.resolve_tree(dog.id))
-      refute Instances.Flows.next_positions_stale?(swept, tree_updated_at)
+      refute Instances.Flows.next_positions_stale?(swept)
     end
 
     test "a publish that reopens nothing leaves the cache alone", %{conn: conn} do

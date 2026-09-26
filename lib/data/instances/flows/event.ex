@@ -10,8 +10,9 @@ defmodule FormFlow.Data.Instances.Flow.Event do
   deliberately.
 
   Events record *mutations* - they are not a pure data audit of every
-  answer change. `snapshot` holds free-form notes: what was stranded by a
-  template edit, what an admin decided about it. Progress derivation never
+  answer change. `snapshot` holds free-form notes: which snapshot a move
+  left and reached, what was stranded by it, what an admin decided about
+  it. Progress derivation never
   reads events - they are audit, not state, which is what keeps them unable
   to split from the live flow.
   """
@@ -22,7 +23,7 @@ defmodule FormFlow.Data.Instances.Flow.Event do
 
   alias FormFlow.Data.Instances
 
-  @events ~w(created status_changed reconciled)
+  @events ~w(created status_changed moved reconciled)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

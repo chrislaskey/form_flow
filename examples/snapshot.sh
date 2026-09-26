@@ -42,7 +42,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DB="demo/demo_dev.db"
+# FORM_FLOW_SNAPSHOT_DB names another database to read - a scratch copy
+# migrated ahead of the running demo, say - and defaults to the demo's own
+DB="${FORM_FLOW_SNAPSHOT_DB:-demo/demo_dev.db}"
 OUT="overlay/priv/repo/form_flow_snapshot.sql"
 
 with_instances=false
@@ -66,6 +68,7 @@ TEMPLATE_TABLES=(
   form_flow_template_flow_nodes
   form_flow_template_flow_relationships
   form_flow_template_flow_events
+  form_flow_template_flow_snapshots
 )
 INSTANCE_TABLES=(
   form_flow_instance_flows

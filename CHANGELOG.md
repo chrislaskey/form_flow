@@ -1,5 +1,77 @@
 # Changelog
 
+## v0.44.0
+
+### Flow Template Snapshots
+
+A flow used to be referenced live: every save an admin made reached every
+journey in flight, and the editor's structural-save dialog, the
+next-position sweep on every save, and the stale marker on the listing
+were all ways of living with that. Now a journey records a **template
+flow snapshot** when it starts - the whole tree, every flow, node, and
+relationship, as `FormFlow.Data.Templates.Flows.resolve_tree/1` loaded it,
+as JSON in the new table `form_flow_template_flow_snapshots`
+(`FormFlow.Data.Templates.Flow.Snapshot`) - and reads its flow from that
+snapshot ever after: its pages, the listing, the form start, the sweeps.
+
+Editing stays what it is: many small saves, no draft, no publish, no flow
+versions. A snapshot is taken on demand, at start
+(`FormFlow.Data.Templates.Flows.Snapshots.get_or_create/2`): the live tree
+is hashed and matched against the root's snapshots, a hit reused and a
+miss inserted and numbered. A hundred saves between two starts make one
+snapshot; a save nobody starts against makes none. **Any save followed by
+a start is a new snapshot** - a drag, a rename, a status change - because
+snapshots mean "the rows changed", not "the logic changed", and a
+duplicate costs a row nobody reads. Health refreshes make none. Form
+templates appear by id only; their rows are read live. Perspectives freeze
+with the rest of a flow's properties, so a journey keeps the visibility
+rule it started with.
+
+The flow editor asks on **every** save while journeys are in flight, with
+the two cards the publish dialog uses: **Leave them on the snapshot they
+started with** (the default) saves and does nothing else; **Move them to
+the new snapshot** saves, takes the snapshot, points every in-progress
+journey of the root at it with a `moved` event on each, and recomputes
+where each stands (`FormFlow.Data.Instances.Flows.move_to_snapshot/3`).
+When the save deletes an owned form template, Move is the only answer
+offered, since a journey left behind would name a form that no longer
+exists. Save & Continue asks the same question and navigates once it is
+answered. Completed journeys are never moved.
+
+### Breaking changes
+
+* `form_flow_instance_flows` gains `template_flow_snapshot_id`, not null,
+  `on_delete: restrict`; the `V01` migration of both adapters is edited in
+  place, so an existing database is recreated. `completed_template_snapshot`
+  is dropped: a completed journey never changes snapshot, so the tree it
+  finished on is the tree it reads.
+* `FormFlow.Data.Instances.Flows.Snapshot` is removed, and with it the
+  `"positions"` list the History page counted. The flow instance page no
+  longer filters a completed journey's rows; the frozen tree does that.
+* `FormFlow.Data.Instances.Flows.create/2` refuses a `template_flow_id`
+  that names no flow on the changeset, `"does not exist"`, rather than
+  through the foreign key.
+* `FormFlow.Data.Instances.Flows.update_next_positions/2`'s
+  `%Templates.Flow{}` clause groups the root's journeys by snapshot and
+  sweeps each group against its own tree; `opts[:tree]` is read by the
+  journey clause alone.
+* `FormFlow.Data.Instances.Flows.list_stranded/2` takes a journey only;
+  the `%Templates.Flow{}` clause is gone. With a frozen tree a journey
+  strands only after a move.
+* `FormFlow.Data.Instances.Flows.next_positions_stale?/1` takes the
+  journey alone: a row is stale when no refresh has reached it, which
+  after a move means the move's sweep did not finish.
+  `FormFlow.Data.Templates.Flows.tree_updated_at/1` is removed. The
+  listing's marker and the flow instance page's read-repair now answer to
+  that one case.
+* `FormFlow.Data.Instances.Flow.Event` gains the `moved` event; the History
+  page labels it "Moved to a new snapshot".
+* `FormFlow.Data.Instances.Flows.delete_pre_release/2` also deletes the
+  flow's snapshots no remaining journey reads
+  (`FormFlow.Data.Templates.Flows.Snapshots.delete_unreferenced/1`).
+* The demo's `examples/snapshot.sh` lists the new table and reads
+  `FORM_FLOW_SNAPSHOT_DB` for another database to dump.
+
 ## v0.43.0
 
 ### A journey finishes when its forms are done

@@ -114,7 +114,7 @@ defmodule FormFlow.Web.Instances.Flows.History do
             dot(kind(entry))
           ]} />
           <p class="text-sm">
-            <span class="font-semibold">{label(entry, @flow_instance)}</span>
+            <span class="font-semibold">{label(entry, @flow_instance, @forms)}</span>
             <span class="text-zinc-700">· {subject(entry, @forms, @flow_name)}</span>
             <span :if={entry.event.user_id} class="text-zinc-500">by</span>
             <code :if={entry.event.user_id} class="text-xs">{entry.event.user_id}</code>
@@ -132,38 +132,49 @@ defmodule FormFlow.Web.Instances.Flows.History do
 
   # A form's event is labelled as its own History page labels it; the
   # instance's own events in the same voice. Completion says how many form
-  # positions the flow had at that moment, from the snapshot the row keeps
-  # - a journey completed before the snapshot existed says "Completed" alone
-  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "created"}}, _instance),
-    do: "Started"
+  # positions the flow has - the journey's tree is frozen, so that is how
+  # many it had at that moment too - while the journey still stands
+  # completed; a completion later taken back says "Completed" alone
+  defp label(
+         %{form_instance: nil, event: %Instances.Flow.Event{event: "created"}},
+         _instance,
+         _forms
+       ),
+       do: "Started"
 
   defp label(
          %{form_instance: nil, event: %Instances.Flow.Event{} = event},
-         %Instances.Flow{} = instance
+         %Instances.Flow{} = instance,
+         forms
        )
        when event.event == "status_changed" do
     case Instances.Flow.Event.status(event) do
       "in_progress" -> "Reopened"
-      _completed -> completed_label(instance)
+      _completed -> completed_label(instance, forms)
     end
   end
 
-  defp label(%{form_instance: nil, event: %Instances.Flow.Event{event: "reconciled"}}, _instance),
-    do: "Reconciled"
+  defp label(
+         %{form_instance: nil, event: %Instances.Flow.Event{event: "moved"}},
+         _instance,
+         _forms
+       ),
+       do: "Moved to a new snapshot"
 
-  defp label(%{event: %Instances.Form.Event{} = event}, _instance),
+  defp label(
+         %{form_instance: nil, event: %Instances.Flow.Event{event: "reconciled"}},
+         _instance,
+         _forms
+       ),
+       do: "Reconciled"
+
+  defp label(%{event: %Instances.Form.Event{} = event}, _instance, _forms),
     do: FormStatus.event_label(event)
 
-  # How many form positions the flow had at that moment, from the snapshot
-  # the row keeps - but only while the journey still holds one. A reopen
-  # clears it, so a completion that was later taken back says "Completed"
-  # alone, as does one recorded before the snapshot column existed.
-  defp completed_label(%Instances.Flow{completed_template_snapshot: %{"positions" => positions}})
-       when is_list(positions),
-       do:
-         "Completed · #{length(positions)} #{if length(positions) == 1, do: "form", else: "forms"}"
+  defp completed_label(%Instances.Flow{status: "completed"}, forms) when is_list(forms),
+    do: "Completed · #{length(forms)} #{if length(forms) == 1, do: "form", else: "forms"}"
 
-  defp completed_label(%Instances.Flow{}), do: "Completed"
+  defp completed_label(%Instances.Flow{}, _forms), do: "Completed"
 
   # A reopen is not a success - it is the journey going back to work, the
   # colour a reopened form already wears

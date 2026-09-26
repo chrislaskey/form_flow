@@ -20,7 +20,8 @@ defmodule FormFlow.Data.Instances do
   Where only the row itself is meant, these docs say so.
 
   Traversal state is never stored. `FormFlow.Data.Instances.FlowProgress`
-  derives it from the live template tree and the journey's form instances, so
-  a template edit cannot desync it.
+  derives it from the journey's snapshot of the flow
+  (`FormFlow.Data.Templates.Flow.Snapshot`) and its form instances, so a
+  template edit cannot reach it.
   """
 end

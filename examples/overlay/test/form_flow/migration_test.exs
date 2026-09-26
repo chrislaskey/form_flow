@@ -162,15 +162,34 @@ defmodule Demo.FormFlowMigrationTest do
     with {:ok, _} <- result, do: {:ok, id}
   end
 
+  # A journey names the snapshot it reads its flow from, so one goes first
   defp insert_journey(flow_id) do
+    id = Ecto.UUID.generate()
+
+    with {:ok, snapshot_id} <- insert_snapshot(flow_id),
+         {:ok, _} <-
+           Repo.query(
+             """
+             INSERT INTO form_flow_instance_flows
+               (id, template_flow_id, template_flow_snapshot_id, status, metadata,
+                inserted_at, updated_at)
+             VALUES (?, ?, ?, 'in_progress', '{}', ?, ?)
+             """,
+             [id, flow_id, snapshot_id, @timestamp, @timestamp]
+           ) do
+      {:ok, id}
+    end
+  end
+
+  defp insert_snapshot(flow_id) do
     id = Ecto.UUID.generate()
 
     result =
       Repo.query(
         """
-        INSERT INTO form_flow_instance_flows
-          (id, template_flow_id, status, metadata, inserted_at, updated_at)
-        VALUES (?, ?, 'in_progress', '{}', ?, ?)
+        INSERT INTO form_flow_template_flow_snapshots
+          (id, template_flow_id, number, checksum, data, inserted_at, updated_at)
+        VALUES (?, ?, 1, 'checksum', '{}', ?, ?)
         """,
         [id, flow_id, @timestamp, @timestamp]
       )

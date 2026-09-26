@@ -23,6 +23,7 @@ defmodule Demo.FormFlowNextPositionsTest do
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Data.Templates.Forms
 
   describe "a journey of one in-order flow: Start → Name → Address → End" do
@@ -227,7 +228,7 @@ defmodule Demo.FormFlowNextPositionsTest do
   end
 
   describe "the sweep: update_next_positions/2 on a Templates.Flow" do
-    test "rewrites every open journey of the root against the edited tree, and skips completed ones" do
+    test "recomputes every open journey against its own snapshot, and skips completed ones" do
       %{flow: flow, forms: [name, address]} = flow_of_two()
       first = start_flow(flow, [])
       second = start_flow(flow, [])
@@ -236,8 +237,9 @@ defmodule Demo.FormFlowNextPositionsTest do
 
       complete(second, [name.id])
 
-      # The template changes under them: a form is added before Name, so
-      # the flow is open there for a journey that has not started Name
+      # The template changes: a form is added before Name. The journeys read
+      # the tree they started on, so a sweep recomputes each against that
+      # and moves nothing
       {:ok, flow} = Flows.get(flow.id) |> then(&{:ok, &1})
       first_node = Enum.find(flow.nodes, &("Start" in &1.labels))
       intro = build_form_node(flow, "Intro")
@@ -245,11 +247,15 @@ defmodule Demo.FormFlowNextPositionsTest do
       edge(flow, first_node, intro)
       edge(flow, intro, name)
 
-      # Stale until swept
-      assert reload(first).next_path == [name.id]
-
       # Three open journeys: the fixture's own, `first`, and `second`
       assert {:ok, 3} = Instances.Flows.update_next_positions(flow)
+      assert reload(first).next_path == [name.id]
+      assert reload(first).forms_total == 2
+
+      # Moved to the new snapshot, the flow is open at Intro for a journey
+      # that has not started Name
+      {:ok, snapshot} = Snapshots.get_or_create(flow, Flows.resolve_tree(flow.id))
+      assert {:ok, 3} = Instances.Flows.move_to_snapshot(flow, snapshot)
 
       first = reload(first)
       assert first.next_path == [intro.id]
@@ -416,33 +422,19 @@ defmodule Demo.FormFlowNextPositionsTest do
   end
 
   describe "staleness" do
-    test "next_positions_stale?/2: no refresh yet, or a flow of the tree saved since" do
+    test "next_positions_stale?/1: a journey no refresh has reached, and no other" do
       %{journey: journey, flow: flow} = flow_of_two()
-      tree_at = Flows.tree_updated_at(Flows.resolve_tree(flow.id))
 
-      refute Instances.Flows.next_positions_stale?(journey, tree_at)
-      assert Instances.Flows.next_positions_stale?(%{journey | next_computed_at: nil}, tree_at)
-      refute Instances.Flows.next_positions_stale?(journey, nil)
+      refute Instances.Flows.next_positions_stale?(journey)
+      assert Instances.Flows.next_positions_stale?(%{journey | next_computed_at: nil})
 
-      # The flow is saved after the refresh
-      later = DateTime.add(journey.next_computed_at, 1, :second)
-      assert Instances.Flows.next_positions_stale?(journey, later)
-    end
+      # A save of the flow moves nothing under a journey: its tree is frozen
+      {:ok, _renamed} = Flows.update(flow, %{name: "Application 2027"})
+      refute Instances.Flows.next_positions_stale?(reload(journey))
 
-    test "tree_updated_at/1 is the newest save anywhere in the tree, a subflow's included" do
-      %{root: root, documents: documents} = nested_flow()
-      tree = Flows.resolve_tree(root.id)
-
-      assert Flows.tree_updated_at(tree) == Flows.tree_updated_at(tree)
-
-      later = DateTime.add(Flows.tree_updated_at(tree), 60, :second)
-
-      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^documents.flow.id),
-        set: [updated_at: later]
-      )
-
-      assert Flows.tree_updated_at(Flows.resolve_tree(root.id)) == later
-      assert Flows.tree_updated_at(nil) == nil
+      # A completed journey is never stale, refresh or no refresh
+      completed = %{journey | status: "completed", next_computed_at: nil}
+      refute Instances.Flows.next_positions_stale?(completed)
     end
   end
 
@@ -450,70 +442,8 @@ defmodule Demo.FormFlowNextPositionsTest do
 
   # Start → Name → Address → End, one "forms" flow of the given type, and a
   # journey of it. `opts[:tenant_id]` sets the journey's tenant.
-  describe "Instances.Flows.complete/2 records the template" do
-    test "writes the tree and the form positions as they stand, once" do
-      %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
-      _ = complete(journey, [name.id])
-
-      {:ok, completed} = Instances.Flows.complete(journey)
-      snapshot = completed.completed_template_snapshot
-
-      assert snapshot["tree"]["flow"]["id"] == flow.id
-      assert snapshot["tree"]["flow"]["name"] == "Application"
-      assert snapshot["tree"]["subflows"] == %{}
-      assert length(snapshot["tree"]["nodes"]) == 4
-      assert length(snapshot["tree"]["relationships"]) == 3
-
-      form_node = Enum.find(snapshot["tree"]["nodes"], &(&1["id"] == name.id))
-      assert form_node["form_id"] == name.form_id
-      assert form_node["labels"] == ["Form"]
-
-      [name_instance] = Instances.Flows.form_instances(journey)
-
-      assert snapshot["positions"] == [
-               %{
-                 "path" => [name.id],
-                 "label" => "Name",
-                 "status" => "completed",
-                 "instance_id" => name_instance.id,
-                 "version_id" => name_instance.template_form_version_id
-               },
-               %{
-                 "path" => [address.id],
-                 "label" => "Address",
-                 "status" => "available",
-                 "instance_id" => nil,
-                 "version_id" => nil
-               }
-             ]
-
-      # Completing a completed journey is a no-op: the snapshot stays
-      {:ok, again} = Instances.Flows.complete(completed)
-      assert again.completed_template_snapshot == snapshot
-      assert reload(journey).completed_template_snapshot == snapshot
-    end
-
-    test "a later template edit moves the derivation, not the snapshot" do
-      %{flow: flow, journey: journey, forms: [_name, address]} = flow_of_two()
-      {:ok, completed} = Instances.Flows.complete(journey)
-      snapshot = completed.completed_template_snapshot
-      assert length(snapshot["positions"]) == 2
-
-      extra = build_form_node(flow, "Extra")
-      edge(flow, address, extra)
-
-      assert map_size(Instances.Flows.progress(reload(journey))) == 5
-      assert reload(journey).completed_template_snapshot == snapshot
-    end
-
-    test "null on a journey still in progress" do
-      %{journey: journey} = flow_of_two()
-      assert reload(journey).completed_template_snapshot == nil
-    end
-  end
-
   describe "the journey's status follows its forms" do
-    test "submitting the last form completes the journey, with its moment and its snapshot" do
+    test "submitting the last form completes the journey, with its moment" do
       %{journey: journey, forms: [name, address]} = flow_of_two()
 
       complete(journey, [name.id])
@@ -524,9 +454,6 @@ defmodule Demo.FormFlowNextPositionsTest do
       done = reload(journey)
       assert done.status == "completed"
       assert %DateTime{} = done.completed_at
-      assert %{"tree" => _tree, "positions" => positions} = done.completed_template_snapshot
-      assert length(positions) == 2
-      assert Enum.all?(positions, &(&1["status"] == "completed"))
 
       # And it leaves every queue
       assert done.next_path == nil
@@ -559,7 +486,7 @@ defmodule Demo.FormFlowNextPositionsTest do
       assert reload(journey).status == "in_progress"
     end
 
-    test "reopening one form reopens the journey, and clears its moment and snapshot" do
+    test "reopening one form reopens the journey, and clears its moment" do
       %{journey: journey, forms: [name, address]} = flow_of_two()
 
       complete(journey, [name.id])
@@ -572,12 +499,11 @@ defmodule Demo.FormFlowNextPositionsTest do
       back = reload(journey)
       assert back.status == "in_progress"
       assert back.completed_at == nil
-      assert back.completed_template_snapshot == nil
       assert back.next_path == [name.id]
       assert open_paths(back) == [[name.id]]
     end
 
-    test "finishing again records the second moment and takes the snapshot again" do
+    test "finishing again records the second moment" do
       %{journey: journey, forms: [name, address]} = flow_of_two()
 
       complete(journey, [name.id])
@@ -585,15 +511,12 @@ defmodule Demo.FormFlowNextPositionsTest do
       first = reload(journey)
 
       {:ok, _reopened} = Instances.Forms.update_status(journey, [name.id], :in_progress)
-      # Cleared while it is not finished, so nothing claims a moment that
-      # has been taken back
-      assert reload(journey).completed_template_snapshot == nil
+      assert reload(journey).completed_at == nil
 
       complete(journey, [name.id])
 
       second = reload(journey)
       assert second.status == "completed"
-      assert second.completed_template_snapshot != nil
       assert DateTime.compare(second.completed_at, first.completed_at) == :gt
     end
 
@@ -759,11 +682,10 @@ defmodule Demo.FormFlowNextPositionsTest do
     |> Enum.sort_by(&flow_order(&1, journey))
   end
 
-  # Where a path sits in the tree's flow order (`FlowProgress.forms/2`)
+  # Where a path sits in the journey's flow order (`FlowProgress.forms/2`)
   defp flow_order(path, journey) do
-    tree = Flows.resolve_tree(journey.template_flow_id)
-
-    tree
+    journey
+    |> Snapshots.tree()
     |> FormFlow.Data.Instances.FlowProgress.forms([])
     |> Enum.find_index(&(&1.path == path))
   end

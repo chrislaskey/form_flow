@@ -59,6 +59,7 @@ defmodule FormFlow.Data.Instances.Forms do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flows.Snapshots
 
   @doc "Fetches an instance by id, or nil."
   def get(instance_form_id), do: Repo.get(Instances.Form, instance_form_id)
@@ -148,9 +149,8 @@ defmodule FormFlow.Data.Instances.Forms do
 
   The journey's status therefore follows its forms **at the moments its
   forms change** - it is still written by an operation, never recomputed at
-  read time, and a template edit still moves nothing
-  (`FormFlow.Data.Instances.Flow`'s moduledoc on the divergence that
-  leaves).
+  read time, and a template edit moves nothing: the journey reads the
+  snapshot it started on (`FormFlow.Data.Instances.Flow`).
 
   The flow's status is not consulted: whether a user may still continue -
   start, reopen, submit - is the pages' rule (`FormFlow.Data.Templates.Flow.allows?/2`),
@@ -202,11 +202,7 @@ defmodule FormFlow.Data.Instances.Forms do
     opts = Keyword.take(opts, [:tree, :flow_types, :callback_data])
     journey = Instances.Flows.get(journey.id) || journey
 
-    tree =
-      Keyword.get_lazy(opts, :tree, fn ->
-        Templates.Flows.resolve_tree(journey.template_flow_id)
-      end)
-
+    tree = Keyword.get_lazy(opts, :tree, fn -> Snapshots.tree(journey) end)
     opts = Keyword.put(opts, :tree, tree)
 
     case {finished?(tree, journey), journey.status} do
@@ -228,9 +224,9 @@ defmodule FormFlow.Data.Instances.Forms do
   # journey whose flow has no End at all, which `complete?/2` refuses and
   # which is a malformed flow, not a finished journey.
   #
-  # Stranded positions - a form instance at a position the tree no longer
-  # has - are not in `forms/2` and so hold nothing up; they are
-  # `FormFlow.Data.Instances.Flows.list_stranded/2`'s business.
+  # Stranded positions - a form instance at a position the journey's tree
+  # does not have, after a move - are not in `forms/2` and so hold nothing
+  # up; they are `FormFlow.Data.Instances.Flows.list_stranded/2`'s business.
   #
   # This is the strict reading, and it is the right one while the join rule
   # is AND-only (`FlowProgress`'s moduledoc: OR-joins and N-of-M are
@@ -461,8 +457,14 @@ defmodule FormFlow.Data.Instances.Forms do
     end)
   end
 
+  # The node is looked up in the journey's own tree, not the live template:
+  # a step the template has lost since the journey started is still a
+  # position of this journey, and the form template behind it, when it
+  # still exists, still starts. The version is the form template's latest
+  # published one, read live - a snapshot holds form templates by id only.
   defp create_at(journey, path, opts) do
-    node = Templates.Flows.get_node(List.last(path))
+    tree = Keyword.get_lazy(opts, :tree, fn -> Snapshots.tree(journey) end)
+    node = node_in(tree, List.last(path))
 
     cond do
       is_nil(node) ->
@@ -477,6 +479,13 @@ defmodule FormFlow.Data.Instances.Forms do
           version -> insert_instance(journey, path, version, opts)
         end
     end
+  end
+
+  defp node_in(nil, _node_id), do: nil
+
+  defp node_in(%{nodes: nodes, subflows: subflows}, node_id) do
+    Enum.find(nodes, &(&1.id == node_id)) ||
+      Enum.find_value(subflows, fn {_step_id, subtree} -> node_in(subtree, node_id) end)
   end
 
   defp insert_instance(journey, path, version, opts) do

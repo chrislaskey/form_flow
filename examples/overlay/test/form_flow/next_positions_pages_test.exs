@@ -22,7 +22,7 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
   describe "the editor's save" do
     @describetag user: "admin"
 
-    test "sweeps the open journeys after a structural save, and not after a rename",
+    test "Leave sweeps nothing; Move sweeps the open journeys against the new snapshot",
          %{conn: conn} do
       %{flow: flow, journey: journey, forms: [name, address]} = flow_of_two()
       flow = Flows.get(flow.id)
@@ -32,7 +32,7 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
 
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}/edit")
 
-      # A rename: the same steps and edges, a new name
+      # A rename, left: the journey keeps its snapshot and its cache
       view
       |> element("#flows-edit-editor")
       |> render_hook("form_flow:flow_changed", canvas(flow, [start, name, address, stop]))
@@ -42,21 +42,18 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
       |> render_change(%{"dynamic_form" => %{"name" => "Renamed"}})
 
       view |> element("button", "Save") |> render_click()
+      view |> form("#flows-edit-confirm-save", %{"journeys" => "leave"}) |> render_submit()
       assert render(view) =~ "Saved."
 
       assert reload(journey).next_computed_at == computed_at
 
-      # A structural save: Address is removed. With a journey in flight this
-      # asks first (`Demo.FormFlowFlowSaveConfirmationTest`), so the sweep
-      # runs on "Save anyway"
+      # Address removed, and the journey moved: swept against the new tree
       view
       |> element("#flows-edit-editor")
       |> render_hook("form_flow:flow_changed", canvas(flow, [start, name, stop]))
 
       view |> element("button", "Save") |> render_click()
-      assert render(view) =~ "Save anyway"
-
-      view |> element("button", "Save anyway") |> render_click()
+      view |> form("#flows-edit-confirm-save", %{"journeys" => "move"}) |> render_submit()
       assert render(view) =~ "Saved."
 
       swept = reload(journey)
@@ -69,11 +66,12 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
   describe "the flow instance's page" do
     @describetag user: "dog_owner"
 
-    test "repairs a row no refresh has reached, and one older than the flow's last save",
+    test "repairs a row no refresh has reached, and leaves a fresh one alone",
          %{conn: conn} do
-      %{flow: flow, journey: journey, forms: [name, _address]} = flow_of_two()
+      %{journey: journey, forms: [name, _address]} = flow_of_two()
 
-      # Never refreshed
+      # Never refreshed - or moved to a new snapshot by a sweep that did
+      # not finish, which clears the refresh the same way
       FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
         set: [next_path: nil, next_node_id: nil, next_computed_at: nil]
       )
@@ -87,25 +85,9 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
       assert %DateTime{} = repaired.next_computed_at
       assert [_row] = rows_of(journey)
 
-      # Refreshed before the flow was last saved: the cached value is wrong
-      # and the timestamps say so
-      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
-        set: [next_path: ["gone"], next_node_id: "gone"]
-      )
-
-      # Saved a moment after the refresh - in the past, so the repair that
-      # follows is newer than it
-      later = DateTime.add(repaired.next_computed_at, 1, :millisecond)
-      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
-
-      {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
-
-      assert reload(journey).next_path == [name.id]
-
       # A fresh row is left alone
-      fresh = reload(journey)
       {:ok, _view, _html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
-      assert reload(journey).next_computed_at == fresh.next_computed_at
+      assert reload(journey).next_computed_at == repaired.next_computed_at
     end
   end
 
@@ -151,38 +133,27 @@ defmodule Demo.FormFlowNextPositionsPagesTest do
       refute html =~ "3 forms"
       refute html =~ "Extra"
     end
-
-    test "a journey completed with no snapshot renders live rather than renders nothing",
-         %{conn: conn} do
-      %{journey: journey, forms: [name, address]} = flow_of_two()
-
-      submit(journey, [name.id])
-      submit(journey, [address.id])
-
-      # As every journey completed before the snapshot column existed
-      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
-        set: [completed_template_snapshot: nil]
-      )
-
-      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications/#{journey.id}")
-
-      assert html =~ "2 of 2 forms done"
-      assert html =~ "Name"
-      assert html =~ "Address"
-    end
   end
 
   describe "the listing" do
     @describetag user: "dog_owner"
 
-    test "marks a row the flow was edited after, quietly, and not a fresh one", %{conn: conn} do
+    test "marks a row a move left unswept, quietly, and not a fresh one", %{conn: conn} do
       %{flow: flow, journey: journey} = flow_of_two()
 
       {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
       refute html =~ "may have changed"
 
-      later = DateTime.add(journey.next_computed_at, 60, :second)
-      FormFlowRepo.update_all(from(f in Flow, where: f.id == ^flow.id), set: [updated_at: later])
+      # A save of the flow marks nothing: the journey's tree is frozen
+      {:ok, _renamed} = Flows.update(flow, %{name: "Application 2027"})
+      {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
+      refute html =~ "may have changed"
+
+      # A move whose sweep did not finish leaves the refresh cleared and the
+      # old position in place - the one row that may have changed
+      FormFlowRepo.update_all(from(i in Instances.Flow, where: i.id == ^journey.id),
+        set: [next_computed_at: nil]
+      )
 
       {:ok, _view, html} = live(conn, "/demo/pet-licenses/applications")
       assert html =~ "may have changed"

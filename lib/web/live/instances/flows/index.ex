@@ -95,12 +95,17 @@ defmodule FormFlow.Web.Instances.Flows.Index do
       application is.
 
   Which forms are the viewer's comes from the flow type's `visible?/2`,
-  asked once per form node of each of the page's flows on every load
-  (`FormFlow.Web.Instances.Flows.Shared.visible_node_ids/2`) - in memory,
-  never stored, so an admin adding a perspective is right on the next
-  load. `actionable_only` turns that set into the listing's filter: only
-  journeys open at one of the viewer's nodes are listed, which is what a
-  reviews page is (`FormFlow.Data.Instances.Flows.narrow_next_position/2`).
+  asked once per form node of every snapshot the page's in-progress
+  journeys read (`FormFlow.Data.Templates.Flows.Snapshots.list_in_progress/2`,
+  `FormFlow.Web.Instances.Flows.Shared.visible_node_ids/2`) - in memory,
+  never stored. The live template is not consulted: a journey walks the
+  snapshot it started on, perspectives included, so this page and the
+  journey's own page answer "whose turn" from the same tree, and an admin
+  changing who may see a step reaches journeys in flight through the
+  editor's Move. `actionable_only` turns that set into the listing's
+  filter: only journeys open at one of the viewer's nodes are listed,
+  which is what a reviews page is
+  (`FormFlow.Data.Instances.Flows.narrow_next_position/2`).
 
   ## The states it draws
 
@@ -128,6 +133,7 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.SectionHeading
@@ -194,15 +200,25 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     allowed = Shared.resolve_flows(socket.assigns.flows, tenant_id)
     page_flows = Enum.map(allowed, & &1.flow)
 
-    # The page's trees, once per load: three queries each. They name the
-    # viewer's form nodes and the labels of the Next column. A journey of
-    # a flow the page is not about - a host's `instances` query reaching
-    # past its `flows` - draws neither, and with `actionable_only` is not
-    # listed at all: the filter knows only the named flows' nodes.
-    trees = Map.new(page_flows, &{&1.id, Templates.Flows.resolve_tree(&1.id)})
+    # The trees the page's journeys read: every snapshot an in-progress
+    # journey of the page's flows is on, found in one query and decoded
+    # once each. They name the viewer's form nodes and the labels of the
+    # Next column. The live template is not read here - it is not what any
+    # listed journey walks. A journey of a flow the page is not about - a
+    # host's `instances` query reaching past its `flows` - draws neither,
+    # and with `actionable_only` is not listed at all: the filter knows
+    # only the named flows' snapshots.
+    #
+    # This is `1 + 2N` queries and N decodes, N being those snapshots -
+    # unbounded, and measured at 132 ms for 201 of them on local SQLite.
+    # Accepted until a deployment shows the number; see
+    # `Snapshots.list_in_progress/2`'s doc for the cache that would fix
+    # it, and why it is safe.
+    trees =
+      Map.new(Snapshots.list_in_progress(page_flows, tenant_id), &{&1.id, Snapshots.tree(&1)})
 
     viewer_node_ids =
-      Enum.reduce(trees, MapSet.new(), fn {_flow_id, tree}, ids ->
+      Enum.reduce(trees, MapSet.new(), fn {_snapshot_id, tree}, ids ->
         MapSet.union(
           ids,
           FormFlow.Web.Instances.Flows.Shared.visible_node_ids(tree, socket.assigns)
@@ -226,10 +242,6 @@ defmodule FormFlow.Web.Instances.Flows.Index do
     |> assign(:page_flows, page_flows)
     |> assign(:viewer_node_ids, viewer_node_ids)
     |> assign(:next_labels, next_labels(trees))
-    |> assign(
-      :trees_updated_at,
-      Map.new(trees, fn {id, tree} -> {id, Templates.Flows.tree_updated_at(tree)} end)
-    )
     # Both answers, as everywhere: this page has to offer the flow
     # (`FormFlow.Config.Flows.Allowed`'s `start`) and the flow's status has
     # to take a start
@@ -281,38 +293,36 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   defp narrow_actionable(query, true, node_ids, tenant_id),
     do: Instances.Flows.narrow_next_position(query, MapSet.to_list(node_ids), tenant_id)
 
-  # Every form position of the page's flows, labelled as the flow
-  # instance's page labels it, keyed by flow then path - what the Next
-  # column draws for a journey's `next_path`
+  # Every form position of every snapshot the page's journeys read,
+  # labelled as the flow instance's page labels it, keyed by snapshot then
+  # path - what the Next column draws for a journey's `next_path`
   defp next_labels(trees) do
-    Map.new(trees, fn {flow_id, tree} ->
-      {flow_id,
+    Map.new(trees, fn {snapshot_id, tree} ->
+      {snapshot_id,
        Map.new(FlowProgress.forms(tree, []), &{&1.path, FlowProgress.qualified_label(&1)})}
     end)
   end
 
   # The name of a journey's next position, or nil when it has none or the
-  # page has no tree for its flow
+  # page has no tree for its snapshot
   defp next_label(%Instances.Flow{next_path: nil}, _labels), do: nil
 
   defp next_label(%Instances.Flow{} = flow_instance, labels) do
-    get_in(labels, [flow_instance.template_flow_id, flow_instance.next_path])
+    get_in(labels, [flow_instance.template_flow_snapshot_id, flow_instance.next_path])
   end
 
-  # Whether the row's cached position may be out of date: a flow of its
-  # tree was saved after the last refresh, and no sweep has reached it
-  # (`FormFlow.Data.Instances.Flows.next_positions_stale?/2`). Drawn as a
-  # quiet mark beside the value; the journey's page repairs it on open.
+  # Whether the row's cached position may be out of date: no refresh has
+  # reached it, which after a move means the move's sweep did not finish
+  # (`FormFlow.Data.Instances.Flows.next_positions_stale?/1`). Drawn as a
+  # quiet mark beside the value - or alone, when the journey had no next
+  # position before the move and may have one now; the journey's page
+  # repairs it on open.
   #
   # A completed journey is never stale and so is never marked - that rule
-  # lives in `next_positions_stale?/2`, where the journey's page reads it
+  # lives in `next_positions_stale?/1`, where the journey's page reads it
   # too.
-  defp stale?(%Instances.Flow{} = flow_instance, trees_updated_at) do
-    Instances.Flows.next_positions_stale?(
-      flow_instance,
-      Map.get(trees_updated_at, flow_instance.template_flow_id)
-    )
-  end
+  defp stale?(%Instances.Flow{} = flow_instance),
+    do: Instances.Flows.next_positions_stale?(flow_instance)
 
   # Whether a journey's flow is open at a form of the viewer's - one of its
   # cached open positions is among the viewer's nodes
@@ -538,9 +548,9 @@ defmodule FormFlow.Web.Instances.Flows.Index do
           <:column :let={flow_instance} label="Next">
             <span class="text-sm">{next_label(flow_instance, @next_labels)}</span>
             <span
-              :if={flow_instance.next_computed_at && stale?(flow_instance, @trees_updated_at)}
+              :if={stale?(flow_instance)}
               class="text-xs text-zinc-400"
-              title="The flow was edited after this was last computed; opening the flow instance brings it up to date."
+              title="The flow instance was moved to a new snapshot after this was last computed; opening it brings it up to date."
             >
               (may have changed)
             </span>

@@ -17,6 +17,7 @@ defmodule Demo.FormFlowResolveTreeTest do
   alias FormFlow.Data.Repo, as: FormFlowRepo
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Data.Templates.Forms
 
   describe "resolve_tree/1" do
@@ -147,7 +148,7 @@ defmodule Demo.FormFlowResolveTreeTest do
           )
         )
 
-      tree = Flows.resolve_tree(root.id)
+      tree = Snapshots.tree(journey)
       instances = Instances.Flows.form_instances(journey)
 
       {listed, count} =

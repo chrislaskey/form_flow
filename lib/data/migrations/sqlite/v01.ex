@@ -52,6 +52,38 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
 
     create_if_not_exists(index(:form_flow_template_flow_events, [:flow_id]))
 
+    # A template flow snapshot (see the Postgres file)
+    create_if_not_exists table(:form_flow_template_flow_snapshots, primary_key: false) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :template_flow_id,
+        references(:form_flow_template_flows, type: :uuid, on_delete: :delete_all),
+        null: false
+      )
+
+      add(:tenant_id, :string)
+      add(:number, :integer, null: false)
+      add(:checksum, :string, null: false)
+      add(:data, :map, null: false)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_snapshots, [:template_flow_id, :number],
+        name: :form_flow_template_flow_snapshots_flow_id_number_index
+      )
+    )
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_snapshots, [:template_flow_id, :checksum],
+        name: :form_flow_template_flow_snapshots_flow_id_checksum_index
+      )
+    )
+
+    create_if_not_exists(index(:form_flow_template_flow_snapshots, [:tenant_id]))
+
     create_if_not_exists(
       unique_index(:form_flow_template_flows, [:slug, "COALESCE(tenant_id, '')"],
         where: "slug IS NOT NULL",
@@ -132,16 +164,19 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
         null: false
       )
 
+      # The snapshot the journey reads its flow from (see the Postgres
+      # file): set at creation, written by the editor's Move, never cast
+      add(
+        :template_flow_snapshot_id,
+        references(:form_flow_template_flow_snapshots, type: :uuid, on_delete: :restrict),
+        null: false
+      )
+
       add(:status, :string, null: false, default: "in_progress")
       add(:user_id, :string)
       add(:tenant_id, :string)
       add(:metadata, :map, null: false)
       add(:completed_at, :utc_datetime_usec)
-
-      # The flow tree and positions as they stood when the journey
-      # completed (see the Postgres file): written by complete/2 alone,
-      # never cast, null before
-      add(:completed_template_snapshot, :map)
 
       # The cache of where the flow is open (see the Postgres file): written
       # by the refresh alone, never cast
@@ -155,6 +190,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     end
 
     create_if_not_exists(index(:form_flow_instance_flows, [:template_flow_id]))
+    create_if_not_exists(index(:form_flow_instance_flows, [:template_flow_snapshot_id]))
     create_if_not_exists(index(:form_flow_instance_flows, [:status]))
     create_if_not_exists(index(:form_flow_instance_flows, [:user_id]))
     create_if_not_exists(index(:form_flow_instance_flows, [:tenant_id]))
@@ -358,6 +394,7 @@ defmodule FormFlow.Data.Migrations.SQLite.V01 do
     drop_if_exists(table(:form_flow_instance_form_events))
     drop_if_exists(table(:form_flow_instance_forms))
     drop_if_exists(table(:form_flow_instance_flows))
+    drop_if_exists(table(:form_flow_template_flow_snapshots))
     drop_if_exists(table(:form_flow_template_form_versions))
     drop_if_exists(table(:form_flow_template_forms))
     drop_if_exists(table(:form_flow_template_flow_events))

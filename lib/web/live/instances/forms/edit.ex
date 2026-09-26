@@ -160,6 +160,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.Components.Forms.Capture
@@ -525,7 +526,7 @@ defmodule FormFlow.Web.Instances.Forms.Edit do
   # the progress is fresh, so the form just submitted counts as done, and
   # `:form_instance` is the completed row. The template side is as at mount.
   defp fresh_context(%{flow_instance: flow_instance, context: context} = assigns, completed) do
-    tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
+    tree = Snapshots.tree(flow_instance)
     instances = Instances.Flows.form_instances(flow_instance)
     forms = FlowProgress.forms(tree, instances)
     steps = FlowProgress.subflows(tree, instances)

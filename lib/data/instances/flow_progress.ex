@@ -42,10 +42,12 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   attestation records left behind by strand reconciliation, not live
   traversal state.
 
-  The tree comes from `FormFlow.Data.Templates.Flows.resolve_tree/1`. The
+  The tree is the journey's snapshot of its flow
+  (`FormFlow.Data.Templates.Flows.Snapshots.tree/1`), in the shape
+  `FormFlow.Data.Templates.Flows.resolve_tree/1` gives the live one. The
   journey's recorded `status` and this module answer different questions and
-  may legitimately diverge after a template edit - `complete?/2` is the
-  derivation-side answer.
+  may legitimately diverge after a move to a new snapshot - `complete?/2` is
+  the derivation-side answer.
   """
 
   alias FormFlow.Data.Instances.FormProgress
@@ -104,9 +106,9 @@ defmodule FormFlow.Data.Instances.FlowProgress do
   The journey's form positions in the order they are worked, each as a
   `FormFlow.Data.Instances.FormProgress`.
 
-  Positions the tree no longer has are absent - a stranded instance is not a
-  form of the flow any more (`FormFlow.Data.Instances.Flows.list_stranded/2`
-  is where those surface).
+  Positions the tree does not have are absent - an instance stranded by a
+  move to a snapshot without its step is not a form of the flow any more
+  (`FormFlow.Data.Instances.Flows.list_stranded/2` is where those surface).
 
   `statuses` is `derive/2`'s answer, for a caller that has it already and
   wants both views of one derivation - `forms/3` and `subflows/3` for the

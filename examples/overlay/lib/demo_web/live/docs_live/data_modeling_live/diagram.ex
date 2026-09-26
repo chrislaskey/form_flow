@@ -45,6 +45,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
     %{schema: Templates.Flow.Node, position: %{x: 420, y: 0}},
     %{schema: Templates.Flow.Relationship, position: %{x: 420, y: 320}},
     %{schema: Templates.Flow.Event, position: %{x: 840, y: 320}},
+    %{schema: Templates.Flow.Snapshot, position: %{x: 1260, y: 320}},
     %{schema: Templates.Form.Version, position: %{x: 0, y: 320}},
     %{schema: Instances.Flow, position: %{x: 840, y: 700}},
     %{schema: Instances.Form, position: %{x: 0, y: 700}},
@@ -55,9 +56,10 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
 
   # The five a reader should find first: a flow template, the nodes in it, a
   # form template, and the two tables those turn into once a user fills one
-  # out. The other six support them — a form's versions, a flow's audit log
-  # and each instance's, the relationships between nodes, and the positions a
-  # journey's flow is open at. The page marks these with a star.
+  # out. The other seven support them — a form's versions, a flow's audit log
+  # and each instance's, the relationships between nodes, the snapshots a
+  # journey reads its flow from, and the positions a journey's flow is open
+  # at. The page marks these with a star.
   @primary [
     Templates.Flow,
     Templates.Flow.Node,
@@ -98,6 +100,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
   @on_delete_rules %{
     {"form_flow_template_flows", "owner_flow_id"} => :cascade,
     {"form_flow_template_flow_events", "flow_id"} => :restrict,
+    {"form_flow_template_flow_snapshots", "template_flow_id"} => :cascade,
     {"form_flow_template_forms", "owner_flow_id"} => :set_null,
     {"form_flow_template_forms", "copied_from_form_id"} => :set_null,
     {"form_flow_template_form_versions", "form_id"} => :restrict,
@@ -109,6 +112,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
     {"form_flow_template_flow_relationships", "source_id"} => :cascade,
     {"form_flow_template_flow_relationships", "target_id"} => :cascade,
     {"form_flow_instance_flows", "template_flow_id"} => :restrict,
+    {"form_flow_instance_flows", "template_flow_snapshot_id"} => :restrict,
     {"form_flow_instance_flow_events", "instance_flow_id"} => :restrict,
     {"form_flow_instance_next_positions", "instance_flow_id"} => :restrict,
     {"form_flow_instance_forms", "template_form_version_id"} => :restrict,

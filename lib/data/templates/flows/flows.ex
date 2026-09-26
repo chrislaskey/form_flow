@@ -414,9 +414,10 @@ defmodule FormFlow.Data.Templates.Flows do
   they started on: nothing here re-resolves an instance's version.
 
   A step leaves a catalog form by being removed from the canvas and added
-  again; the new step has a new id, so users who had started the old one
-  are stranded there (`FormFlow.Data.Instances.Flows.list_stranded/2`), as
-  after any removed step.
+  again; the new step has a new id. A journey left on its snapshot keeps
+  the old step; one moved to the new snapshot is stranded at it
+  (`FormFlow.Data.Instances.Flows.list_stranded/2`), as after any removed
+  step.
   """
   def reuse_form(%Node{} = node, %Templates.Form{} = form, opts \\ []) do
     form_types = Keyword.get(opts, :form_types, FormFlow.Config.Forms.Type.defaults())
@@ -720,6 +721,47 @@ defmodule FormFlow.Data.Templates.Flows do
   end
 
   @doc """
+  The owned form templates a save of `attrs` on `flow` would delete - the
+  garbage collector's answer (`update/2`), asked before the save rather
+  than after it. The flow's steps are taken to be `attrs[:nodes]` and every
+  other flow's its rows; the root's reachable owned flows follow from that,
+  and the root's owned forms no step of the reachable set names are the
+  answer. The same two questions the collector asks
+  (`sweep_unreachable/1`), so the two cannot disagree: a form on a subflow
+  the save makes unreachable is listed, as it is deleted.
+
+  `[]` for attrs without contents, which replace no steps. The flow
+  editor asks this to decide whether a save with journeys in flight may
+  leave them on their snapshot - a journey left behind would still name a
+  deleted form and have nothing to start.
+  """
+  def forms_removed_by(%Flow{} = flow, attrs) do
+    if contents?(attrs) do
+      root_id = flow.owner_flow_id || flow.id
+      pending = Map.get(attrs, :nodes, [])
+      subflow_ids = pending_references(pending, :subflow_id)
+      form_ids = pending_references(pending, :form_id)
+
+      reachable = reachable_owned([root_id], root_id, %{flow.id => subflow_ids})
+      flow_ids = Enum.reject([root_id | reachable], &(&1 == flow.id))
+
+      unreferenced_owned_forms(root_id, referenced_form_ids(flow_ids) ++ form_ids)
+    else
+      []
+    end
+  end
+
+  # A pending step's reference, as the editor passes it (in `properties`,
+  # the copy the schema takes the column from) or as a host passes it
+  defp pending_references(nodes, key) do
+    for node <- nodes,
+        id = node[key] || get_in(node, [:properties, Atom.to_string(key)]),
+        is_binary(id),
+        uniq: true,
+        do: id
+  end
+
+  @doc """
   Updates a flow.
 
   When `attrs` include `:nodes` or `:relationships`, the flow's contents are
@@ -730,6 +772,16 @@ defmodule FormFlow.Data.Templates.Flows do
   domain that are no longer reachable through subflow references are deleted,
   with everything under them. Removing a subflow node from the canvas is how
   an owned subflow (and its whole private subtree) goes away.
+
+  Journeys in flight are not touched: each reads the snapshot it started
+  on (`FormFlow.Data.Templates.Flow.Snapshot`), and only the editor's Move
+  (`FormFlow.Data.Instances.Flows.move_to_snapshot/3`) sends them to a
+  new one. One consequence for a host calling this directly: nothing here
+  stops a save from garbage-collecting an owned form template that those
+  journeys' snapshot still names, and the instance form page then says
+  the form has no published version. The editor offers Move alone for
+  such a save; a host that removes owned forms under open journeys should
+  move them the same way.
 
   `properties` keys with a leading underscore are the library's own
   bookkeeping - `FormFlow.Data.Templates.Flows.Health`'s cached status and
@@ -814,9 +866,18 @@ defmodule FormFlow.Data.Templates.Flows do
 
   @doc """
   The flow aggregate with subflow references resolved, recursively - the
-  tree `FormFlow.Data.Instances.FlowProgress` derives against. Returns
-  `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`, or
-  `nil` for an unknown id.
+  live tree, as the template pages, health, and the editor read it, and
+  the shape `FormFlow.Data.Instances.FlowProgress` derives against.
+  Returns `%{flow:, nodes:, relationships:, subflows: %{node_id => tree}}`,
+  or `nil` for an unknown id.
+
+  Not for a journey. A journey reads the snapshot it started on, through
+  `FormFlow.Data.Templates.Flows.Snapshots.tree/1`, which returns this
+  same shape; a caller resolving the live tree for one journey shows it a
+  flow it is not walking. The two callers that do resolve the live tree
+  for journeys are the ones that take a snapshot of it:
+  `FormFlow.Data.Instances.Flows.create/2` at a start, and the editor's
+  Move after a save.
 
   Three queries whatever the size of the tree, not five per flow in it:
   every flow of a tree is owned by its root (`owner_flow_id`), so one query
@@ -949,29 +1010,6 @@ defmodule FormFlow.Data.Templates.Flows do
 
         %{flow: flow, nodes: flow.nodes, relationships: flow.relationships, subflows: subflows}
     end
-  end
-
-  @doc """
-  When any flow of a resolved tree (`resolve_tree/1`) was last saved: the
-  newest `updated_at` over the root and every subflow under it. The root's
-  own timestamp is not the answer - `update/2` writes the flow it was
-  given, so editing a subflow moves that subflow's `updated_at` and leaves
-  the root's alone. What a cached derivation of a journey is dated
-  against: a `next_computed_at` older than this may be stale
-  (`FormFlow.Data.Instances.Flows.update_next_positions/2`). Read off the
-  rows the tree already holds, so it costs no query. `nil` for a `nil`
-  tree.
-  """
-  def tree_updated_at(nil), do: nil
-
-  def tree_updated_at(%{flow: %Flow{updated_at: updated_at}, subflows: subflows}) do
-    subflows
-    |> Map.values()
-    |> Enum.map(&tree_updated_at/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(updated_at, fn candidate, newest ->
-      if DateTime.compare(candidate, newest) == :gt, do: candidate, else: newest
-    end)
   end
 
   @doc """
@@ -1805,7 +1843,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # subflow's own children stop being reachable too.
   defp sweep_unreachable(flow) do
     root_id = flow.owner_flow_id || flow.id
-    reachable = reachable_owned([root_id], root_id)
+    reachable = reachable_owned([root_id], root_id, %{})
 
     doomed =
       Repo.all(
@@ -1827,21 +1865,7 @@ defmodule FormFlow.Data.Templates.Flows do
   # data exists - and then so does this save: instance data is never orphaned
   # silently, the user is told the removed step still has submissions.
   defp sweep_unreferenced_forms(flow, root_id, flow_ids) do
-    referenced =
-      Repo.all(
-        from(n in Node,
-          where: n.flow_id in ^flow_ids and not is_nil(n.form_id),
-          distinct: true,
-          select: n.form_id
-        )
-      )
-
-    doomed =
-      Repo.all(
-        from(f in Templates.Form,
-          where: f.owner_flow_id == ^root_id and f.id not in ^referenced
-        )
-      )
+    doomed = unreferenced_owned_forms(root_id, referenced_form_ids(flow_ids))
 
     Enum.each(doomed, fn form ->
       case Templates.Forms.delete(form) do
@@ -1900,25 +1924,58 @@ defmodule FormFlow.Data.Templates.Flows do
   # Flows owned by `owner_id` reachable by following subflow references out
   # of `frontier`. Within one ownership domain the reference structure is a
   # tree, but the seen-set guards against cycles regardless.
-  defp reachable_owned(frontier, owner_id), do: reachable_owned(frontier, owner_id, MapSet.new())
-
-  defp reachable_owned([], _owner_id, seen), do: MapSet.to_list(seen)
-
-  defp reachable_owned(frontier, owner_id, seen) do
-    children =
-      Repo.all(
-        from(n in Node,
-          join: f in Flow,
-          on: f.id == n.subflow_id,
-          where: n.flow_id in ^frontier and f.owner_flow_id == ^owner_id,
-          distinct: true,
-          select: f.id
-        )
+  # The form template ids the nodes of `flow_ids` point at
+  defp referenced_form_ids(flow_ids) do
+    Repo.all(
+      from(n in Node,
+        where: n.flow_id in ^flow_ids and not is_nil(n.form_id),
+        distinct: true,
+        select: n.form_id
       )
+    )
+  end
 
-    new = Enum.reject(children, &MapSet.member?(seen, &1))
+  # The root's owned forms that none of `referenced` names
+  defp unreferenced_owned_forms(root_id, referenced) do
+    Repo.all(
+      from(f in Templates.Form,
+        where: f.owner_flow_id == ^root_id and f.id not in ^referenced
+      )
+    )
+  end
 
-    reachable_owned(new, owner_id, Enum.into(new, seen))
+  # `override` is `%{flow_id => [subflow_id]}`: a flow whose steps are not
+  # the rows in the database but the ones a caller is about to save
+  # (`forms_removed_by/2`). Empty for the collector itself.
+  defp reachable_owned(frontier, owner_id, override),
+    do: reachable_owned(frontier, owner_id, override, MapSet.new())
+
+  defp reachable_owned([], _owner_id, _override, seen), do: MapSet.to_list(seen)
+
+  defp reachable_owned(frontier, owner_id, override, seen) do
+    {overridden, from_rows} = Enum.split_with(frontier, &Map.has_key?(override, &1))
+
+    from_rows_children =
+      if from_rows == [] do
+        []
+      else
+        Repo.all(
+          from(n in Node,
+            join: f in Flow,
+            on: f.id == n.subflow_id,
+            where: n.flow_id in ^from_rows and f.owner_flow_id == ^owner_id,
+            distinct: true,
+            select: f.id
+          )
+        )
+      end
+
+    # A pending step's subflow is the root's own or the save is refused
+    # (`validate_subflow_ownership/2`), so no ownership check is needed here
+    children = from_rows_children ++ Enum.flat_map(overridden, &Map.fetch!(override, &1))
+    new = children |> Enum.uniq() |> Enum.reject(&MapSet.member?(seen, &1))
+
+    reachable_owned(new, owner_id, override, Enum.into(new, seen))
   end
 
   # Deletes flows in an order that never trips the subflow foreign key:

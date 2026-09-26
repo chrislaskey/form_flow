@@ -52,7 +52,7 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   alias FormFlow.Context
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
-  alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Web.CoreComponents
 
   @prefill_property "prefill_with_answers_from"
@@ -148,25 +148,31 @@ defmodule FormFlow.Web.Components.Forms.Types.Default do
   end
 
   # This user's journeys of the named flow, newest first, and the first of
-  # them with a completed form at the named position. Every journey is of
-  # the one flow, so its tree is resolved once.
+  # them with a completed form at the named position. Each journey reads
+  # its own snapshot's tree, read when a journey first needs it and kept
+  # for the next on the same one - the usual answer is the newest journey,
+  # and so one tree.
   defp answers_at(flow_id, path, %Context{user_id: user_id, tenant_id: tenant_id}) do
-    case Instances.Flows.list(user_id: user_id, tenant_id: tenant_id, flow: flow_id) do
-      [] ->
-        %{}
+    journeys = Instances.Flows.list(user_id: user_id, tenant_id: tenant_id, flow: flow_id)
 
-      journeys ->
-        case Templates.Flows.resolve_tree(flow_id) do
-          nil -> %{}
-          tree -> Enum.find_value(journeys, %{}, &submitted_at(&1, tree, path))
+    {answers, _trees} =
+      Enum.reduce_while(journeys, {%{}, %{}}, fn journey, {_none, trees} ->
+        id = journey.template_flow_snapshot_id
+        trees = Map.put_new_lazy(trees, id, fn -> Snapshots.tree(id) end)
+
+        case submitted_at(journey, trees[id], path) do
+          nil -> {:cont, {%{}, trees}}
+          answers -> {:halt, {answers, trees}}
         end
-    end
+      end)
+
+    answers
   end
 
   # The stored answers of the completed form at `path`, read the way the
-  # pages read progress: the resolved tree and every form instance of the
-  # journey, so a superseded instance is passed over and a position the flow
-  # no longer has is not a form of it
+  # pages read progress: the journey's tree and every form instance of it,
+  # so a superseded instance is passed over and a position the tree does
+  # not have is not a form of it
   defp submitted_at(%Instances.Flow{} = journey, tree, path) do
     tree
     |> FlowProgress.forms(Instances.Flows.form_instances(journey))

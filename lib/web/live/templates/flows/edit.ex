@@ -96,14 +96,17 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
 
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
+  alias FormFlow.Data.Instances
   alias FormFlow.Data.Templates.Flow
   alias FormFlow.Data.Templates.Flows
+  alias FormFlow.Data.Templates.Flows.Snapshots
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Dialog
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Helpers.ReactFlow
+  alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Components.SectionHeading
@@ -118,7 +121,9 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
        notice: nil,
        pending_navigation: nil,
        confirming_discard?: false,
-       confirming_save?: false
+       confirming_save?: false,
+       open_journeys: 0,
+       move_only?: false
      )}
   end
 
@@ -417,45 +422,38 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
-  # A structural save of a flow with journeys in flight asks first: it moves
-  # where those journeys stand, it sweeps them synchronously (the page
-  # waits), and copying the flow is usually the better move. Only this
-  # button asks. "Save & Continue" is already a prompt - a second modal on
-  # top of the first would be two questions for one decision - and the
-  # navigation it answers is the admin leaving, where the flow's own state
-  # is the thing being rescued.
+  # A save of a flow with journeys in flight asks first: leave them on the
+  # snapshot they started with, or move them to the new one and recompute
+  # where each stands (`FormFlow.Data.Instances.Flows.move_to_snapshot/3`).
+  # Any save is the question - any save followed by a start is a new
+  # snapshot (`FormFlow.Data.Templates.Flow.Snapshot`), and there is no
+  # second definition of "changed" for the dialog to keep. Save & Continue
+  # asks it too, and navigates once it is answered: the unsaved-changes
+  # dialog closes, this one opens with the pending navigation kept, and
+  # the answer saves, moves if asked, and leaves. Two dialogs in a row ask
+  # two different questions, so neither is asked twice.
   @impl true
   def handle_event("save", _params, socket) do
-    if confirm_save?(socket.assigns) do
-      {:noreply, assign(socket, :confirming_save?, true)}
-    else
-      {:noreply, save_now(socket)}
-    end
-  end
-
-  @impl true
-  def handle_event("cancel_save", _params, socket) do
-    {:noreply, assign(socket, :confirming_save?, false)}
-  end
-
-  @impl true
-  def handle_event("confirm_save", _params, socket) do
-    {:noreply, socket |> assign(:confirming_save?, false) |> save_now()}
+    {:noreply, save_or_ask(socket)}
   end
 
   @impl true
   def handle_event("save_and_continue", _params, socket) do
-    pending = socket.assigns.pending_navigation
+    {:noreply, save_or_ask(socket)}
+  end
 
-    case persist_current(socket) do
-      {:ok, socket, id_map} ->
-        to = resolve_pending_navigation(pending, socket.assigns, id_map)
+  @impl true
+  def handle_event("cancel_save", _params, socket) do
+    {:noreply, assign(socket, confirming_save?: false, pending_navigation: nil)}
+  end
 
-        {:noreply, socket |> assign(:pending_navigation, nil) |> push_navigate(to: to)}
+  # The dialog's answer. Move only leaves no choice on screen, so it is
+  # read from the page's own rule rather than the form
+  @impl true
+  def handle_event("confirm_save", params, socket) do
+    choice = if socket.assigns.move_only? or params["journeys"] == "move", do: :move, else: :leave
 
-      {:error, socket} ->
-        {:noreply, assign(socket, :pending_navigation, nil)}
-    end
+    {:noreply, socket |> assign(:confirming_save?, false) |> save_with(choice)}
   end
 
   @impl true
@@ -579,7 +577,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       # root is read again for the status it now carries
       FormFlow.Data.Templates.Flows.Health.refresh(flow, socket.assigns.host_types)
       flow = Flows.get(flow.id)
-      sweep_error = sweep_next_positions(socket.assigns.flow, flow, socket.assigns)
       root = socket.assigns.root && Flows.get(socket.assigns.root.id)
       data = ReactFlow.to_data(flow)
 
@@ -600,7 +597,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
           pending_status: flow.status,
           form_data: form_data(flow, node, socket.assigns.flow_types),
           instance_counts: Shared.instance_counts(flow),
-          error: sweep_error
+          error: nil
         )
         |> push_event("form_flow:set_flow", %{flow: data})
 
@@ -619,91 +616,85 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
     end
   end
 
-  # A save that changed the structure of the flow - its steps, its edges,
-  # or its type - can move where every open journey of the root is open,
-  # so the cache of that is recomputed for all of them, here, and the page
-  # waits (`FormFlow.Data.Instances.Flows.update_next_positions/2`). A save
-  # that changed only a name, a slug, a description, a status, or the
-  # flow's perspectives moves no position and sweeps nothing: the
-  # perspective mapping is read live. Structure is compared as what the
-  # derivation reads of it: each step's id and what it points at, each
-  # edge's ends, and the flow's type.
-  #
-  # The save is already committed when this runs, so a sweep that does not
-  # finish is reported beside "Saved." rather than raised: the page keeps
-  # the admin's work, and the message says how the cache catches up - the
-  # journey's page repairs a stale row on open, and a second save sweeps
-  # again. Returns the message, or nil.
-  defp sweep_next_positions(%Flow{} = before, %Flow{} = after_save, assigns) do
-    if structure(before, assigns.flow_types) != structure(after_save, assigns.flow_types) do
-      case FormFlow.Data.Instances.Flows.update_next_positions(after_save,
-             flow_types: assigns.flow_types,
-             callback_data: assigns.callback_data
-           ) do
-        {:ok, _count} ->
-          nil
+  # Ask when the root has journeys in flight; a flow nobody has started is
+  # the admin's to reshape freely, which is the whole point of building one
+  # before it opens. The counts the dialog needs are read once, here, not
+  # on every render of it.
+  defp save_or_ask(socket) do
+    case open_journeys(socket.assigns) do
+      0 ->
+        save_with(socket, :leave)
 
-        {:error, _reason} ->
-          "The flow was saved, but recomputing where its open flow instances stand did not " <>
-            "finish. Opening a flow instance brings it up to date, and saving again retries."
-      end
+      open ->
+        assign(socket,
+          confirming_save?: true,
+          open_journeys: open,
+          move_only?: removed_owned_forms(socket.assigns) != []
+        )
     end
   end
 
-  defp save_now(socket) do
+  # Leave saves and does nothing else. Move saves, takes the snapshot of
+  # what was saved, and moves the root's open journeys to it; the move's
+  # failure is reported beside "Saved." rather than raised, since the save
+  # is already committed. Either way the page then says "Saved." or, when
+  # Save & Continue asked, leaves for where the admin was going.
+  defp save_with(socket, choice) do
     case persist_current(socket) do
-      {:ok, socket, _id_map} -> assign(socket, :notice, "Saved.")
-      {:error, socket} -> socket
+      {:ok, socket, id_map} ->
+        socket =
+          if choice == :move, do: assign(socket, :error, move_journeys(socket)), else: socket
+
+        after_save(socket, id_map)
+
+      {:error, socket} ->
+        assign(socket, :pending_navigation, nil)
     end
   end
 
-  # Whether this save has to ask first: it changes the structure, and the
-  # root has journeys in flight for that change to move. Both halves have
-  # to be true. A rename, a slug, a description, a status, a perspective, or
-  # a node dragged to a new place asks nothing, however many journeys are
-  # open; and a flow nobody has started is the admin's to reshape freely,
-  # which is the whole point of building one before it opens.
-  defp confirm_save?(assigns) do
-    open_journeys(assigns) > 0 and structural_save?(assigns)
+  defp after_save(%{assigns: %{pending_navigation: nil}} = socket, _id_map),
+    do: assign(socket, :notice, "Saved.")
+
+  defp after_save(socket, id_map) do
+    to = resolve_pending_navigation(socket.assigns.pending_navigation, socket.assigns, id_map)
+
+    socket |> assign(:pending_navigation, nil) |> push_navigate(to: to)
   end
 
-  # The pending canvas read as `structure/2` reads a saved flow - the same
-  # three facts, from the node and edge maps the canvas holds rather than
-  # from rows. `ReactFlow.to_flow_attrs/1` is what the save itself would
-  # pass to `Flows.update/2`, so this asks of the pending state exactly what
-  # the post-save comparison asks of the result, and the two cannot drift.
-  defp structural_save?(assigns) do
-    canvas_structure(assigns.current, assigns) != canvas_structure(assigns.data, assigns) or
-      pending_type_module(assigns) != structure(assigns.flow, assigns.flow_types).flow_type
+  # The snapshot of the tree as just saved, and every open journey of the
+  # root moved to it (`FormFlow.Data.Instances.Flows.move_to_snapshot/3`).
+  # Returns the message for the page's error line, or nil.
+  defp move_journeys(%{assigns: assigns}) do
+    root = assigns.root || assigns.flow
+
+    with {:ok, snapshot} <- Snapshots.get_or_create(root, Flows.resolve_tree(root.id)),
+         {:ok, _moved} <-
+           Instances.Flows.move_to_snapshot(root, snapshot,
+             flow_types: assigns.flow_types,
+             callback_data: assigns.callback_data,
+             user_id: assigns.user_id
+           ) do
+      nil
+    else
+      _error ->
+        "The flow was saved, but moving its open flow instances to the new snapshot did " <>
+          "not finish. Opening a flow instance brings it up to date, and saving again with " <>
+          "Move retries."
+    end
   end
 
-  defp canvas_structure(data, assigns) do
-    attrs = ReactFlow.to_flow_attrs(data)
+  # The owned form templates this save would delete, asked of the garbage
+  # collector that would delete them (`Flows.forms_removed_by/2`) rather
+  # than worked out again here. A journey left on its snapshot would still
+  # name such a form and have nothing to start - the one removal a frozen
+  # tree cannot survive, so the dialog offers Move only. A removed step
+  # holding a shared catalog form is harmless; a removed subflow is not,
+  # since the owned forms on its steps go with it, which is why the
+  # collector is asked and not the steps of this flow alone.
+  defp removed_owned_forms(assigns),
+    do: Flows.forms_removed_by(assigns.flow, ReactFlow.to_flow_attrs(assigns.current))
 
-    %{
-      nodes:
-        attrs.nodes
-        |> Enum.map(&{&1.id, &1.properties["form_id"], &1.properties["subflow_id"]})
-        |> Enum.sort(),
-      relationships:
-        attrs.relationships |> Enum.map(&{&1.source_id, &1.target_id}) |> Enum.sort(),
-      flow_types: assigns.flow_types
-    }
-  end
-
-  # The module the type picker's pending value resolves to, compared with the
-  # saved flow's the same way `structure/2` compares them: an unset value
-  # resolving to the same module as the stored one is no change
-  defp pending_type_module(%{flow: %Flow{} = flow} = assigns) do
-    pending = %{
-      flow
-      | properties: Map.put(flow.properties || %{}, "flow_type", assigns.pending_type)
-    }
-
-    FormFlow.Config.Flows.Type.for_flow(assigns.flow_types, pending).module
-  end
-
-  # The journeys a structural save would move: the **root's**, since every
+  # The journeys a save would move: the **root's**, since every
   # journey is a traversal of the whole tree and a subflow's save reshapes
   # part of it. Editing a subflow, the counts on the page are the root's
   # too.
@@ -715,16 +706,6 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
       _owned ->
         0
     end
-  end
-
-  # The type as the module that answers for it, not the stored id: a save
-  # that writes the default's id where none was stored changes no rule
-  defp structure(%Flow{} = flow, flow_types) do
-    %{
-      nodes: flow.nodes |> Enum.map(&{&1.id, &1.form_id, &1.subflow_id}) |> Enum.sort(),
-      relationships: flow.relationships |> Enum.map(&{&1.source_id, &1.target_id}) |> Enum.sort(),
-      flow_type: FormFlow.Config.Flows.Type.for_flow(flow_types, flow).module
-    }
   end
 
   # The flow's stored `properties` map with the form's pending values applied
@@ -999,7 +980,7 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         </DynamicForm.form>
       </div>
 
-      <Dialog.dialog :if={@pending_navigation} width={:small}>
+      <Dialog.dialog :if={@pending_navigation && not @confirming_save?} width={:small}>
         <p class="mb-4 text-sm text-zinc-700">
           This flow has unsaved changes. Save before continuing?
         </p>
@@ -1023,45 +1004,62 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
         </div>
       </Dialog.dialog>
 
-      <%!-- A structural save with journeys in flight: what it will do to
-            them, how long the page will wait, and the way round it --%>
+      <%!-- A save with journeys in flight: leave them on the snapshot they
+            started with, or move them to the new one. Cards rather than a
+            row of radios, as the publish dialog draws its two: each answer
+            takes a sentence to say what it does to people mid-flow. --%>
       <Dialog.dialog :if={@confirming_save?} width={:medium}>
-        <p class="mb-2 text-sm font-medium text-zinc-900">
-          {Shared.count(open_journeys(assigns), "flow instance")} still in progress.
-        </p>
-        <p class="mb-2 text-sm text-zinc-700">
-          This save changes the shape of the flow - its steps, how they connect, or
-          how it is worked. Those flow instances are part-way through the old shape.
-          Answers already given are kept, but where each one stands is recomputed, and
-          a step somebody was about to reach can move or disappear.
-        </p>
-        <p :if={Shared.sweep_estimate(open_journeys(assigns))} class="mb-2 text-sm text-zinc-700">
-          Recomputing them takes {Shared.sweep_estimate(open_journeys(assigns))}, and this page
-          waits for it.
-        </p>
-        <p class="mb-4 text-sm text-zinc-700">
-          Consider copying the flow instead: change the copy, and set this one to
-          <em>Winding down</em>
-          so the flow instances already started finish against the shape they started on.
-        </p>
-        <div class="flex justify-end gap-2">
-          <Core.button
-            components={@components}
-            phx-click="cancel_save"
-            phx-target={@myself}
-            class="btn"
-          >
-            Keep editing
-          </Core.button>
-          <Core.button
-            components={@components}
-            phx-click="confirm_save"
-            phx-target={@myself}
-            class="btn btn-error"
-          >
-            Save anyway
-          </Core.button>
-        </div>
+        <form id="flows-edit-confirm-save" phx-submit="confirm_save" phx-target={@myself}>
+          <p class="mb-3 text-sm font-medium text-zinc-900">
+            {Shared.count(@open_journeys, "flow instance")} still in progress.
+          </p>
+          <p :if={@move_only?} class="mb-3 text-sm text-zinc-700">
+            This save removes a form. Flow instances in progress are moved to the new
+            snapshot, because the form they might reach no longer exists.
+          </p>
+          <div class="grid grid-cols-1 gap-2">
+            <ChoiceCard.choice_card
+              :if={not @move_only?}
+              id="flows-edit-confirm-save-leave"
+              name="journeys"
+              value="leave"
+              checked
+              label="Leave them on the snapshot they started with - Recommended"
+            >
+              People part-way through keep the steps, the order, and the visibility they
+              have seen. New flow instances start on the new snapshot.
+            </ChoiceCard.choice_card>
+            <ChoiceCard.choice_card
+              id="flows-edit-confirm-save-move"
+              name="journeys"
+              value="move"
+              checked={@move_only?}
+              label="Move them to the new snapshot - Not recommended"
+            >
+              Every flow instance in progress is moved to the new snapshot and where each
+              one stands is recomputed. Answers already given are kept. A step somebody was
+              about to reach can move or disappear.
+              <span :if={Shared.sweep_estimate(@open_journeys)}>
+                Recomputing takes {Shared.sweep_estimate(@open_journeys)}, and this page
+                waits for it.
+              </span>
+            </ChoiceCard.choice_card>
+          </div>
+          <div class="mt-6 flex justify-end gap-2">
+            <Core.button
+              components={@components}
+              type="button"
+              phx-click="cancel_save"
+              phx-target={@myself}
+              class="btn"
+            >
+              Keep editing
+            </Core.button>
+            <Core.button components={@components} type="submit" variant="primary">
+              Save
+            </Core.button>
+          </div>
+        </form>
       </Dialog.dialog>
 
       <Dialog.dialog :if={@confirming_discard?} width={:small}>

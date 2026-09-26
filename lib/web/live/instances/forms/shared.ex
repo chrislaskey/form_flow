@@ -78,6 +78,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Data.Templates.Flows.Snapshots
 
   # What a form is governed by when the page has no form types at all - a
   # host passing [].
@@ -215,7 +216,7 @@ defmodule FormFlow.Web.Instances.Forms.Shared do
   """
   def resolve(assigns) do
     %{flow_instance: flow_instance, path: path} = assigns
-    tree = Templates.Flows.resolve_tree(flow_instance.template_flow_id)
+    tree = Snapshots.tree(flow_instance)
     instances = Instances.Flows.form_instances(flow_instance)
     forms = FlowProgress.forms(tree, instances)
     steps = FlowProgress.subflows(tree, instances)

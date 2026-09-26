@@ -80,20 +80,25 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
   #     status changes, with prior data snapshotted when a migration discards
   #     it. `:restrict` from events to instances: deleting an instance goes
   #     through an explicit delete API that removes events deliberately.
-  #   * `instance_flows` - one traversal of a root flow (a journey). The root
-  #     is referenced live - no flow versioning, edits propagate to journeys
-  #     in flight - and `:restrict`ed: journeys can never be orphaned by
-  #     template deletion. `user_id` is the creating user and `tenant_id`
-  #     the host tenant it belongs to, both opaque host identities, set
-  #     at creation and immutable. Traversal state is never stored as the
-  #     truth; it is derived (FormFlow.Data.Instances.FlowProgress).
-  #   * `instance_flows.completed_template_snapshot` - the one exception,
-  #     and a recorded fact rather than a truth: the flow tree and the
-  #     journey's form positions as they stood when the journey
-  #     completed, written once by FormFlow.Data.Instances.Flows.complete/2
-  #     (see FormFlow.Data.Instances.Flows.Snapshot) and never recomputed.
-  #     NULL until completion. Form templates by id only - the instances
-  #     record their versions - and no answers.
+  #   * `template_flow_snapshots` - the whole tree of a root flow as JSON,
+  #     as it stood when a journey started against it
+  #     (FormFlow.Data.Templates.Flow.Snapshot). Taken on demand at start
+  #     and shared: one row per distinct tree, found by `checksum`, numbered
+  #     per root. Cascades with the root, which is refused deletion while
+  #     journeys exist. No flow versioning: the editor goes on saving the
+  #     live rows, and a journey reads these instead.
+  #   * `instance_flows` - one traversal of a root flow (a journey).
+  #     `template_flow_id` names the root and is what listings filter by;
+  #     `template_flow_snapshot_id` names the tree the journey walks - set at
+  #     creation, written again only by the editor's Move - so an edit to
+  #     the template reaches no journey in flight unless an admin sends it
+  #     there. Both `:restrict`ed: a journey can never be orphaned by
+  #     template deletion, and a snapshot a journey reads is never pruned.
+  #     `user_id` is the creating user and `tenant_id` the host tenant it
+  #     belongs to, both opaque host identities, set at creation and
+  #     immutable. Traversal state is never stored as the truth; it is
+  #     derived from the snapshot's tree and the journey's form instances
+  #     (FormFlow.Data.Instances.FlowProgress).
   #   * `instance_flows.next_path` + `next_node_id` + `completed_forms` +
   #     `forms_total` + `next_computed_at` - a cache of that derivation, not
   #     a second truth: where the flow is open (the first actionable
@@ -215,6 +220,54 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(
       index(:form_flow_template_flow_events, [:flow_id], prefix: context.prefix)
+    )
+
+    # A template flow snapshot (`FormFlow.Data.Templates.Flow.Snapshot`):
+    # the whole tree of a root flow as JSON, taken when a journey starts
+    # against it and read by that journey ever after. `number` counts the
+    # root's snapshots; `checksum` is over the encoded `data`, so the same
+    # tree is one row. Index names are hand-written: the generated
+    # checksum one is 65 bytes, over Postgres's 63.
+    create_if_not_exists table(:form_flow_template_flow_snapshots,
+                           primary_key: false,
+                           prefix: context.prefix
+                         ) do
+      add(:id, :uuid, primary_key: true)
+
+      add(
+        :template_flow_id,
+        references(:form_flow_template_flows,
+          type: :uuid,
+          on_delete: :delete_all,
+          prefix: context.prefix
+        ),
+        null: false
+      )
+
+      add(:tenant_id, :string)
+      add(:number, :integer, null: false)
+      add(:checksum, :string, null: false)
+      add(:data, :map, null: false)
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_snapshots, [:template_flow_id, :number],
+        name: :form_flow_template_flow_snapshots_flow_id_number_index,
+        prefix: context.prefix
+      )
+    )
+
+    create_if_not_exists(
+      unique_index(:form_flow_template_flow_snapshots, [:template_flow_id, :checksum],
+        name: :form_flow_template_flow_snapshots_flow_id_checksum_index,
+        prefix: context.prefix
+      )
+    )
+
+    create_if_not_exists(
+      index(:form_flow_template_flow_snapshots, [:tenant_id], prefix: context.prefix)
     )
 
     create_if_not_exists(
@@ -340,16 +393,23 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
         null: false
       )
 
+      # The snapshot the journey reads its flow from (see the header): set
+      # at creation, written by the editor's Move, never cast
+      add(
+        :template_flow_snapshot_id,
+        references(:form_flow_template_flow_snapshots,
+          type: :uuid,
+          on_delete: :restrict,
+          prefix: context.prefix
+        ),
+        null: false
+      )
+
       add(:status, :string, null: false, default: "in_progress")
       add(:user_id, :string)
       add(:tenant_id, :string)
       add(:metadata, :map, null: false, default: %{})
       add(:completed_at, :utc_datetime_usec)
-
-      # The flow tree and positions as they stood when the journey
-      # completed (see the header): written by complete/2 alone, never
-      # cast, null before
-      add(:completed_template_snapshot, :map)
 
       # The cache of where the flow is open (see the header): written by
       # the refresh alone, never cast
@@ -364,6 +424,10 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
 
     create_if_not_exists(
       index(:form_flow_instance_flows, [:template_flow_id], prefix: context.prefix)
+    )
+
+    create_if_not_exists(
+      index(:form_flow_instance_flows, [:template_flow_snapshot_id], prefix: context.prefix)
     )
 
     create_if_not_exists(index(:form_flow_instance_flows, [:status], prefix: context.prefix))
@@ -711,6 +775,7 @@ defmodule FormFlow.Data.Migrations.Postgres.V01 do
     drop_if_exists(table(:form_flow_instance_form_events, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_forms, prefix: context.prefix))
     drop_if_exists(table(:form_flow_instance_flows, prefix: context.prefix))
+    drop_if_exists(table(:form_flow_template_flow_snapshots, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_form_versions, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_forms, prefix: context.prefix))
     drop_if_exists(table(:form_flow_template_flow_events, prefix: context.prefix))
