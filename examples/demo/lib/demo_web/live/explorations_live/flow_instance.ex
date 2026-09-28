@@ -869,7 +869,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
     assigns = assign(assigns, text: text, kind: class)
 
     ~H"""
-    <span class={["badge badge-soft", @kind, @class]}>{@text}</span>
+    <span class={["badge badge-soft whitespace-nowrap", @kind, @class]}>{@text}</span>
     """
   end
 
@@ -1181,7 +1181,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
     <div class="divide-y divide-zinc-200">
       <div :for={form <- @group.forms} class="flex flex-wrap items-center gap-3 px-6 py-4">
         <span class="font-medium">{form.label}</span>
-        <span class={["badge badge-soft", badge_class(form.status)]}>{badge_text(form.status)}</span>
+        <span class={["badge badge-soft whitespace-nowrap", badge_class(form.status)]}>{badge_text(form.status)}</span>
         <span class="ml-auto flex items-center gap-3">
           <.row_actions form={form} whose={@group.whose} />
         </span>
@@ -1217,7 +1217,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
         <span :if={form.status == :pending} class="text-sm">Cannot start yet</span>
         <span
           :if={form.status not in [:completed, :pending]}
-          class={["badge badge-soft", badge_class(form.status)]}
+          class={["badge badge-soft whitespace-nowrap", badge_class(form.status)]}
         >
           {task_status(form.status)}
         </span>
@@ -1252,7 +1252,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
             </span>
             <span
               :if={form.status == :reopened}
-              class={["badge badge-soft badge-xs", badge_class(form.status)]}
+              class={["badge badge-soft whitespace-nowrap badge-xs", badge_class(form.status)]}
             >
               Needs attention
             </span>
@@ -1300,7 +1300,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
         ]}>
           {form.label}
         </span>
-        <span :if={form.status == :reopened} class={["badge badge-soft", badge_class(form.status)]}>Needs attention</span>
+        <span :if={form.status == :reopened} class={["badge badge-soft whitespace-nowrap", badge_class(form.status)]}>Needs attention</span>
         <span :if={form.status == :completed} class="text-sm text-zinc-500">
           Submitted {form.when} by <code class="text-xs">{form.who}</code>
         </span>
@@ -1342,7 +1342,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
             {form.label}
           </td>
           <td class="px-3 py-3">
-            <span class={["badge badge-soft badge-sm", badge_class(form.status)]}>{badge_text(
+            <span class={["badge badge-soft whitespace-nowrap badge-sm", badge_class(form.status)]}>{badge_text(
               form.status
             )}</span>
           </td>
@@ -1593,7 +1593,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
               <% end %>
             </p>
           </div>
-          <span :if={@flow.decision} class="badge badge-soft badge-success">{@flow.decision}</span>
+          <span :if={@flow.decision} class="badge badge-soft whitespace-nowrap badge-success">{@flow.decision}</span>
         </div>
       </div>
     </div>
@@ -1761,7 +1761,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
               <% end %>
             </p>
           </div>
-          <span :if={@flow.decision} class="badge badge-soft badge-success">{@flow.decision}</span>
+          <span :if={@flow.decision} class="badge badge-soft whitespace-nowrap badge-success">{@flow.decision}</span>
         </div>
       </div>
     </div>
@@ -1786,7 +1786,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <dt class="text-xs text-zinc-500">Status</dt>
           <dd>
             <span class={[
-              "badge badge-soft badge-sm",
+              "badge badge-soft whitespace-nowrap badge-sm",
               if(@flow.status == "Completed", do: "badge-success", else: "badge-warning")
             ]}>
               {@flow.status}

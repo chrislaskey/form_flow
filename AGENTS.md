@@ -144,3 +144,13 @@ Hard cutover. No aliases kept "for now", no `# renamed from` comments, no
 deprecation shims. Write the code as though the new name had always been
 there, and record the break in `CHANGELOG.md` where a reader will look for
 it. A transition comment is a note to a reader who no longer exists.
+
+# Commands
+
+After writing code run:
+
+```
+mix credo && mix compile --warnings-as-errors
+```
+
+And fix any errors found.

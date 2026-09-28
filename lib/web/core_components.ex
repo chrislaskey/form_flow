@@ -595,7 +595,7 @@ defmodule FormFlow.Web.CoreComponents do
       )
 
     ~H"""
-    <span class={["badge", @variant_class, @kind_class, @class]} {@rest}>
+    <span class={["badge whitespace-nowrap", @variant_class, @kind_class, @class]} {@rest}>
       {render_slot(@inner_block)}
     </span>
     """

@@ -74,7 +74,7 @@ defmodule DemoWeb.ExplorationsLive.FormInstanceParts do
   def status_badge(assigns) do
     ~H"""
     <span class={[
-      "badge badge-soft",
+      "badge badge-soft whitespace-nowrap",
       case @status do
         "Draft" -> "badge-info"
         "Submitted" -> "badge-success"
