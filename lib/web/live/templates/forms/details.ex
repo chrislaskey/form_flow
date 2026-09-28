@@ -30,10 +30,10 @@ defmodule FormFlow.Web.Templates.Forms.Details do
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Note
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Shared

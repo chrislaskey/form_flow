@@ -34,9 +34,9 @@ defmodule FormFlow.Web.Templates.Flows.New do
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.CoreComponents
+  alias FormFlow.Web.Templates
   alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Templates
 
   # What a flow can hold, which is fixed the moment it is created: the
   # `label` column's two values, and what each one means for the flow after.

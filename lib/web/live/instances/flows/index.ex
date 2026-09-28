@@ -131,10 +131,10 @@ defmodule FormFlow.Web.Instances.Flows.Index do
   alias FormFlow.Config.Flows.Perspective
   alias FormFlow.Context
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flows.Snapshots
-  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Instances.Components.Flows.Progress

@@ -49,10 +49,10 @@ defmodule FormFlow.Web.Templates.Flows.Health do
 
   use Phoenix.LiveComponent
 
+  alias FormFlow.Config.Flows.Type
   alias FormFlow.Data.Templates.Flows
   alias FormFlow.Data.Templates.Flows.Health
   alias FormFlow.Data.Templates.Flows.Health.Entry
-  alias FormFlow.Config.Flows.Type
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Shared

@@ -44,10 +44,10 @@ defmodule FormFlow.Web.Templates.Flows.Show do
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Editor
   alias FormFlow.Web.Components.FactSheet
+  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Flows.Components.CopyDialog
   alias FormFlow.Web.Templates.Flows.Components.StatusDialog

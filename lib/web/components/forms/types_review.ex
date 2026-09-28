@@ -57,14 +57,14 @@ defmodule FormFlow.Web.Components.Forms.Types.Review do
   use Phoenix.Component
 
   alias FormFlow.Config.Forms.Type
-  alias FormFlow.Web.Components.Core
-  alias FormFlow.Web.CoreComponents
   alias FormFlow.Config.Property
   alias FormFlow.Data.Instances
   alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.Form.Event
   alias FormFlow.Data.Instances.FormProgress
   alias FormFlow.Data.Templates
+  alias FormFlow.Web.Components.Core
+  alias FormFlow.Web.CoreComponents
 
   @typedoc """
   What has happened to the reviewed form since the review:

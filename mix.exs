@@ -52,6 +52,7 @@ defmodule FormFlow.MixProject do
       # 0.4.0 settled on
       {:req, ">= 0.4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:mix_credence, ">= 0.0.0", only: :dev, runtime: false}
     ]

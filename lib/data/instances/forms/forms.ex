@@ -54,9 +54,9 @@ defmodule FormFlow.Data.Instances.Forms do
   import Ecto.Query
 
   alias FormFlow.Data.Instances
+  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Instances.Form.Draft
   alias FormFlow.Data.Instances.Form.Event
-  alias FormFlow.Data.Instances.FlowProgress
   alias FormFlow.Data.Repo
   alias FormFlow.Data.Templates
   alias FormFlow.Data.Templates.Flows.Snapshots

@@ -24,9 +24,9 @@ defmodule FormFlow.Web.Templates.Forms.New do
 
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
-  alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Templates
+  alias FormFlow.Web.Templates.Components.Header
 
   @impl true
   def mount(socket) do

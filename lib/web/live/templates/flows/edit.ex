@@ -103,13 +103,13 @@ defmodule FormFlow.Web.Templates.Flows.Edit do
   alias FormFlow.Data.Templates.Forms
   alias FormFlow.Web.Components.Core
   alias FormFlow.Web.Components.Dialog
-  alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Components.Editor
+  alias FormFlow.Web.Components.SectionHeading
+  alias FormFlow.Web.CoreComponents
   alias FormFlow.Web.Helpers.ReactFlow
   alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Flows.Tabs
   alias FormFlow.Web.Templates.Components.Header
-  alias FormFlow.Web.Components.SectionHeading
   alias FormFlow.Web.Templates.Components.Health
   alias FormFlow.Web.Templates.Shared
 
