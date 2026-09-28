@@ -161,8 +161,8 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   alias FormFlow.Web.Templates.Components.ChoiceCard
   alias FormFlow.Web.Templates.Components.Header
   alias FormFlow.Web.Templates.Components.Note
-  alias FormFlow.Web.Templates.Forms.BuildWithAI
   alias FormFlow.Web.Templates.Forms.Builder
+  alias FormFlow.Web.Templates.Forms.BuildWithAI
   alias FormFlow.Web.Templates.Forms.Components.Canvas
   alias FormFlow.Web.Templates.Forms.Components.CatalogBadge
   alias FormFlow.Web.Templates.Forms.Components.PublishDialog
