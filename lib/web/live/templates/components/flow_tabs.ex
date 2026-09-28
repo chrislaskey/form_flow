@@ -12,7 +12,9 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     * Overview - the whole root flow at once, every level, read-only,
       `FormFlow.Web.Templates.Flows.Overview` at `/flows/:root_id/overview`
     * Preview - every form of the root in order, empty, one at a time,
-      `FormFlow.Web.Templates.Flows.Preview` at `/flows/:root_id/preview`
+      `FormFlow.Web.Templates.Flows.Preview` at `/flows/:root_id/preview`;
+      from inside a subflow, `?node=` names its step, so the preview opens
+      on the first form at or inside it
     * History - the root's log, `FormFlow.Web.Templates.Flows.History` at
       `/flows/:root_id/history`
 
@@ -56,7 +58,7 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     assigns =
       assign(assigns, :items, [
         {:overview, "Overview", "#{assigns.base}/flows/#{root_id}/overview"},
-        {:preview, "Preview", "#{assigns.base}/flows/#{root_id}/preview"},
+        {:preview, "Preview", preview_path(assigns, root_id)},
         {:show, "View", level_path(assigns)},
         {:history, "History", "#{assigns.base}/flows/#{root_id}/history"},
         {:edit, "Edit", level_path(assigns) <> "/edit"}
@@ -66,6 +68,14 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     <Tabs.tabs items={@items} active={@active} target={@target} class={@class} />
     """
   end
+
+  # The preview opened where this page is: at the first form at or inside
+  # the step a drill-in came through, or the root's first form
+  defp preview_path(%{node_id: nil} = assigns, root_id),
+    do: "#{assigns.base}/flows/#{root_id}/preview"
+
+  defp preview_path(assigns, root_id),
+    do: "#{assigns.base}/flows/#{root_id}/preview?node=#{assigns.node_id}"
 
   # This level's show URL: the flow's own, or the step it was reached through
   defp level_path(%{node_id: nil} = assigns), do: "#{assigns.base}/flows/#{assigns.flow.id}"

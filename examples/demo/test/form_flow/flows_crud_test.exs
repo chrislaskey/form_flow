@@ -1876,13 +1876,28 @@ defmodule Demo.FormFlowFlowsCrudTest do
              "Forward"
            )
 
-    # The tabs say where this page is
+    # The header has the health check, and the tabs say where this page is;
+    # View and Edit go to the canvas the step sits on - the subflow's - not
+    # to the form template's pages
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{root_id}/health"]))
     assert has_element?(view, ~s([aria-current="page"]), "Preview")
     assert has_element?(view, ~s(a[href="/demo/admin/flows/#{root_id}/overview"]), "Overview")
 
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/nodes/#{application.id}"]),
+             "View"
+           )
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/nodes/#{application.id}/edit"]),
+             "Edit"
+           )
+
     # The select lists every step, the subflow's name before the form's, and
     # jumping patches the URL to that step
-    assert has_element?(view, ~s([data-ps-option="#{health.id}"]), "Application › Health")
+    assert has_element?(view, ~s([data-ps-option="#{health.id}"]), "Application / Health")
 
     view
     |> element("#flows-preview-jump")
@@ -1907,6 +1922,72 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview?step=nope")
     assert has_element?(view, "h2", "Intake")
     assert html =~ "1 of 2"
+
+    # `node` opens on the first form at or inside that node: the subflow's
+    # step gives its first form, a form step gives itself
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/preview?node=#{application.id}")
+    assert has_element?(view, "h2", "Intake")
+
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/preview?node=#{health.id}")
+    assert has_element?(view, "h2", "Health")
+
+    # Which is what the subflow's own pages link: the Preview tab there
+    # carries the step; the root's does not
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/preview?node=#{application.id}"]),
+             "Preview"
+           )
+
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{root_id}/preview"]), "Preview")
+
+    # Properties: the type's with a value, as the form template's fact
+    # sheet lists them. A Review's "Form to review" is a link to that step;
+    # a pointer at a form no longer offered is marked missing, seen here
+    # before release; the any-flow pointer every type has is plain text
+    health_form = Forms.get(health.form_id)
+
+    {:ok, _form} =
+      Forms.update(health_form, %{
+        properties: %{
+          "form_type" => "review",
+          "form_type_property_values" => %{"source" => "#{application.id}/#{intake.id}"}
+        }
+      })
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview?step=#{health.id}")
+    assert html =~ "Form to review"
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/preview?step=#{intake.id}"]),
+             "Application / Intake"
+           )
+
+    {:ok, _form} =
+      Forms.update(Forms.get(health.form_id), %{
+        properties: %{
+          "form_type" => "review",
+          "form_type_property_values" => %{
+            "source" => "#{application.id}/gone",
+            "prefill_with_answers_from" =>
+              FormFlow.Config.Property.flow_position(root_id, [application.id, intake.id])
+          }
+        }
+      })
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview?step=#{health.id}")
+    assert has_element?(view, "td.text-error", "Missing - no longer in this flow")
+    assert html =~ "Prefill with answers from"
+    assert has_element?(view, "td span", "Licensing / Application / Intake")
+
+    # Intake, a default form with nothing set, lists no properties
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview?step=#{intake.id}")
+    refute has_element?(view, "table")
+    refute html =~ "Form to review"
   end
 
   test "the preview names the perspectives of the form subflow a step is in", %{conn: conn} do

@@ -11,21 +11,34 @@ journey, records, prefills, every gate. This is the fast look instead:
 what does each form look like, one after the other, with nothing filled
 in.
 
-The page lists the form steps the way the Overview's Text layout does -
-depth first from Start, following the edges, a subflow's forms where its
-step sits, a step reached twice listed once - and draws one: its name
-under the subflows it sits in, the perspectives of the form subflow it
-belongs to when that names any, a select to jump to any step, Back and
-Forward, and the ring the instances index draws for flow progress with
-"3 of 7" beside it. The form is `FormFlow.Web.Templates.Forms.Preview` on
-the forms Canvas, the version the form's own page opens on - the latest
-published, else the newest draft. It draws the form alone, not the
-instance page around it. The step is the `step` query param, a node id,
-so every step is a URL.
+The page lists the form steps the way the instance pages do
+(`FormFlow.Data.Instances.FlowProgress.forms/2`) - the order a user works
+them, a subflow's forms where its step sits, each step once - so "3 of 7"
+here is the 3 of 7 a journey's progress card shows. It draws one step: its
+name under the subflows it sits in, the perspectives of the form subflow
+it belongs to when that names any, its type's properties as a small
+table, one row each - every one with a value, as the form template's fact
+sheet lists them, a Review's "Form to review" a link that jumps to that step and
+a pointer at a form no longer offered marked as missing - a select to
+jump to any step, Back and Forward, and the ring the instances
+index draws for flow progress with "3 of 7" beside it. The form is
+`FormFlow.Web.Templates.Forms.Preview` on the forms Canvas, the version
+the form's own page opens on - the latest published, else the newest
+draft. It draws the form alone, not the instance page around it. The
+health check sits in the header, as on the Overview.
+
+Two query params say which step. `step` is a form step's node id; Back,
+Forward, and the select patch it, so every step is a URL. `node` is any
+node id, a form or a subflow step at any depth, and opens the page on the
+first form at or inside it - what the Preview tab on a subflow's own View
+and Edit pages links, so the preview opens where the admin is. The page's
+own View and Edit tabs go to the canvas the current step sits on, the
+subflow's or the root's, never to the form template's pages.
 
 `FormFlow.Web.Templates.Components.Flows.Tabs` reads Overview | Preview |
-View | History | Edit; `active` accepts `:preview`. The router's
-`flow_page/2` knows `"preview"`.
+View | History | Edit; `active` accepts `:preview`, and from inside a
+subflow the Preview item carries `?node=`. The router's `flow_page/2`
+knows `"preview"`.
 
 ## v0.44.0
 
