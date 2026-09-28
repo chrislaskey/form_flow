@@ -25,7 +25,7 @@ Flows and Forms.
 ### Visualizing complex flows
 
 If you visualize the more complex journeys, they begin to resemble a tree
-shape — Forms are the leaf nodes and Flows are the branches and can be stacked
+shape - Forms are the leaf nodes and Flows are the branches and can be stacked
 one on top of each other, one flow leading to another flow.
 
 Note: to help differentiate the types we call flows that only contain forms
@@ -35,8 +35,8 @@ different type fields.
 
 ### Modeling connections
 
-We could use Form and Flow to model both the connections — how one flow
-connects to another — AND the behaviour — how should a subflow render. And
+We could use Form and Flow to model both the connections - how one flow
+connects to another - AND the behaviour - how should a subflow render. And
 it'd work, but it'd be a bit messy. The simpler way is to keep the behaviour
 in the Forms and Flows, and model the connections separately.
 
@@ -80,8 +80,8 @@ them.
 
 ![The ten tables FormFlow's migration creates, drawn as a schema diagram with one node per table and one edge per foreign key](images/data-modeling-sql-schema.png)
 
-The demo draws this from FormFlow's Ecto schemas at runtime — table names,
-columns in declaration order, and every `belongs_to` — so it describes the
+The demo draws this from FormFlow's Ecto schemas at runtime - table names,
+columns in declaration order, and every `belongs_to` - so it describes the
 library it is compiled against. The column types shown are the ones a
 PostgreSQL host gets.
 
@@ -103,17 +103,17 @@ just the data from specific IDs.
 
 Three of the ten tables above cross over, and only those three: a node, a
 relationship between two nodes, and the flow they belong to. Form templates,
-form versions, and every instance table stay in SQL — a `form_id` in a Neo4j
+form versions, and every instance table stay in SQL - a `form_id` in a Neo4j
 property map is a key into Postgres, not a pointer into the graph. Flows are
 drawn here as nodes rather than left out because anything a reference targets
 has to be a node, or the reference cannot be traversed, and both subflow and
 ownership references point at flows.
 
-A node carries `labels`, plural — a set — while a relationship carries exactly
+A node carries `labels`, plural - a set - while a relationship carries exactly
 one `type`. FormFlow's SQL already mirrors that: `labels text[]` on the nodes
 table, a single `label varchar` on the relationships table. Each entity's
 `properties` column is its Neo4j property map byte for byte, which is why the
-infrastructure columns are dual-written into it — in the graph there are no
+infrastructure columns are dual-written into it - in the graph there are no
 columns to index.
 
 The lines are not foreign keys. A solid one is the relationship row itself,
@@ -128,7 +128,7 @@ Neo4j would hold that no row does, because a property already says it.
 
 Those three types are FormFlow's structural vocabulary, so user data must not
 collide with them: `FormFlow.Data.Templates.Flow.Relationship` rejects them as
-relationship labels today — a changeset error, not a convention — which means
+relationship labels today - a changeset error, not a convention - which means
 no stored data will need cleaning up when the dual-write arrives.
 
 The full mapping, and the queries it buys, are in the [Neo4j](neo4j.md) guide.
@@ -175,8 +175,8 @@ Nothing here is special to a graph. Any database can hold one, and writing a
 node or a line is a single insert.
 
 The interesting part is reading it back. As long as you only want to filter
-the graph — "which nodes are named payment?" — it stays a normal table. The
-moment you want to follow it — "what comes after start, and after that?" — you
+the graph - "which nodes are named payment?" - it stays a normal table. The
+moment you want to follow it - "what comes after start, and after that?" - you
 have a choice to make, and it is the same three choices every time.
 
 ### Option one: joins
@@ -202,8 +202,8 @@ is ordinary SQL: the indexes work, the query planner understands it, and you
 can add a WHERE clause anywhere.
 
 The catch is that the depth is baked into the statement. Going three steps
-means writing two more joins. And the question that has no fixed depth —
-"everything reachable from start" — cannot be written this way at all, because
+means writing two more joins. And the question that has no fixed depth -
+"everything reachable from start" - cannot be written this way at all, because
 you do not know how many joins to write until you have already looked.
 
 That is the whole trade. Joins are the right tool when the depth is part of
@@ -246,7 +246,7 @@ subtly wrong.
 
 Then there is that depth cap, which is doing a job it is not really qualified
 for. SQL has no memory of where it has been, so an edge that points back to an
-earlier node loops until the cap stops it — and a cap cannot tell a cycle
+earlier node loops until the cap stops it - and a cap cannot tell a cycle
 apart from a graph that is honestly ten levels deep. There are better guards
 (an array of visited ids, or PostgreSQL's CYCLE clause), but they are more
 machinery, and the SQLite version is different from the PostgreSQL one.
@@ -288,7 +288,7 @@ same key, and the traversal happens in Elixir.
 
 ```sql
 -- One flow's nodes and lines. Two lookups on the same index, no join
--- between them — the caller wants both lists whole.
+-- between them - the caller wants both lists whole.
 SELECT * FROM form_flow_template_flow_nodes         WHERE flow_id = '3f2c...';
 SELECT * FROM form_flow_template_flow_relationships WHERE flow_id = '3f2c...';
 ```
@@ -301,7 +301,7 @@ and assembles the tree as it goes.
 This works because of the size and shape of the data. A flow is tens of rows,
 not thousands, and templates are one or two levels deep in practice, so the
 extra round trips are cheap. In exchange you get an exact cycle guard instead
-of a depth cap — a flow that embeds one of its own ancestors resolves to
+of a depth cap - a flow that embeds one of its own ancestors resolves to
 nothing, while the same flow embedded twice side by side is correctly resolved
 at both positions, a distinction a depth cap cannot draw.
 

@@ -1,6 +1,6 @@
 defmodule Demo.FormFlowMigrationTest do
   @moduledoc """
-  Exercises `FormFlow.Data.Migration` against a real database — the library's
+  Exercises `FormFlow.Data.Migration` against a real database - the library's
   own tests use repo stubs and never issue DDL, so this is where the migration
   is proven to actually run.
 
@@ -54,7 +54,7 @@ defmodule Demo.FormFlowMigrationTest do
     assert {:ok, %{rows: [[1]]}} = Repo.query("SELECT count(*) FROM form_flow_instance_forms")
   end
 
-  test "instances cannot be orphaned — template_form_version_id is RESTRICT" do
+  test "instances cannot be orphaned - template_form_version_id is RESTRICT" do
     {:ok, form_id} = insert_template("Enrollment")
     {:ok, version_id} = insert_version(form_id)
 
@@ -118,11 +118,11 @@ defmodule Demo.FormFlowMigrationTest do
     {:ok, _} = insert_template("Enrollment")
 
     # The partial unique index guards the catalog (owner_flow_id IS NULL) as
-    # one namespace — a tenant does not get its own
+    # one namespace - a tenant does not get its own
     assert {:error, _} = insert_template("Enrollment")
     assert {:error, _} = insert_template("Enrollment", tenant_id: "other-tenant")
 
-    # Owned forms are outside the catalog — yearly copies repeat names freely
+    # Owned forms are outside the catalog - yearly copies repeat names freely
     {:ok, flow_id} = insert_flow()
     assert {:ok, _} = insert_template("Enrollment", owner_flow_id: flow_id)
     assert {:ok, _} = insert_template("Enrollment", owner_flow_id: flow_id)

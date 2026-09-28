@@ -3,7 +3,7 @@ defmodule DemoWeb.FormFlowLive.OtherForms do
   The catch-all user page: every flow outside the pet licensing group.
 
   Mounted on `live "/demo/other-forms/*path", FormFlowLive.OtherForms`, the
-  same shape as `DemoWeb.FormFlowLive.Users` — FormFlow's router dispatches
+  same shape as `DemoWeb.FormFlowLive.Users` - FormFlow's router dispatches
   the remaining path to the right LiveComponent, and `base="/demo/other-forms"`
   is what makes every link the components build carry the mount prefix.
 

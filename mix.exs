@@ -46,7 +46,7 @@ defmodule FormFlow.MixProject do
       {:phoenix_select, ">= 0.0.0"},
       {:slab, ">= 0.0.0"},
       {:dynamic_form, ">= 0.0.0"},
-      # FormFlow.Data.Clients.AI.OpenRouter posts with Req.post/2 — `:json`,
+      # FormFlow.Data.Clients.AI.OpenRouter posts with Req.post/2 - `:json`,
       # `:headers` as a list of tuples, `:receive_timeout`, and the non-bang
       # {:ok, response} | {:error, exception} return, which is the surface
       # 0.4.0 settled on

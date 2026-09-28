@@ -45,7 +45,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.CopyDialog do
     <Dialog.dialog width={:medium}>
       <p class="mb-1 text-sm font-semibold text-zinc-900">Duplicate this flow?</p>
       <p class="mb-3 text-xs text-zinc-500">
-        A duplicate of “{@flow.name}” with its steps, connections, subflows, and forms.
+        A duplicate of "{@flow.name}" with its steps, connections, subflows, and forms.
         Forms from the catalog stay shared; the rest is the copy's own.
       </p>
 

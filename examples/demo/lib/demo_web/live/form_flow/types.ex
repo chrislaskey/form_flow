@@ -1,10 +1,10 @@
 defmodule DemoWeb.FormFlowLive.Types do
   @moduledoc """
-  The demo's flow and form types — the lists both the admin and the users
+  The demo's flow and form types - the lists both the admin and the users
   pages pass as `flow_types` and `form_types`. One module serves both pages
   because a type is chosen on the admin side (the flow and form edit pages'
   dropdowns) and acted on in the users side (which forms a user may edit;
-  what a form starts filled in with) — the same list has to answer in both
+  what a form starts filled in with) - the same list has to answer in both
   places, so both pages call the same function. What the types *do* is
   `DemoWeb.FormFlowLive.Checklist` and `DemoWeb.FormFlowLive.Prefill`.
 
@@ -32,7 +32,7 @@ defmodule DemoWeb.FormFlowLive.Types do
   # The kinds of user a "forms" flow can be for. The admin picks per subflow;
   # the users page then shows a viewer only the subflows for the
   # perspectives its `perspectives` attr names. The metadata is the host's
-  # own — here, which desk a reviewer's work lands on.
+  # own - here, which desk a reviewer's work lands on.
   @doc "The two kinds of user the demo's flows are for - the ids `Demo.Users` carries."
   def perspectives do
     [

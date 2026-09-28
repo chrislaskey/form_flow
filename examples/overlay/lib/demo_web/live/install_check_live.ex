@@ -5,11 +5,11 @@ defmodule DemoWeb.InstallCheckLive do
 
   What each section proves:
 
-  - `PhoenixSelect.select` — the phoenix_select colocated hook is registered
+  - `PhoenixSelect.select` - the phoenix_select colocated hook is registered
     (without it the dropdown never opens) and its Tailwind source is scanned
-  - `DynamicForm.form` — dynamic_form's Tailwind source is scanned and daisyUI
+  - `DynamicForm.form` - dynamic_form's Tailwind source is scanned and daisyUI
     is present, since its built-in components render daisyUI classes
-  - `Slab.table` — the slab colocated hooks are registered (the Share tab's
+  - `Slab.table` - the slab colocated hooks are registered (the Share tab's
     copy-to-clipboard button) and its Tailwind source is scanned
 
   Nothing here calls FormFlow itself; the index page does that.

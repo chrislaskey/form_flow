@@ -5,7 +5,7 @@ defmodule DemoWeb.ExplorationsLive do
   at it rather than by describing it.
 
   Each exploration is one page under `/explorations`, listed in
-  `@explorations` here. Nothing on any of them is wired up — the data is
+  `@explorations` here. Nothing on any of them is wired up - the data is
   hardcoded and the components are scratch copies, so picking a direction is
   a separate job from building it.
 
@@ -19,7 +19,7 @@ defmodule DemoWeb.ExplorationsLive do
       path: "/explorations/logo",
       title: "Logo marks",
       note: """
-      `Layouts.logo_mark` as an actual logo — solid vs. gradient strokes,
+      `Layouts.logo_mark` as an actual logo - solid vs. gradient strokes,
       each variation on white and on black.
       """
     },

@@ -7,7 +7,7 @@ defmodule DemoWeb.FormFlowLive.Users do
   FormFlowLive.Users`, so `/demo/pet-licenses/applications` (the listing of
   the user's flow instances), `.../applications/:id` (one instance), and
   `.../applications/:id/forms/*` (a form inside it) all land here. FormFlow's
-  router dispatches the remaining path to the right LiveComponent — this page
+  router dispatches the remaining path to the right LiveComponent - this page
   just supplies the layout around it. `base="/demo/pet-licenses/applications"`
   is what makes every link the components build carry the mount prefix.
 

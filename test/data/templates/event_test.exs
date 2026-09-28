@@ -25,7 +25,7 @@ defmodule FormFlow.Data.Templates.Flow.EventTest do
              ~w(created status_changed health_ignored health_unignored pre_release_instances_deleted)
   end
 
-  test "the actor is optional — a host that passes no user_id logs the change unsigned" do
+  test "the actor is optional - a host that passes no user_id logs the change unsigned" do
     changeset = Event.changeset(%Event{}, %{flow_id: Ecto.UUID.generate(), event: "created"})
 
     assert changeset.valid?

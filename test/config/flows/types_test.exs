@@ -38,7 +38,7 @@ defmodule FormFlow.Config.Flows.TypesTest do
   end
 
   # A host's type that shows every flow to every viewer, whatever the flow's
-  # perspectives say — the property states, the type decides
+  # perspectives say - the property states, the type decides
   defmodule Open do
     use FormFlow.Config.Flows.Type
 

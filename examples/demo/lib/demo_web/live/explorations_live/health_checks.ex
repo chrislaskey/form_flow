@@ -3,7 +3,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
   Scratch directions for a flow's health check: the trigger an admin sees
   on the flows index (and later in a page header), and the modal it opens.
 
-  Everything here is hardcoded — one flow, one report — so the shapes can
+  Everything here is hardcoded - one flow, one report - so the shapes can
   be compared side by side. Each trigger direction is a `trigger/1` clause
   rendered in four states (healthy, errors, warnings only, everything
   ignored); each modal direction is a `modal/1` clause rendered inline as a
@@ -43,7 +43,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       level: :error,
       code: "form_not_published",
       where: "Review / Decision",
-      message: "“Review / Decision” has no published version — users cannot start it",
+      message: ~s("Review / Decision" has no published version - users cannot start it),
       hint: "Open the form and publish its draft.",
       ignored: nil
     },
@@ -51,7 +51,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       level: :warning,
       code: "unconnected",
       where: "Application / Vaccination records",
-      message: "“Application / Vaccination records” is not connected from Start",
+      message: ~s("Application / Vaccination records" is not connected from Start),
       hint: "Wire it in, or remove the step.",
       ignored: %{user_id: "demo-admin", on: "2026-09-08"}
     },
@@ -59,7 +59,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       level: :warning,
       code: "dead_end",
       where: "Application / License options",
-      message: "“Application / License options” leads nowhere — nothing follows it",
+      message: ~s("Application / License options" leads nowhere - nothing follows it),
       hint: "Connect it to the next step, or to End.",
       ignored: nil
     },
@@ -67,7 +67,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       level: :info,
       code: "unpublished_changes",
       where: "Application / Owner contact",
-      message: "“Application / Owner contact” has a draft with changes not yet published",
+      message: ~s("Application / Owner contact" has a draft with changes not yet published),
       hint: "Publish when the changes are ready.",
       ignored: nil
     }
@@ -103,7 +103,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
     %{
       id: :tinted_chip,
       title: "T4 · Tinted chip",
-      note: "Soft tinted background in the level's colour, with an icon. Green says “Healthy”."
+      note: ~s(Soft tinted background in the level's colour, with an icon. Green says "Healthy".)
     },
     %{
       id: :icon_badge,
@@ -114,18 +114,18 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       id: :checks_bar,
       title: "T6 · Checks passed bar",
       note:
-        "A thin bar of passed vs. failed checks with “29 / 31 checks”. Says how close, not just what."
+        ~s(A thin bar of passed vs. failed checks with "29 / 31 checks". Says how close, not just what.)
     },
     %{
       id: :coloured_words,
       title: "T7 · Coloured words only",
-      note: "“2 errors · 1 warning” with each count in its colour. Quietest; densest."
+      note: ~s("2 errors · 1 warning" with each count in its colour. Quietest; densest.)
     },
     %{
       id: :ghost_dot,
       title: "T8 · Ghost button with dot",
       note:
-        "An outlined button reading “Health”, the dot doing the colour. Fits a header CTA row."
+        ~s(An outlined button reading "Health", the dot doing the colour. Fits a header CTA row.)
     },
     %{
       id: :ring,
@@ -147,7 +147,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       id: :split,
       title: "T12 · Split button",
       note:
-        "“Health” on the left, the count in a coloured right segment. Two clicks, one control."
+        ~s("Health" on the left, the count in a coloured right segment. Two clicks, one control.)
     }
   ]
 
@@ -167,7 +167,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       id: :checklist,
       title: "M3 · Every check, as a checklist",
       note:
-        "Passing checks shown too, ticked and collapsed, so “healthy” has evidence. Failing ones expanded."
+        ~s(Passing checks shown too, ticked and collapsed, so "healthy" has evidence. Failing ones expanded.)
     },
     %{
       id: :report_card,
@@ -177,13 +177,13 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
     %{
       id: :table,
       title: "M5 · Table",
-      note: "Level, where, what, ignore — one row per entry. Scans well with many entries."
+      note: "Level, where, what, ignore - one row per entry. Scans well with many entries."
     },
     %{
       id: :minimal,
       title: "M6 · Minimal",
       note:
-        "One sentence of summary, a plain list with a coloured edge per level, “Ignore” as a text action."
+        ~s(One sentence of summary, a plain list with a coloured edge per level, "Ignore" as a text action.)
     },
     %{
       id: :inspector,
@@ -195,7 +195,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       id: :by_location,
       title: "M8 · Grouped by flow",
       note:
-        "Sections per flow — root, Application, Review — so an admin fixes one canvas at a time."
+        "Sections per flow - root, Application, Review - so an admin fixes one canvas at a time."
     }
   ]
 
@@ -1229,7 +1229,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
 
   # The message without its quoted subject, when a row already names it
   defp short(message) do
-    case String.replace(message, ~r/^“[^”]+” /, "") do
+    case String.replace(message, ~r/^"[^"]+" /, "") do
       <<first::utf8, rest::binary>> -> String.upcase(<<first::utf8>>) <> rest
       other -> other
     end
@@ -1250,7 +1250,7 @@ defmodule DemoWeb.ExplorationsLive.HealthChecks do
       "Dog License connects Start to End",
       "Application connects Start to End",
       "Every step in Application has a published form",
-      "Check pet details points “Form to review” at a form in this flow"
+      ~s(Check pet details points "Form to review" at a form in this flow)
     ]
   end
 

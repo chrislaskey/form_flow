@@ -42,7 +42,7 @@ defmodule FormFlow.Web.Controllers.DownloadsTest do
   end
 
   describe "form_path/2" do
-    test "carries the token and nothing else — the token is the request" do
+    test "carries the token and nothing else - the token is the request" do
       assert Downloads.form_path("/form-flow/downloads", "abc123") ==
                "/form-flow/downloads?token=abc123"
     end
@@ -58,7 +58,7 @@ defmodule FormFlow.Web.Controllers.DownloadsTest do
       assert Plug.Conn.Query.decode(URI.parse(url).query) == %{"token" => "a+b/c="}
     end
 
-    test "has no clause for nowhere to link — a page with no path draws no link" do
+    test "has no clause for nowhere to link - a page with no path draws no link" do
       assert_raise FunctionClauseError, fn -> Downloads.form_path(nil, "abc") end
     end
   end
@@ -103,7 +103,7 @@ defmodule FormFlow.Web.Controllers.DownloadsTest do
     test "params beside the token are not read, so one cannot widen what it grants" do
       # The token names no position, so the request stops before it looks
       # anything up. Query params naming one would carry it past that point
-      # if they were read at all — they are not, so it stops all the same.
+      # if they were read at all - they are not, so it stops all the same.
       payload = %{flow_instance_id: "f", path: [], disposition: :download}
 
       assert %{status: 404, resp_body: body} =

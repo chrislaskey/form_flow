@@ -3,7 +3,7 @@ defmodule DemoWeb.DemoDataComponents do
   The control that puts the demo's data back to what it ships with, and the
   event it sends.
 
-  Two pages carry it — the index at `/` and the demo landing page at `/demo` —
+  Two pages carry it - the index at `/` and the demo landing page at `/demo` -
   so the card and the handling of its click are written once here. A page
   renders `reset_demo_data/1` and forwards the event to `handle_reset/1`:
 
@@ -13,7 +13,7 @@ defmodule DemoWeb.DemoDataComponents do
   The card is shown to everyone and `handle_reset/1` refuses anyone but the
   admin, which is the demo's idiom elsewhere too: a page says whose it is
   rather than hiding from you (`DemoWeb.PersonaComponents`). The check has to
-  live there regardless — a LiveView event can be pushed by anyone, whether or
+  live there regardless - a LiveView event can be pushed by anyone, whether or
   not a button was rendered for them.
   """
 
@@ -41,7 +41,7 @@ defmodule DemoWeb.DemoDataComponents do
         <h2 class="font-semibold text-gray-900">Reset the demo data</h2>
         <p class="text-sm text-base-content/70">
           Puts the flows, forms, and applications back to the pet licensing data
-          the demo ships with. Anything built or filled in since goes — including
+          the demo ships with. Anything built or filled in since goes - including
           whatever someone else reading this demo was in the middle of.
         </p>
       </div>

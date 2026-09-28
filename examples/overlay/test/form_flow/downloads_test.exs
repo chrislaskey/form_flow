@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowDownloadsTest do
   @moduledoc """
   Exercises the download and print routes against a real database, a real
-  router, and a real request — the whole path the library's own tests can't
+  router, and a real request - the whole path the library's own tests can't
   reach: a mounted route, a position resolved out of the URL, the instance's
   version's definition parsed, and a file coming back.
 
@@ -104,7 +104,7 @@ defmodule Demo.FormFlowDownloadsTest do
       assert conn.resp_body =~ "This flow no longer exists."
     end
 
-    test "a position nobody has opened — there are no answers to print", %{conn: conn} do
+    test "a position nobody has opened - there are no answers to print", %{conn: conn} do
       %{instance: instance, form: form} = flow_of_one()
 
       conn = get(conn, download_url(instance.id, [form.id]))

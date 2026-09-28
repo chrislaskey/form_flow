@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
     end
 
-    test "status is not castable — only completion sets it" do
+    test "status is not castable - only completion sets it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
@@ -34,12 +34,12 @@ defmodule FormFlow.Data.Instances.FormTest do
     end
 
     test "the visit identity is both-or-neither: a journey requires a path" do
-      # standalone: neither — fine (the existing mode)
+      # standalone: neither - fine (the existing mode)
       assert Instances.Form.changeset(%Instances.Form{}, %{
                template_form_version_id: @version_id
              }).valid?
 
-      # a journey instance without a path is invalid — the partial unique
+      # a journey instance without a path is invalid - the partial unique
       # index can't catch this half, the changeset must
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
@@ -50,7 +50,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       refute changeset.valid?
       assert {"is required for an in-journey form instance", _} = changeset.errors[:path]
 
-      # path is not castable — only visit_changeset/4 sets it
+      # path is not castable - only visit_changeset/4 sets it
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,
@@ -78,7 +78,7 @@ defmodule FormFlow.Data.Instances.FormTest do
       assert Ecto.Changeset.get_field(changeset, :path) == path
     end
 
-    test "superseded_at is not castable — reconciliation sets it" do
+    test "superseded_at is not castable - reconciliation sets it" do
       changeset =
         Instances.Form.changeset(%Instances.Form{}, %{
           template_form_version_id: @version_id,

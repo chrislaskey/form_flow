@@ -52,7 +52,7 @@ defmodule Demo.FormFlowHealthTest do
     assert status.summary.steps == 0
     assert %DateTime{} = status.checked_at
 
-    # One key, strings throughout — the flow's own open map, as the type and
+    # One key, strings throughout - the flow's own open map, as the type and
     # perspectives already are
     assert %{
              "status" => %{
@@ -166,7 +166,7 @@ defmodule Demo.FormFlowHealthTest do
     refute Map.has_key?(Flows.get(subflow.id).properties, "_health_metadata")
 
     # A check by the subflow's id is the root's check too, so what is ignored
-    # from it — the record and the event — lands on the root
+    # from it - the record and the event - lands on the root
     health = Health.check(subflow.id)
     assert health.flow_id == root.id
     [entry | _rest] = health.entries

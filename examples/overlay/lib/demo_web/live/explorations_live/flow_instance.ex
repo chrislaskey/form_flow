@@ -1204,7 +1204,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <span :if={form.status == :pending} class="block text-xs">
             {cannot_start_hint(form, @group)}
           </span>
-          <span :if={form.note} class="block text-xs text-zinc-600">“{form.note}” - reviewer</span>
+          <span :if={form.note} class="block text-xs text-zinc-600">"{form.note}" - reviewer</span>
         </span>
         <span :if={form.status == :completed} class="text-sm text-zinc-700">Completed</span>
         <span :if={form.status == :pending} class="text-sm">Cannot start yet</span>
@@ -1254,7 +1254,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
             :if={form.status in [:in_progress, :reopened, :available] && @group.whose == :mine}
             class="mt-2 flex flex-wrap items-center gap-3"
           >
-            <p :if={form.note} class="text-sm text-zinc-600">“{form.note}” - reviewer, {form.when}</p>
+            <p :if={form.note} class="text-sm text-zinc-600">"{form.note}" - reviewer, {form.when}</p>
             <p :if={!form.note && form.when} class="text-sm text-zinc-500">
               Last saved {form.when} by <code>{form.who}</code>
             </p>
@@ -1630,7 +1630,7 @@ defmodule DemoWeb.ExplorationsLive.FlowInstance do
           <% :reopened -> %>
             <p class="font-semibold">{@reopened.label} needs your attention.</p>
             <p class="text-sm text-zinc-600">
-              The reviewer wrote: “{@reopened.note}” Update the form and submit it again.
+              The reviewer wrote: "{@reopened.note}" Update the form and submit it again.
             </p>
           <% :decided -> %>
             <p class="font-semibold">Approved.</p>

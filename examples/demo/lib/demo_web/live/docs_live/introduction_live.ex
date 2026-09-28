@@ -1,6 +1,6 @@
 defmodule DemoWeb.DocsLive.IntroductionLive do
   @moduledoc """
-  `/docs/introduction` — the README's introduction, for a reader who reached
+  `/docs/introduction` - the README's introduction, for a reader who reached
   the docs first.
 
   The prose is `DemoWeb.IntroductionComponents`', shared with the demo index,

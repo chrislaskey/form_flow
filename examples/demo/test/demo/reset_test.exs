@@ -4,7 +4,7 @@ defmodule Demo.ResetTest do
   alias Demo.Reset
   alias Demo.Snapshot
 
-  # The test database starts empty — the snapshot migration skips :test — so
+  # The test database starts empty - the snapshot migration skips :test - so
   # these build their own "before" out of the snapshot itself.
   defp load_snapshot do
     Repo.query!("PRAGMA defer_foreign_keys = ON")

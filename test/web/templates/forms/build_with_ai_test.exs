@@ -24,7 +24,7 @@ defmodule FormFlow.Web.Templates.Forms.BuildWithAITest do
     end
 
     # The model that invented `"groupType": "row"` reasoned aloud that the
-    # allowed values were "not specified" — because they were not
+    # allowed values were "not specified" - because they were not
     test "spells out the values of the two properties that take a fixed set" do
       instructions = BuildWithAI.instructions()
 

@@ -77,7 +77,7 @@ defmodule FormFlow.Data.MigrationTest do
     end
 
     test "accepts an atom prefix" do
-      # Fails later, on DDL outside of a migration — but the prefix is accepted
+      # Fails later, on DDL outside of a migration - but the prefix is accepted
       assert_raise RuntimeError, ~r/could not find migration runner/, fn ->
         Migration.up(repo: PostgresRepo, prefix: :tenant_one)
       end

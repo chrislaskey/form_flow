@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Templates.Forms.PreviewTest do
   What the preview does with a definition it cannot draw.
 
   The page renders arbitrary admin-authored JSON, so a definition it chokes
-  on is expected input rather than a bug — and `mount/3` is where that has to
+  on is expected input rather than a bug - and `mount/3` is where that has to
   be settled. A definition left to fail at render takes the preview's process
   with it, and the client answers by remounting, which fails again: the
   crash-remount loop these tests exist to keep closed.

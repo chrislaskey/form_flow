@@ -1,6 +1,6 @@
 defmodule DemoWeb.DocsLive.Index do
   @moduledoc """
-  `/docs` — the front door to the documentation, and what the header's Docs
+  `/docs` - the front door to the documentation, and what the header's Docs
   link points at.
 
   There is nothing to list by hand: the pages come from

@@ -5,19 +5,19 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
   were built by hand in the admin UI.
 
   The SQL is written by `examples/snapshot.sh` and read through
-  `Demo.Snapshot`, which `Demo.Reset` replays too — loading the demo's data
+  `Demo.Snapshot`, which `Demo.Reset` replays too - loading the demo's data
   into an empty database and putting a running demo back to it are the same
   statements. Rebuild the file after editing the flows, then commit.
 
   Two cases load nothing:
 
-    * the test database — the demo's tests count on empty tables
-    * a database that already has flows — this migration is pending on the
+    * the test database - the demo's tests count on empty tables
+    * a database that already has flows - this migration is pending on the
       very database the snapshot was taken from, and replaying it there would
       collide on primary keys. `mix ecto.reset` is the way to reload.
 
   Rolling back leaves the rows in place: the snapshot is the demo's data, not
-  a schema change, and deleting it is `mix ecto.reset`'s job — or `Demo.Reset`,
+  a schema change, and deleting it is `mix ecto.reset`'s job - or `Demo.Reset`,
   on a deployed demo where dropping the database is not on offer.
   """
 
@@ -42,7 +42,7 @@ defmodule Demo.Repo.Migrations.LoadFormFlowSnapshot do
         # Parent-first order makes this a formality, but a flow can be copied
         # from one built after it, so let SQLite check references at commit.
         # Queried directly with logging off rather than through execute/1, which
-        # would echo every INSERT — some of them kilobytes of JSON — into the
+        # would echo every INSERT - some of them kilobytes of JSON - into the
         # migrate log.
         repo().query!("PRAGMA defer_foreign_keys = ON", [], log: false)
         Enum.each(statements, &repo().query!(&1, [], log: false))

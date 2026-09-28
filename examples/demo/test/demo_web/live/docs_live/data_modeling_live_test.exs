@@ -79,7 +79,7 @@ defmodule DemoWeb.DocsLive.DataModelingLiveTest do
 
     %{"nodes" => nodes, "edges" => edges} = diagram(view, "graph-diagram")
 
-    # Only the graph half of the templates crosses over — a node, a
+    # Only the graph half of the templates crosses over - a node, a
     # relationship between two nodes, and the flow they belong to
     assert Enum.map(nodes, & &1["data"]["table"]) |> Enum.sort() == [
              "form_flow_template_flow_nodes",
@@ -199,7 +199,7 @@ defmodule DemoWeb.DocsLive.DataModelingLiveTest do
   # by hand, since ReactFlow has no layout of its own and each table needs a
   # position. Reading the same list back would prove nothing, so the test asks
   # the form_flow application which of its modules are Ecto schemas.
-  # Schemas with a source — an embedded one (`Form.Prefill`, stored inside a
+  # Schemas with a source - an embedded one (`Form.Prefill`, stored inside a
   # column) names no table, and the diagram draws tables
   defp form_flow_tables do
     {:ok, modules} = :application.get_key(:form_flow, :modules)

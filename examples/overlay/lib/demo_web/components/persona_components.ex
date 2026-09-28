@@ -33,7 +33,7 @@ defmodule DemoWeb.PersonaComponents do
 
   @doc """
   The framed "Pick a user perspective" control, for a page that introduces
-  the switch rather than assuming it — the demo index does. Pages that
+  the switch rather than assuming it - the demo index does. Pages that
   merely need it have the header's.
   """
   attr :id, :string, default: "perspective"

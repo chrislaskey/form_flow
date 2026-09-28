@@ -5,7 +5,7 @@ defmodule DemoWeb.FormFlowLive.Admin do
   Mounted on `live "/demo/admin/*path", FormFlowLive.Admin`, so `/demo/admin`
   (a landing linking the two indexes), `/demo/admin/flows/*`, and
   `/demo/admin/forms/*` all land here. FormFlow's router dispatches the
-  remaining path to the right LiveComponent — this page just supplies the
+  remaining path to the right LiveComponent - this page just supplies the
   layout around it. `base="/demo/admin"` is what makes every link the
   components build carry the mount prefix.
   """

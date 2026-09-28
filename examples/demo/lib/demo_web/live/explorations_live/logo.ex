@@ -1,6 +1,6 @@
 defmodule DemoWeb.ExplorationsLive.Logo do
   @moduledoc """
-  Scratch page for trying `Layouts.logo_mark` as an actual logo — solid vs.
+  Scratch page for trying `Layouts.logo_mark` as an actual logo - solid vs.
   gradient strokes, each variation drawn on white and on black.
 
   Nothing here is wired up; the header's real mark is the one in
@@ -150,7 +150,7 @@ defmodule DemoWeb.ExplorationsLive.Logo do
           <h1 class="text-2xl font-semibold">Logo marks</h1>
           <p class="text-base-content/70">
             Trying <code>Layouts.logo_mark</code>
-            as an actual logo — solid vs. gradient strokes, on light and dark.
+            as an actual logo - solid vs. gradient strokes, on light and dark.
           </p>
         </header>
 

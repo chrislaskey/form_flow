@@ -3,9 +3,9 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
   The schema diagram `DemoWeb.DocsLive.DataModelingLive` draws: one ReactFlow node per
   table FormFlow's migration creates, one edge per foreign key between them.
 
-  Everything but the layout is read off FormFlow's Ecto schemas at runtime —
+  Everything but the layout is read off FormFlow's Ecto schemas at runtime -
   `__schema__(:source)` for the table name, `__schema__(:fields)` for the
-  columns in declaration order, and each `belongs_to` for the foreign keys —
+  columns in declaration order, and each `belongs_to` for the foreign keys -
   so the diagram cannot drift from the library the demo is compiled against.
   Adding a column to a schema adds a row here; adding a `belongs_to` adds an
   edge.
@@ -20,8 +20,8 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
       here are the ones a Postgres host gets.
     * **`ON DELETE` behaviour.** It lives on the migration's `references`, not
       on `belongs_to`, so `@on_delete_rules` records it per column. It is the
-      most load-bearing thing about this schema — see the long comment at the
-      top of `FormFlow.Data.Migrations.Postgres.V01` — which is why the page
+      most load-bearing thing about this schema - see the long comment at the
+      top of `FormFlow.Data.Migrations.Postgres.V01` - which is why the page
       names it against every foreign key it lists.
     * **Position.** ReactFlow has no layout of its own, so `@tables` places
       each one by hand, right to left in dependency order.
@@ -56,7 +56,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
 
   # The five a reader should find first: a flow template, the nodes in it, a
   # form template, and the two tables those turn into once a user fills one
-  # out. The other seven support them — a form's versions, a flow's audit log
+  # out. The other seven support them - a form's versions, a flow's audit log
   # and each instance's, the relationships between nodes, the snapshots a
   # journey reads its flow from, and the positions a journey's flow is open
   # at. The page marks these with a star.
@@ -168,7 +168,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.Diagram do
   end
 
   @doc """
-  Every foreign key in the schema, in the order the tables are declared —
+  Every foreign key in the schema, in the order the tables are declared -
   the reference table the page draws under the diagram.
   """
   def foreign_keys do

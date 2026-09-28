@@ -1,6 +1,6 @@
 defmodule FormFlow.Data.Templates.Flows.HealthTest do
   @moduledoc """
-  `FormFlow.Data.Templates.Flows.Health.check/2` over hand-built trees —
+  `FormFlow.Data.Templates.Flows.Health.check/2` over hand-built trees -
   pure structs, no database, the way
   `FormFlow.Data.Templates.Flows.ConnectedTreeTest` builds its fixtures. Each
   test wires one flow one way and asserts on the codes that come out, since
@@ -34,7 +34,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
   defp start_node, do: build_node(["Start"], label: "Start")
   defp end_node, do: build_node(["End"], label: "End")
 
-  # A form node whose form is published — the healthy default
+  # A form node whose form is published - the healthy default
   defp form_node(label, opts \\ []) do
     form = Keyword.get_lazy(opts, :form, fn -> published_form(label) end)
     build_node(["Form"], form_id: form && form.id, form: form, label: label)
@@ -155,7 +155,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
            ] =
              health.entries
 
-    # End itself is what is unconnected — not the chain leading towards it
+    # End itself is what is unconnected - not the chain leading towards it
     assert [%Entry{code: :unconnected, node_id: end_id}] = Health.at(health, :warning)
     assert end_id == stop.id
   end
@@ -180,7 +180,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
 
     health = Health.check(tree(nodes ++ [aside], edges ++ [edge(start, aside)]))
 
-    assert [%Entry{code: :dead_end, message: "“Aside” leads nowhere - nothing follows it"}] =
+    assert [%Entry{code: :dead_end, message: ~s("Aside" leads nowhere - nothing follows it)}] =
              health.entries
   end
 
@@ -197,7 +197,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              %Entry{
                level: :error,
                code: :form_not_published,
-               message: "“Name” has no published version - users cannot start it"
+               message: ~s("Name" has no published version - users cannot start it)
              }
            ] = health.entries
   end
@@ -251,16 +251,16 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [
              %Entry{
                code: :unknown_type,
-               message: "“Name” uses the form type “gone”, which is not offered"
+               message: ~s("Name" uses the form type "gone", which is not offered)
              }
            ] =
              Health.check(chain([form_node("Name", form: form)])).entries
   end
 
-  test "a required form property left unset is an error — the Review type's source" do
+  test "a required form property left unset is an error - the Review type's source" do
     form = published_form("Check", %{"form_type" => "review"})
 
-    assert [%Entry{code: :property_missing, message: "“Check” needs “Form to review” set"}] =
+    assert [%Entry{code: :property_missing, message: ~s("Check" needs "Form to review" set)}] =
              Health.check(chain([form_node("Check", form: form)])).entries
   end
 
@@ -282,7 +282,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [%Entry{code: :related_form_missing, message: message}] =
              Health.check(chain([about, review_of.(Ecto.UUID.generate())])).entries
 
-    assert message == "“Check” points “Form to review” at a form that is no longer in this flow"
+    assert message == ~s("Check" points "Form to review" at a form that is no longer in this flow)
   end
 
   describe "a related form in another flow" do
@@ -335,14 +335,15 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       assert [%Entry{code: :related_form_in_any_flow_missing, level: :error, message: gone}] =
                check.(Property.flow_position(Ecto.UUID.generate(), [context.reachable]))
 
-      assert gone == "“Renew” points “Prefill with answers from” at a flow that no longer exists"
+      assert gone ==
+               ~s("Renew" points "Prefill with answers from" at a flow that no longer exists)
 
       # The flow is there; the position is not
       assert [%Entry{code: :related_form_in_any_flow_missing, message: removed}] =
                check.(Property.flow_position(context.other, [Ecto.UUID.generate()]))
 
       assert removed ==
-               "“Renew” points “Prefill with answers from” at a form the flow it names no longer has"
+               ~s("Renew" points "Prefill with answers from" at a form the flow it names no longer has)
 
       # The position is there; no Start reaches it, which is where the
       # runtime looks
@@ -350,14 +351,14 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
                check.(Property.flow_position(context.other, [context.stranded]))
 
       assert unreachable ==
-               "“Renew” points “Prefill with answers from” at a form no Start reaches in the flow it names"
+               ~s("Renew" points "Prefill with answers from" at a form no Start reaches in the flow it names)
 
       # A value no flow can be read out of at all - written by hand
       assert [%Entry{code: :related_form_in_any_flow_missing, message: nonsense}] =
                check.("not-a-position")
 
       assert nonsense ==
-               "“Renew” points “Prefill with answers from” at something that is not a form of any flow"
+               ~s("Renew" points "Prefill with answers from" at something that is not a form of any flow)
     end
 
     test "the check stands down when it was not given the flows to check against", context do
@@ -397,15 +398,15 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     end
 
     # Pointing at a step this tree has: still wrong, since the same value
-    # serves every flow using the form — and the one entry says so, the
+    # serves every flow using the form - and the one entry says so, the
     # missing-position entry standing down
     health = Health.check(chain([about, shared_review.(%{"source" => about.id})]))
     assert [%Entry{code: :related_form_shared, level: :error, message: message}] = health.entries
 
     assert message ==
-             "“Check” is a shared form that points “Form to review” at a step of one flow"
+             ~s("Check" is a shared form that points "Form to review" at a step of one flow)
 
-    # Pointing at a step this tree lacks — a copied flow's shared form: the
+    # Pointing at a step this tree lacks - a copied flow's shared form: the
     # same one entry, not two
     health = Health.check(chain([about, shared_review.(%{"source" => Ecto.UUID.generate()})]))
     assert codes(health) == [:related_form_shared]
@@ -453,7 +454,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
              %Entry{code: :unconnected}
            ] = health.entries
 
-    assert message == "“Check” points “Form to review” at a form no Start reaches"
+    assert message == ~s("Check" points "Form to review" at a form no Start reaches)
   end
 
   test "a related form resolves across subflows, by path" do
@@ -473,7 +474,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     outer = chain([step, check], label: "subflows", subflows: %{step.id => inner})
 
     # A "subflows" flow holding a form step is not a shape a save allows,
-    # but the check does not police flavor — that is the save's job
+    # but the check does not police flavor - that is the save's job
     assert Health.ok?(Health.check(outer))
   end
 
@@ -490,7 +491,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [%{code: :unknown_type, message: message}] =
              Enum.filter(health.entries, &(&1.code == :unknown_type))
 
-    assert message =~ "flow type “gone”"
+    assert message =~ ~s(flow type "gone")
 
     # A "forms" type is not offered to a "subflows" flow, whatever the list
     health =
@@ -552,7 +553,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [
              %Entry{
                code: :stale_perspectives,
-               message: "This flow is for “auditor”, which its type no longer declares"
+               message: ~s(This flow is for "auditor", which its type no longer declares)
              }
            ] =
              health.entries
@@ -611,7 +612,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
     assert [%Entry{code: :form_not_published, message: message, flow_id: flow_id, path: path}] =
              health.entries
 
-    assert message == "“Review / Check” has no published version - users cannot start it"
+    assert message == ~s("Review / Check" has no published version - users cannot start it)
     assert flow_id == inner.flow.id
     assert path == [step.id, Enum.at(inner.nodes, 1).id]
   end
@@ -677,7 +678,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
       assert entry.fix == Entry.fix(entry.code)
     end
 
-    # Words of its own for every code — not the general sentence an unlisted
+    # Words of its own for every code - not the general sentence an unlisted
     # code falls back to, which keeps a save from refusing over a missing
     # paragraph
     for code <- Entry.codes() do
@@ -693,7 +694,7 @@ defmodule FormFlow.Data.Templates.Flows.HealthTest do
   test "the checks emit every listed code, and no code the list lacks" do
     # One tree per code the other tests build alone; the set of codes that
     # come out of all of them is the set `Entry.codes/0` names, so a check
-    # added without its code — which would take the fallback words — fails
+    # added without its code - which would take the fallback words - fails
     # here, and so does a listed code no check produces
     loose = form_node("Loose")
     unpublished = form_node("New", form: draft_only_form("New"))

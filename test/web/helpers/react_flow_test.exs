@@ -15,7 +15,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
   defp encode(data), do: data |> ReactFlow.to_json() |> Jason.decode!()
 
   describe "to_json/1" do
-    test "keeps existing node UUIDs stable — form-instance paths depend on it" do
+    test "keeps existing node UUIDs stable - form-instance paths depend on it" do
       id = Ecto.UUID.generate()
 
       %{nodes: [saved]} = ReactFlow.to_flow_attrs(%{"nodes" => [%{"id" => id}], "edges" => []})
@@ -213,7 +213,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
       assert target == Enum.at(data.nodes, 1)["id"]
 
       # And saving what to_data produced changes nothing: ids are stable.
-      # id_map itself isn't part of that invariant — this second call's ids
+      # id_map itself isn't part of that invariant - this second call's ids
       # are already UUIDs, so it's the identity map, unlike the temporary-id
       # mapping the first call produced.
       round_tripped = ReactFlow.to_flow_attrs(data)
@@ -278,7 +278,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
     end
 
     test "keeps the node's stored label even when the entity behind it is named differently" do
-      # The step's name is the node's — a catalog form
+      # The step's name is the node's - a catalog form
       # named for the catalog must not rename every consumer's step on load
       subflow_node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),
@@ -303,7 +303,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
 
     test "an entity-less or unloaded node keeps its stored label" do
       # Start/End steps have no backing entity; associations as built are
-      # %Ecto.Association.NotLoaded{} — to_data must not require the preload
+      # %Ecto.Association.NotLoaded{} - to_data must not require the preload
       node = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),
         properties: %{"type" => "step", "data" => %{"label" => "Start", "kind" => "start"}}
@@ -321,7 +321,7 @@ defmodule FormFlow.Web.Helpers.ReactFlowTest do
         subflow: %FormFlow.Data.Templates.Flow{properties: %{}}
       }
 
-      # %Ecto.Association.NotLoaded{}, as built — to_data must not require
+      # %Ecto.Association.NotLoaded{}, as built - to_data must not require
       # the preload
       unloaded = %FormFlow.Data.Templates.Flow.Node{
         id: Ecto.UUID.generate(),

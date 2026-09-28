@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowFormsTest do
   @moduledoc """
-  Exercises `FormFlow.Data.Templates.Forms` — the form template row and version lifecycle
-  and the publish operation with what it does to existing instances — against a real
+  Exercises `FormFlow.Data.Templates.Forms` - the form template row and version lifecycle
+  and the publish operation with what it does to existing instances - against a real
   database. The library's own tests stop at changesets; the optimistic lock,
   the version-numbering unique index, the FK net, and the instance
   migrations are proven here.
@@ -35,7 +35,7 @@ defmodule Demo.FormFlowFormsTest do
       {:ok, other_tenant} = Forms.create(%{name: "Elsewhere", tenant_id: "other"})
       {:ok, second} = Forms.create(%{name: "Second"})
 
-      # No tenant given lists every tenant's catalog — a host with no tenants
+      # No tenant given lists every tenant's catalog - a host with no tenants
       # has nothing to narrow by
       assert Enum.map(Forms.list(), & &1.id) == [first.id, other_tenant.id, second.id]
       assert Enum.map(Forms.list(tenant_id: "other"), & &1.id) == [other_tenant.id]
@@ -47,7 +47,7 @@ defmodule Demo.FormFlowFormsTest do
       assert {:ok, %Form{name: "After"}} = Forms.update(Forms.get(form.id), %{name: "After"})
     end
 
-    test "catalog names are unique — the catalog is one namespace, across tenants" do
+    test "catalog names are unique - the catalog is one namespace, across tenants" do
       {:ok, _} = Forms.create(%{name: "Enrollment"})
 
       assert {:error, changeset} = Forms.create(%{name: "Enrollment"})
@@ -65,7 +65,7 @@ defmodule Demo.FormFlowFormsTest do
       assert Forms.list_versions(form.id) == []
     end
 
-    test "delete refuses while instance data exists — fill data is never orphaned" do
+    test "delete refuses while instance data exists - fill data is never orphaned" do
       {form, v1} = published_form()
       instance = insert_instance(v1)
 
@@ -168,7 +168,7 @@ defmodule Demo.FormFlowFormsTest do
       assert {:error, :not_draft} = Forms.update_status(v1, :published)
     end
 
-    test "get_latest_version skips drafts and archived — archiving the latest is a rollback" do
+    test "get_latest_version skips drafts and archived - archiving the latest is a rollback" do
       {form, v1} = published_form()
       {:ok, draft} = Forms.create_draft(form.id, based_on: v1.id)
       {:ok, v2} = Forms.update_status(draft, :published)
@@ -179,7 +179,7 @@ defmodule Demo.FormFlowFormsTest do
       assert Forms.get_latest_version(form.id).id == v1.id
     end
 
-    test "numbering counts archived versions — a retired number is never reissued" do
+    test "numbering counts archived versions - a retired number is never reissued" do
       {form, v1} = published_form()
       {:ok, _} = Forms.update_status(v1, :archived)
 
@@ -482,7 +482,7 @@ defmodule Demo.FormFlowFormsTest do
   describe "copy/2" do
     test "a published source copies as a published v1 with provenance" do
       {form, _v1} = published_form(%{"fields" => [%{"name" => "ssn"}]})
-      # A newer draft exists but does not copy — history stays with the source
+      # A newer draft exists but does not copy - history stays with the source
       {:ok, _draft} = Forms.create_draft(form.id)
 
       owner = insert_flow()
@@ -523,7 +523,7 @@ defmodule Demo.FormFlowFormsTest do
                )
 
       assert repointed.properties["form_type_property_values"] == %{"source" => "node-c"}
-      # An owned copy has no slug — its step's is the handle — and the
+      # An owned copy has no slug - its step's is the handle - and the
       # dual-written copy of the source's did not come along
       assert copy.slug == nil
       refute Map.has_key?(copy.properties, "slug")
@@ -578,7 +578,7 @@ defmodule Demo.FormFlowFormsTest do
       assert Forms.get_prefill(form, "Never saved") == nil
     end
 
-    test "a name is a form's own handle — twice is refused, another form is free" do
+    test "a name is a form's own handle - twice is refused, another form is free" do
       {:ok, form} = Forms.create(%{name: "Dog Information"})
       {:ok, other} = Forms.create(%{name: "Cat Information"})
       {:ok, form} = Forms.create_prefill(form, %{name: "Happy path", data: %{}})
@@ -649,7 +649,7 @@ defmodule Demo.FormFlowFormsTest do
       assert ["No vet record"] = Enum.map(Forms.list_prefills(Forms.get(form.id)), & &1.name)
     end
 
-    test "prefills survive a publish — they are the form's, not a version's" do
+    test "prefills survive a publish - they are the form's, not a version's" do
       {:ok, form} = Forms.create(%{name: "Dog Information", definition: %{"fields" => []}})
 
       {:ok, form} =
@@ -746,12 +746,12 @@ defmodule Demo.FormFlowFormsTest do
       assert %{nodes: [message]} = errors_on(changeset)
       assert message =~ "still has submitted data"
 
-      # And nothing was half-deleted — the save rolled back whole
+      # And nothing was half-deleted - the save rolled back whole
       assert Forms.get(node.form_id) != nil
       assert [_node] = Flows.get(flow.id).nodes
     end
 
-    test "deleting a flow deletes its owned forms — they never leak into the catalog" do
+    test "deleting a flow deletes its owned forms - they never leak into the catalog" do
       {:ok, flow} = Flows.create()
       {:ok, _} = Flows.update(flow, %{nodes: [form_node_attrs("Private")]})
       [node] = Flows.get(flow.id).nodes
@@ -790,7 +790,7 @@ defmodule Demo.FormFlowFormsTest do
       assert copied_form.copied_from_form_id == source_node.form_id
       assert copied_form.owner_flow_id == copy.id
 
-      # The stale property copy was overwritten — a copied node must never
+      # The stale property copy was overwritten - a copied node must never
       # point back at the original form template through the properties copy
       assert copied_node.properties["form_id"] == copied_node.form_id
     end
@@ -1079,8 +1079,8 @@ defmodule Demo.FormFlowFormsTest do
   end
 
   # Inserts the row as given. `Instances.Form.changeset/2` never casts
-  # `status` or `completed_at` — completion is `Instances.Forms.update_status/4`'s
-  # to write — so a test that needs a completed row sets the struct directly.
+  # `status` or `completed_at` - completion is `Instances.Forms.update_status/4`'s
+  # to write - so a test that needs a completed row sets the struct directly.
   defp insert_instance(version, attrs \\ []) do
     attrs =
       Enum.into(attrs, %{
@@ -1119,7 +1119,7 @@ defmodule Demo.FormFlowFormsTest do
       {:ok, named} = Forms.copy(form, owner_flow_id: root.id, slug: "userinfo2027")
       assert named.slug == "userinfo2027"
 
-      # A catalog copy suffixes the source's — or, when the source was owned
+      # A catalog copy suffixes the source's - or, when the source was owned
       # and had none, defaults from the name
       {:ok, promoted} = Forms.copy(owned)
       assert promoted.owner_flow_id == nil

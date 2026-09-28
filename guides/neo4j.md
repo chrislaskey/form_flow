@@ -1,6 +1,6 @@
 # Neo4j
 
-FormFlow stores flow diagrams as a property graph in your SQL database —
+FormFlow stores flow diagrams as a property graph in your SQL database -
 Postgres or SQLite. A future extension will dual-write the same data to
 [Neo4j](https://neo4j.com), so installations with complex or numerous flows
 can run true graph queries. **The extension does not exist yet.** This guide
@@ -14,11 +14,11 @@ The SQL schema follows one rule everywhere: **domain data lives in
 That rule is what makes the Neo4j mapping mechanical:
 
   * A node's or relationship's `properties` column **is** its future Neo4j
-    property map, byte for byte. The schemas keep the copies in sync — see
+    property map, byte for byte. The schemas keep the copies in sync - see
     `FormFlow.Data.Templates.Flow.Node` and
     `FormFlow.Data.Templates.Flow.Relationship`.
   * The columns additionally become *structural relationships* in Neo4j
-    (below). Membership therefore appears in Neo4j twice — as a property and
+    (below). Membership therefore appears in Neo4j twice - as a property and
     as a relationship. Both derive from the same column, so they cannot
     drift: the property is the fidelity contract, the relationship is the
     query accelerator.
@@ -34,7 +34,7 @@ That rule is what makes the Neo4j mapping mechanical:
   * **Keys with a leading underscore are the library's own bookkeeping**,
     not domain data, and are stripped from the projection: a flow's
     `properties["_health_metadata"]` (`FormFlow.Data.Templates.Flows.Health`
-    — its cached status and the entries an admin ignored) is derived from
+    - its cached status and the entries an admin ignored) is derived from
     the graph and rebuilt on every save, so it has no place in the graph
     itself. `flow_type_property_values`, a nested map, needs the same
     treatment for a different reason: Neo4j properties are flat.
@@ -43,12 +43,12 @@ That rule is what makes the Neo4j mapping mechanical:
 
 Rule of thumb: anything that is the target of a reference must be a Neo4j
 node, or the reference cannot be traversed. Subflow references and ownership
-point at flows — so flows are nodes too.
+point at flows - so flows are nodes too.
 
 | SQL | Neo4j |
 |-----|-------|
-| `form_flow_template_flow_nodes` row | node — `labels` column → labels, `properties` column → property map, verbatim |
-| `form_flow_template_flow_relationships` row | relationship — `label` → type, `properties` → property map |
+| `form_flow_template_flow_nodes` row | node - `labels` column → labels, `properties` column → property map, verbatim |
+| `form_flow_template_flow_relationships` row | relationship - `label` → type, `properties` → property map |
 | `form_flow_template_flows` row | `:Flow` node (id, timestamps as properties) |
 | `nodes.flow_id` column | `(n)-[:IN]->(:Flow)` |
 | `nodes.subflow_id` column | `(n)-[:EMBEDS]->(:Flow)` |
@@ -58,8 +58,8 @@ point at flows — so flows are nodes too.
 
 `IN`, `EMBEDS`, and `OWNED_BY` are FormFlow's structural vocabulary. User
 data must not collide with them, so `FormFlow.Data.Templates.Flow.Relationship`
-rejects them as relationship labels today — a changeset error, not a
-convention — which means no data will need cleaning up when the dual-write
+rejects them as relationship labels today - a changeset error, not a
+convention - which means no data will need cleaning up when the dual-write
 arrives.
 
 ## What the mapping buys
@@ -78,7 +78,7 @@ The queries that motivate a graph database become single patterns:
     MATCH (f:Flow)-[:OWNED_BY]->(:Flow {id: $root})
     RETURN f
 
-    // a node (step) by its handle — no join
+    // a node (step) by its handle - no join
     MATCH (n {slug: $slug, tenant_id: $tenant})
     RETURN n
 

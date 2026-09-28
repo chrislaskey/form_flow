@@ -1,16 +1,16 @@
 defmodule DemoWeb.DemoLive do
   @moduledoc """
-  `/demo` — the front door to the demo application: who to read it as, the
+  `/demo` - the front door to the demo application: who to read it as, the
   three sides of it, and the control that puts its data back.
 
   The header's Demo app menu points here. The menu opens on hover and lists
   the same three experiences, so this page is what a click gets you rather
-  than a second way to reach the same links — somewhere to read what each side
+  than a second way to reach the same links - somewhere to read what each side
   of the demo is before choosing one.
 
   The experiences come from `DemoWeb.Experiences`, the same list the menu is
   drawn from, so one added there appears here without this module changing.
-  They are named here by kind first — "User pages", "Reviewer pages" — with
+  They are named here by kind first - "User pages", "Reviewer pages" - with
   the name they carry in the pet licensing service beside it, because this
   page explains the demo to the people trying it rather than posing as the
   service's own front door.

@@ -1,6 +1,6 @@
 defmodule DemoWeb.DocsLive.DataModelingLive do
   @moduledoc """
-  `/docs/data-modeling` — the tables `mix form_flow.gen.migration` creates,
+  `/docs/data-modeling` - the tables `mix form_flow.gen.migration` creates,
   drawn as a schema diagram with a column-level ReactFlow node modelled on
   [ReactFlow's database schema node](https://reactflow.dev/ui/components/database-schema-node).
 
@@ -13,8 +13,8 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
   exports `mount`/`mountOverview` and keeps React to itself, so a page
   wanting a node type of its own cannot reach in. This one loads React and
   ReactFlow from jsDelivr instead and registers its own `table` node, which
-  makes it a second standalone demonstration of the same idea — a ReactFlow
-  canvas whose data is defined in Elixir — with no bundler, no npm install,
+  makes it a second standalone demonstration of the same idea - a ReactFlow
+  canvas whose data is defined in Elixir - with no bundler, no npm install,
   and nothing added to `app.js` but the hook below.
 
   It also means the page needs network access to jsDelivr; offline, it says
@@ -34,13 +34,13 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
 
   # Pinned, immutable CDN files. ReactFlow 11 rather than 12
   # (@xyflow/react) because 11 is the last version whose UMD build runs on the
-  # React and ReactDOM globals alone — 12's also wants `react/jsx-runtime` as
+  # React and ReactDOM globals alone - 12's also wants `react/jsx-runtime` as
   # a global, which React ships no UMD for. React 18 for the same reason: 19
   # dropped UMD builds. FormFlow's own editor bundle is @xyflow/react 12 on
   # React 19; it goes through esbuild, so none of this applies to it.
   #
   # The list is what the page's table draws, and the map is what the hook
-  # fetches — derived from it, so a version can only be bumped in one place.
+  # fetches - derived from it, so a version can only be bumped in one place.
   @sources [
     {:react, "react", "18.3.1",
      "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"},
@@ -232,7 +232,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
             Three of the ten tables above cross over, and only those three: a
             node, a relationship between two nodes, and the flow they belong
             to. Form templates, form versions, and every instance table stay in
-            SQL — a <code>form_id</code> in a Neo4j property map is a key into
+            SQL - a <code>form_id</code> in a Neo4j property map is a key into
             Postgres, not a pointer into the graph. Flows are drawn here as
             nodes rather than left out because anything a reference targets has
             to be a node, or the reference cannot be traversed, and both
@@ -240,13 +240,13 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
           </.p>
 
           <.p>
-            A node carries <code>labels</code>, plural — a set — while a
+            A node carries <code>labels</code>, plural - a set - while a
             relationship carries exactly one <code>type</code>. FormFlow's SQL
             already mirrors that: <code>labels text[]</code>
             on the nodes table, a single <code>label varchar</code>
             on the relationships table. Each entity's <code>properties</code>
             column is its Neo4j property map byte for byte, which is why the
-            infrastructure columns are dual-written into it — in the graph there
+            infrastructure columns are dual-written into it - in the graph there
             are no columns to index.
           </.p>
 
@@ -276,8 +276,8 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
           <.p>
             Those three types are FormFlow's structural vocabulary, so user data
             must not collide with them: <code>FormFlow.Data.Templates.Flow.Relationship</code>
-            rejects them as relationship labels today — a changeset error, not a
-            convention — which means no stored data will need cleaning up when
+            rejects them as relationship labels today - a changeset error, not a
+            convention - which means no stored data will need cleaning up when
             the dual-write arrives.
           </.p>
         </.docs_section>
@@ -525,7 +525,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive do
       // The table node: a header naming the Ecto schema and the table behind
       // it, then one row per column. A row's handle is what an edge attaches
       // to, which is why the primary key gets a target and each foreign key a
-      // source — the same arrangement as ReactFlow's own database schema node,
+      // source - the same arrangement as ReactFlow's own database schema node,
       // written with createElement because there is no JSX without a bundler.
       function tableNode({React, ReactFlow}) {
         const h = React.createElement

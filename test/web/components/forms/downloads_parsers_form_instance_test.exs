@@ -110,7 +110,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstanceTest do
              ]
     end
 
-    test "leaves out what has not happened — an unsubmitted form has no submitted line" do
+    test "leaves out what has not happened - an unsubmitted form has no submitted line" do
       details = document(%{}, instance: [status: "in_progress", completed_at: nil]).details
 
       assert {"Status", "In progress"} in details
@@ -159,7 +159,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstanceTest do
       assert entries(document(%{}), "Dogs") == []
     end
 
-    test "a question left blank is kept — a record says what was not answered" do
+    test "a question left blank is kept - a record says what was not answered" do
       assert {:field, "Full name", ""} in entries(document(%{}), nil)
     end
 
@@ -413,7 +413,7 @@ defmodule FormFlow.Web.Components.Forms.Downloads.Parsers.FormInstanceTest do
       assert FormInstance.render_value([true, false]) == "Yes, No"
     end
 
-    test "a map — an answer no question explains — falls back to compact JSON" do
+    test "a map - an answer no question explains - falls back to compact JSON" do
       assert FormInstance.render_value(%{"a" => 1}) == ~s({"a":1})
     end
 

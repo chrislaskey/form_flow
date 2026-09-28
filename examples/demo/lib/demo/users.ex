@@ -17,7 +17,7 @@ defmodule Demo.Users do
   # the admin builds joins the pages by naming it on the flow's edit page.
   @pet_licensing "pet-licensing"
 
-  # In reading order: reading, applying, then the two staff roles — the
+  # In reading order: reading, applying, then the two staff roles - the
   # reviewer works applications, the admin builds the flows. The demo opens
   # as the admin (`default/0`), which is the last of them rather than the
   # first: the list is a description of the cast, not a running order.

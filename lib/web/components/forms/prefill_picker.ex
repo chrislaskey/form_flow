@@ -65,7 +65,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillPicker do
         {render_slot(@actions)}
       </div>
       <p :if={@missing} class="mt-1 text-xs text-zinc-500">
-        This form has no prefill named “{@missing}”.
+        This form has no prefill named "{@missing}".
       </p>
     </div>
     """

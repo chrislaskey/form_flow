@@ -3,8 +3,8 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
   Reopen, asked directly, against both of the rules it needs.
 
   The page's state says whether the page may act at all. It cannot say
-  whether the page may act on *this* position — the position arrives from
-  the client — so the event also has to find the row it names among the ones
+  whether the page may act on *this* position - the position arrives from
+  the client - so the event also has to find the row it names among the ones
   the page drew. Reaching the write is what a failure here looks like: no
   repo is configured in the library's own tests, so a call that gets that
   far raises rather than returning.
@@ -73,14 +73,14 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
       # The hole this closes: unguarded, confirming it would carry a path to
       # `confirm_reopen` that could create an instance at whatever position
       # the client names, on whatever form version that node points at
-      # — anyone's
+      # - anyone's
       socket = socket(%{})
 
       assert {:noreply, ^socket} =
                Show.handle_event("request_reopen", %{"path" => "somebody-elses-node"}, socket)
     end
 
-    test "refuses a row it drew that has no instance — starting is not reopening" do
+    test "refuses a row it drew that has no instance - starting is not reopening" do
       socket = socket(%{rows: [row("available", :available, nil)]})
 
       assert {:noreply, ^socket} =
@@ -143,8 +143,8 @@ defmodule FormFlow.Web.Instances.Flows.ShowTest do
     end
 
     test "a completed row still pending confirmation is what gets as far as the write" do
-      # The one path that passes both rules: it now reaches the repo — the
-      # click's re-read of the flow's status — which is absent here. That the
+      # The one path that passes both rules: it now reaches the repo - the
+      # click's re-read of the flow's status - which is absent here. That the
       # two differ is the rules working.
       socket = socket(%{confirming_reopen_path: ["done"]})
 

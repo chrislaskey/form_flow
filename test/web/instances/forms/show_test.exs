@@ -3,7 +3,7 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
   The page's events, asked directly.
 
   A LiveComponent's `handle_event/3` is reachable whenever the component is
-  mounted, and this one is mounted even when the page drew a refusal — the
+  mounted, and this one is mounted even when the page drew a refusal - the
   host's `on_mount` said no, or the flow's type says this form is another
   perspective's work. Which buttons were rendered gates nothing, so the
   events are tested against the page's state
@@ -92,8 +92,8 @@ defmodule FormFlow.Web.Instances.Forms.ShowTest do
     end
 
     test "the state is what decides it, not the assigns the write would use" do
-      # Same assigns, the state flipped: now it gets as far as the repo — the
-      # click's re-read of the flow's status — which is absent here. That the
+      # Same assigns, the state flipped: now it gets as far as the repo - the
+      # click's re-read of the flow's status - which is absent here. That the
       # two differ is the guard doing its job.
       assigns = %{
         page_state: :completed,

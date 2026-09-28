@@ -840,7 +840,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
             scope,
             :warning,
             :unknown_type,
-            "uses the flow type “#{id}”, which is not offered"
+            ~s(uses the flow type "#{id}", which is not offered)
           )
         ]
 
@@ -945,7 +945,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
             scope,
             :warning,
             :unknown_type,
-            "uses the form type “#{id}”, which is not offered"
+            ~s(uses the form type "#{id}", which is not offered)
           )
         ]
 
@@ -987,7 +987,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
             scope,
             :error,
             :related_form_shared,
-            "is a shared form that points “#{property.name}” at a step of one flow"
+            ~s(is a shared form that points "#{property.name}" at a step of one flow)
           )
         ]
     end
@@ -1033,7 +1033,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
       cond do
         blank?(value) and property.required ->
-          entry.(:error, :property_missing, "needs “#{property.name}” set")
+          entry.(:error, :property_missing, ~s(needs "#{property.name}" set))
 
         blank?(value) ->
           :pass
@@ -1064,7 +1064,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
 
     case Property.parse_flow_position(value) do
       nil ->
-        missing.("points “#{property.name}” at something that is not a form of any flow")
+        missing.(~s(points "#{property.name}" at something that is not a form of any flow))
 
       {flow_id, path} ->
         named_flow_result(property, path, opts.named_flows[flow_id], missing)
@@ -1072,7 +1072,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   defp named_flow_result(property, _path, nil, missing),
-    do: missing.("points “#{property.name}” at a flow that no longer exists")
+    do: missing.(~s(points "#{property.name}" at a flow that no longer exists))
 
   defp named_flow_result(property, path, paths, missing) do
     cond do
@@ -1083,10 +1083,10 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   end
 
   defp no_start_reaches_it(property),
-    do: "points “#{property.name}” at a form no Start reaches in the flow it names"
+    do: ~s(points "#{property.name}" at a form no Start reaches in the flow it names)
 
   defp gone_from_its_flow(property),
-    do: "points “#{property.name}” at a form the flow it names no longer has"
+    do: ~s(points "#{property.name}" at a form the flow it names no longer has)
 
   # The `named_flows:` argument, built from the database: every flow a
   # `:related_form_in_any_flow` value in this tree names, loaded once each.
@@ -1135,8 +1135,8 @@ defmodule FormFlow.Data.Templates.Flows.Health do
   # - the message says which, since the fix differs
   defp related_form_text(property, value, opts) do
     if MapSet.member?(opts.form_paths, split_path(value)),
-      do: "points “#{property.name}” at a form no Start reaches",
-      else: "points “#{property.name}” at a form that is no longer in this flow"
+      do: ~s(points "#{property.name}" at a form no Start reaches),
+      else: ~s(points "#{property.name}" at a form that is no longer in this flow)
   end
 
   defp blank?(value), do: value in [nil, "", []]
@@ -1197,7 +1197,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     %Entry{
       level: level,
       code: code,
-      message: "“#{subject}” #{text}",
+      message: ~s("#{subject}" #{text}),
       subject: subject,
       explanation: Entry.explanation(code),
       fix: Entry.fix(code),
@@ -1207,7 +1207,7 @@ defmodule FormFlow.Data.Templates.Flows.Health do
     }
   end
 
-  defp quote_all(names), do: Enum.map_join(names, ", ", &"“#{&1}”")
+  defp quote_all(names), do: Enum.map_join(names, ", ", &~s("#{&1}"))
 
   # --- reading nodes ---------------------------------------------------------
 

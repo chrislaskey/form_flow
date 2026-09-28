@@ -141,7 +141,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, _html} =
       live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
-    # Add element must not also submit the form — a button with no type is a
+    # Add element must not also submit the form - a button with no type is a
     # submit button, and a click would silently save the draft
     assert has_element?(view, ~s(button[type="button"][phx-click="add_nested_entry"]))
 
@@ -192,11 +192,11 @@ defmodule Demo.FormFlowFormsCrudTest do
              ]
            }
 
-    # Two elements can't share a name — the nested form's key — and every
+    # Two elements can't share a name - the nested form's key - and every
     # element needs a type and a name. The preview follows the builder as
     # faithfully as it follows the JSON, duplicate names included, and two
-    # fields with one name are two inputs with one id — fine in a browser,
-    # an error to LiveViewTest — so it is left out of this step.
+    # fields with one name are two inputs with one id - fine in a browser,
+    # an error to LiveViewTest - so it is left out of this step.
     view |> element(~s(button[phx-click="toggle_auto_update"])) |> render_click()
 
     view
@@ -366,7 +366,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     end
 
     # A group's members are written as its elements, a nested form's as its
-    # template — one level deep, each as the same kind of entry
+    # template - one level deep, each as the same kind of entry
     html =
       submit.(%{
         "0" => %{
@@ -507,7 +507,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert has_element?(view, ~s(input[name="dynamic_form[elements][0][isRequired]"][checked]))
     refute render(view) =~ "Definition (JSON)"
 
-    # And switching back writes the entries into the JSON — the rest of the
+    # And switching back writes the entries into the JSON - the rest of the
     # document, its title here, untouched
     html =
       switch.(%{
@@ -583,7 +583,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     @elements ~s({"elements": [{"type": "text", "name": "dog_name", "title": "Dog's name"}]})
 
     # What the host passes as `build_with_ai`, in front of
-    # `DemoWeb.FormFlowLive.AI.config/0`'s own reading of the environment —
+    # `DemoWeb.FormFlowLive.AI.config/0`'s own reading of the environment -
     # so a test never reaches OpenRouter, and CI, which has no key, sees the
     # unconfigured state the page is built to explain.
     defp configure_ai(answer, models \\ ["anthropic/claude-opus-5"]) do
@@ -639,7 +639,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       html = html <> render(view)
 
-      # The card is unconditional — an admin who read about the feature and
+      # The card is unconditional - an admin who read about the feature and
       # cannot find it is looking at their own developers' decision
       assert html =~ "Build with AI"
       assert html =~ "Build with AI isn&#39;t set up for this application yet."
@@ -688,7 +688,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert has_element?(view, ~s(input[name="dynamic_form[name]"][value="Dogs, renamed"]))
 
       # The answer opens the form builder, which hides the Build with AI
-      # panel — the prompt is kept, not shown, and asking again from the words
+      # panel - the prompt is kept, not shown, and asking again from the words
       # that produced this form costs nothing
       refute has_element?(view, ~s(textarea[name="dynamic_form[build_with_ai_prompt]"]))
 
@@ -737,7 +737,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert html =~ "Build with AI returned an answer that is not valid JSON."
 
       # The editor did not move, and the definition it holds is the one that
-      # was there — read by switching to the editor that shows it, since a
+      # was there - read by switching to the editor that shows it, since a
       # hidden field is not rendered
       assert has_element?(
                view,
@@ -789,7 +789,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       html = build(view)
 
       # Merging two questions into one is a valid definition and an answer
-      # that looks like a success — the names are the only evidence it lost
+      # that looks like a success - the names are the only evidence it lost
       # something
       assert html =~
                "Build with AI added 1 question (full_name) and removed 2 (given_name, family_name)."
@@ -847,14 +847,14 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       refute render(view) =~ "Writing the elements"
 
-      # The answer opens the form builder, so the panel — Build button and all
-      # — comes back only when the card does
+      # The answer opens the form builder, so the panel - Build button and all
+      # - comes back only when the card does
       assert has_element?(view, ~s(input[name="dynamic_form[elements][0][name]"]))
       assert describe_form(view, "A form for a dog licence") =~ ~s(phx-click="build_with_ai")
     end
 
     # A button inside a form submits it, and submitting this one saves the
-    # draft — which is the one thing Build with AI does not do. Nothing in a
+    # draft - which is the one thing Build with AI does not do. Nothing in a
     # LiveView test presses a button the way a browser does, so the attribute
     # is what there is to assert.
     test "neither Build nor Cancel submits the form", %{conn: conn} do
@@ -901,7 +901,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       refute html =~ "This draft has unsaved changes"
 
-      # An edit to the definition is what makes the draft dirty — the prompt
+      # An edit to the definition is what makes the draft dirty - the prompt
       # itself never counts, or the note would be on screen the whole time.
       # The edit is made in the form builder, because that is where a
       # definition is edited; the Build with AI panel holds it as JSON.
@@ -1036,7 +1036,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Update the existing form by adding..."
 
     # A draft with a form in it has something to edit, and asks for that
-    # instead — read on the way in, so the prompt already typed is never
+    # instead - read on the way in, so the prompt already typed is never
     # thrown away by a definition that crossed between blank and not
     _html = switch.(%{"definition_editor" => "json", "definition" => "{}"})
 
@@ -1050,7 +1050,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ "Let&#39;s create a form with fields for..."
 
     # The definition rides along in the hidden JSON field, so it has to parse
-    # — the same refusal Copy gives, for the same reason
+    # - the same refusal Copy gives, for the same reason
     _html = switch.(%{"definition_editor" => "json", "definition" => "{}"})
     html = switch.(%{"definition_editor" => "ai", "definition" => "{nope"})
     assert html =~ "Fix the JSON syntax before switching to Build with AI."
@@ -1192,10 +1192,10 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, view, html} =
       live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit?start=fresh")
 
-    # The dropdown carries what the demo's Config enables — proof the
+    # The dropdown carries what the demo's Config enables - proof the
     # router's config attr reaches the form pages. Nothing saved yet, so it
-    # shows the first type the page offers — the one the form would be
-    # governed by anyway — and none of another type's property fields
+    # shows the first type the page offers - the one the form would be
+    # governed by anyway - and none of another type's property fields
     assert html =~ "Form type"
     assert html =~ "Demo prefill"
 
@@ -1245,7 +1245,7 @@ defmodule Demo.FormFlowFormsCrudTest do
            }
 
     # Show mode's fact sheet renders the stored type as its name, with its
-    # property values — a choice by its label
+    # property values - a choice by its label
     {:ok, view, html} = live(conn, "/demo/admin/forms/#{form.id}")
     assert html =~ "Demo prefill"
     assert has_element?(view, "dt", "Name to prefill")
@@ -1294,7 +1294,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Fresh start"
     assert html =~ "Copy form"
 
-    # A definition already typed in — even once nothing has been published —
+    # A definition already typed in - even once nothing has been published -
     # is something a copy would overwrite, so the chooser stops offering
     {:ok, _} = Forms.update_draft(draft, %{definition: %{"fields" => []}})
     {:ok, _view, html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit")
@@ -1333,7 +1333,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert has_element?(view, "#forms-edit-form-form")
     assert has_element?(view, "button", "Publish")
 
-    # Nothing about the form or draft changed — Fresh start is a no-op
+    # Nothing about the form or draft changed - Fresh start is a no-op
     assert Forms.get_version(draft.id).definition == %{}
   end
 
@@ -1376,7 +1376,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element(~s(button[phx-click="copy_form"]))
     |> render_click()
 
-    # The step keeps its own name — a copy brings content, not identity — so
+    # The step keeps its own name - a copy brings content, not identity - so
     # the node's label and its owned form's name stay one value
     updated = Forms.get(dest.id)
     assert updated.name == "W-2 Details"
@@ -1387,7 +1387,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     assert Forms.get_version(dest_draft.id).definition == %{"fields" => [%{"name" => "ssn"}]}
 
-    # The chooser served its purpose — a copy is content, so it stops offering
+    # The chooser served its purpose - a copy is content, so it stops offering
     html = render(view)
     refute html =~ "Start this form from"
   end
@@ -1445,7 +1445,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       # The confirmation says what goes
       assert has_element?(
                view,
-               ~s|button[phx-click="reuse_form"][data-confirm*="“#{own.name}” is deleted"]|
+               ~s|button[phx-click="reuse_form"][data-confirm*=""#{own.name}" is deleted"]|
              )
 
       view |> element(~s(button[phx-click="reuse_form"])) |> render_click()
@@ -1455,7 +1455,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert Flows.get_node(node.id).form_id == owner.id
       assert Forms.get(own.id) == nil
 
-      # Which now resolves the catalog form — published, so no chooser
+      # Which now resolves the catalog form - published, so no chooser
       {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root.id}/nodes/#{node.id}/form")
       assert html =~ "reusable form"
       assert html =~ "This reusable form is used in the following flows:"
@@ -1735,7 +1735,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {Flows.get(flow.id), Flows.get_node(step_id)}
   end
 
-  # A published catalog form by name — what a step reuses
+  # A published catalog form by name - what a step reuses
   defp published_catalog(name) do
     {:ok, form} = Forms.create(%{name: name})
     [draft] = Forms.list_versions(form.id)
@@ -1751,8 +1751,8 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   describe "a step's name" do
-    # The Name field edits the step — the node's label, which is what the
-    # instance pages show — and the owned form's name follows it. A catalog
+    # The Name field edits the step - the node's label, which is what the
+    # instance pages show - and the owned form's name follows it. A catalog
     # form's own name is edited on its catalog page, not from a step.
     test "from a node, Name is the step's label; saving renames the step and its owned form",
          %{conn: conn} do
@@ -1832,8 +1832,8 @@ defmodule Demo.FormFlowFormsCrudTest do
   end
 
   describe "a step's slug" do
-    # Through a step the Slug field is the step's — the node's, the handle a
-    # host names the step by — and the owned form behind it has none. A
+    # Through a step the Slug field is the step's - the node's, the handle a
+    # host names the step by - and the owned form behind it has none. A
     # catalog form's own slug is edited on its catalog page.
     test "from a node, Slug is the step's; saving writes the node, and the owned form has none",
          %{conn: conn} do
@@ -1911,7 +1911,7 @@ defmodule Demo.FormFlowFormsCrudTest do
                "input[name='dynamic_form[slug]'][value='cat-license_owner-conta']"
              )
 
-      assert html =~ "own slug is “owner-conta”"
+      assert html =~ ~s(own slug is "owner-conta")
 
       view
       |> element("#forms-edit-form-form")
@@ -1972,7 +1972,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     refute html =~ ~s(value="#{owner_form.id}")
 
     # The reused catalog form is offered once, at its step, by the step's
-    # name and slug — not again from the catalog under its own
+    # name and slug - not again from the catalog under its own
     assert length(String.split(html, ~s(value="#{catalog.id}"))) == 2
     assert html =~ "Current flow - Vaccination record (vaccination)"
     refute html =~ "Reusable form - Catalog Form"
@@ -2002,7 +2002,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
   test "from the catalog, Copy offers every form: the catalog first, then each flow's steps",
        %{conn: conn} do
-    # Two catalog forms, and two flows wired Start → step → End — the cat
+    # Two catalog forms, and two flows wired Start → step → End - the cat
     # flow's step reusing a catalog form, which is offered once, from the
     # catalog. Like the step page's own list, only the steps a flow reaches
     # from its Start are offered.
@@ -2104,7 +2104,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     {:ok, view, html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit")
 
-    # Already published, so the main chooser doesn't offer itself — Copy
+    # Already published, so the main chooser doesn't offer itself - Copy
     # existing form isn't gated by that at all. It is the radio's third
     # choice, hidden while the draft opens in the form builder
     refute html =~ "Start this form from"
@@ -2198,7 +2198,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
     edge(root, start_node, intake)
     edge(root, intake, review)
-    # The form is published, so its details — the type among them — are
+    # The form is published, so its details - the type among them - are
     # edited on the details page
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root.id}/nodes/#{review.id}/form/edit")
 
@@ -2226,7 +2226,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
     assert render(view) =~ "Saved."
 
-    # The stored value is the chosen form's path — here one node deep
+    # The stored value is the chosen form's path - here one node deep
     assert Forms.get(review_form.id).properties["form_type_property_values"] == %{
              "name" => "Ada",
              "source" => intake.id
@@ -2245,7 +2245,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     review = build_node(root, ["Form"], "Review", %{form_id: review_form.id})
     edge(root, start_node, review)
 
-    # A value pointing at a node that isn't in the flow — rearranged, or
+    # A value pointing at a node that isn't in the flow - rearranged, or
     # edited by hand; the cause doesn't matter
     {:ok, _form} =
       Forms.update(review_form, %{
@@ -2300,7 +2300,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert render(view) =~ ~r/Save draft\s*<\/button>.*Publish/s
 
     # Save draft and Publish trade the primary style: whichever is the next
-    # thing to do wears it. Clean, that is Publish — publishing takes the
+    # thing to do wears it. Clean, that is Publish - publishing takes the
     # last saved definition, and there is nothing newer to save.
     refute has_element?(view, ~s(button[form="forms-edit-form-form"].btn-primary))
     assert has_element?(view, ~s(button.btn-primary), "Publish")
@@ -2333,14 +2333,14 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
     # Nothing has ever been published, so there's nothing on Show worth
-    # seeing yet — Open lands straight on the node's own (sole) draft,
+    # seeing yet - Open lands straight on the node's own (sole) draft,
     # exactly as it would have landed on a fresh "Save & Continue"
     assert_redirect(
       view,
       "/demo/admin/flows/#{root.id}/nodes/#{node.id}/form/versions/#{draft.id}/edit?mode=edit"
     )
 
-    # And it creates nothing to get there — the same draft as before the click
+    # And it creates nothing to get there - the same draft as before the click
     assert length(Forms.list_versions(node.form_id)) == 1
   end
 
@@ -2356,7 +2356,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_form", %{"node_id" => node.id})
 
-    # `mode=edit` is the one thing that does cross this boundary — it tells
+    # `mode=edit` is the one thing that does cross this boundary - it tells
     # the form page's own breadcrumb to route Root and Parent back to their
     # editors, since that's where this click came from
     assert_redirect(view, "/demo/admin/flows/#{root.id}/nodes/#{node.id}/form?mode=edit")
@@ -2366,7 +2366,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert length(Forms.list_versions(node.form_id)) == 1
   end
 
-  test "the edit page publishes too — directly the first time, dialog after",
+  test "the edit page publishes too - directly the first time, dialog after",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Publishable"})
     [draft] = Forms.list_versions(form.id)
@@ -2416,7 +2416,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert html =~ "Only drafts can be edited"
   end
 
-  test "the first publish skips the policy dialog — there is nobody to migrate",
+  test "the first publish skips the policy dialog - there is nobody to migrate",
        %{conn: conn} do
     {:ok, form} = Forms.create(%{name: "Publishable"})
     [draft] = Forms.list_versions(form.id)
@@ -2554,7 +2554,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     view |> element("button", "Archive version") |> render_click()
     assert_redirect(view, "/demo/admin/forms/#{form.id}/versions/#{v2.id}")
 
-    # The bare URL resolves latest published — v1 again
+    # The bare URL resolves latest published - v1 again
     {:ok, _view, html} = live(conn, "/demo/admin/forms/#{form.id}")
     assert html =~ "v1 · published"
   end
@@ -2604,7 +2604,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     {:ok, _view, html} = live(conn, "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit")
     refute html =~ "Delete draft"
 
-    # A second version — draft or published, doesn't matter which — is what
+    # A second version - draft or published, doesn't matter which - is what
     # brings the button back
     {:ok, _other_draft} = Forms.create_draft(form.id)
 
@@ -2644,7 +2644,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     for path <- [show_path, edit_path] do
       {:ok, view, html} = live(conn, path)
 
-      # Flows / Taxes 2026 / Wages / W-2 Details — the full trail on both pages
+      # Flows / Taxes 2026 / Wages / W-2 Details - the full trail on both pages
       assert html =~ "Taxes 2026", "missing root crumb on #{path}"
       assert html =~ "Wages", "missing subflow crumb on #{path}"
       assert html =~ "W-2 Details", "missing form name on #{path}"
@@ -2759,7 +2759,7 @@ defmodule Demo.FormFlowFormsCrudTest do
              "Wages"
            )
 
-    # Nothing was created to make this possible — this is the node's own
+    # Nothing was created to make this possible - this is the node's own
     # initial draft
     assert length(Forms.list_versions(form_node.form_id)) == 1
   end
@@ -2776,7 +2776,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     assert_redirect(view, "/demo/admin/flows/#{root.id}/nodes/#{node.id}/form")
   end
 
-  # The details — name, slug, description, type — belong to the form template row and
+  # The details - name, slug, description, type - belong to the form template row and
   # change the moment they are saved. The draft editor carries them only
   # until the form is first published; after that they have their own page.
   describe "form details" do
@@ -2821,7 +2821,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       assert has_element?(view, ~s(a[href="/demo/admin/forms/#{form.id}/edit"]), "here")
 
-      # A save writes the definition and nothing else — a name in the
+      # A save writes the definition and nothing else - a name in the
       # request is not a field of this page
       view
       |> element("#forms-edit-form-form")
@@ -3027,8 +3027,8 @@ defmodule Demo.FormFlowFormsCrudTest do
     {Flows.get(flow.id), node}
   end
 
-  # A flow whose one form step points at an existing catalog form — what the
-  # reuse of a catalog form produces — labelled with the form's own name, so
+  # A flow whose one form step points at an existing catalog form - what the
+  # reuse of a catalog form produces - labelled with the form's own name, so
   # that building it renames nothing
   defp flow_with_catalog_form_node(flow_name, catalog) do
     {:ok, flow} = Flows.create(%{name: flow_name})
@@ -3066,7 +3066,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     } do
       {:ok, view, html} = live(conn, path)
 
-      # The placeholder is the label — one control, one word — and the select
+      # The placeholder is the label - one control, one word - and the select
       # stays usable so a form with no prefills says so itself
       assert html =~ ~s(placeholder="Prefill")
       refute has_element?(view, ~s(#forms-edit-prefill-select input[disabled]))
@@ -3142,7 +3142,7 @@ defmodule Demo.FormFlowFormsCrudTest do
 
       {:ok, view, _html} = live(conn, path)
 
-      # Unsaved editor content — the state a reload would discard
+      # Unsaved editor content - the state a reload would discard
       view
       |> element("#forms-edit-form-form")
       |> render_change(%{
@@ -3201,7 +3201,7 @@ defmodule Demo.FormFlowFormsCrudTest do
                "pet_name" => "Rexington"
              }
 
-      # Same name, same URL — no navigation, and the preview shows the new answers
+      # Same name, same URL - no navigation, and the preview shows the new answers
       assert render(view) =~ "Rexington"
     end
 
@@ -3275,7 +3275,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     test "Capture reads the preview's form, not the editor's own", %{conn: conn, path: path} do
       {:ok, view, _html} = live(conn, path)
 
-      # The id the hook serialises is the form the preview rendered — the page
+      # The id the hook serialises is the form the preview rendered - the page
       # draws two, and the editor's is the definition rather than answers
       assert has_element?(view, "form#forms-edit-preview-r0-form-form")
 
@@ -3346,7 +3346,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       {:ok, view, _html} = live(conn, path)
 
       # Nothing casts them: an answer this version has no question for, and
-      # one the form would refuse, are both kept — a form is tested with bad
+      # one the form would refuse, are both kept - a form is tested with bad
       # answers as often as good ones
       view
       |> element("#forms-edit-prefill-actions-capture")
@@ -3411,7 +3411,7 @@ defmodule Demo.FormFlowFormsCrudTest do
       assert render(view) =~ "Rex"
     end
 
-    test "choosing one goes straight there — nothing here is unsaved", %{
+    test "choosing one goes straight there - nothing here is unsaved", %{
       conn: conn,
       form: form,
       path: path
@@ -3464,7 +3464,7 @@ defmodule Demo.FormFlowFormsCrudTest do
     do: "/demo/admin/forms/#{form.id}/versions/#{draft.id}/edit"
 
   # Root flow → subflow ("Wages") → form node ("W-2 Details"), reached by
-  # drill-in — the nested case a breadcrumb has to walk back through
+  # drill-in - the nested case a breadcrumb has to walk back through
   defp nested_flow_with_form_node do
     {:ok, root} = Flows.create(%{name: "Taxes 2026", label: "subflows"})
 

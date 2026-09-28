@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.Form.PrefillTest do
 
   alias FormFlow.Data.Templates.Form.Prefill
 
-  test "requires a name — it is the key the set is stored under" do
+  test "requires a name - it is the key the set is stored under" do
     refute Prefill.changeset(%Prefill{}, %{data: %{"wages" => "1000"}}).valid?
 
     changeset = Prefill.changeset(%Prefill{}, %{name: "Happy path"})
@@ -33,7 +33,7 @@ defmodule FormFlow.Data.Templates.Form.PrefillTest do
     assert changeset.changes.user_id == "admin"
   end
 
-  test "timestamps are not castable — the context stamps them as it writes" do
+  test "timestamps are not castable - the context stamps them as it writes" do
     changeset =
       Prefill.changeset(%Prefill{}, %{name: "Happy path", inserted_at: DateTime.utc_now()})
 

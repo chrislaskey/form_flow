@@ -4,8 +4,8 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
   which hardcoded perspective (reviewer, dog owner, cat owner, docs reader)
   the demo is viewed from.
 
-  Each direction is a `switcher/1` clause, rendered twice — in a mock header
-  and again in page content — since the real component lives in both places.
+  Each direction is a `switcher/1` clause, rendered twice - in a mock header
+  and again in page content - since the real component lives in both places.
   Selecting a user here only updates the mock; the real control sets a
   session cookie and reloads.
 
@@ -79,7 +79,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     },
     %{
       id: :viewing_as,
-      title: "2 · “Viewing as” label",
+      title: ~s(2 · "Viewing as" label),
       note: "The label carries the meaning, so the value itself can stay quiet."
     },
     %{
@@ -110,7 +110,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
     %{
       id: :split_button,
       title: "8 · Split button",
-      note: "Identity on the left, action on the right; “Switch” is a verb you can see."
+      note: ~s(Identity on the left, action on the right; "Switch" is a verb you can see.)
     },
     %{
       id: :banner_strip,
@@ -143,17 +143,17 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
       id: :dark_avatar_switch,
       title: "14 · Dark avatar + switch",
       note:
-        "One dark initials circle with a gradient chevron badge, then “Name · Switch”. #6 and #10 combined."
+        ~s(One dark initials circle with a gradient chevron badge, then "Name · Switch". #6 and #10 combined.)
     },
     %{
       id: :gradient_ring_switch,
       title: "15 · Gradient ring + switch",
-      note: "#5 without the eye: “Name · Switch” inside the hairline ring, chevron on the right."
+      note: ~s(#5 without the eye: "Name · Switch" inside the hairline ring, chevron on the right.)
     },
     %{
       id: :dark_avatar_stacked,
       title: "16 · Dark avatar, stacked label",
-      note: "#14 with #2's “Viewing as” label over the name; the badge still carries the chevron."
+      note: ~s(#14 with #2's "Viewing as" label over the name; the badge still carries the chevron.)
     },
     %{
       id: :gradient_ring_avatar,
@@ -165,7 +165,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
       id: :dark_avatar_pill,
       title: "18 · Dark avatar in a pill",
       note:
-        "#1's bordered pill carrying the dark avatar and “Name · Switch”; quieter than the gradient ring."
+        ~s(#1's bordered pill carrying the dark avatar and "Name · Switch"; quieter than the gradient ring.)
     },
     %{
       id: :dark_avatar_chevron_right,
@@ -596,7 +596,7 @@ defmodule DemoWeb.ExplorationsLive.UserSwitchers do
       <.icon name="hero-eye" class="size-4 text-indigo-600" />
       <span>
         You're viewing the demo as <span class="font-semibold">{@current.name}</span>
-        <span class="text-indigo-900/60">— {String.downcase(@current.blurb)}.</span>
+        <span class="text-indigo-900/60">- {String.downcase(@current.blurb)}.</span>
       </span>
       <.dropdown id={@id} align={:end} open={@open} class="ml-auto">
         <:trigger>

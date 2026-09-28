@@ -9,8 +9,8 @@ defmodule Demo.Reset do
 
   ## Why the tables are emptied rather than the database recreated
 
-  SQLite would allow the stronger thing — the file is the database, and the
-  connection pool is the only thing holding it — but recreating it means
+  SQLite would allow the stronger thing - the file is the database, and the
+  connection pool is the only thing holding it - but recreating it means
   stopping the repo, deleting the file, starting the repo, and migrating, which
   drops every in-flight query and takes down anyone mid-form. Emptying the
   tables in one transaction leaves the pool alone and is the faster of the two
@@ -39,7 +39,7 @@ defmodule Demo.Reset do
   @doc """
   Empties FormFlow's tables and reloads the snapshot, in one transaction.
 
-  Returns `{:ok, %{deleted: integer, loaded: integer}}` — rows cleared, and
+  Returns `{:ok, %{deleted: integer, loaded: integer}}` - rows cleared, and
   rows put back.
   """
   def run do
@@ -47,7 +47,7 @@ defmodule Demo.Reset do
       Repo.transaction(fn ->
         # Checked at commit instead of per statement, so the tables can be
         # emptied and refilled in any order. The snapshot is dumped
-        # parent-first, which makes this a formality — but a flow can be
+        # parent-first, which makes this a formality - but a flow can be
         # copied from one built after it, and then it is not.
         Repo.query!("PRAGMA defer_foreign_keys = ON", [], log: false)
 
@@ -76,7 +76,7 @@ defmodule Demo.Reset do
 
   @doc """
   Every FormFlow table in the database, asked of the database rather than
-  listed here — a table added by a later version of the library is emptied
+  listed here - a table added by a later version of the library is emptied
   without this module hearing about it.
   """
   def tables do

@@ -157,8 +157,8 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
 
   @doc "The sentence a refused `save_details/4` shows."
   def save_details_error(form, {:related_form_shared, property}) do
-    "“#{form.name}” is shared by every flow that uses it, so it can't point " <>
-      "“#{property.name}” at a step of one flow. Copy the form into this flow instead - " <>
+    ~s("#{form.name}" is shared by every flow that uses it, so it can't point ) <>
+      ~s("#{property.name}" at a step of one flow. Copy the form into this flow instead - ) <>
       "the Copy form choice on the step's page - or clear the choice."
   end
 
@@ -222,14 +222,15 @@ defmodule FormFlow.Web.Templates.Forms.Shared do
 
   @doc "A catalog form reused at a step keeps its own slug, and the field is not it."
   def slug_description(%{owner_flow_id: nil, slug: slug}, %{}) when is_binary(slug) do
-    "The catalog form's own slug is “#{slug}”; change it on its catalog page."
+    # {slug}"; change it on its catalog page."
+    "The catalog form's own slug is "
   end
 
   def slug_description(_form, _node), do: nil
 
   @doc "The step's name is this flow's; a catalog form reused here is not renamed from a step."
   def name_description(%{owner_flow_id: nil} = form, %{}) do
-    "This step reuses the catalog form “#{form.name}”. Renaming the step here does not " <>
+    ~s(This step reuses the catalog form "#{form.name}". Renaming the step here does not ) <>
       "rename the catalog form; do that on its catalog page."
   end
 

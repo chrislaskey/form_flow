@@ -61,7 +61,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
   end
 
   test "takes subflow_id from the properties copy when the column is not given" do
-    # The editor round-trips properties untouched — the reference must survive
+    # The editor round-trips properties untouched - the reference must survive
     subflow_id = Ecto.UUID.generate()
 
     changeset =
@@ -107,7 +107,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
   end
 
   test "takes form_id from the properties copy when the column is not given" do
-    # The editor round-trips properties untouched — the reference must survive
+    # The editor round-trips properties untouched - the reference must survive
     form_id = Ecto.UUID.generate()
 
     changeset =
@@ -177,7 +177,7 @@ defmodule FormFlow.Data.Templates.Flow.NodeTest do
            }
   end
 
-  test "a slug in properties never becomes the column — the canvas cannot write one" do
+  test "a slug in properties never becomes the column - the canvas cannot write one" do
     # Unlike form_id and subflow_id, which the editor must be able to keep
     changeset =
       Node.changeset(%Node{}, %{flow_id: @flow_id, properties: %{"slug" => "stale"}})

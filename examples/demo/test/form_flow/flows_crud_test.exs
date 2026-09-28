@@ -7,8 +7,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
   read-only, subflows drill in at `/demo/admin/flows/:root/nodes/:node_id`, and
   delete removes everything a flow owns.
 
-  The editor's React side can't run here — LiveViewTest has no JavaScript
-  engine — so edits are driven by pushing the events the hook would push.
+  The editor's React side can't run here - LiveViewTest has no JavaScript
+  engine - so edits are driven by pushing the events the hook would push.
   """
 
   use DemoWeb.ConnCase
@@ -167,7 +167,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
              "Flow Overview"
            )
 
-    # Every entry as a row — where it is — the first open one selected, and
+    # Every entry as a row - where it is - the first open one selected, and
     # its detail: the message, why, the check, what to do, where Open goes
     assert has_element?(view, "#{entries} button[aria-current=true]", "Enrollment")
     assert has_element?(view, "#{entries} button[aria-current=false]", "End")
@@ -194,7 +194,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element(~s(#{entries} button[phx-value-entry="#{key}"])) |> render_click()
 
     assert_patch(view, "#{page}?entry=#{key}")
-    assert has_element?(view, "#{detail} h3", "“End” is not connected from Start")
+    assert has_element?(view, "#{detail} h3", ~s("End" is not connected from Start))
     assert has_element?(view, "#{detail} .badge", "warning")
 
     assert has_element?(
@@ -261,7 +261,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     badge = ~s(a[href="#{page}"])
 
     # Wired through a form step from the edit page: the save creates the
-    # step's form as a draft, which users cannot start — one error — and the
+    # step's form as a draft, which users cannot start - one error - and the
     # page's own badge (through the navigate event) reads the fresh status
     flow = Flows.get(id)
     start = Enum.find(flow.nodes, &("Start" in &1.labels))
@@ -313,7 +313,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert_redirect(view, page)
 
     # Publishing the step's form from its page: healthy, and the show page's
-    # badge — the root's, from a drill-in — says so
+    # badge - the root's, from a drill-in - says so
     node = Enum.find(Flows.get(id).nodes, & &1.form_id)
     [draft] = Forms.list_versions(node.form_id)
     form_page = "/demo/admin/flows/#{id}/nodes/#{node.id}/form/versions/#{draft.id}"
@@ -329,7 +329,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, "#flows-health-summary", "0 errors")
     assert render(view) =~ "Nothing to report"
 
-    # A save that bypasses the pages leaves the badge behind — until the
+    # A save that bypasses the pages leaves the badge behind - until the
     # health page is opened, which writes the cache back
     flow = Flows.get(id)
 
@@ -533,7 +533,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     save_subflow_node(conn, root_id)
     [node] = Flows.get(root_id).nodes
 
-    # The field belongs to the type the subflow amounts to — a fresh one
+    # The field belongs to the type the subflow amounts to - a fresh one
     # never chose, so the first type's, shown as selected
     {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert html =~ "Perspectives"
@@ -546,7 +546,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
       "dynamic_form" => %{"flow_type" => "wizard_in_order", "perspectives" => ["reviewer"]}
     })
 
-    # Nothing persists until Save — a pending choice is an unsaved change
+    # Nothing persists until Save - a pending choice is an unsaved change
     refute Map.has_key?(Flows.get(node.subflow_id).properties, "perspectives")
     assert has_element?(view, "button", "Discard changes")
 
@@ -622,7 +622,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert Flows.get(node.subflow_id).properties["flow_type"] == nil
   end
 
-  test "a complex flow has no perspectives of its own — its subflows do", %{conn: conn} do
+  test "a complex flow has no perspectives of its own - its subflows do", %{conn: conn} do
     root_id = create_flow(conn, "Licensing", "subflows")
 
     {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
@@ -639,7 +639,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-flow-form-form")
     |> render_change(%{"dynamic_form" => %{"name" => "Better name"}})
 
-    # Nothing persists until Save — a pending name is an unsaved change,
+    # Nothing persists until Save - a pending name is an unsaved change,
     # riding the same guard as canvas edits
     assert Flows.get(id).name != "Better name"
     assert has_element?(view, "button", "Discard changes")
@@ -656,7 +656,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
     # The dropdown carries the FormFlow.Config defaults plus the option the
-    # demo's types add — proof the router's flow_types attr reaches the
+    # demo's types add - proof the router's flow_types attr reaches the
     # page
     assert html =~ "Flow type"
     assert html =~ "Wizard (any order)"
@@ -667,7 +667,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-flow-form-form")
     |> render_change(%{"dynamic_form" => %{"flow_type" => "wizard_any_order"}})
 
-    # Nothing persists until Save — a pending type is an unsaved change
+    # Nothing persists until Save - a pending type is an unsaved change
     assert Map.delete(Flows.get(id).properties, "_health_metadata") == %{"slug" => "untitled-fl"}
     assert has_element?(view, "button", "Discard changes")
 
@@ -703,7 +703,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
-    # Who the flow is, then what it is — each a DynamicForm group the page
+    # Who the flow is, then what it is - each a DynamicForm group the page
     # lays out three to a row
     assert has_element?(
              view,
@@ -873,7 +873,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    # One stored copy — the form template row's properties; the node keeps none
+    # One stored copy - the form template row's properties; the node keeps none
     [saved_node] = Flows.get(id).nodes
 
     assert Forms.get(node.form_id).properties == %{"form_type" => "review"}
@@ -886,7 +886,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert view |> element("#flows-show-editor") |> render() =~ "review"
 
     # The canvas offers the configured form types, the library's and the
-    # demo's — and a node reported without a type clears it, which is what an
+    # demo's - and a node reported without a type clears it, which is what an
     # unset type is resolved from anyway
     {:ok, view, html} = live(conn, "/demo/admin/flows/#{id}/edit")
     assert html =~ "Demo prefill"
@@ -919,7 +919,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    # One stored copy — the embedded flow's properties; the node keeps none
+    # One stored copy - the embedded flow's properties; the node keeps none
     [saved_node] = Flows.get(root_id).nodes
 
     assert Flows.get(node.subflow_id).properties == %{"flow_type" => "wizard_any_order"}
@@ -968,8 +968,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
     view |> element("button", "Save") |> render_click()
     assert render(view) =~ "Saved."
 
-    # The rename reached the entity the node embeds — the same name its own
-    # pages edit — and loading projects it back into the node's title
+    # The rename reached the entity the node embeds - the same name its own
+    # pages edit - and loading projects it back into the node's title
     assert Flows.get(node.subflow_id).name == "Collect documents"
 
     {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}")
@@ -995,7 +995,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     [node] = Flows.get(root_id).nodes
     assert get_in(node.properties, ["data", "label"]) == "Application"
 
-    # Reloading the parent's canvas shows the step's own label — nothing is
+    # Reloading the parent's canvas shows the step's own label - nothing is
     # projected over it from the subflow
     {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
     assert html =~ "Application"
@@ -1089,7 +1089,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert view |> element("#flows-show-editor") |> render() =~ ~s(data-editable="false")
 
     # Drill-in edit works on the same node URL, with a breadcrumb that stays
-    # in edit mode — backing out lands on the parent's editor. Edit-page
+    # in edit mode - backing out lands on the parent's editor. Edit-page
     # breadcrumbs are buttons, not plain links, so unsaved changes can gate
     # them the same way Open is gated.
     {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
@@ -1170,7 +1170,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     [y] = Enum.filter(Flows.get(middle.id).nodes, &(&1.properties["type"] == "subflow"))
 
     # The page shows Leaf; deleting removes node y from Middle, so the
-    # destination is Middle's editor — addressed by the node embedding Middle
+    # destination is Middle's editor - addressed by the node embedding Middle
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root.id}/nodes/#{y.id}")
 
     view |> element(~s(button[aria-label="Delete"])) |> render_click()
@@ -1228,7 +1228,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
 
-    # Added but never saved — Flows.get_node/1 can't find it under its
+    # Added but never saved - Flows.get_node/1 can't find it under its
     # editor-temporary id yet
     view
     |> element("#flows-edit-editor")
@@ -1256,7 +1256,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert {:ok, _} = Ecto.UUID.cast(node.id)
     assert node.subflow_id != nil
 
-    # Not just "back to the root" — the specific node the temp id resolved to
+    # Not just "back to the root" - the specific node the temp id resolved to
     assert_redirect(view, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
   end
 
@@ -1289,7 +1289,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     |> element("#flows-edit-editor")
     |> render_hook("form_flow:open_subflow", %{"node_id" => node.id})
 
-    # Still on the edit page — no redirect fired — with the prompt showing
+    # Still on the edit page - no redirect fired - with the prompt showing
     assert render(view) =~ "unsaved changes"
     assert has_element?(view, "button", "Save & Continue")
   end
@@ -1365,7 +1365,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "View") |> render_click()
 
-    # Still on the edit page — no redirect fired — with the prompt showing
+    # Still on the edit page - no redirect fired - with the prompt showing
     assert render(view) =~ "unsaved changes"
 
     view |> element("button", "Save & Continue") |> render_click()
@@ -1420,7 +1420,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     assert_redirect(view, "/demo/admin/flows/#{id}/edit")
 
-    # Nothing was persisted — the edit never went through save
+    # Nothing was persisted - the edit never went through save
     assert length(Flows.get(id).nodes) == 2
   end
 
@@ -1463,7 +1463,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     view |> element("button", "Flows") |> render_click()
 
-    # Still on the edit page — no redirect fired — with the prompt showing
+    # Still on the edit page - no redirect fired - with the prompt showing
     assert render(view) =~ "unsaved changes"
 
     view |> element("button", "Save & Continue") |> render_click()
@@ -1536,7 +1536,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     # Left blank, the slug is the default the dialog showed
     assert copy.slug == "dog-license-2"
 
-    # The copy is whole — its own step on its own form, with provenance —
+    # The copy is whole - its own step on its own form, with provenance -
     # and its health is cached, as for any saved flow
     assert [step] = copy.nodes
     assert step.id != source_step.id
@@ -1646,8 +1646,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{id}/edit")
 
-    # The pasted node as the canvas reports it: the source's snapshot — its
-    # stale form_id copy included — under a temp id, with the marker in data
+    # The pasted node as the canvas reports it: the source's snapshot - its
+    # stale form_id copy included - under a temp id, with the marker in data
     pasted = %{
       "id" => "2",
       "type" => "step",
@@ -1780,7 +1780,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert [inner] = Map.values(tree["subflows"])
     assert node_labels(inner["nodes"]) == ["End", "Intake", "Start"]
 
-    # Neither level's unwired step is drawn here — the drill-down is where
+    # Neither level's unwired step is drawn here - the drill-down is where
     # they are seen and fixed, and both are still on it
     refute html =~ "Abandoned idea"
     refute html =~ "Draft form"
@@ -2231,7 +2231,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     assert has_element?(view, ~s(a[href="#{overview}"]), "Overview")
 
     # The edit page leaves through its own "navigate" event, so unsaved
-    # changes prompt first — a button carrying the destination, not a link
+    # changes prompt first - a button carrying the destination, not a link
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{node.id}/edit")
     assert has_element?(view, ~s(button[phx-value-to="#{overview}"]), "Overview")
 
@@ -2305,7 +2305,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
   # A saved subflow node the way the editor reports it: the stored properties
   # (subflow_id reference included) round-trip through the canvas, with `data`
-  # merged over the defaults — e.g. a picked flow_type
+  # merged over the defaults - e.g. a picked flow_type
   # Adds one form step to a forms flow and saves, creating its form
   defp save_form_node(conn, flow_id) do
     {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow_id}/edit")
@@ -2347,7 +2347,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
     }
   end
 
-  # Reports a moved node without saving — the canvas ends up with unsaved
+  # Reports a moved node without saving - the canvas ends up with unsaved
   # changes relative to whatever was last persisted
   defp move_subflow_node(view, node_id) do
     view
@@ -2366,7 +2366,7 @@ defmodule Demo.FormFlowFlowsCrudTest do
   end
 
   # Reports a "forms" flow's starter nodes collapsed down to one renamed step
-  # — an unsaved change relative to whatever was last persisted
+  # - an unsaved change relative to whatever was last persisted
   defp edit_step(view) do
     view
     |> element("#flows-edit-editor")

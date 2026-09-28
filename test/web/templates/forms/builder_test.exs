@@ -90,7 +90,7 @@ defmodule FormFlow.Web.Templates.Forms.BuilderTest do
     end
 
     test "writes only the properties that apply to the element's type" do
-      # A hidden field keeps the value it held before the type changed — the
+      # A hidden field keeps the value it held before the type changed - the
       # choices typed for a dropdown must not follow the element into text
       entry = %{type: "text", name: "email", choices: "a\nb", rateMin: 1, html: "<b>x</b>"}
 

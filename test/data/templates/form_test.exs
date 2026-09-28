@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.FormTest do
 
   alias FormFlow.Data.Templates.Form
 
-  test "requires a name — a form template row is an identity, and the name is it" do
+  test "requires a name - a form template row is an identity, and the name is it" do
     refute Form.changeset(%Form{}).valid?
 
     changeset = Form.changeset(%Form{}, %{name: "W-2 Details"})
@@ -27,7 +27,7 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.owner_flow_id == owner_id
   end
 
-  test "casts properties — the form-level domain data, like form_type" do
+  test "casts properties - the form-level domain data, like form_type" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", properties: %{"form_type" => "prefill"}})
 
@@ -85,7 +85,7 @@ defmodule FormFlow.Data.Templates.FormTest do
     assert changeset.changes.properties == %{}
   end
 
-  test "copied_from_form_id is not castable — only copy/2 sets it" do
+  test "copied_from_form_id is not castable - only copy/2 sets it" do
     changeset =
       Form.changeset(%Form{}, %{name: "W-2 Details", copied_from_form_id: Ecto.UUID.generate()})
 
@@ -93,7 +93,7 @@ defmodule FormFlow.Data.Templates.FormTest do
     refute Map.has_key?(changeset.changes, :copied_from_form_id)
   end
 
-  test "prefills are not castable — they move only through prefills_changeset/2" do
+  test "prefills are not castable - they move only through prefills_changeset/2" do
     changeset =
       Form.changeset(%Form{}, %{
         name: "W-2 Details",

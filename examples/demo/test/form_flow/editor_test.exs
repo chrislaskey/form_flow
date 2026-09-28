@@ -3,7 +3,7 @@ defmodule Demo.FormFlowEditorTest do
   Covers the two halves of how the flow editor reaches the browser: the route
   that serves the prebuilt bundle, and the hook container that fetches it.
 
-  What can't be covered here is React itself — LiveViewTest has no JavaScript
+  What can't be covered here is React itself - LiveViewTest has no JavaScript
   engine, so mounting the editor is a manual check at
   http://localhost:4001/flows/new.
   """
@@ -82,7 +82,7 @@ defmodule Demo.FormFlowEditorTest do
         |> hd()
         |> Jason.decode!()
 
-      # The universal seed: a Start and End that cannot be deleted, no middle node, no edges —
+      # The universal seed: a Start and End that cannot be deleted, no middle node, no edges -
       # the user connects the dots. End is inserted first (see
       # Flows.starter_nodes/0) so a node someone adds lands to the right of
       # Start rather than End.

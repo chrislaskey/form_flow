@@ -4,13 +4,13 @@ defmodule DemoWeb.FormFlowLive.Prefill do
   `DemoWeb.FormFlowLive.Config` offers: a form whose `name` question starts
   filled in.
 
-  What it starts filled in *with* comes from the type's properties — declared
+  What it starts filled in *with* comes from the type's properties - declared
   here as `FormFlow.Config.Property` structs, entered by an admin on the form
   edit page under the type dropdown, and read back at render through the
   context as the type's property values. A real host would look the name up
   in its own database; the properties stand in for that. The salutation shows
   a choice property alongside the text one, and the source a related-form
-  property — a dropdown of the forms earlier in the flow, which a future
+  property - a dropdown of the forms earlier in the flow, which a future
   iteration reads from at render.
 
   It shows the shape every prefill takes: load the host's data, then merge

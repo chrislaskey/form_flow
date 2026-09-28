@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowFlowStatusTest do
   @moduledoc """
-  A flow's status — `draft`, `pre_release`, `open`, `winding_down`,
-  `read_only`, `archived` — and the event log that records how it got there
+  A flow's status - `draft`, `pre_release`, `open`, `winding_down`,
+  `read_only`, `archived` - and the event log that records how it got there
   (`FormFlow.Data.Templates.Flow.Event`), against a real database: the data
   layer's writes and refusals, and what each status does on the user-facing
   pages and the admin pages.
@@ -46,7 +46,7 @@ defmodule Demo.FormFlowFlowStatusTest do
   end
 
   # The same router with `pre_release_user_ids` as a function of the page's
-  # context — a role, decided per viewer — rather than a list
+  # context - a role, decided per viewer - rather than a list
   defmodule RolePage do
     use Phoenix.LiveView
 
@@ -121,7 +121,7 @@ defmodule Demo.FormFlowFlowStatusTest do
                }
              ] = events(winding)
 
-      # Any status to any other — back to draft included — and an atom works
+      # Any status to any other - back to draft included - and an atom works
       {:ok, drafted} = Flows.update_status(winding, :draft, [])
       assert drafted.status == "draft"
       assert length(events(drafted)) == 4
@@ -136,7 +136,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert {:error, :unknown_status} = Flows.update_status(flow, "closed", [])
     end
 
-    test "the data layer does what it is asked, whatever the status — the pages are the gate" do
+    test "the data layer does what it is asked, whatever the status - the pages are the gate" do
       {:ok, draft} = Flows.create(%{name: "Draft"})
       {:ok, archived} = Flows.create(%{name: "Archived", status: "archived"})
 
@@ -474,7 +474,7 @@ defmodule Demo.FormFlowFlowStatusTest do
 
       {:ok, _} = Flows.update_status(flow, "read_only", [])
 
-      # Listed, as View — there is nothing to continue
+      # Listed, as View - there is nothing to continue
       {:ok, view, html} = live(conn, "/demo/pet-licenses/applications")
       assert html =~ instance.id
 
@@ -541,7 +541,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       assert html =~ "Not offered to users"
       assert html =~ "Nobody has started this flow yet."
 
-      # Picking another redraws the summary and counts as an unsaved change —
+      # Picking another redraws the summary and counts as an unsaved change -
       # the choice reaches the page through send_update, so read it again
       view
       |> element("#flows-edit-flow-form-form")
@@ -624,7 +624,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{flow.id}")
 
       html = view |> element("button[phx-click=request_status]") |> render_click()
-      assert html =~ "Change the status of “Dog License”"
+      assert html =~ ~s(Change the status of "Dog License")
       assert html =~ "Not offered to users"
       assert has_element?(view, "option[value=read_only]", "Read-only")
       assert has_element?(view, "option[value=pre_release]", "Pre-release")
@@ -668,7 +668,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, view, _html} = live(conn, "/demo/admin/flows")
 
       html = view |> element("#{menu} button", "Change status") |> render_click()
-      assert html =~ "Change the status of “Dog License”"
+      assert html =~ ~s(Change the status of "Dog License")
       assert html =~ "Offered to users"
 
       view
@@ -852,7 +852,7 @@ defmodule Demo.FormFlowFlowStatusTest do
       {:ok, view, _html} = live(conn, "/demo/admin/flows/#{owned.id}/history")
       assert has_element?(view, "h2", "Dog License")
 
-      # A row written past the data layer — a seed, a host — has no log, and
+      # A row written past the data layer - a seed, a host - has no log, and
       # the page says so rather than drawing an empty list
       {:ok, seeded} = FormFlowRepo.insert(Flow.changeset(%Flow{}, %{name: "Seeded"}))
       {:ok, _view, html} = live(conn, "/demo/admin/flows/#{seeded.id}/history")

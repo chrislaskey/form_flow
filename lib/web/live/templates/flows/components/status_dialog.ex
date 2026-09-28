@@ -51,7 +51,7 @@ defmodule FormFlow.Web.Templates.Flows.Components.StatusDialog do
   def status_dialog(assigns) do
     ~H"""
     <Dialog.dialog width={:medium}>
-      <p class="mb-1 font-semibold text-zinc-900">Change the status of “{@flow.name}”</p>
+      <p class="mb-1 font-semibold text-zinc-900">Change the status of "{@flow.name}"</p>
       <p class="mb-3 text-sm text-zinc-500">
         What users may do with this flow. Any status can move to any other; every
         change is logged with who made it.

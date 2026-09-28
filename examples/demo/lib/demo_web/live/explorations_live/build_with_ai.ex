@@ -6,14 +6,14 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   The panel itself is built (`FormFlow.Web.Templates.Forms.Edit`): a heading,
   a line saying what it does, and a prompt. What is not decided is what it
   looks like for the twenty to sixty seconds between pressing Build and a
-  form appearing — long enough that a disabled button is not an answer, and
+  form appearing - long enough that a disabled button is not an answer, and
   the one part of the feature every user sees every time.
 
   Each direction is one `panel/1` clause, drawn in the waiting state with the
   same hardcoded prompt, so they can be read side by side. `reference/1`
   draws the two settled states for comparison: ready (with the model select a
   host offering several models gets) and not configured. Nothing here is
-  wired to the real page, and none of it animates anything real — the CSS in
+  wired to the real page, and none of it animates anything real - the CSS in
   `styles/1` is scoped to this page.
 
   `steps_variations/0` and `steps_panel/1` are the second pass, and **6f is
@@ -21,12 +21,12 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   white panel, with direction 12's moving gradient border around the steps
   box rather than the panel, **each step carrying its own elapsed time**, and
   Cancel as the only thing under it. The total elapsed time went away with
-  the choice — the running step's clock is that number, and a panel that
+  the choice - the running step's clock is that number, and a panel that
   showed both showed it twice.
 
   The directions differ along three axes worth naming when picking one:
 
-    * **Where the motion is** — in the button, in the panel, in the preview
+    * **Where the motion is** - in the button, in the panel, in the preview
       column, or at the top of the page.
     * **Whether the prompt stays readable.** An admin re-reads what they
       asked for while they wait; a skeleton or an overlay takes that away.
@@ -68,7 +68,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :elapsed_timer,
       title: "5. Elapsed time, and a way out",
-      note: "Says how long it has been and offers to stop — the honest version."
+      note: "Says how long it has been and offers to stop - the honest version."
     },
     %{
       id: :status_steps,
@@ -88,7 +88,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :ghost_elements,
       title: "9. Elements arriving one by one",
-      note: "Looks like streaming. Nothing streams — this is a loop on a timer."
+      note: "Looks like streaming. Nothing streams - this is a loop on a timer."
     },
     %{
       id: :prompt_sweep,
@@ -113,7 +113,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :progress_ring,
       title: "14. A ring around the mark",
-      note: "The same idea, closed — reads calmer than a bar."
+      note: "The same idea, closed - reads calmer than a bar."
     },
     %{
       id: :equalizer_bars,
@@ -133,7 +133,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :quiet_lock,
       title: "18. Quiet: dim everything, say one word",
-      note: "The opposite direction — almost no motion at all."
+      note: "The opposite direction - almost no motion at all."
     },
     %{
       id: :preview_takeover,
@@ -173,13 +173,13 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
       <div class="space-y-10">
         <header class="space-y-2">
           <Shared.back_link />
-          <h1 class="text-2xl font-semibold">Build with AI — waiting states</h1>
+          <h1 class="text-2xl font-semibold">Build with AI - waiting states</h1>
           <p class="text-base-content/70">
             The form editor's fourth panel in the twenty to sixty seconds between
             pressing Build and a form appearing. Every direction shows the same
             hardcoded prompt, so they differ only in how the wait is drawn.
             Nothing here is wired up, and nothing here knows how far along the
-            request is — there is no percentage to report.
+            request is - there is no percentage to report.
           </p>
         </header>
 
@@ -195,7 +195,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
               <.reference variant={:idle} />
             </div>
             <div class="space-y-2">
-              <p class="text-sm text-gray-500">Not configured — no prompt, no button</p>
+              <p class="text-sm text-gray-500">Not configured - no prompt, no button</p>
               <.reference variant={:not_configured} />
             </div>
           </div>
@@ -233,7 +233,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
             <h2 class="text-xl font-semibold">Second pass: the steps, varied</h2>
             <p class="text-base-content/70">
               Direction 6 on an ordinary white panel, with direction 12's moving
-              border around the steps rather than around the whole thing — the
+              border around the steps rather than around the whole thing - the
               panel is not what is working, the steps are. 6f is the pick: each
               step carries its own clock, which is why there is no total in the
               corner, and Cancel is the only thing under the box. Then the same
@@ -271,8 +271,8 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         <label class="text-sm">
           <span class="mb-1 block text-gray-600">Model</span>
           <select class="select select-sm w-64">
-            <option>Claude Opus 5 — the careful one</option>
-            <option>Claude Sonnet 5 — the quick one</option>
+            <option>Claude Opus 5 - the careful one</option>
+            <option>Claude Sonnet 5 - the quick one</option>
           </select>
         </label>
         <span class="btn btn-primary">Build</span>
@@ -628,7 +628,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         <span class="loading loading-spinner loading-sm text-primary" />
         <span class="text-sm text-gray-700">
           <span class="font-medium">Building your form.</span>
-          You can keep editing the details above — the form will land in the editor when it is ready.
+          You can keep editing the details above - the form will land in the editor when it is ready.
         </span>
         <button type="button" class="link link-primary ml-auto text-sm">Stop</button>
       </div>
@@ -661,7 +661,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :current_only,
       title: "6d. Only the step it is on",
-      note: "\"Step 3 of 4\" and a segmented bar — the steps without the list."
+      note: "\"Step 3 of 4\" and a segmented bar - the steps without the list."
     },
     %{
       id: :sub_line,
@@ -670,7 +670,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     },
     %{
       id: :timings,
-      title: "6f. The pick — each step's own time",
+      title: "6f. The pick - each step's own time",
       note:
         "The clock lives on the row that is running, so the panel needs no total in the corner."
     },
@@ -682,7 +682,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
     %{
       id: :beside_skeleton,
       title: "6h. Steps beside what is coming",
-      note: "A left rail against a skeleton of the form — #6 married to #8."
+      note: "A left rail against a skeleton of the form - #6 married to #8."
     },
     %{
       id: :plain_border,
@@ -825,7 +825,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
             <span>
               <span class="block font-medium text-gray-900">Writing the elements</span>
               <span class="block text-xs text-gray-500">
-                The long part — a form of a dozen questions takes about half a minute.
+                The long part - a form of a dozen questions takes about half a minute.
               </span>
             </span>
           </li>
@@ -941,7 +941,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p class="text-sm text-gray-600">
           <span class="font-medium text-gray-900">Built in 0:26.</span>
-          Four questions, open in the form builder below — nothing is saved yet.
+          Four questions, open in the form builder below - nothing is saved yet.
         </p>
         <span class="btn">Build again</span>
       </div>
@@ -1030,7 +1030,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
 
   # The way out, and nothing else. The running step carries its own clock
   # (`timed_steps/0`), so a total in the corner would be the same number
-  # twice — and the one number an admin wants while they wait is how long
+  # twice - and the one number an admin wants while they wait is how long
   # *this* step has been going, not how long the panel has been open.
   defp waiting_footer(assigns) do
     ~H"""
@@ -1061,7 +1061,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
       {"Read the form as it stands", :done, "0:00"},
       {"Sent your description", :done, "0:01"},
       {"Writing the elements", :running, "0:13"},
-      {"Checking the builder can show them", :pending, "—"}
+      {"Checking the builder can show them", :pending, "-"}
     ]
 
   defp step_text(:done), do: "text-gray-500"
@@ -1131,7 +1131,7 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
   @doc """
   The keyframes the directions above use, scoped to this page by a `bwa-`
   prefix. Written here rather than in `app.css` because none of it has been
-  chosen yet — whatever wins moves into the library's own markup, and the
+  chosen yet - whatever wins moves into the library's own markup, and the
   rest goes away with this section.
   """
   def styles(assigns) do
@@ -1184,8 +1184,8 @@ defmodule DemoWeb.ExplorationsLive.BuildWithAI do
         4%, 32%    { opacity: 1; transform: none; }
         36%, 100%  { opacity: 0; transform: translateY(-4px); }
       }
-      /* Base opacity 1 so a still of the page — a screenshot, a browser with
-         animations off — shows the first line rather than an empty box; the
+      /* Base opacity 1 so a still of the page - a screenshot, a browser with
+         animations off - shows the first line rather than an empty box; the
          animation takes the property over the moment it runs. */
       .bwa-cycle { animation: bwa-cycle 6s ease-in-out infinite; }
       .bwa-cycle:not(:first-of-type) { opacity: 0; }

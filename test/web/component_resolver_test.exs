@@ -6,7 +6,7 @@ defmodule FormFlow.Web.ComponentResolverTest do
 
   alias FormFlow.Web.ComponentResolver
 
-  # A host's own components module — defines only `button/1`, so dispatch for
+  # A host's own components module - defines only `button/1`, so dispatch for
   # anything else must fall back to FormFlow.Web.CoreComponents.
   defmodule Fake do
     use Phoenix.Component

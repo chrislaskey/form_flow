@@ -5,7 +5,7 @@ defmodule DemoWeb.Experiences do
 
   `all/0` is the four pages; `menu/0` puts `overview/0` in front of them, and
   is what the header's Demo app menu and the mobile nav list. The overview is
-  not a page of the demo's service — it is the page the others are described
+  not a page of the demo's service - it is the page the others are described
   on, which is also where the menu's own label goes. The user side has two
   pages: the pet license applications, and Other Forms, the catch-all for
   every flow outside the pet licensing group.
@@ -36,8 +36,8 @@ defmodule DemoWeb.Experiences do
   choice while moving between them.
 
   `title` is the page's name in the pet licensing service, which the header
-  menus show. `kind` is which side of the demo it is — "User pages",
-  "Reviewer pages" — the name the overview explains the demo by, so the
+  menus show. `kind` is which side of the demo it is - "User pages",
+  "Reviewer pages" - the name the overview explains the demo by, so the
   overview shows both: the kind first, then the title beside it
   (`overview_title/1`).
 
@@ -102,7 +102,7 @@ defmodule DemoWeb.Experiences do
 
   @doc """
   How the overview names an experience: its kind, then its title in the pet
-  licensing service when the two differ — "User pages - Pet License
+  licensing service when the two differ - "User pages - Pet License
   Applications", but just "Admin pages".
   """
   def overview_title(%{kind: kind, title: kind}), do: kind

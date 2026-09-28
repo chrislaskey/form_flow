@@ -1,6 +1,6 @@
 defmodule FormFlow.Data.Templates.Flows.ConnectedTreeTest do
   @moduledoc """
-  `FormFlow.Data.Templates.Flows.connected_tree/1` over hand-built trees —
+  `FormFlow.Data.Templates.Flows.connected_tree/1` over hand-built trees -
   pure structs, no database, the way `FormFlow.Data.Instances.FlowProgressTest`
   builds its fixtures. The rule under test is the one the overview draws
   with: a node counts when a Start node reaches it forward along the flow's

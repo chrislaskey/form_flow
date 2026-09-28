@@ -134,7 +134,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.WriterTest do
       refute drawn =~ "() Tj"
     end
 
-    test "newlines and tabs collapse to spaces — a PDF string has no line breaks" do
+    test "newlines and tabs collapse to spaces - a PDF string has no line breaks" do
       binary = Writer.new() |> Writer.text("one\ntwo\tthree") |> pdf()
 
       assert binary =~ "(one two three) Tj"
@@ -147,7 +147,7 @@ defmodule FormFlow.Web.Downloads.Renderer.PDF.WriterTest do
     end
 
     test "maps the typographic characters that keep appearing in pasted text" do
-      assert Writer.encode("“a” — b… •") ==
+      assert Writer.encode("\u201Ca\u201D \u2014 b\u2026 \u2022") ==
                <<0x93, ?a, 0x94, ?\s, 0x97, ?\s, ?b, 0x85, ?\s, 0x95>>
     end
 

@@ -6,7 +6,7 @@ defmodule FormFlow.Web.Instances.Forms.EditTest do
   `handle_event/3`: DynamicForm's success message targets the parent
   LiveView, so `on_success` routes it back here as
   `update(%{event: "submitted"}, socket)`. That is where it is guarded, and
-  the guard is tested the way the pages' events are — against the page's
+  the guard is tested the way the pages' events are - against the page's
   state, not against the markup, because a component is reachable whenever
   it is mounted.
   """

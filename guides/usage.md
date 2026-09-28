@@ -43,11 +43,11 @@ The mount root is the listing. With `base="/users"`:
 | `/users`                           | the user's flow instances, and the flows they can start |
 | `/users/:id`                       | one instance: its forms and their progress |
 | `/users/:id/forms/*path`           | the answers at one form, read-only |
-| `/users/:id/forms/*path/edit`      | the form itself — opening this page is what starts it |
+| `/users/:id/forms/*path/edit`      | the form itself - opening this page is what starts it |
 
 There is no landing page and no `/flows` segment on this side: it has one
 section, so the root is its index. (The template side keeps both, because it
-has two — flows and the reusable forms catalog.) `*path` is the chain of
+has two - flows and the reusable forms catalog.) `*path` is the chain of
 node ids from the root flow down to the form, one segment per subflow. Every
 link the components render is built from `base` by
 `FormFlow.Web.Instances.Paths`, so a host that mounts the router at a
@@ -59,13 +59,13 @@ and pagination from them.
 ## What the attrs decide
 
 Three attrs shape what a page lists and offers, each defaulting to no
-narrowing. They are listing conveniences, not access control — `on_mount`
+narrowing. They are listing conveniences, not access control - `on_mount`
 is the gate.
 
-* **`flows`** — which flow templates the page is about, and what it lets a
+* **`flows`** - which flow templates the page is about, and what it lets a
   user do with each: a list of `FormFlow.Config.Flows.Allowed`, built with
-  `Allowed.new(flow_slug: "dog-license")`. Each names one flow — by `flow`,
-  `flow_id` or `flow_slug`, exactly one of the three — and answers two
+  `Allowed.new(flow_slug: "dog-license")`. Each names one flow - by `flow`,
+  `flow_id` or `flow_slug`, exactly one of the three - and answers two
   questions about it: `start` a new journey here, and `continue` work
   inside one. Both are `true` unless you say otherwise; `start: true` with
   `continue: false` is refused, since the page would begin a journey it
@@ -73,7 +73,7 @@ is the gate.
   its instance pages refuse an instance of a flow the list leaves out, and
   when `instances` is left to its default, the listing shows the user's own
   instances of the named flows alone. Omitted, the page is about every root
-  flow of the tenant, everything allowed — so a flow authored later turns
+  flow of the tenant, everything allowed - so a flow authored later turns
   up on its own. The flow's status is asked as well, and an action needs
   both: a `winding_down` flow is not offered however this attr reads.
   Between the two is a **group**: an admin sets `flow_group` on the flow's
@@ -82,14 +82,14 @@ is the gate.
   wrapped in `Allowed.new(flow: flow)` - so a flow authored later turns up
   on the page its group names, with no change to the host. `flow_group:
   :none` lists the flows in no group, for a catch-all page.
-* **`instances`** — whose instances the listing shows, as an Ecto query
+* **`instances`** - whose instances the listing shows, as an Ecto query
   over `FormFlow.Data.Instances.Flow`. Omitted, the current user's own.
   `FormFlow.Data.Instances.Flows.list_query/1` builds one: with no options
   it is every instance of every user; `user_id:`, `tenant_id:`, `flow:`,
   and `status:` (the instance's own, `"in_progress"` or `"completed"`)
   narrow it; `narrow_flow/2` and `narrow_tenant/2` do the same to a query
   the host wrote.
-* **`perspectives`** — which kind of user is looking, as one or more of the
+* **`perspectives`** - which kind of user is looking, as one or more of the
   perspective ids the host declared on its flow types. Each "forms" flow in
   a template is for one or more perspectives, set by the administrator; the
   instance page and the form pages show the viewer the flows for their
@@ -101,16 +101,16 @@ is the gate.
 Two more decide who may see a page at all and what the host's callbacks
 receive:
 
-* **`on_mount`** — a function of the page's `FormFlow.Context` and
+* **`on_mount`** - a function of the page's `FormFlow.Context` and
   `callback_data`, asked before every user-facing page draws. `nil` allows;
   `{:ok, assigns}` allows and merges assigns; `{:error, message}` renders
   the message alone; `{:redirect, to}` navigates. The listing asks it too.
-* **`callback_data`** — the host's own map, passed unmodified as the second
+* **`callback_data`** - the host's own map, passed unmodified as the second
   argument of every callback FormFlow makes: `on_mount` and the type
   callbacks alike.
 
 A callback or gate that needs to know *which step* it is about reads
-`context.form_node.slug` — the step's slug, set on the step's page and
+`context.form_node.slug` - the step's slug, set on the step's page and
 stable across environments where node ids differ. `context.form.slug` is a
 catalog form's, shared by every flow reusing it, and `nil` for a form a
 step owns.
@@ -188,8 +188,8 @@ aliases the struct the `flows` attr takes:
       form_types={Types.form_types()}
     />
 
-`/users/applications` lists the applicant's own Dog License instances — not
-their Cat License, not their renewals — with one "Start" button.
+`/users/applications` lists the applicant's own Dog License instances - not
+their Cat License, not their renewals - with one "Start" button.
 `/users/applications/:id` is one of them, showing Intake and hiding Review.
 Opening `/users/applications/:id` for a Cat License instance is refused,
 because the page did not name that flow.
@@ -215,7 +215,7 @@ their part of each.
 
 `instances` with no options is every instance of every user. `flows` names
 the same flow the applicant's page names, with `start: false`, since
-applicants start applications and reviewers do not — so this page has no
+applicants start applications and reviewers do not - so this page has no
 Start section at all. `/staff/reviews/:id` shows the reviewer Review and
 hides Intake; the same instance seen from the applicant's page shows the
 reverse.
@@ -224,7 +224,7 @@ Name the flows a reviewer reviews rather than leaving the attr off. A flow
 authored next year should reach a reviewer because you said so, not because
 somebody saved a draft.
 
-The listing itself does not yet filter by the viewer's perspective — an
+The listing itself does not yet filter by the viewer's perspective - an
 instance still in Intake is listed here too, with nothing for the reviewer
 to do inside it yet. Because the listing is wider than the user's own, the
 page is gated:
@@ -242,7 +242,7 @@ second `flows`.
     live "/users/renewals/*path", MyAppWeb.RenewalsLive
 
 Each page passes its own `base` and names its own flow. Nothing is shared
-between them but the type lists — the one value that must be the same on
+between them but the type lists - the one value that must be the same on
 every page, the admin pages included, because a type chosen on one side
 acts on the other.
 
@@ -250,7 +250,7 @@ acts on the other.
 
 A flow is not versioned. Dog License 2026 and Dog License 2027 are two
 flows, the second a copy of the first, and the difference between "this
-year's" and "last year's" is each flow's **status** — the one fact a flow
+year's" and "last year's" is each flow's **status** - the one fact a flow
 keeps about what users may do with it.
 
 | Status | Start a new instance | Continue one | See their instances |
@@ -262,30 +262,30 @@ keeps about what users may do with it.
 | `read_only` | no | no | yes |
 | `archived` | no | no | no |
 
-A flow is born a **draft**: built, checked, and never offered — a user with
+A flow is born a **draft**: built, checked, and never offered - a user with
 `flows={[Allowed.new(flow_slug: "dog-license-2027")]}` sees nothing of it,
 not even an instance they somehow have. An admin opens it from the flow's show page (the status
 badge in the header opens a dialog), from the flows index (the row's ⋮
 menu), or from the edit page (the Status field under the canvas, saved with
 everything else). **Pre-release** is a draft that some people may use:
 the router's `pre_release_user_ids` names them, by the host's own user
-ids — a list, or a function of the page's `FormFlow.Context` and
+ids - a list, or a function of the page's `FormFlow.Context` and
 `callback_data` that returns one, for a role or a team (`fn context, _data ->
 if staff?(context.user_id), do: [context.user_id], else: [] end`; the
-context is the page's, with no flow in it, so the rule is per page) — and
-to them the flow is open — offered, continued, seen — while to everyone
+context is the page's, with no flow in it, so the rule is per page) - and
+to them the flow is open - offered, continued, seen - while to everyone
 else it stays a draft. The pages are the gate; the data layer
 takes a pre-release start from anyone and marks the instance's `metadata`
 with `"form_flow" => %{"pre_release" => true}`, so once the flow opens the
 pre-release run's instances can be told from the real ones. **Open** is the
 normal state. **Winding down** is a deadline that has passed: the listing
 names the flow with "No longer taking new starts." where its Start button
-was, and everyone already in it finishes and keeps seeing their record — a
+was, and everyone already in it finishes and keeps seeing their record - a
 reviewer finishing reviews after applications closed included; this is the
 state for "applications closed, reviews continuing". **Read-only** is the
 year over:
-nobody starts or continues — the edit page says "This flow is read-only
-now; your answers are kept as they are." — but everyone still sees, prints,
+nobody starts or continues - the edit page says "This flow is read-only
+now; your answers are kept as they are." - but everyone still sees, prints,
 and downloads their own. **Archived** puts it away: users see nothing of
 it, admins keep the flow, its instances, and its history. Draft and
 archived allow the same nothing; they differ in meaning, never opened and
@@ -295,11 +295,11 @@ made it (`FormFlow.Data.Templates.Flow.Event`).
 So the year rolls over like this:
 
 1. On Dog License 2026's show page, **Duplicate Flow**: name it "Dog
-   License 2027", slug `dog-license-2027`. The copy is a draft, whole —
-   steps, connections, subflows, its own forms — with fresh ids.
+   License 2027", slug `dog-license-2027`. The copy is a draft, whole -
+   steps, connections, subflows, its own forms - with fresh ids.
 2. Edit the copy, publish its forms, read its health.
-3. Point the applicants' page at it —
-   `flows={[Allowed.new(flow_slug: "dog-license-2027")]}` — or, if the page
+3. Point the applicants' page at it -
+   `flows={[Allowed.new(flow_slug: "dog-license-2027")]}` - or, if the page
    names both years, leave 2026 in the list: a user with a 2026 instance
    still sees it there. `Allowed.new(flow_slug: "dog-license-2026",
    start: false)` says the same thing the `winding_down` status says, from
@@ -312,9 +312,9 @@ A pre-release is the same flow with a smaller audience: move it to
 that should offer it; when it has proved itself, open it. The pre-release
 instances stay in the flow, marked; as the flow leaves Pre-release, the
 status dialog says how many were started during it and offers to delete
-them with the change — logged on the flow's history — or duplicate the
+them with the change - logged on the flow's history - or duplicate the
 flow before opening if the trial run must not mix with the real one. A
-rule change from a date — "filings after 1 July need a certificate" — is
+rule change from a date - "filings after 1 July need a certificate" - is
 a copy opened on the date while the original winds down.
 
 Two things follow for host code. The status is the pages' rule, not the
@@ -323,10 +323,10 @@ data layer's: `FormFlow.Data.Instances.Flows.create/2` and
 so that your own admin and support tooling can take an appeal after the
 deadline or repair a record in an archived year without a back door. A
 route of your own that should honour the status asks
-`FormFlow.Data.Templates.Flow.allows?/2` first — and, since `allows?/2`
+`FormFlow.Data.Templates.Flow.allows?/2` first - and, since `allows?/2`
 answers the table and the table says a pre-release flow is open, checks
 its own pre-release users for that one status, as the pages do through
-`FormFlow.Web.Instances.Shared.status_allows?/3` — which a route can call
+`FormFlow.Web.Instances.Shared.status_allows?/3` - which a route can call
 too, with a bare map for the page: `status_allows?(flow, :see,
 %{user_id: id, pre_release_user_ids: ids})`. And a gate or
 callback that keys on `context.form_node.slug` sees the copy's prefix
@@ -343,7 +343,7 @@ in with what *this same user* answered there, in their most recent journey
 of that flow. The answers go under anything they have typed here, merged
 by question name, so a prefill never replaces an answer, and a question
 only one of the two forms asks is left alone. A user with no earlier
-journey — and a viewer with no `user_id` — gets the empty form an unset
+journey - and a viewer with no `user_id` - gets the empty form an unset
 setting gives, with no explanation: nothing crosses between people, and
 nothing is said about a year that is not there.
 
@@ -354,7 +354,7 @@ flow for a new year, for a regional variant, or to try something out, and
 only the first of those means "prefill from the original".
 
 So **copying a flow clears it**. 2028 copied from 2027 arrives with the
-field empty rather than still pointing at 2026 — which would resolve
+field empty rather than still pointing at 2026 - which would resolve
 perfectly, at the wrong year. The duplicate dialog lists what it is about
 to clear before you confirm. A pointer at a step of the flow's *own* tree
 is not cleared: the copy re-points it at the copied steps, where it stays
@@ -365,15 +365,15 @@ right.
 read off the types, and a copy that silently kept one is not a thing you
 can find afterwards.
 
-A pointer that stops resolving — the flow deleted, the step removed, or no
-Start reaching it — is one of
+A pointer that stops resolving - the flow deleted, the step removed, or no
+Start reaching it - is one of
 `FormFlow.Data.Templates.Flows.Health`'s checks. A pointer that is merely
 *old* is not, and cannot be: an old pointer that resolves is not wrong.
 Clearing on copy is what handles that one.
 
 A host's own form type offers the same field by putting
 `FormFlow.Config.Forms.Type.Default.properties/0` after its own. A setting
-of its own can clear on copy too — `clear_on_copy: true` on a
+of its own can clear on copy too - `clear_on_copy: true` on a
 `FormFlow.Config.Property`.
 
 ## Taking the answers away
@@ -381,7 +381,7 @@ of its own can clear on copy too — `clear_on_copy: true` on a
 A user looking at a form they have filled in can save it as a PDF or open it
 to print. Both are links out of the LiveView, because a LiveView holds a
 websocket and cannot send a file, so they need a pair of ordinary routes
-mounted once — before any catch-all, and inside a pipeline that
+mounted once - before any catch-all, and inside a pipeline that
 authenticates:
 
     import FormFlow.Router
@@ -408,8 +408,8 @@ The gate is not asked twice. `FormFlow.Web.Instances.Forms.Show` already ran
 your `on_mount`, the flow type's `visible?`, and the page's `flows` scope in
 order to decide what to draw, and Download and Print are drawn wherever the
 answers are; when the user clicks either it mints a
-short-lived encrypted token — 60 seconds by default,
-`config :form_flow, download_token_max_age:` — and the request carries that
+short-lived encrypted token - 60 seconds by default,
+`config :form_flow, download_token_max_age:` - and the request carries that
 instead of an argument. The endpoint reads the token and ignores every other
 query param, so a token cannot be pointed at a form it was not minted for.
 
@@ -422,8 +422,8 @@ Two things follow that are worth knowing:
   * **Anyone holding the URL can redeem it until it expires.** FormFlow
     cannot bind a token to a session without knowing your current user, which
     is the thing the token exists to avoid. Mount the route inside a pipeline
-    that authenticates — an anonymous holder is then turned away before
-    FormFlow sees the token — and layer any further checks you want in front
+    that authenticates - an anonymous holder is then turned away before
+    FormFlow sees the token - and layer any further checks you want in front
     of it. A user who can mint a link can already save the PDF and send that
     instead, so the link is a briefer version of a capability they had.
   * **Your own endpoint gets the same token.** `FormFlow.decode_token/3`
@@ -439,15 +439,15 @@ Two things follow that are worth knowing:
 
 ### Choosing what the file looks like
 
-The PDF is written by FormFlow itself — no Chrome, no wkhtmltopdf, nothing to
-install — and is deliberately plain: a heading, the details, and each
+The PDF is written by FormFlow itself - no Chrome, no wkhtmltopdf, nothing to
+install - and is deliberately plain: a heading, the details, and each
 question's answer under its label. Everything about how it is drawn is in
 `FormFlow.Web.Downloads.Renderer.PDF.Writer`, which is also where the format's
 limits are written down.
 
 Wanting more than that is a renderer, not a setting. FormFlow flattens the
-resource into a `FormFlow.Web.Downloads.Document` — headings, fields, values, no
-format — and hands it to a `FormFlow.Web.Downloads.Renderer`. Mount a different
+resource into a `FormFlow.Web.Downloads.Document` - headings, fields, values, no
+format - and hands it to a `FormFlow.Web.Downloads.Renderer`. Mount a different
 one and the same document comes out the other way:
 
     # a printable HTML page instead, printed through the browser
@@ -462,7 +462,7 @@ host's `callback_data`, and returns bytes and a content type. See
 
 ### Where the links point
 
-One route answers both Download and Print, and the path carries nothing —
+One route answers both Download and Print, and the path carries nothing -
 the form, the position, and which of the two was clicked all ride in the
 query string:
 
@@ -489,7 +489,7 @@ all:
 Point it at an endpoint of your own and FormFlow declares no route in it:
 your controller reads `flow_instance_id`, `path[]` (repeated, one segment per
 node, so it arrives as a list) and `disposition` off the query string, and
-generates the document however it likes — its own template, its own engine,
+generates the document however it likes - its own template, its own engine,
 its own authorization. The page stops caring what happens after the click.
 
 ## Rendering the LiveComponents directly
@@ -497,6 +497,6 @@ its own authorization. The page stops caring what happens after the click.
 A host that would rather own its routing can render
 `FormFlow.Web.Instances.Flows.Index`, `Flows.Show`, `Forms.Show`, and
 `Forms.Edit` itself, passing the same attrs the router does. The links they
-render are still built from `base` in the shape above, so the router — or
-routes of the same shape — must answer at that `base`, or the links point
+render are still built from `base` in the shape above, so the router - or
+routes of the same shape - must answer at that `base`, or the links point
 at nothing.

@@ -209,7 +209,7 @@ defmodule FormFlow.Data.Instances.FlowProgressTest do
       assert FlowProgress.next_path_position(tree, all_done) == nil
     end
 
-    test "an in-progress form is the next stop — resume before advancing" do
+    test "an in-progress form is the next stop - resume before advancing" do
       {tree, _start, form1, _form2, _stop} = linear_flow()
 
       instances = [form_instance([form1.id], "in_progress")]

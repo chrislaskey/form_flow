@@ -41,7 +41,7 @@ defmodule DemoWeb.ConnCase do
   A conn viewing the demo as one of `Demo.Users`, the way the pages that
   gate on a role (`DemoWeb.PersonaComponents`) need to be visited.
 
-  Tests pick one with a tag — `@moduletag user: "admin"` — and without one
+  Tests pick one with a tag - `@moduletag user: "admin"` - and without one
   the conn is the default user, exactly as a first-time visitor is.
   """
   def build_conn_as(nil), do: Phoenix.ConnTest.build_conn()

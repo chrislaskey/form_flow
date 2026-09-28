@@ -3,10 +3,10 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
   Start, asked directly.
 
   This page builds its listing *inside* the gate's `on_ok`, so a refused
-  viewer has no `:offered_flows` at all — which is what made the event a
+  viewer has no `:offered_flows` at all - which is what made the event a
   crash rather than a check. The state is the first of its two rules; the
-  flows the page offered — those the page is about whose status takes a
-  start — are the second.
+  flows the page offered - those the page is about whose status takes a
+  start - are the second.
   """
 
   use ExUnit.Case, async: true
@@ -39,7 +39,7 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
 
   describe "start" do
     test "refuses when the gate refused the page, and does not look for a listing" do
-      # A refusal means `load/1` never ran, so `:offered_flows` is not there —
+      # A refusal means `load/1` never ran, so `:offered_flows` is not there -
       # reading it is the KeyError the guard replaces
       socket =
         socket(%{page_state: :refused})
@@ -69,7 +69,7 @@ defmodule FormFlow.Web.Instances.Flows.IndexTest do
       assert socket.assigns.error == "That flow is not available here."
     end
 
-    test "a flow the page is about but does not offer — one not taking starts — is refused too" do
+    test "a flow the page is about but does not offer - one not taking starts - is refused too" do
       winding = %Templates.Flow{id: "flow-2", status: "winding_down"}
       socket = socket(%{page_flows: [winding], offered_flows: []})
 

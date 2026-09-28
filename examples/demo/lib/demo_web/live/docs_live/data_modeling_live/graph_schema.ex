@@ -4,12 +4,12 @@ defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
   would create, drawn with the same node type as the SQL schema above them so
   the two read as one page.
 
-  Nothing here is derived. There is no graph database to read it off — the
-  extension does not exist yet — so this is a transcription of the mapping
+  Nothing here is derived. There is no graph database to read it off - the
+  extension does not exist yet - so this is a transcription of the mapping
   `guides/neo4j.md` records, and that guide is the thing to check when the two
   drift.
 
-  Everything here is a node, a relationship, or a flow — the data model's own
+  Everything here is a node, a relationship, or a flow - the data model's own
   words. A node is what the product calls a *step*, and where that reading
   matters the page says "node (step)" rather than switching vocabulary.
 
@@ -18,7 +18,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
     * **Only the graph half of the templates crosses over.** Nodes,
       relationships, and the flows they point at. Form templates, form
       versions, and every instance table stay in SQL and are joined back by id
-      — a `form_id` in a Neo4j property map is a key into Postgres, not a
+      - a `form_id` in a Neo4j property map is a key into Postgres, not a
       pointer into the graph.
     * **Flows are Neo4j nodes, not a third kind of thing.** Anything a
       reference targets has to be a node or the reference cannot be traversed,
@@ -115,7 +115,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
   The graph schema in ReactFlow's own shape, ready for
   `FormFlow.Web.Helpers.ReactFlow.to_json/1`.
 
-  Every node is `type: "table"` — the same component the SQL schema uses, so a
+  Every node is `type: "table"` - the same component the SQL schema uses, so a
   reader compares two drawings rather than learning two.
   """
   def data do
@@ -124,7 +124,7 @@ defmodule DemoWeb.DocsLive.DataModelingLive.GraphSchema do
 
   @doc """
   The reserved relationship types, the property each is derived from, and what
-  it means — the table the page draws under the graph.
+  it means - the table the page draws under the graph.
   """
   def structural_types do
     [

@@ -96,7 +96,7 @@ defmodule FormFlow.Web.Downloads.RendererTest do
   end
 
   describe "the HTML renderer" do
-    test "escapes what it draws — a printable page is still a page a browser will run" do
+    test "escapes what it draws - a printable page is still a page a browser will run" do
       document = %Document{
         title: "<script>alert(1)</script>",
         filename: "x",

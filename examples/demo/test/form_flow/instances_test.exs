@@ -1,16 +1,16 @@
 defmodule Demo.FormFlowInstancesTest do
   @moduledoc """
-  Exercises the user-facing pages — the flow instance's listing and the form
-  pages — against a real database and a real LiveView mount.
+  Exercises the user-facing pages - the flow instance's listing and the form
+  pages - against a real database and a real LiveView mount.
 
   Two things are proven here that the library's own tests can't reach. First,
   that a stored `flow_type` changes what a user sees: which forms offer
   to start, which of them are navigable, and where the flow's progress is
-  drawn — the demo's own type included, which is the only place the whole
+  drawn - the demo's own type included, which is the only place the whole
   `FormFlow.Config` → `FormFlow.Config.Flows.Type` path runs end to end.
   Second, that the URLs address *positions*: `/edit` starts the form it
   names, on an ordinary page load, and only where the flow's type allows work
-  — so the address bar can't walk around the flow.
+  - so the address bar can't walk around the flow.
   """
 
   use DemoWeb.ConnCase, async: false
@@ -65,7 +65,7 @@ defmodule Demo.FormFlowInstancesTest do
     def handle_complete(_context, _callback_data), do: raise("the host's job queue is down")
   end
 
-  # The demo's type lists with the three types above beside the library's —
+  # The demo's type lists with the three types above beside the library's -
   # every flow type for applicants or reviewers, the vocabulary being the
   # type's, set on the library's wizards too
   defmodule TestTypes do
@@ -90,7 +90,7 @@ defmodule Demo.FormFlowInstancesTest do
 
   # The test page's gate: refuses, redirects, or decorates by the flow's name,
   # so one function exercises every answer on_mount can give; on the listing,
-  # which has no flow in scope, the page's callback_data drives it — the
+  # which has no flow in scope, the page's callback_data drives it - the
   # host's own data reaching the host's own gate
   defmodule TestGate do
     def on_mount(%Context{flow: %{name: "Refused"}}, _callback_data),
@@ -112,7 +112,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # The users page as `DemoWeb.FormFlowLive.Users` renders it, with the test
-  # types and gate in place of the demo's — mounted without a route
+  # types and gate in place of the demo's - mounted without a route
   # (live_isolated/3). The session's "callback_data" is the page's
   # callback_data, and also picks the listing's `instances` ("listing" =>
   # "everyone") and `flows` ("offer" => slug or "offer_id" => id, with
@@ -293,7 +293,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert length(Instances.Flows.form_instances(instance)) == 1
     end
 
-    test "show never starts anything — it offers the start instead", %{conn: conn} do
+    test "show never starts anything - it offers the start instead", %{conn: conn} do
       %{instance: instance, forms: [name, _address]} = flow_of_two()
 
       {:ok, view, html} = live(conn, form_path(instance, [name.id]))
@@ -472,7 +472,7 @@ defmodule Demo.FormFlowInstancesTest do
       submit(view, instance_at(instance, intake), %{"name" => "Ada"})
 
       # Review is the next actionable position in the flow, but not the
-      # applicant's — so the flow's page, not Review's edit page
+      # applicant's - so the flow's page, not Review's edit page
       assert {path, _flash} = assert_redirect(view)
       assert path == flow_path(instance)
 
@@ -629,7 +629,7 @@ defmodule Demo.FormFlowInstancesTest do
 
       {:ok, view, _html} = live(conn, edit_path(instance, [name.id]))
 
-      # The form being filled is never a link to itself — only the others are.
+      # The form being filled is never a link to itself - only the others are.
       refute has_element?(view, "a[href='#{edit_path(instance, [name.id])}']")
       assert has_element?(view, "a[href='#{edit_path(instance, [address.id])}']")
     end
@@ -1139,7 +1139,7 @@ defmodule Demo.FormFlowInstancesTest do
       owner = build_form_node(last_year, "Owner", owner_flow_id: last_year.id)
       edge(last_year, build_node(last_year, ["Start"], "Start"), owner)
 
-      # This year points at it because an admin said so — no copy, no new form template
+      # This year points at it because an admin said so - no copy, no new form template
       this_year = renewing_flow(Property.flow_position(last_year.id, [owner.id]))
       this_instance = start_flow(this_year.flow)
 
@@ -1148,7 +1148,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute html =~ "Rex"
 
       # The user filed last year. Someone else filed too, and the user also
-      # started a later journey they never submitted — neither is theirs to
+      # started a later journey they never submitted - neither is theirs to
       # renew from
       complete(start_flow(last_year), [owner.id], %{"name" => "Rex"})
 
@@ -1180,7 +1180,7 @@ defmodule Demo.FormFlowInstancesTest do
       {:ok, view, html} = live(conn, edit_path(start_flow(renewal.flow), [renewal.form.id]))
 
       # The form opens as any other unanswered form does: no prefill, no
-      # word of one — the admin hears about it from the health page instead
+      # word of one - the admin hears about it from the health page instead
       assert html =~ "Name"
       refute html =~ "Missing"
       refute html =~ "Prefill with answers from"
@@ -1214,7 +1214,7 @@ defmodule Demo.FormFlowInstancesTest do
       edge(flow, intake, review)
       instance = start_flow(flow)
 
-      # Until Intake is answered there is nothing to review — and Review isn't
+      # Until Intake is answered there is nothing to review - and Review isn't
       # editable yet anyway, so the page says so
       complete(instance, [intake.id], %{"name" => "Ada"})
 
@@ -1325,7 +1325,7 @@ defmodule Demo.FormFlowInstancesTest do
       assert has_element?(view, start_button(dog))
       refute has_element?(view, start_button(cat))
 
-      # A crafted event for the flow that was not offered starts nothing — the
+      # A crafted event for the flow that was not offered starts nothing - the
       # offered button's target, with the other flow's id in its place
       view |> element(start_button(dog)) |> render_click(%{"flow-id" => cat.id})
       assert render(view) =~ "That flow is not available here."
@@ -1705,7 +1705,7 @@ defmodule Demo.FormFlowInstancesTest do
       # The reaction saw the completed row and the flow instance's fresh progress
       assert_receive {:handle_complete, %Context{} = fresh}
       # The step is in the context by its node, and its slug is the handle a
-      # host names it by — the step's own, not the form's, which a catalog
+      # host names it by - the step's own, not the form's, which a catalog
       # form shares with every flow reusing it
       assert fresh.form_node.id == List.last(fresh.form_progress.path)
       assert fresh.form_node.slug == "recorded-step"
@@ -2018,7 +2018,7 @@ defmodule Demo.FormFlowInstancesTest do
       }
     end
 
-    test "redact_snapshots/1 blanks every copy in the journey — superseded included — and nothing else" do
+    test "redact_snapshots/1 blanks every copy in the journey - superseded included - and nothing else" do
       %{journey: journey, other: other} = reviewed_journeys()
       before = Enum.map(journey.reviews, &Instances.Forms.latest_event(&1, "status_changed"))
 
@@ -2129,7 +2129,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute html =~ ~s(value="Rex")
     end
 
-    test "an open flow offers none — this is for a flow not open yet", %{conn: conn} do
+    test "an open flow offers none - this is for a flow not open yet", %{conn: conn} do
       %{instance: instance, form: node} = flow_of_one()
 
       {:ok, _form} =
@@ -2162,7 +2162,7 @@ defmodule Demo.FormFlowInstancesTest do
       refute has_element?(view, "#instance-forms-edit-prefill-actions button", "Edit prefill")
       refute has_element?(view, "#instance-forms-edit-prefill-actions button", "Delete prefill")
 
-      # Capture reads the form the user is filling in — the one the form type
+      # Capture reads the form the user is filling in - the one the form type
       # drew under the id this page handed it
       form_id = "instance-forms-edit-#{instance_at(instance, [node.id]).id}-form"
 
@@ -2223,7 +2223,7 @@ defmodule Demo.FormFlowInstancesTest do
       |> element("#instance-forms-edit-prefill-actions button", "Edit prefill")
       |> render_click()
 
-      # Same name, so the selection does not move and the page stays put —
+      # Same name, so the selection does not move and the page stays put -
       # and the form is filled from what was just written
       view
       |> element(~s(form[phx-submit="save_prefill"]))
@@ -2699,7 +2699,7 @@ defmodule Demo.FormFlowInstancesTest do
     }
   end
 
-  # The review submitted through its page, the way the reviewer does it — so
+  # The review submitted through its page, the way the reviewer does it - so
   # its type records what it reviewed
   defp reviewed(
          conn,
@@ -2757,7 +2757,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # An open flow of one form typed "default" with `value` set as the form it
-  # prefills from — this year's licence, pointing at last year's
+  # prefills from - this year's licence, pointing at last year's
   defp renewing_flow(value) do
     {:ok, flow} =
       Flows.create(%{
@@ -2784,7 +2784,7 @@ defmodule Demo.FormFlowInstancesTest do
   end
 
   # A published form with one text question, "name"; `form_type:` picks a
-  # form type for it and `property_values:` its property values — for the
+  # form type for it and `property_values:` its property values - for the
   # demo's prefill type, "Demo User" as the name to prefill unless given.
   # `owner_flow_id:` makes it a flow's own form rather than a catalog one.
   # `definition:` replaces the question outright, which is how a stored

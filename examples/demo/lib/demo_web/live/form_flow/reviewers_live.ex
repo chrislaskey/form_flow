@@ -4,7 +4,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
   reviews.
 
   Mounted on `live "/demo/pet-licenses/reviews/*path", FormFlowLive.Reviewers`,
-  the same shape as `DemoWeb.FormFlowLive.Users` — FormFlow's router dispatches
+  the same shape as `DemoWeb.FormFlowLive.Users` - FormFlow's router dispatches
   the remaining path to the right LiveComponent, and
   `base="/demo/pet-licenses/reviews"` is what makes every link the components
   build carry the mount prefix.
@@ -17,7 +17,7 @@ defmodule DemoWeb.FormFlowLive.Reviewers do
 
   `flows` is every root flow in the pet licensing group, the same list the
   applications page draws, with `start: false` on each
-  (`Demo.Users.flows/2`), so this page has no Start section at all — a
+  (`Demo.Users.flows/2`), so this page has no Start section at all - a
   reviewer who could start an application would be filing one in their own
   name. A flow the admin authors becomes a reviewer's work the moment it is
   given the group, and not before.

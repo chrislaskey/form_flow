@@ -21,7 +21,7 @@ defmodule DemoWeb.Router do
   end
 
   # A user saving or printing their answers. Inside :browser, and in a real app
-  # inside whatever authenticates too — FormFlow does not authorize these yet.
+  # inside whatever authenticates too - FormFlow does not authorize these yet.
   scope "/" do
     pipe_through :browser
 

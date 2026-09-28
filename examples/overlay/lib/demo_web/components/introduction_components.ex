@@ -4,8 +4,8 @@ defmodule DemoWeb.IntroductionComponents do
   forms as data, how far an app can customize it, what it takes to use it, how
   it is being built, and where its licensing stands.
 
-  Two pages open with this prose — the demo index at `/` and
-  `/docs/introduction` — so it is written once here and headed by each of
+  Two pages open with this prose - the demo index at `/` and
+  `/docs/introduction` - so it is written once here and headed by each of
   them in its own way: the index with plain headings, the docs page with the
   anchored sections its nav links to. Neither owns the words.
 

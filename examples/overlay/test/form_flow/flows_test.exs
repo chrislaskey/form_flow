@@ -1,6 +1,6 @@
 defmodule Demo.FormFlowFlowsTest do
   @moduledoc """
-  Exercises `FormFlow.Data.Templates.Flows` and the flow schemas against a real database —
+  Exercises `FormFlow.Data.Templates.Flows` and the flow schemas against a real database -
   the library's own tests stop at changesets, so this is where the V01 flow DDL
   (foreign keys, cascades, the unique relationship index) is proven to hold.
   """
@@ -42,7 +42,7 @@ defmodule Demo.FormFlowFlowsTest do
 
     assert [%Flow{nodes: %Ecto.Association.NotLoaded{}} | _] = Flows.list()
 
-    # Owned subflow children live inside their root — never listed beside it
+    # Owned subflow children live inside their root - never listed beside it
     {:ok, _child} = Flows.create(%{owner_flow_id: first.id})
     assert length(Flows.list()) == 2
   end
@@ -424,7 +424,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert {:error, changeset} = Flows.create(%{name: "B", slug: "taken"})
       assert {"has already been taken", _} = changeset.errors[:slug]
 
-      # The same slug in another tenant is fine — and a second untenanted one is not
+      # The same slug in another tenant is fine - and a second untenanted one is not
       assert {:ok, _} = Flows.create(%{name: "C", slug: "taken", tenant_id: "acme"})
       assert {:error, _} = Flows.create(%{name: "D", slug: "taken"})
     end
@@ -456,8 +456,8 @@ defmodule Demo.FormFlowFlowsTest do
       assert documents.slug == nil
       refute Map.has_key?(documents.properties, "slug")
 
-      # Inside the subflow the prefix is still the root's — the subflow has no
-      # slug of its own — and two same-named steps in one save see each other
+      # Inside the subflow the prefix is still the root's - the subflow has no
+      # slug of its own - and two same-named steps in one save see each other
       {:ok, _} =
         Flows.update(documents, %{
           nodes: [form_step("User Information"), form_step("User Information")],
@@ -513,7 +513,7 @@ defmodule Demo.FormFlowFlowsTest do
 
       {:ok, _} = Flows.update_node(node, %{slug: "owner-contact"})
 
-      # A tab opened before the change sends the old copy back — the column wins
+      # A tab opened before the change sends the old copy back - the column wins
       stale =
         put_in(form_step("Owner contact", node), [:properties, "slug"], "intake_owner-conta")
 
@@ -1027,7 +1027,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(child.id) != nil
     end
 
-    test "copy copies the identity: name, label, and properties — or the name given" do
+    test "copy copies the identity: name, label, and properties - or the name given" do
       {:ok, root} =
         Flows.create(%{
           name: "Onboarding",
@@ -1067,7 +1067,7 @@ defmodule Demo.FormFlowFlowsTest do
       end
 
       # The copy's properties come from the source, which carries the source's
-      # id — the changeset has to overwrite it, or a Cypher lookup by id would
+      # id - the changeset has to overwrite it, or a Cypher lookup by id would
       # land on the original
       {:ok, copy} = Flows.copy(flow, host_types())
       copied = Flows.get(copy.id)
@@ -1120,7 +1120,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get(other.id) != nil
     end
 
-    test "deleting a subflow on its own is refused — its step is the way" do
+    test "deleting a subflow on its own is refused - its step is the way" do
       {:ok, root} = Flows.create(%{label: "subflows"})
       {:ok, owned} = Flows.create(%{owner_flow_id: root.id})
       node = insert_subflow_node(root, owned)
@@ -1249,7 +1249,7 @@ defmodule Demo.FormFlowFlowsTest do
   end
 
   describe "step names" do
-    # A step's name is its node's data.label — what the instance pages show.
+    # A step's name is its node's data.label - what the instance pages show.
     # Saving the canvas writes it through to the entity behind the step only
     # when this flow owns that entity; a catalog form or a reusable subflow
     # keeps its own name for every consumer.
@@ -1266,7 +1266,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert step_label(Flows.get(dog.id)) == "Your details"
 
       # A step pointing at a catalog form, labelled with the form's name, then
-      # relabelled by a canvas save (which carries the node's id — a node saved
+      # relabelled by a canvas save (which carries the node's id - a node saved
       # without one records no intent, so the first save here renames nothing)
       {:ok, catalog} = Forms.create(%{name: "Owner contact"})
       {:ok, cat} = Flows.create(%{name: "Cat License"})
@@ -1311,7 +1311,7 @@ defmodule Demo.FormFlowFlowsTest do
       # The form is the step's owner's concern, not this function's
       assert Forms.get(node.form_id).name == "Owner contact"
 
-      # A blank label renames nothing — names are never blanked
+      # A blank label renames nothing - names are never blanked
       assert {:ok, same} = Flows.update_node(renamed, %{label: ""})
       assert get_in(same.properties, ["data", "label"]) == "Your details"
 
@@ -1416,7 +1416,7 @@ defmodule Demo.FormFlowFlowsTest do
       assert Flows.get_node(dog.step.id).form_id == dog.step.form_id
       assert Forms.get(dog.step.form_id) != nil
 
-      # Content alone is no bar — the page's confirmation names what goes
+      # Content alone is no bar - the page's confirmation names what goes
       cat = license_flow("Cat License")
       [cat_draft] = Forms.list_versions(cat.step.form_id)
       {:ok, _} = Forms.update_draft(cat_draft, %{definition: %{"elements" => []}})
@@ -1441,7 +1441,7 @@ defmodule Demo.FormFlowFlowsTest do
   end
 
   # A root flow of subflows embedding one Application flow of forms with one
-  # Owner contact step — saved, so the step has its blank owned form
+  # Owner contact step - saved, so the step has its blank owned form
   defp license_flow(name) do
     {:ok, root} = Flows.create(%{name: name, label: "subflows"})
     {:ok, _} = Flows.update(root, %{nodes: [subflow_step("Application")]})

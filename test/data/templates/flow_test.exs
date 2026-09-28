@@ -3,7 +3,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
 
   alias FormFlow.Data.Templates.Flow
 
-  test "the changeset is valid with no attributes — a flow row is an identity" do
+  test "the changeset is valid with no attributes - a flow row is an identity" do
     changeset = Flow.changeset(%Flow{})
 
     assert changeset.valid?
@@ -36,7 +36,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
     assert Flow.changeset(persisted, %{name: "Renamed"}).valid?
   end
 
-  test "casts properties — the flow-level domain data, like flow_type" do
+  test "casts properties - the flow-level domain data, like flow_type" do
     changeset =
       Flow.changeset(%Flow{}, %{properties: %{"flow_type" => "wizard_any_order"}})
 
@@ -164,7 +164,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
       assert Flow.statuses() == ~w(draft pre_release open winding_down read_only archived)
     end
 
-    test "status is immutable through the plain changeset — update_status/3 moves it" do
+    test "status is immutable through the plain changeset - update_status/3 moves it" do
       persisted = %Flow{status: "draft"} |> Ecto.put_meta(state: :loaded)
 
       refute Flow.changeset(persisted, %{status: "open"}).valid?
@@ -197,7 +197,7 @@ defmodule FormFlow.Data.Templates.FlowTest do
       assert Flow.allows?(%Flow{status: "open"}, :start)
       refute Flow.allows?("closed", :see)
 
-      # The data layer's answer for pre_release is "anyone" — the pages gate
+      # The data layer's answer for pre_release is "anyone" - the pages gate
       assert Flow.allows?("pre_release", :start)
       assert Flow.statuses_allowing(:start) == ["pre_release", "open"]
       assert Flow.statuses_allowing(:continue) == ["pre_release", "open", "winding_down"]

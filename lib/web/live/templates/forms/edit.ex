@@ -1002,13 +1002,13 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
     own =
       case current do
         %{owner_flow_id: nil} ->
-          "This step stops using “#{current.name}”, which stays in the catalog."
+          ~s(This step stops using "#{current.name}", which stays in the catalog.)
 
         _owned ->
-          "This step's own form “#{current.name}” is deleted."
+          ~s(This step's own form "#{current.name}" is deleted.)
       end
 
-    "This step becomes the catalog's “#{target.name}”. Edits to that form reach every flow " <>
+    ~s(This step becomes the catalog's "#{target.name}". Edits to that form reach every flow ) <>
       "using it; publishing it can reopen users' submitted forms in all of them. #{own} " <>
       "To stop reusing it later, remove this step from the canvas and add it again."
   end
@@ -1022,7 +1022,7 @@ defmodule FormFlow.Web.Templates.Forms.Edit do
   defp reuse_error(:related_form, target, form_types) do
     property = FormFlow.Config.Forms.Type.related_form_property(form_types, target)
 
-    "“#{target.name}” can't be reused: its form type's “#{property.name}” points at a step " <>
+    ~s("#{target.name}" can't be reused: its form type's "#{property.name}" points at a step ) <>
       "in one flow, so the form cannot serve two."
   end
 

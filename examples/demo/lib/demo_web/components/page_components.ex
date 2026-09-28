@@ -3,7 +3,7 @@ defmodule DemoWeb.PageComponents do
   The demo's shared typography: one definition of what a heading and a
   paragraph look like, wherever they are written.
 
-  These began in the docs pages and are now every page's — the admin, user,
+  These began in the docs pages and are now every page's - the admin, user,
   and reviewer pages share them, so a heading is the same size and weight
   whichever side of the demo it is on. Docs-only furniture (the left nav,
   the anchored sections it links to) stays in `DemoWeb.DocsComponents`.
@@ -61,7 +61,7 @@ defmodule DemoWeb.PageComponents do
   end
 
   @doc """
-  An aside in the muted voice — what to take away from the thing above it.
+  An aside in the muted voice - what to take away from the thing above it.
   Newlines in the text are kept, so it can carry paragraphs of its own.
   """
   attr :class, :string, default: nil

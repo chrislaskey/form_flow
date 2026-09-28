@@ -6,7 +6,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
   @flow_id Ecto.UUID.generate()
 
   describe "Instances.Flow.changeset/2" do
-    test "requires the root flow — a journey always knows what it traverses" do
+    test "requires the root flow - a journey always knows what it traverses" do
       refute Instances.Flow.changeset(%Instances.Flow{}, %{}).valid?
 
       changeset =
@@ -20,7 +20,7 @@ defmodule FormFlow.Data.Instances.FlowTest do
       assert Ecto.Changeset.get_field(changeset, :status) == "in_progress"
     end
 
-    test "status and completed_at are not castable — only completion sets them" do
+    test "status and completed_at are not castable - only completion sets them" do
       changeset =
         Instances.Flow.changeset(%Instances.Flow{}, %{
           template_flow_id: @flow_id,

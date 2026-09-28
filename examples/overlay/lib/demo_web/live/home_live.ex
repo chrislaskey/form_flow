@@ -1,7 +1,7 @@
 defmodule DemoWeb.HomeLive do
   @moduledoc """
-  `/` — what FormFlow is and why it exists, which user the demo is being
-  viewed as, the version it was compiled against, and — for the admin — the
+  `/` - what FormFlow is and why it exists, which user the demo is being
+  viewed as, the version it was compiled against, and - for the admin - the
   control that puts the demo's data back. The last two are
   `DemoWeb.DemoDataComponents`' and `DemoWeb.PersonaComponents`', shared with
   `/demo`, which offers the same pair.

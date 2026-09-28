@@ -2,8 +2,8 @@ defmodule FormFlow.Web.Instances.SharedTest do
   @moduledoc """
   The state each page computes, asked directly.
 
-  Both functions are pure and take a plain map, so every state — and, more
-  to the point, every ordering between two of them — is one assertion here
+  Both functions are pure and take a plain map, so every state - and, more
+  to the point, every ordering between two of them - is one assertion here
   rather than a page mounted into it.
   """
 

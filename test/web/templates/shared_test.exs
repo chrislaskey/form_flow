@@ -47,7 +47,7 @@ defmodule FormFlow.Web.Templates.SharedTest do
     }
   ]
 
-  test "properties/2 are the picked type's — none for no type or an unknown one" do
+  test "properties/2 are the picked type's - none for no type or an unknown one" do
     assert Shared.properties(@types, "typed") == [@name, @greeting]
     assert Shared.properties(@types, "plain") == []
     assert Shared.properties(@types, nil) == []

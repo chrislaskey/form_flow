@@ -40,7 +40,7 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
     end
   end
 
-  describe "update_changeset/2 — immutability enforcement" do
+  describe "update_changeset/2 - immutability enforcement" do
     test "a draft's definition is editable, under the optimistic lock" do
       draft = loaded(%Version{status: "draft", lock_version: 1, form_id: @form_id})
 
@@ -49,7 +49,7 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
       assert changeset.valid?
       assert changeset.changes.definition == %{"fields" => []}
       # optimistic_lock filters on the current lock and increments at write
-      # time — the same-draft "changed under you" guard
+      # time - the same-draft "changed under you" guard
       assert changeset.filters == %{lock_version: 1}
     end
 
@@ -69,7 +69,7 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
     end
   end
 
-  describe "status_changeset — whitelisted transitions" do
+  describe "status_changeset - whitelisted transitions" do
     test "draft → published stamps the assigned number and timestamp" do
       draft = loaded(%Version{status: "draft", form_id: @form_id})
       now = DateTime.utc_now()
@@ -88,7 +88,7 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
       assert Version.status_changeset(published, "archived").valid?
     end
 
-    test "draft → archived is rejected — only published work can be retired" do
+    test "draft → archived is rejected - only published work can be retired" do
       draft = loaded(%Version{status: "draft", form_id: @form_id})
 
       changeset = Version.status_changeset(draft, "archived")
@@ -97,13 +97,13 @@ defmodule FormFlow.Data.Templates.Form.VersionTest do
       assert {"cannot transition from draft to archived", _} = changeset.errors[:status]
     end
 
-    test "archived → published is rejected — un-archiving is not a thing yet" do
+    test "archived → published is rejected - un-archiving is not a thing yet" do
       archived = loaded(%Version{status: "archived", version: 2, form_id: @form_id})
 
       refute Version.status_changeset(archived, "published", 5, DateTime.utc_now()).valid?
     end
 
-    test "published → published is rejected — publishing is not repeatable" do
+    test "published → published is rejected - publishing is not repeatable" do
       published = loaded(%Version{status: "published", version: 2, form_id: @form_id})
 
       refute Version.status_changeset(published, "published", 3, DateTime.utc_now()).valid?

@@ -9,7 +9,7 @@ defmodule FormFlow.Web.Downloads.DocumentTest do
       refute Document.any_content?(%Document{})
     end
 
-    test "is false when every section is empty — an opened panel nobody filled" do
+    test "is false when every section is empty - an opened panel nobody filled" do
       document = %Document{sections: [%Section{title: "Address"}, %Section{title: nil}]}
 
       refute Document.any_content?(document)
@@ -40,7 +40,7 @@ defmodule FormFlow.Web.Downloads.DocumentTest do
       refute String.ends_with?(slug, "-")
     end
 
-    test "falls back when nothing survives — a title in a script this drops" do
+    test "falls back when nothing survives - a title in a script this drops" do
       assert Document.slugify("日本語", "form") == "form"
       assert Document.slugify("", "form") == "form"
       assert Document.slugify(nil, "form") == "form"

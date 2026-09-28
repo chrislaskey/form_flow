@@ -113,7 +113,7 @@ defmodule FormFlow.Web.Components.Forms.PrefillMenu do
           <button
             type="button"
             role="menuitem"
-            data-confirm={@selected && ~s(Delete the prefill “#{@selected.name}”?)}
+            data-confirm={~s(Delete the prefill "#{@selected.name}"?)}
             phx-click={
               JS.remove_attribute("open", to: "##{@id}") |> JS.push("delete_prefill")
             }

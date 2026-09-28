@@ -27,7 +27,7 @@ Ask: **where does this word come from?** A good name has an answer:
 * it is the common word for this, used the ordinary way
 
 If the answer is "I made it up so we would have a word for this", the name is
-wrong, however apt it feels while writing it. That feeling is not evidence —
+wrong, however apt it feels while writing it. That feeling is not evidence -
 the person who coins a term always finds it clear.
 
 Worked example, `archive/plans/page-state.md` §2.0: every state name is
@@ -39,7 +39,7 @@ change settles a vocabulary question, write down the rejects too.
 
 Counter-example, from the same work: `:workable?`. Invented, and it sat
 beside the real callbacks `visible?/2` and `editable?/2` looking like a third
-member of a family it was not in — "workable" and "editable" are near
+member of a family it was not in - "workable" and "editable" are near
 synonyms in English while meaning unrelated things in the code. Two mistakes at
 once: coining a word, and coining one that collides with the real names
 sitting next to it.
@@ -52,7 +52,7 @@ ordinary way:
 * pages: **index, show, new, edit, delete**
 * functions over data: **list, get, create, update, delete**
 
-These will not always fit — much of this library is about things Phoenix has
+These will not always fit - much of this library is about things Phoenix has
 no word for. The point is not to force them; it is to try common
 words first, and to coin one only for something that genuinely has no name
 yet.
@@ -61,17 +61,17 @@ yet.
 
 One term, one meaning. Do not widen these, and do not introduce a synonym.
 
-* **"user"** — the person working through a flow instance. Never "filler".
-* **"position"** — exactly one thing: a place in a flow instance where a form
+* **"user"** - the person working through a flow instance. Never "filler".
+* **"position"** - exactly one thing: a place in a flow instance where a form
   sits, addressed by its `path`. Do not use the word for anything else.
-* **start / edit / show** — the verbs on the instance side. **start** creates
+* **start / edit / show** - the verbs on the instance side. **start** creates
   the form instance and records the version; **edit** is the working page;
   **show** is read only. **Reopen** is its own action. Links read Start,
-  Continue, or View — never "Open".
-* **"gate"** — prose only, for the host's `on_mount`. It never appears in a
+  Continue, or View - never "Open".
+* **"gate"** - prose only, for the host's `on_mount`. It never appears in a
   function or state name.
 * **form template / form template row / form template id / form template
-  version / form instance** — the template side of a form is a **form
+  version / form instance** - the template side of a form is a **form
   template**: one `FormFlow.Data.Templates.Form` row plus its
   `Form.Version` rows. Say **form template row**, or **form template id**
   for `form_id`, when the row alone is meant as against its versions; **form
@@ -135,7 +135,7 @@ that introduces a term the code does not use has made the code harder to
 read, not easier.
 
 Say what a thing is before saying what it is for. Name the trade-off you
-took and the one you rejected — a reader who knows why a door is locked does
+took and the one you rejected - a reader who knows why a door is locked does
 not try to open it.
 
 ## When you rename something
@@ -154,3 +154,7 @@ mix credo && mix compile --warnings-as-errors
 ```
 
 And fix any errors found.
+
+# Syntax
+
+Don't use emdash, endash, or special quotes. Use regular `-` and `"` marks instead.

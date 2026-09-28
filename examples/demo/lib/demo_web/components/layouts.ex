@@ -38,7 +38,7 @@ defmodule DemoWeb.Layouts do
     default: nil,
     doc:
       "which primary nav item is active: :home, :install_check, :docs, " <>
-        ":demo, :admin, :users, :reviewers, or :other_forms — the last five light the Demo app menu"
+        ":demo, :admin, :users, :reviewers, or :other_forms - the last five light the Demo app menu"
 
   attr :current_user, :map,
     default: nil,
@@ -100,7 +100,7 @@ defmodule DemoWeb.Layouts do
   @github_url "https://github.com/chrislaskey/form_flow"
 
   @doc """
-  Links back to FormFlow's source, as the GitHub mark alone — the header
+  Links back to FormFlow's source, as the GitHub mark alone - the header
   already names the project beside it, so a label would say it twice.
 
   The mark is for the header the mobile nav collapses into a row, so it is
@@ -135,7 +135,7 @@ defmodule DemoWeb.Layouts do
   ⧉ glyph used for subflow nodes in the editor), top-left over bottom-right.
 
   Pass `box1`/`box2` as a color (`"currentColor"`, `"#000"`, `"url(#some-id)"`)
-  to color each square independently — a `:defs` slot carries any `<defs>`
+  to color each square independently - a `:defs` slot carries any `<defs>`
   (e.g. a `<linearGradient>`) a `url(#...)` value refers to. `front` picks
   which square draws last (so its stroke sits on top at the overlap).
   """
@@ -170,7 +170,7 @@ defmodule DemoWeb.Layouts do
   The overview page itself still lists every side.
 
   The label is a link to `/demo` and the menu opens on hover, so the two ways
-  in do different things — hovering offers the three pages, clicking goes to
+  in do different things - hovering offers the three pages, clicking goes to
   the page that describes them. Hover is CSS (`group-hover`), with
   `group-focus-within` beside it so the menu opens for a keyboard too: focus
   lands on the label first, which is inside the group.
@@ -233,7 +233,7 @@ defmodule DemoWeb.Layouts do
   The nav for a screen too narrow for the header's: every page the demo has,
   in one list behind a hamburger.
 
-  Flat, where the desktop nav nests the demo's pages behind a hover menu —
+  Flat, where the desktop nav nests the demo's pages behind a hover menu -
   hover is not a gesture a touch screen has, and a menu inside a menu is worse
   on a small screen than the four extra rows it saves. The demo's pages keep
   their caption, so the list still reads as two groups. Like the desktop

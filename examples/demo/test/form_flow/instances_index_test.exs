@@ -1,7 +1,7 @@
 defmodule Demo.FormFlowInstancesIndexTest do
   @moduledoc """
   Exercises the user-facing flow listing's `Slab.table` against a real
-  database — query mode, so the sorting and pagination the URL asks for have
+  database - query mode, so the sorting and pagination the URL asks for have
   to compile into real SQL rather than being applied to a list in memory.
 
   The template indexes get the same treatment in `flows_crud_test.exs` and
@@ -10,8 +10,8 @@ defmodule Demo.FormFlowInstancesIndexTest do
 
   Two things to know about asserting on these. Slab keeps its `id` on the
   LiveComponent and derives ids for the parts it renders, so the table's
-  presence is probed through one of those — here the page-size control the
-  `<:pagination>` slot brings — rather than through the id passed to it, the
+  presence is probed through one of those - here the page-size control the
+  `<:pagination>` slot brings - rather than through the id passed to it, the
   same trick `install_check_live_test.exs` documents. And
   presence of a *row* is asserted through the instance id in its link: a
   flow's name also appears in the "start a new flow" picker beside the table,
@@ -50,7 +50,7 @@ defmodule Demo.FormFlowInstancesIndexTest do
 
     {:ok, view, _html} = live(conn, "/demo/pet-licenses/applications")
 
-    # A joined value, rendered per row — so the preload survived Slab's count
+    # A joined value, rendered per row - so the preload survived Slab's count
     assert has_element?(view, row_link(instance), "Benefits Application")
   end
 

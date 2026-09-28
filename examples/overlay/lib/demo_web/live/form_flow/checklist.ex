@@ -7,8 +7,8 @@ defmodule DemoWeb.FormFlowLive.Checklist do
   whole surface a type has:
 
     * every form can be edited until it's done, so there is no order to obey
-    * finishing one returns to the top of the list — the first form still
-      unfinished — rather than pressing forward through the flow
+    * finishing one returns to the top of the list - the first form still
+      unfinished - rather than pressing forward through the flow
     * the list is always drawn, even for a flow with a single form, because
       here it is the point rather than a progress indicator
 

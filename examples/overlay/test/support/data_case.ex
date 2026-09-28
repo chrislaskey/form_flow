@@ -42,7 +42,7 @@ defmodule Demo.DataCase do
 
   @doc """
   The host's type lists as the pages pass them (`DemoWeb.FormFlowLive.Types`)
-  — what `FormFlow.Data.Templates.Flows.copy/2` requires, since the copy
+  - what `FormFlow.Data.Templates.Flows.copy/2` requires, since the copy
   reads them to decide which property values to drop.
 
       {:ok, copy} = Flows.copy(flow, [name: "Dog License 2027"] ++ host_types())
