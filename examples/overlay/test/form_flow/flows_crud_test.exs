@@ -1702,7 +1702,8 @@ defmodule Demo.FormFlowFlowsCrudTest do
           "/demo/admin/flows/#{Ecto.UUID.generate()}",
           "/demo/admin/flows/not-a-uuid/edit",
           "/demo/admin/flows/#{Ecto.UUID.generate()}/nodes/#{Ecto.UUID.generate()}",
-          "/demo/admin/flows/#{Ecto.UUID.generate()}/overview"
+          "/demo/admin/flows/#{Ecto.UUID.generate()}/overview",
+          "/demo/admin/flows/#{Ecto.UUID.generate()}/preview"
         ] do
       {:ok, _view, html} = live(conn, path)
 
@@ -1789,6 +1790,186 @@ defmodule Demo.FormFlowFlowsCrudTest do
 
     {:ok, _view, inner_html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}")
     assert inner_html =~ "Draft form"
+  end
+
+  test "the preview walks every form in order, one at a time, empty", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+
+    # Start → Application → End at the root; inside Application,
+    # Start → Intake → Health → End
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        %{
+          "id" => "2",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Application", "subflow_label" => "forms"}
+        },
+        step_attrs("3", "End", "end")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    application = flow_node(root_id, "Application")
+
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{application.id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        step_attrs("2", "Intake", "form"),
+        step_attrs("3", "Health", "form"),
+        step_attrs("4", "End", "end")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"},
+        %{"id" => "e3-4", "source" => "3", "target" => "4"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    intake = flow_node(application.subflow_id, "Intake")
+    health = flow_node(application.subflow_id, "Health")
+
+    # Intake's draft gets a question, so it draws as a form - a draft is
+    # what the page shows when nothing is published; Health's stays empty,
+    # so it draws the canvas's empty message
+    [intake_draft] = Forms.list_versions(intake.form_id)
+
+    {:ok, _draft} =
+      Forms.update_draft(intake_draft, %{
+        definition: %{
+          "elements" => [%{"type" => "text", "name" => "name", "title" => "Full name"}]
+        }
+      })
+
+    # The first step by default: its name under the subflow it sits in, the
+    # ring with "1 of 2", the form itself on the canvas, Back disabled and
+    # Forward a link to the next step
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview")
+
+    assert has_element?(view, "h2", "Intake")
+    assert html =~ "Application"
+    assert html =~ "1 of 2"
+    # The form is a child LiveView, in the page once it has mounted
+    assert render(view) =~ "Full name"
+    refute render(view) =~ "Nothing to preview yet"
+    assert has_element?(view, "button[disabled]", "Back")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/preview?step=#{health.id}"]),
+             "Forward"
+           )
+
+    # The tabs say where this page is
+    assert has_element?(view, ~s([aria-current="page"]), "Preview")
+    assert has_element?(view, ~s(a[href="/demo/admin/flows/#{root_id}/overview"]), "Overview")
+
+    # The select lists every step, the subflow's name before the form's, and
+    # jumping patches the URL to that step
+    assert has_element?(view, ~s([data-ps-option="#{health.id}"]), "Application › Health")
+
+    view
+    |> element("#flows-preview-jump")
+    |> render_change(%{"step" => health.id})
+
+    assert_patch(view, "/demo/admin/flows/#{root_id}/preview?step=#{health.id}")
+
+    html = render(view)
+    assert has_element?(view, "h2", "Health")
+    assert html =~ "2 of 2"
+    assert html =~ "Nothing to preview yet"
+    refute html =~ "Full name"
+    assert has_element?(view, "button[disabled]", "Forward")
+
+    assert has_element?(
+             view,
+             ~s(a[href="/demo/admin/flows/#{root_id}/preview?step=#{intake.id}"]),
+             "Back"
+           )
+
+    # A step the walk does not reach falls back to the first
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview?step=nope")
+    assert has_element?(view, "h2", "Intake")
+    assert html =~ "1 of 2"
+  end
+
+  test "the preview names the perspectives of the form subflow a step is in", %{conn: conn} do
+    root_id = create_flow(conn, "Licensing", "subflows")
+
+    # A fresh flow's Start points at nothing, so the walk reaches no form
+    {:ok, _view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview")
+    assert html =~ "Nothing is connected to Start yet."
+
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/edit")
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        %{
+          "id" => "2",
+          "type" => "subflow",
+          "position" => %{"x" => 0, "y" => 0},
+          "data" => %{"label" => "Review", "subflow_label" => "forms"}
+        },
+        step_attrs("3", "End", "end")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    review = flow_node(root_id, "Review")
+
+    # Inside Review: the reviewer's perspective, and one form
+    {:ok, view, _html} = live(conn, "/demo/admin/flows/#{root_id}/nodes/#{review.id}/edit")
+
+    view
+    |> element("#flows-edit-flow-form-form")
+    |> render_change(%{
+      "dynamic_form" => %{"flow_type" => "wizard_in_order", "perspectives" => ["reviewer"]}
+    })
+
+    view
+    |> element("#flows-edit-editor")
+    |> render_hook("form_flow:flow_changed", %{
+      "nodes" => [
+        step_attrs("1", "Start", "start"),
+        step_attrs("2", "Decision", "form"),
+        step_attrs("3", "End", "end")
+      ],
+      "edges" => [
+        %{"id" => "e1-2", "source" => "1", "target" => "2"},
+        %{"id" => "e2-3", "source" => "2", "target" => "3"}
+      ]
+    })
+
+    view |> element("button", "Save") |> render_click()
+
+    {:ok, view, html} = live(conn, "/demo/admin/flows/#{root_id}/preview")
+    assert has_element?(view, "h2", "Decision")
+    assert html =~ "Perspectives: Reviewer"
+    assert html =~ "1 of 1"
   end
 
   test "the overview offers four layouts, chosen by the layout query param", %{conn: conn} do

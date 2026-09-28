@@ -1,9 +1,9 @@
 defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
   @moduledoc """
   `FormFlow.Web.Templates.Components.Flows.Tabs` function component renders
-  the four views of one flow template as a segmented control
-  (`FormFlow.Web.Components.Tabs`) - **Edit**, **View**, **Overview**,
-  **History** - each a link to its own URL:
+  the five views of one flow template as a segmented control
+  (`FormFlow.Web.Components.Tabs`) - **Overview**, **Preview**, **View**,
+  **History**, **Edit** - each a link to its own URL:
 
     * Edit - the canvas editable, `FormFlow.Web.Templates.Flows.Edit`:
       `/flows/:id/edit`, or `/flows/:root_id/nodes/:node_id/edit` for an
@@ -11,13 +11,15 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     * View - the same level read-only, `FormFlow.Web.Templates.Flows.Show`
     * Overview - the whole root flow at once, every level, read-only,
       `FormFlow.Web.Templates.Flows.Overview` at `/flows/:root_id/overview`
+    * Preview - every form of the root in order, empty, one at a time,
+      `FormFlow.Web.Templates.Flows.Preview` at `/flows/:root_id/preview`
     * History - the root's log, `FormFlow.Web.Templates.Flows.History` at
       `/flows/:root_id/history`
 
   Edit and View are one level at a time, so from inside a subflow they stay
-  inside it; Overview and History are the root's from any depth, as its
-  health is. The Overview and History pages are root pages, so their Edit
-  and View lead to the root's.
+  inside it; Overview, Preview, and History are the root's from any depth,
+  as its health is. Those three are root pages, so their Edit and View lead
+  to the root's.
 
   It replaced three things that sat apart in the header: the Show / Edit
   switch, the Flow Overview button, and the History button.
@@ -44,7 +46,7 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     doc: "the step the subflow was reached through; nil at the root"
   )
 
-  attr(:active, :atom, required: true, values: [:edit, :show, :overview, :history])
+  attr(:active, :atom, required: true, values: [:edit, :show, :overview, :preview, :history])
   attr(:target, :any, default: nil, doc: "the editor's `@myself`, to leave through its event")
   attr(:class, :any, default: nil)
 
@@ -54,6 +56,7 @@ defmodule FormFlow.Web.Templates.Components.Flows.Tabs do
     assigns =
       assign(assigns, :items, [
         {:overview, "Overview", "#{assigns.base}/flows/#{root_id}/overview"},
+        {:preview, "Preview", "#{assigns.base}/flows/#{root_id}/preview"},
         {:show, "View", level_path(assigns)},
         {:history, "History", "#{assigns.base}/flows/#{root_id}/history"},
         {:edit, "Edit", level_path(assigns) <> "/edit"}

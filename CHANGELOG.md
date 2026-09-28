@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.45.0
+
+### Flow Preview
+
+A fifth tab on a flow template, **Preview**, at `/flows/:id/preview`
+(`FormFlow.Web.Templates.Flows.Preview`): every form of the root flow in
+order, one at a time, empty. A pre-release flow is walked for real - a
+journey, records, prefills, every gate. This is the fast look instead:
+what does each form look like, one after the other, with nothing filled
+in.
+
+The page lists the form steps the way the Overview's Text layout does -
+depth first from Start, following the edges, a subflow's forms where its
+step sits, a step reached twice listed once - and draws one: its name
+under the subflows it sits in, the perspectives of the form subflow it
+belongs to when that names any, a select to jump to any step, Back and
+Forward, and the ring the instances index draws for flow progress with
+"3 of 7" beside it. The form is `FormFlow.Web.Templates.Forms.Preview` on
+the forms Canvas, the version the form's own page opens on - the latest
+published, else the newest draft. It draws the form alone, not the
+instance page around it. The step is the `step` query param, a node id,
+so every step is a URL.
+
+`FormFlow.Web.Templates.Components.Flows.Tabs` reads Overview | Preview |
+View | History | Edit; `active` accepts `:preview`. The router's
+`flow_page/2` knows `"preview"`.
+
 ## v0.44.0
 
 ### Flow Template Snapshots

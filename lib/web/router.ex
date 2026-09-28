@@ -28,6 +28,7 @@ defmodule FormFlow.Web.Router do
   | `/flows/:id`                        | `FormFlow.Web.Templates.Flows.Show` |
   | `/flows/:id/edit`                   | `FormFlow.Web.Templates.Flows.Edit` |
   | `/flows/:id/overview`               | `FormFlow.Web.Templates.Flows.Overview` (the whole tree, read-only) |
+  | `/flows/:id/preview`                | `FormFlow.Web.Templates.Flows.Preview` (every form in order, empty) |
   | `/flows/:id/health`                 | `FormFlow.Web.Templates.Flows.Health` (the health check, run on every visit) |
   | `/flows/:id/history`                | `FormFlow.Web.Templates.Flows.History` (the flow's log, newest first) |
   | `/flows/:root/nodes/:node_id`       | `FormFlow.Web.Templates.Flows.Show` (the node's subflow) |
@@ -405,6 +406,18 @@ defmodule FormFlow.Web.Router do
               components={@components}
               params={@params}
             />
+          <% {:preview, id} -> %>
+            <.live_component
+              module={Flows.Preview}
+              id="flows-preview"
+              flow_id={id}
+              base={@base}
+              user_id={@user_id}
+              flow_types={@flow_types}
+              form_types={@form_types}
+              components={@components}
+              params={@params}
+            />
           <% {:health, id} -> %>
             <.live_component
               module={Flows.Health}
@@ -743,10 +756,11 @@ defmodule FormFlow.Web.Router do
     end
   end
 
-  # The pages under one flow: its editor, the two read-only views of the
+  # The pages under one flow: its editor, the three read-only views of the
   # whole tree, and its history
   defp flow_page(id, "edit"), do: {:edit, id}
   defp flow_page(id, "overview"), do: {:overview, id}
+  defp flow_page(id, "preview"), do: {:preview, id}
   defp flow_page(id, "health"), do: {:health, id}
   defp flow_page(id, "history"), do: {:history, id}
   defp flow_page(_id, _other), do: nil
