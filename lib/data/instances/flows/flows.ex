@@ -197,16 +197,18 @@ defmodule FormFlow.Data.Instances.Flows do
     with {:ok, tree, snapshot} <- snapshot_for_start(flow, changeset, opts) do
       changeset = Ecto.Changeset.put_change(changeset, :template_flow_snapshot_id, snapshot.id)
 
-      Repo.transaction(fn ->
-        with {:ok, instance} <- Repo.insert(changeset),
-             {:ok, _event} <- insert_event(instance, "created", opts),
-             {:ok, instance} <-
-               refresh_next_positions(instance, Keyword.put(opts, :tree, tree)) do
-          instance
-        else
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
-      end)
+      Repo.transaction(fn -> insert_and_refresh(changeset, tree, opts) end)
+    end
+  end
+
+  defp insert_and_refresh(changeset, tree, opts) do
+    with {:ok, instance} <- Repo.insert(changeset),
+         {:ok, _event} <- insert_event(instance, "created", opts),
+         {:ok, instance} <-
+           refresh_next_positions(instance, Keyword.put(opts, :tree, tree)) do
+      instance
+    else
+      {:error, changeset} -> Repo.rollback(changeset)
     end
   end
 
@@ -840,17 +842,7 @@ defmodule FormFlow.Data.Instances.Flows do
 
         numbers = Map.new(Snapshots.list(root), &{&1.id, &1.number})
 
-        Enum.each(journeys, fn journey ->
-          snapshot_numbers = %{
-            "from_snapshot" => numbers[journey.template_flow_snapshot_id],
-            "to_snapshot" => snapshot.number
-          }
-
-          case insert_event(journey, "moved", snapshot_numbers, opts) do
-            {:ok, _event} -> :ok
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-        end)
+        Enum.each(journeys, &insert_move_event(&1, snapshot, numbers, opts))
 
         ids = Enum.map(journeys, & &1.id)
 
@@ -869,6 +861,18 @@ defmodule FormFlow.Data.Instances.Flows do
          {:ok, _swept} <-
            update_next_positions(root, Keyword.take(opts, [:flow_types, :callback_data])) do
       {:ok, moved}
+    end
+  end
+
+  defp insert_move_event(journey, snapshot, numbers, opts) do
+    snapshot_numbers = %{
+      "from_snapshot" => numbers[journey.template_flow_snapshot_id],
+      "to_snapshot" => snapshot.number
+    }
+
+    case insert_event(journey, "moved", snapshot_numbers, opts) do
+      {:ok, _event} -> :ok
+      {:error, changeset} -> Repo.rollback(changeset)
     end
   end
 
