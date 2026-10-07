@@ -10,7 +10,7 @@
   </a>
 </p>
 
-> <p align="center">See the **full interactive demo** at [form-flow.fly.dev](https://form-flow.fly.dev).</p>
+> <p align="center">See the <strong>full interactive demo</strong> at <a href="https://form-flow.fly.dev" target="_blank">form-flow.fly.dev</a>.</p>
 
 ## Why FormFlow?
 
