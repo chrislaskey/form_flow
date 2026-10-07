@@ -8,6 +8,10 @@
   <img title="v0.26.0 Overview Screenshot" src="https://raw.githubusercontent.com/chrislaskey/form_flow/refs/heads/main/examples/screenshot-overview-v0.26.0.gif" width="1200">
 </p>
 
+## Interactive demo
+
+See the **full interactive demo** at [form-flow.fly.dev](https://form-flow.fly.dev).
+
 ## Why FormFlow?
 
 Web apps are great for building forms. Creating an individual form in code is
