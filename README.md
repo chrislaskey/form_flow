@@ -5,12 +5,12 @@
 > and deterministic results.
 
 <p align="center">
-  <img title="v0.26.0 Overview Screenshot" src="https://raw.githubusercontent.com/chrislaskey/form_flow/refs/heads/main/examples/screenshot-overview-v0.26.0.gif" width="1200">
+  <a href="https://form-flow.fly.dev" target="_blank">
+    <img title="v0.26.0 Overview Screenshot" src="https://raw.githubusercontent.com/chrislaskey/form_flow/refs/heads/main/examples/screenshot-overview-v0.26.0.gif" width="1200">
+  </a>
 </p>
 
-## Interactive demo
-
-See the **full interactive demo** at [form-flow.fly.dev](https://form-flow.fly.dev).
+> See the **full interactive demo** at [form-flow.fly.dev](https://form-flow.fly.dev).
 
 ## Why FormFlow?
 
